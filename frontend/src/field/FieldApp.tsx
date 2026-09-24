@@ -34,6 +34,8 @@ import {
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { Dialog } from "./Dialog";
+import { hasCoarsePointer } from "./touch";
+import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from "./page-scroll";
 import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
 import "./workspace.css";
@@ -67,6 +69,7 @@ export default function FieldApp() {
   const account = useAccount();
   const [feedback, setFeedback] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [touch] = useState(hasCoarsePointer);
   const mapRef = useRef<HTMLDivElement>(null);
   // Anyone who has opened the planner goes straight back to it from `/`.
   useEffect(markLandingSeen, []);
@@ -102,8 +105,14 @@ export default function FieldApp() {
     terms: "Terms",
   };
   const pageLabel = nav.find((item) => item.id === w.view)?.label || pageLabels[w.view] || "Planning";
+  // The brief is replaced by a loading state while a new one is generated.
+  useNewPageStartsAtTop(w.view, w.view === "planner" && w.loading);
   function navigate(page: AppView) {
     setFeedback("");
+    if (page === w.view) {
+      scrollPageToTop();
+      return;
+    }
     if (page === "trip") w.openTripToolView();
     else w.navigateToView(page);
   }
@@ -227,8 +236,9 @@ export default function FieldApp() {
       <div className="field-map-note">
         <Layers size={16} />
         <p>
-          Select a point, then return to your plan. Switch map layers for
-          terrain, roads, or satellite imagery.
+          {touch
+            ? "Tap to select a point, then return to your plan. Move or zoom the map with two fingers."
+            : "Select a point, then return to your plan. Switch map layers for terrain, roads, or satellite imagery."}
         </p>
       </div>
     </div>
@@ -350,13 +360,15 @@ export default function FieldApp() {
                       <button
                         className="field-location-row"
                         key={peak.name}
-                        onClick={() =>
+                        onClick={() => {
                           w.selectSuggestion({
                             ...peak,
                             class: "natural",
                             type: "peak",
-                          })
-                        }
+                          });
+                          // On a phone the plan it fills in is a long way up.
+                          revealStart(w.searchInputRef.current?.form ?? null);
+                        }}
                       >
                         <Mountain size={16} />
                         <span>

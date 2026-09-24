@@ -54,6 +54,10 @@ html[data-theme="dark"] {
 .field-app {
   grid-template-columns: var(--shell-side) minmax(0, 1fr);
   --field-sticky-top: var(--shell-toolbar);
+  /* Clearance for a phone's notch and home indicator (index.html sets viewport-fit=cover). */
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 .field-app .field-sidebar {
   --f-rail-ink: var(--f-ink);
@@ -61,7 +65,7 @@ html[data-theme="dark"] {
   --f-rail-hover: color-mix(in srgb, var(--f-ink) 6%, transparent);
   --f-rail-selected: var(--sky-fill);
   --f-rail-line: var(--sky-separator);
-  padding: 20px 12px 16px;
+  padding: 20px 12px max(16px, var(--safe-bottom)) max(12px, var(--safe-left));
   background: var(--f-bg);
   color: var(--f-ink);
   border-right: 1px solid var(--sky-separator);
@@ -94,7 +98,7 @@ html[data-theme="dark"] {
 /* ---------- Regular width: blurred toolbar ---------- */
 .field-app .field-topbar {
   position: sticky; top: 0; z-index: 10;
-  height: var(--shell-toolbar); padding-inline: 32px;
+  height: var(--shell-toolbar); padding-inline: 32px max(32px, var(--safe-right));
   background: var(--shell-bar);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
   backdrop-filter: blur(20px) saturate(1.6);
@@ -110,9 +114,11 @@ html[data-theme="dark"] {
 }
 .field-app .field-topbar button:hover { background: color-mix(in srgb, var(--f-ink) 12%, var(--sky-fill)); }
 .field-app .field-topbar button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
-.field-app #field-main { padding-inline: 32px; }
+/* Symmetric, so the brief's sky can bleed evenly past both edges. */
+.field-app #field-main { padding-inline: max(32px, var(--safe-right)); }
 .field-app .field-footer {
-  padding: 28px 32px 36px; border-top: 1px solid var(--sky-separator); max-width: none;
+  padding: 28px max(32px, var(--safe-right)) max(36px, var(--safe-bottom)) 32px;
+  border-top: 1px solid var(--sky-separator); max-width: none;
   font-size: 13px; color: var(--f-muted);
 }
 .field-app .field-footer > span { letter-spacing: 0.02em; font-size: 12px; font-weight: 600; }
@@ -145,7 +151,7 @@ html[data-theme="dark"] {
   .field-app .field-sidebar {
     position: relative; z-index: 20;
     display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px;
-    height: var(--shell-toolbar); padding: 0 6px 0 16px;
+    height: var(--shell-toolbar); padding: 0 max(6px, var(--safe-right)) 0 max(16px, var(--safe-left));
     border: 0; background: var(--f-bg);
   }
   .field-app .field-brand { padding: 0; width: auto; }
@@ -157,7 +163,7 @@ html[data-theme="dark"] {
   .field-app .field-sidebar nav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
     display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0;
-    margin: 0; padding: 6px 8px max(8px, env(safe-area-inset-bottom));
+    margin: 0; padding: 6px max(8px, var(--safe-right)) max(8px, var(--safe-bottom)) max(8px, var(--safe-left));
     overflow: visible;
     background: var(--shell-bar);
     -webkit-backdrop-filter: blur(20px) saturate(1.6);
@@ -187,9 +193,10 @@ html[data-theme="dark"] {
   .field-app .field-sidebar-bottom button[aria-current="page"] { color: var(--sky-accent); }
 
   .field-app .field-topbar { display: none; }
-  .field-app .field-content { padding-bottom: calc(64px + max(8px, env(safe-area-inset-bottom))); }
-  .field-app #field-main { padding-inline: 16px; }
-  .field-app .field-footer { padding: 24px 16px; flex-wrap: wrap; }
+  .field-app .field-content { padding-bottom: calc(64px + max(8px, var(--safe-bottom))); }
+  /* Symmetric, so full-bleed pieces (calc(50% - 50vw)) reach both edges. */
+  .field-app #field-main { padding-inline: max(16px, var(--safe-left), var(--safe-right)); }
+  .field-app .field-footer { padding: 24px max(16px, var(--safe-right)) 24px max(16px, var(--safe-left)); flex-wrap: wrap; }
 
   /* The brief's sky reaches the top of the screen; the header row sits on it. */
   .field-app:has(.sky-report.is-brief) .field-sidebar { background: transparent; }
@@ -199,7 +206,9 @@ html[data-theme="dark"] {
     padding-inline: 0;
     border-radius: 0 0 24px 24px;
   }
-  .sky-report.is-brief .sky-hero-in { padding: calc(var(--shell-toolbar) + 8px) 16px calc(var(--sky-scene) + var(--sky-ridge)); }
+  .sky-report.is-brief .sky-hero-in {
+    padding: calc(var(--shell-toolbar) + 8px) max(16px, var(--safe-left), var(--safe-right)) calc(var(--sky-scene) + var(--sky-ridge));
+  }
   .sky-report.is-brief .sky-hero-grid { margin-top: 0; }
 }
 

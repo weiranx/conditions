@@ -141,6 +141,7 @@ import {
 } from "../../app/report-storage";
 import { copyTextToClipboard } from "../../app/clipboard";
 import { parseReportSectionHash } from "../../app/report-sections";
+import { followThemePreference } from "../../app/theme";
 import { useHealthChecks } from "../../hooks/useHealthChecks";
 import { useRouteAnalysis } from "../../hooks/useRouteAnalysis";
 import type { RouteAnalysisOptions } from "../../hooks/useRouteAnalysis";
@@ -1061,23 +1062,7 @@ export function useWorkspace() {
     if (typeof window === "undefined") {
       return;
     }
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const applyTheme = () => {
-      const resolvedTheme: "light" | "dark" =
-        preferences.themeMode === "system"
-          ? mediaQuery.matches
-            ? "dark"
-            : "light"
-          : preferences.themeMode;
-      document.documentElement.setAttribute("data-theme", resolvedTheme);
-    };
-
-    applyTheme();
-    mediaQuery.addEventListener("change", applyTheme);
-    return () => {
-      mediaQuery.removeEventListener("change", applyTheme);
-    };
+    return followThemePreference(preferences.themeMode);
   }, [preferences.themeMode]);
 
   useEffect(() => {
