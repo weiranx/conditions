@@ -40,7 +40,7 @@ npm test                 # MCP tool tests
 
 ### Deployment (`scripts/`)
 
-Merging to `main` deploys automatically: CI passes → `deploy.yml` → `ci-deploy.sh` → `deploy.sh` on the droplet (backend, migrations, MCP server, rollback) → `smoke-test.mjs` against the public URLs. The frontend deploys separately via Cloudflare's Git integration.
+Merging to `main` deploys automatically, and only once CI passes: `deploy.yml` → `ci-deploy.sh` → `deploy.sh` on the droplet (backend, migrations, MCP server, rollback) → the frontend to Cloudflare Pages with Wrangler → `smoke-test.mjs` against the public URLs. Cloudflare's own Git deployments stay disabled so failing commits never ship.
 
 ```bash
 ./scripts/provision.sh --host IP --domain API_DOMAIN --frontend-origin URL --email EMAIL  # new or drifted server, end to end
