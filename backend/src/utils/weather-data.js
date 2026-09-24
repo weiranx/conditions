@@ -6,6 +6,7 @@ const { parseStartClock, clampTravelWindowHours, parseIsoTimeToMs } = require('.
 const { deriveTrailStatus, deriveTerrainCondition } = require('./terrain-condition');
 const { createCache, normalizeCoordKey } = require('./cache');
 const { AFTER_WINDOW_HOURS } = require('./contingency');
+const { toFiniteOrNull } = require('./numbers');
 
 const OPEN_METEO_CODE_LABELS = {
   0: 'Clear',
@@ -39,8 +40,9 @@ const OPEN_METEO_CODE_LABELS = {
 };
 
 const openMeteoCodeToText = (code) => {
-  const numericCode = Number(code);
-  if (Number.isFinite(numericCode) && OPEN_METEO_CODE_LABELS[numericCode]) {
+  // A missing code is Unknown; Number(null) would read as code 0, "Clear".
+  const numericCode = toFiniteOrNull(code);
+  if (numericCode !== null && OPEN_METEO_CODE_LABELS[numericCode]) {
     return OPEN_METEO_CODE_LABELS[numericCode];
   }
   return 'Unknown';

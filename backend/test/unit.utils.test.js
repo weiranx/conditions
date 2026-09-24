@@ -270,8 +270,8 @@ const {
   inferNoaaCloudCoverFromIcon,
   inferNoaaCloudCoverFromForecastText,
   resolveNoaaCloudCover,
-  toFiniteNumberOrNull,
 } = require('../src/utils/weather-normalizers');
+const { toFiniteOrNull } = require('../src/utils/numbers');
 
 describe('computeFeelsLikeF', () => {
   test('applies wind chill for cold + windy conditions', () => {
@@ -309,9 +309,9 @@ describe('celsiusToF', () => {
   test('returns null for missing or NaN-producing inputs', () => {
     // A missing reading is not 0°C = 32°F, even though Number(null) === 0
     expect(celsiusToF(null)).toBeNull();
+    expect(celsiusToF('')).toBeNull();
     // non-numeric strings produce NaN -> null
     expect(celsiusToF('warm')).toBeNull();
-    // undefined -> NaN -> null
     expect(celsiusToF(undefined)).toBeNull();
   });
 });
@@ -334,6 +334,10 @@ describe('normalizeNoaaDewPointF', () => {
     expect(normalizeNoaaDewPointF({ value: null, unitCode: 'wmoUnit:degC' })).toBeNull();
     // { value: 'abc' } -> Number('abc') = NaN -> NOT finite -> returns null
     expect(normalizeNoaaDewPointF({ value: 'abc' })).toBeNull();
+  });
+
+  test('keeps a real 0 °C reading', () => {
+    expect(normalizeNoaaDewPointF({ value: 0, unitCode: 'wmoUnit:degC' })).toBe(32);
   });
 });
 
@@ -372,6 +376,7 @@ describe('normalizeNoaaPressureHpa', () => {
   test('returns null for explicit null input and a missing { value: null } quantity', () => {
     expect(normalizeNoaaPressureHpa(null)).toBeNull();
     expect(normalizeNoaaPressureHpa({ value: null })).toBeNull();
+    expect(normalizeNoaaPressureHpa({ value: null, unitCode: 'wmoUnit:Pa' })).toBeNull();
     // { value: 'bad' } -> NaN -> null
     expect(normalizeNoaaPressureHpa({ value: 'bad' })).toBeNull();
   });
@@ -508,21 +513,26 @@ describe('resolveNoaaCloudCover', () => {
   });
 });
 
-describe('toFiniteNumberOrNull', () => {
-  test('returns numeric value for numeric-coercible inputs', () => {
-    expect(toFiniteNumberOrNull(42)).toBe(42);
-    expect(toFiniteNumberOrNull('3.14')).toBe(3.14);
-    expect(toFiniteNumberOrNull(0)).toBe(0);
+describe('toFiniteOrNull', () => {
+  test('returns numbers and numeric strings, including a real 0', () => {
+    expect(toFiniteOrNull(42)).toBe(42);
+    expect(toFiniteOrNull('3.14')).toBe(3.14);
+    expect(toFiniteOrNull(' -7 ')).toBe(-7);
+    expect(toFiniteOrNull(0)).toBe(0);
+    expect(toFiniteOrNull('0')).toBe(0);
   });
 
-  test('returns null for missing and non-finite inputs', () => {
-    // A missing reading is not 0, even though Number(null) === 0
-    expect(toFiniteNumberOrNull(null)).toBeNull();
-    expect(toFiniteNumberOrNull('')).toBeNull();
-    expect(toFiniteNumberOrNull(undefined)).toBeNull();
-    expect(toFiniteNumberOrNull('abc')).toBeNull();
-    expect(toFiniteNumberOrNull(Infinity)).toBeNull();
-    expect(toFiniteNumberOrNull(NaN)).toBeNull();
+  test('returns null for missing values that Number() would turn into 0', () => {
+    for (const missing of [null, undefined, '', '   ', false, true, [], [5], {}]) {
+      expect(toFiniteOrNull(missing)).toBeNull();
+    }
+  });
+
+  test('returns null for non-finite values', () => {
+    expect(toFiniteOrNull('abc')).toBeNull();
+    expect(toFiniteOrNull(Infinity)).toBeNull();
+    expect(toFiniteOrNull('-Infinity')).toBeNull();
+    expect(toFiniteOrNull(NaN)).toBeNull();
   });
 });
 

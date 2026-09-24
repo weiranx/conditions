@@ -1,6 +1,6 @@
 import type { DecisionLevel, SafetyData, SummitDecision, UserPreferences } from './types';
 import { normalizedDecisionScore, decisionLevelRank } from './decision';
-import { parseSolarClockMinutes, parseTimeInputMinutes } from './core';
+import { isFiniteNumber, parseSolarClockMinutes, parseTimeInputMinutes } from './core';
 import { computeFeelsLikeF } from './planner-helpers';
 
 export const START_TIME_SCENARIO_TIMES = ['04:00', '06:00', '08:00'] as const;
@@ -63,9 +63,9 @@ export interface StartTimeScenario {
   daylightRemainingMinutes: number | null;
   decision: SummitDecision;
   score: number;
-  peakGustMph: number;
+  peakGustMph: number | null;
   peakFeelsLikeF: number | null;
-  peakPrecipChance: number;
+  peakPrecipChance: number | null;
   avalancheLevel: number | null;
   avalancheLabel: string;
   stormHours: number;
@@ -87,9 +87,10 @@ function clockFromMinutes(totalMinutes: number): string {
   return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
 }
 
-function finiteMax(values: Array<number | null | undefined>, fallback: number): number {
-  const finite = values.map(Number).filter(Number.isFinite);
-  return finite.length > 0 ? Math.max(...finite) : fallback;
+/** The largest reading, or null when every reading is missing (a gap is not 0). */
+function finiteMax(values: Array<number | null | undefined>): number | null {
+  const finite = values.filter(isFiniteNumber);
+  return finite.length > 0 ? Math.max(...finite) : null;
 }
 
 export function buildStartTimeScenario(
@@ -101,16 +102,15 @@ export function buildStartTimeScenario(
   const startMinutes = parseTimeInputMinutes(startTime) ?? 0;
   const durationMinutes = Math.max(1, Math.round(Number(preferences.travelWindowHours) || 12)) * 60;
   const trend = Array.isArray(data.weather?.trend) ? data.weather.trend.slice(0, preferences.travelWindowHours) : [];
-  const peakGustMph = finiteMax([data.weather?.windGust, ...trend.map((point) => point.gust)], 0);
-  const peakPrecipChance = finiteMax([data.weather?.precipChance, ...trend.map((point) => point.precipChance)], 0);
-  const peakFeelsLikeF = finiteMax(
-    [
-      data.weather?.feelsLike,
-      data.weather?.temp,
-      ...trend.map((point) => computeFeelsLikeF(Number(point.temp), Number(point.wind))),
-    ],
-    Number.NaN,
-  );
+  const peakGustMph = finiteMax([data.weather?.windGust, ...trend.map((point) => point.gust)]);
+  const peakPrecipChance = finiteMax([data.weather?.precipChance, ...trend.map((point) => point.precipChance)]);
+  const peakFeelsLikeF = finiteMax([
+    data.weather?.feelsLike,
+    data.weather?.temp,
+    ...trend.map((point) => (isFiniteNumber(point.temp)
+      ? computeFeelsLikeF(point.temp, isFiniteNumber(point.wind) ? point.wind : 0)
+      : null)),
+  ]);
   const returnMinutes = startMinutes + durationMinutes;
   const sunsetMinutes = parseSolarClockMinutes(data.solar?.sunset);
   const avalancheRelevant = Boolean(data.avalanche && data.avalanche.relevant !== false);
@@ -138,7 +138,7 @@ export function buildStartTimeScenario(
     decision,
     score: normalizedDecisionScore(data),
     peakGustMph,
-    peakFeelsLikeF: Number.isFinite(peakFeelsLikeF) ? peakFeelsLikeF : null,
+    peakFeelsLikeF,
     peakPrecipChance,
     avalancheLevel,
     avalancheLabel,
@@ -157,11 +157,11 @@ function range(values: Array<number | null>, fallback = 0): number {
 function riskPressure(scenario: StartTimeScenario, risk: StartTimeScenarioRisk, preferences: UserPreferences): number {
   switch (risk) {
     case 'Wind':
-      return scenario.peakGustMph / Math.max(1, preferences.maxWindGustMph);
+      return scenario.peakGustMph === null ? 0 : scenario.peakGustMph / Math.max(1, preferences.maxWindGustMph);
     case 'Heat':
       return scenario.peakFeelsLikeF === null ? 0 : scenario.peakFeelsLikeF / Math.max(1, preferences.maxFeelsLikeF);
     case 'Precipitation':
-      return scenario.peakPrecipChance / Math.max(1, preferences.maxPrecipChance);
+      return scenario.peakPrecipChance === null ? 0 : scenario.peakPrecipChance / Math.max(1, preferences.maxPrecipChance);
     case 'Avalanche':
       return scenario.avalancheLevel === null ? 0 : scenario.avalancheLevel / 3;
     case 'Storm / lightning':

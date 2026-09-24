@@ -31,7 +31,7 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
     const point = trend[index];
     const complete = [point.temp, point.wind, point.gust, point.precipChance]
       .every((value) => typeof value === "number" && Number.isFinite(value));
-    const measured = (value: unknown) => typeof value === "number" && Number.isFinite(value);
+    const measured = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
     const knownFailures = row.failedRuleLabels.flatMap((label, index) => {
       const known = label === "Gust above limit" ? measured(point.gust)
         : label === "Precip above limit" ? measured(point.precipChance)

@@ -1,18 +1,13 @@
 'use strict';
 
 const { createCache, normalizeCoordKey } = require('./cache');
+const { toFiniteOrNull } = require('./numbers');
 
 const NWS_POINTS_URL = 'https://api.weather.gov/points';
 const MRMS_REFLECTIVITY_URL = 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer';
 const RFC_QPE_URL = 'https://mapservices.weather.noaa.gov/raster/rest/services/obs/rfc_qpe/MapServer';
 const USFS_CLOSED_ROADS_URL = 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/1';
 const WFIGS_CURRENT_PERIMETERS_URL = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0';
-
-const toFiniteOrNull = (value) => {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
 
 const round = (value, digits = 1) => {
   const numeric = toFiniteOrNull(value);

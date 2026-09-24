@@ -1,4 +1,5 @@
-const { toFiniteOrNull, classifyFlowTrend } = require('./local-conditions');
+const { toFiniteOrNull } = require('./numbers');
+const { classifyFlowTrend } = require('./local-conditions');
 const BASE = 'https://api.waterdata.usgs.gov/ogcapi/v1/collections';
 
 // Modern OGC API. Never interpret a missing value or a stale gauge as zero flow.

@@ -2263,8 +2263,7 @@ test('celsiusToF converts known reference points', () => {
   expect(celsiusToF(-40)).toBe(-40);
 });
 
-test('celsiusToF returns null for non-numeric input', () => {
-  // 'warm' is not a number — Number('warm') = NaN, so returns null
+test('celsiusToF returns null for missing or non-numeric input', () => {
   expect(celsiusToF('warm')).toBeNull();
   // A missing reading is not 0°C, even though Number(null) === 0
   expect(celsiusToF(null)).toBeNull();
@@ -2399,9 +2398,9 @@ test('clampPercent rounds to integer', () => {
 test('clampPercent returns null for non-numeric input', () => {
   // null is a missing reading, not 0%
   expect(clampPercent(null)).toBeNull();
+  expect(clampPercent('')).toBeNull();
   // 'high' → NaN → not finite → null
   expect(clampPercent('high')).toBeNull();
-  // undefined → NaN → not finite → null
   expect(clampPercent(undefined)).toBeNull();
 });
 
@@ -2475,19 +2474,21 @@ test('buildVisibilityRisk returns Unknown when description signals unavailabilit
   expect(result.level).toBe('Unknown');
 });
 
-test('buildVisibilityRisk returns Unknown when the description and every signal are missing', () => {
-  // null fields are missing readings, not 0% / 0 mph evidence of clear visibility
-  const result = buildVisibilityRisk({
-    description: '',
-    precipChance: null,
-    humidity: null,
-    cloudCover: null,
-    windSpeed: null,
-    windGust: null,
-    trend: [],
-  });
-  expect(result.score).toBeNull();
-  expect(result.level).toBe('Unknown');
+test('buildVisibilityRisk treats null signals as missing, not as calm clear air', () => {
+  // The unavailable-weather payload carries explicit nulls; they must not read as 0.
+  for (const description of ['', 'Weather data unavailable']) {
+    const result = buildVisibilityRisk({
+      description,
+      precipChance: null,
+      humidity: null,
+      cloudCover: null,
+      windSpeed: null,
+      windGust: null,
+      trend: [],
+    });
+    expect(result.score).toBeNull();
+    expect(result.level).toBe('Unknown');
+  }
 });
 
 test('buildVisibilityRisk scores high for blizzard/whiteout description', () => {
@@ -3014,11 +3015,11 @@ test('openMeteoCodeToText maps known WMO codes to descriptive labels', () => {
 
 test('openMeteoCodeToText returns Unknown for unrecognized code', () => {
   expect(openMeteoCodeToText(999)).toBe('Unknown');
-  // Number(null) = 0 which maps to 'Clear', so null is not truly "unknown" — skip that case.
   // Non-numeric strings that do not parse to a valid code return Unknown.
   expect(openMeteoCodeToText('fog')).toBe('Unknown');
   expect(openMeteoCodeToText(-1)).toBe('Unknown');
   expect(openMeteoCodeToText(undefined)).toBe('Unknown');
+  expect(openMeteoCodeToText(null)).toBe('Unknown');
 });
 
 test('openMeteoCodeToText accepts numeric strings', () => {

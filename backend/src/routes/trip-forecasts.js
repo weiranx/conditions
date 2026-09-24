@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const { parseCookies, readSessionToken } = require('../auth/account-access');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
+const { toFiniteOrNull } = require('../utils/numbers');
 
 const GUEST_MULTI_DAY_COOKIE_NAME = 'bc_trip_guest';
 const MIN_TRIP_DAYS = 2;
@@ -37,8 +38,9 @@ const registerTripForecastRoutes = ({
         ...(error?.code ? { code: error.code } : {}),
       });
     }
-    const lat = Number(req.body?.lat);
-    const lon = Number(req.body?.lon);
+    // null or '' is a missing coordinate, not 0° (Number(null) === 0).
+    const lat = toFiniteOrNull(req.body?.lat);
+    const lon = toFiniteOrNull(req.body?.lon);
     const startDate = String(req.body?.startDate || '').trim();
     const startTime = String(req.body?.startTime || '').trim();
     const durationDays = Math.round(Number(req.body?.durationDays));
@@ -47,8 +49,8 @@ const registerTripForecastRoutes = ({
     const idempotencyKey = String(req.headers['idempotency-key'] || '').trim();
 
     if (
-      !Number.isFinite(lat) || lat < -90 || lat > 90
-      || !Number.isFinite(lon) || lon < -180 || lon > 180
+      lat === null || lat < -90 || lat > 90
+      || lon === null || lon < -180 || lon > 180
       || !DATE_PATTERN.test(startDate)
       || !TIME_PATTERN.test(startTime)
       || !Number.isInteger(durationDays) || durationDays < MIN_TRIP_DAYS || durationDays > MAX_TRIP_DAYS

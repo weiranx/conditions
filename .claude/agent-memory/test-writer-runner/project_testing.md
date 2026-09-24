@@ -25,15 +25,11 @@ cd backend && npx jest --runInBand test/unit.utils.test.js  # new utils tests
 Two tests in `unit.helpers.test.js` fail due to in-flight changes to `index.js` and `src/utils/wind.js` in the working tree. These are pre-existing and unrelated to the new test file.
 
 ## Key JS null-coercion gotcha
-Many util functions use `Number(value)` which coerces `null` → `0` (finite!), so they do NOT return `null` for `null` inputs — they return `0`. Only `undefined` and non-numeric strings produce `NaN` (non-finite) and trigger null returns. Tests must reflect this actual behavior:
-- `mmToInches(null)` → `0`, not `null`
-- `cmToInches(null)` → `0`, not `null`
-- `clampPercent(null)` → `0`, not `null`
-- `normalizePressureHpa(null)` → `0`, not `null`
-- `toFiniteNumberOrNull(null)` → `0`, not `null`
-- `clampTravelWindowHours(null)` → `1` (0 clamped to min), not fallback
-- `celsiusToF(null)` → `32` (0°C = 32°F), not `null`
-- `openMeteoCodeToText(null)` → `'Clear'` (code 0), not `'Unknown'`
+`Number(null)`, `Number('')` and `Number(false)` are `0`, so a missing provider reading must never go through a bare `Number()`. Use `toFiniteOrNull` from `backend/src/utils/numbers.js` (frontend: `isFiniteNumber` / `parseOptionalFiniteNumber` in `frontend/src/app/core.ts`). As of 2026-09-23 the shared helpers treat null as missing — assert that, not a coerced 0:
+- `clampPercent(null)`, `celsiusToF(null)`, `normalizePressureHpa(null)`, `normalizeNoaaDewPointF({ value: null })`, `normalizeNoaaPressureHpa({ value: null })` → `null`
+- `mmToInches(null)`, `cmToInches(null)` → `null`
+- `clampTravelWindowHours(null)` → the fallback (12), not 1
+- `openMeteoCodeToText(null)` → `'Unknown'`, not `'Clear'`
 - `new Date(null)` = epoch (valid), `new Date(undefined)` = Invalid Date — affects `hourLabelFromIso`
 - JS `toFixed(4)` uses banker's rounding for `.5` half-way cases — do not use `x.xxxxx5` boundary values in `toFixed` assertions
 

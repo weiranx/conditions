@@ -10,14 +10,12 @@ import type { LatLngLiteral } from "leaflet";
 import { buildPlannedReportWeatherRows } from "../report-weather";
 import {
   DATE_FMT,
-  GUST_INCREASE_MPH_PER_1000FT,
   KM_PER_MILE,
   MAP_STYLE_OPTIONS,
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
-  TEMP_LAPSE_F_PER_1000FT,
-  WIND_INCREASE_MPH_PER_1000FT,
 } from "../../app/constants";
+import { estimateAtElevation } from "../../app/elevation-forecast";
 import {
   type ActivityType,
   type MapStyle,
@@ -37,6 +35,7 @@ import {
   formatSweForElevationUnit,
   formatTemperatureForUnit,
   formatWindForUnit,
+  isFiniteNumber,
   minutesToTwentyFourHourClock,
   normalizeForecastDate,
   parseIsoToMs,
@@ -54,7 +53,6 @@ import {
   resolveObjectiveTimeZone,
 } from "../../app/planned-start";
 import {
-  computeFeelsLikeF,
   getDangerLevelClass,
   normalizeDangerLevel,
   parseOptionalElevationInput,
@@ -2304,40 +2302,20 @@ export function useWorkspace() {
   useEffect(() => {
     setWeatherHourPreviewTime(null);
   }, [alpineStartTime, forecastDate, objectiveName]);
-  const targetElevationForecast =
-    safetyData &&
-    hasTargetElevation &&
-    Number.isFinite(Number(safetyData.weather.elevation))
-      ? (() => {
-          const baseElevationFt = Number(safetyData.weather.elevation);
-          const deltaKft = (targetElevationFt - baseElevationFt) / 1000;
-          const temp = Math.round(
-            safetyData.weather.temp - deltaKft * TEMP_LAPSE_F_PER_1000FT,
-          );
-          const windSpeed = Math.max(
-            0,
-            Math.round(
-              safetyData.weather.windSpeed +
-                deltaKft * WIND_INCREASE_MPH_PER_1000FT,
-            ),
-          );
-          const windGust = Math.max(
-            windSpeed,
-            Math.round(
-              safetyData.weather.windGust +
-                deltaKft * GUST_INCREASE_MPH_PER_1000FT,
-            ),
-          );
-          const feelsLike = computeFeelsLikeF(temp, windSpeed);
-          return {
-            temp,
-            feelsLike,
-            windSpeed,
-            windGust,
-            deltaFt: Math.round(targetElevationFt - baseElevationFt),
-          };
-        })()
-      : null;
+  // Estimating from a missing objective elevation, temperature or wind would
+  // invent a forecast at the target (Number(null) is 0 ft, 0 °F, calm).
+  const targetElevationForecast = (() => {
+    const weather = safetyData?.weather;
+    if (!hasTargetElevation || !weather || !isFiniteNumber(weather.elevation)
+      || !isFiniteNumber(weather.temp) || !isFiniteNumber(weather.windSpeed)) {
+      return null;
+    }
+    const deltaFt = targetElevationFt - weather.elevation;
+    return {
+      ...estimateAtElevation({ temp: weather.temp, wind: weather.windSpeed, gust: weather.windGust ?? Number.NaN }, deltaFt),
+      deltaFt: Math.round(deltaFt),
+    };
+  })();
   const rainfallPayload = React.useMemo(() => {
     if (!safetyData) {
       return null;
@@ -2477,14 +2455,14 @@ export function useWorkspace() {
   const snowpackInterpretation = safetyData
     ? buildSnowpackInterpretation(
         safetyData.snowpack,
-        Number(safetyData.weather?.elevation),
+        safetyData.weather?.elevation,
         preferences.elevationUnit,
       )
     : null;
   const snowpackInsights = safetyData
     ? buildSnowpackInsights(
         safetyData.snowpack,
-        Number(safetyData.weather?.elevation),
+        safetyData.weather?.elevation,
         preferences.elevationUnit,
       )
     : null;

@@ -1,4 +1,5 @@
-const { toFiniteNumberOrNull, computeFeelsLikeF } = require('./weather-normalizers');
+const { computeFeelsLikeF } = require('./weather-normalizers');
+const { toFiniteOrNull } = require('./numbers');
 
 const VISIBILITY_RISK_SOURCE = 'Derived from weather description, precipitation, wind, humidity, and cloud cover signals';
 
@@ -8,11 +9,11 @@ const GUST_INCREASE_MPH_PER_1000FT = 2.5;
 
 const buildVisibilityRisk = (weatherData) => {
   const description = String(weatherData?.description || '').toLowerCase().trim();
-  const precipChance = toFiniteNumberOrNull(weatherData?.precipChance);
-  const humidity = toFiniteNumberOrNull(weatherData?.humidity);
-  const cloudCover = toFiniteNumberOrNull(weatherData?.cloudCover);
-  const windSpeed = toFiniteNumberOrNull(weatherData?.windSpeed);
-  const windGust = toFiniteNumberOrNull(weatherData?.windGust);
+  const precipChance = toFiniteOrNull(weatherData?.precipChance);
+  const humidity = toFiniteOrNull(weatherData?.humidity);
+  const cloudCover = toFiniteOrNull(weatherData?.cloudCover);
+  const windSpeed = toFiniteOrNull(weatherData?.windSpeed);
+  const windGust = toFiniteOrNull(weatherData?.windGust);
   const isDaytime = typeof weatherData?.isDaytime === 'boolean' ? weatherData.isDaytime : null;
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
 
@@ -101,11 +102,11 @@ const buildVisibilityRisk = (weatherData) => {
   if (trend.length > 0) {
     activeHours = trend.filter((point) => {
       const pointCondition = String(point?.condition || '').toLowerCase();
-      const pointPrecip = toFiniteNumberOrNull(point?.precipChance);
-      const pointHumidity = toFiniteNumberOrNull(point?.humidity);
-      const pointCloud = toFiniteNumberOrNull(point?.cloudCover);
-      const pointWind = toFiniteNumberOrNull(point?.wind);
-      const pointGust = toFiniteNumberOrNull(point?.gust);
+      const pointPrecip = toFiniteOrNull(point?.precipChance);
+      const pointHumidity = toFiniteOrNull(point?.humidity);
+      const pointCloud = toFiniteOrNull(point?.cloudCover);
+      const pointWind = toFiniteOrNull(point?.wind);
+      const pointGust = toFiniteOrNull(point?.gust);
       const pointEffectiveWind = Math.max(pointWind !== null ? pointWind : 0, pointGust !== null ? pointGust : 0);
 
       let pointRiskSignals = 0;

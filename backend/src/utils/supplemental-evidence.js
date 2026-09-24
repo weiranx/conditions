@@ -1,6 +1,6 @@
 const { createCache } = require('./cache');
 const { haversineKm } = require('./geo');
-const { toFiniteOrNull } = require('./local-conditions');
+const { toFiniteOrNull } = require('./numbers');
 const { createEvidenceFetcher } = require('./evidence-fetch');
 const { createNbmService } = require('./nbm-guidance');
 const { createHrrrSmokeService } = require('./hrrr-smoke');

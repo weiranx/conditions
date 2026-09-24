@@ -3,6 +3,7 @@ const booleanPointInPolygon = require('@turf/boolean-point-in-polygon').default;
 const { createFetchWithTimeout } = require('./http-client');
 const { createCache, normalizeCoordKey } = require('./cache');
 const { logger } = require('./logger');
+const { toFiniteOrNull } = require('./numbers');
 
 const FT_PER_METER = 3.28084;
 const MAX_REASONABLE_ELEVATION_FT = 20000;
@@ -146,8 +147,8 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       );
       if (usgsRes.ok) {
         const usgsData = await usgsRes.json();
-        const usgsElevationFt = Number(usgsData?.value);
-        if (Number.isFinite(usgsElevationFt) && usgsElevationFt > -1000 && usgsElevationFt <= MAX_REASONABLE_ELEVATION_FT) {
+        const usgsElevationFt = toFiniteOrNull(usgsData?.value);
+        if (usgsElevationFt !== null && usgsElevationFt > -1000 && usgsElevationFt <= MAX_REASONABLE_ELEVATION_FT) {
           return { elevationFt: Math.round(usgsElevationFt), source: 'USGS 3DEP elevation service' };
         }
       }
@@ -162,8 +163,8 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       );
       if (openMeteoRes.ok) {
         const openMeteoData = await openMeteoRes.json();
-        const elevationMeters = Number(openMeteoData?.elevation?.[0]);
-        const elevationFt = Number.isFinite(elevationMeters) ? Math.round(elevationMeters * FT_PER_METER) : null;
+        const elevationMeters = toFiniteOrNull(openMeteoData?.elevation?.[0]);
+        const elevationFt = elevationMeters !== null ? Math.round(elevationMeters * FT_PER_METER) : null;
         if (Number.isFinite(elevationFt) && elevationFt > -1000 && elevationFt <= MAX_REASONABLE_ELEVATION_FT) {
           return { elevationFt, source: 'Open-Meteo elevation API' };
         }

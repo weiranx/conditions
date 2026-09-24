@@ -126,8 +126,8 @@ Do not mix module systems within each tier.
 - OpenAI, Anthropic, and Gemini integrations use `backend/src/utils/ai-client.js` as the shared provider-switching client.
 - Caching logic uses `backend/src/utils/cache.js` for tiered in-memory caches.
 - New frontend utilities go in `frontend/src/app/` or `frontend/src/lib/`.
-- New frontend UI components go in `frontend/src/components/`. Domain-specific cards go in `frontend/src/components/planner/cards/`.
-- Prefer extracting helpers from orchestration files (`App.tsx`, `backend/index.js`) rather than splitting the core flow.
+- New frontend screens and report sections go in `frontend/src/field/`; planner state belongs in `frontend/src/field/model/`.
+- Prefer extracting helpers from orchestration files (`frontend/src/field/model/useWorkspace.ts`, `backend/index.js`) rather than splitting the core flow.
 
 ### Avalanche-Specific Logic
 
@@ -188,7 +188,7 @@ Use this after significant changes to confirm core flows still work:
 
 ### Adding a new frontend UI section
 
-1. Create the component in `frontend/src/components/planner/` or inline in `App.tsx` for small additions.
+1. Create the component in `frontend/src/field/` and render it from the screen or report chapter that owns it.
 2. Wire up any new data fields using the types defined in `frontend/src/app/types.ts`.
 3. Run `npm run typecheck` to catch type mismatches.
 4. Add any new shared formatting logic to `frontend/src/app/core.ts`.

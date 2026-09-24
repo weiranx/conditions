@@ -55,12 +55,12 @@ export interface AvalancheProblem {
 
 export interface WeatherTrendPoint {
   time: string;
-  temp: number;
-  wind: number;
-  gust: number;
+  temp: number | null;
+  wind: number | null;
+  gust: number | null;
   windDirection?: string | null;
   pressure?: number | null;
-  precipChance?: number;
+  precipChance?: number | null;
   humidity?: number | null;
   dewPoint?: number | null;
   cloudCover?: number | null;
@@ -186,17 +186,17 @@ export interface SafetyData {
     availableRange?: { start?: string; end?: string };
   };
   weather: {
-    temp: number;
-    feelsLike?: number;
+    temp: number | null;
+    feelsLike?: number | null;
     dewPoint?: number | null;
     description: string;
-    windSpeed: number;
-    windGust: number;
+    windSpeed: number | null;
+    windGust: number | null;
     windDirection?: string | null;
     pressure?: number | null;
-    humidity: number;
+    humidity: number | null;
     cloudCover: number | null;
-    precipChance: number;
+    precipChance: number | null;
     isDaytime?: boolean | null;
     forecastLink?: string;
     issuedTime?: string;

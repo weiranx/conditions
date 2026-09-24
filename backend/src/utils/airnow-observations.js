@@ -1,4 +1,4 @@
-const { toFiniteOrNull } = require('./local-conditions');
+const { toFiniteOrNull } = require('./numbers');
 const { haversineKm } = require('./geo');
 
 const buildAirNowUrl = ({ lat, lon, apiKey, now = Date.now() }) => {

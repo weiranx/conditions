@@ -1,5 +1,5 @@
 const { buildAirNowUrl, parseAirNowObservations } = require('./airnow-observations');
-const { toFiniteOrNull } = require('./local-conditions');
+const { toFiniteOrNull } = require('./numbers');
 const { normalizeHttpUrl } = require('./url-utils');
 const { parseIsoTimeToMs, findClosestTimeIndex, withExplicitTimezone } = require('./time');
 const { createCache, normalizeCoordKey } = require('./cache');

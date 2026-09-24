@@ -1,6 +1,6 @@
 const { selectForecastIntervals } = require('./report-evidence');
 const { parseIsoTimeToMs, parseClockToMinutes, parseIsoClockMinutes, clampTravelWindowHours } = require('./time');
-const finite = v => v == null || v === '' || typeof v === 'boolean' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
+const { toFiniteOrNull: finite } = require('./numbers');
 
 // Weight measurements, not the number of narrative reasons. Unknown metadata
 // remains usable context but cannot establish high-quality local evidence.

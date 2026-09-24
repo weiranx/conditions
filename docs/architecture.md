@@ -4,7 +4,7 @@
 
 Backcountry Conditions uses a two-tier web architecture:
 
-- **Frontend**: React + Vite SPA (`frontend/src/App.tsx` plus supporting modules)
+- **Frontend**: React + Vite SPA (`frontend/src/main.tsx` → `frontend/src/field/FieldApp.tsx` plus supporting modules)
 - **Backend**: Express API (`backend/index.js` + modular server/route helpers in `backend/src/`)
 
 The frontend requests synthesized planning data from the backend. The backend fetches and merges data from multiple upstream providers, then returns a single unified response payload used to render report cards, decision checks, SAT output, and trip/status views.
@@ -20,7 +20,7 @@ Browser
   ▼
 ┌─────────────────────────────────────────────┐
 │              Frontend (Vite SPA)            │
-│  App.tsx → planner UI, report cards, views  │
+│  FieldApp → planner, report, library views  │
 │  /api proxy in dev → backend:3001           │
 └───────────────────┬─────────────────────────┘
                     │ HTTP
@@ -57,43 +57,37 @@ Browser
 - Planner state management (objective, date, start time, target elevation)
 - Travel-window scoring and pass/fail timeline rendering
 - Settings persistence (theme, units, time style, decision thresholds)
-- Multi-view navigation (`home`, `planner`, `settings`, `status`, `trip`)
-- Report actions (print report, SAT one-liner copy, team brief copy)
+- Multi-view navigation (`home`, `planner`, `trip`, `history`, `watches`, `settings`, `account`, `admin`)
+- Report actions (print, copy, share links, saved reports, email)
 - Route analysis UI with route selection and multi-waypoint briefing display
-- AI field brief on-demand narrative
+- AI field brief on-demand narrative and report chat
 - Wind loading / aspect elevation rose visualization
-- Collapsible card UI with preview summaries and modal expand
 - URL state encoding for shareable planner/trip links
 
 **Module layout:**
 
 | Path | Purpose |
 |---|---|
-| `frontend/src/App.tsx` | Main orchestration layer for UI state and rendering |
-| `frontend/src/app/constants.ts` | App-wide constants |
+| `frontend/src/main.tsx` | Entry point: landing page, MCP connect page, or the planner (`FieldApp`) |
+| `frontend/src/field/FieldApp.tsx` | Planner shell and navigation; screens load lazily |
+| `frontend/src/field/*.tsx` | Screens and report chapters (`Report`, `Forecast`, `Timing`, `Terrain`, `Conditions`, `Route`, `Compare`, `Library`, `Settings`, `Account`, `Administration`, `Chat`, …) |
+| `frontend/src/field/model/` | State hooks: `useWorkspace` (planner state passed to screens), `useReportGeneration`, `useSavedReportSync`, `useReportComparisons`, `useObjectiveShortlist`, `useAdministration` |
 | `frontend/src/app/types.ts` | Domain TypeScript interfaces |
+| `frontend/src/app/constants.ts` | App-wide constants |
 | `frontend/src/app/core.ts` | Formatting and calculation utilities |
+| `frontend/src/app/decision.ts` | Go / caution / no-go checks |
 | `frontend/src/app/preferences.ts` | User preference management |
 | `frontend/src/app/planner-helpers.ts` | Planner-specific helper functions |
 | `frontend/src/app/date-time-inputs.ts` | Date/time input handling |
 | `frontend/src/app/text-utils.ts` | Text formatting utilities (markdown rendering, etc.) |
-| `frontend/src/app/map-components.tsx` | Map-related components |
+| `frontend/src/app/*-display.ts` | Display helpers for each report section |
+| `frontend/src/hooks/` | Data-fetching hooks (`useSafetyData`, `useTripForecast`, `useRouteAnalysis`, …) |
+| `frontend/src/contexts/` | Account, feature-flag, and AI-access providers |
 | `frontend/src/lib/api-client.ts` | API calls + retry logic |
 | `frontend/src/lib/search.ts` | Local peak catalog + Nominatim integration |
-| `frontend/src/components/planner/SearchBox.tsx` | Objective search input |
-| `frontend/src/components/planner/CollapsibleCard.tsx` | Card container with collapse/expand modal |
-| `frontend/src/components/planner/ForecastLoading.tsx` | Loading state component |
-| `frontend/src/components/planner/CardHelpHint.tsx` | Contextual help hints for cards |
-| `frontend/src/components/planner/cards/AvalancheForecastCard.tsx` | Avalanche forecast display with danger ratings and problems |
-| `frontend/src/components/planner/cards/WindLoadingCard.tsx` | Wind loading aspect/elevation rose |
-| `frontend/src/components/planner/cards/TravelWindowPlannerCard.tsx` | Travel window timeline and scoring |
-| `frontend/src/components/planner/cards/AspectElevationRose.tsx` | Aspect/elevation rose visualization |
-| `frontend/src/components/planner/cards/ElevationDangerGradient.tsx` | Elevation-based danger gradient display |
-| `frontend/src/components/planner/cards/HourlyConditionsDashboard.tsx` | Hourly conditions overview |
-| `frontend/src/components/planner/cards/MultiDayRiskArc.tsx` | Multi-day risk arc visualization |
-| `frontend/src/components/planner/cards/RouteConditionsProfile.tsx` | Route conditions profile display |
 | `frontend/src/components/ErrorBoundary.tsx` | React error boundary wrapper |
 | `frontend/src/utils/avalanche.ts` | Avalanche-specific utility functions |
+| `frontend/dev/` | In-browser mock API for `npm run dev:mock` and `npm run test:mock` |
 
 **User preferences** are stored in `users.preferences` for signed-in accounts. Guests use browser `localStorage` under `summitsafe:user-preferences:v1`; creating an account seeds it with those browser preferences, and signing out restores the current values to browser storage. Unit conversions (temperature, elevation, wind, time) are display-side only — the backend always returns SI-adjacent values.
 
@@ -220,12 +214,12 @@ On partial upstream failures, the backend returns a degraded but usable `200` re
 
 ## Maintainability Notes
 
-- `frontend/src/App.tsx` and `backend/index.js` are intentionally large orchestration files. Prefer extracting helpers rather than splitting the core flow.
+- `backend/index.js` (composition root) and `frontend/src/field/model/useWorkspace.ts` (planner state) are intentionally large orchestration files. Prefer extracting helpers rather than splitting the core flow.
 - Route registration and server bootstrap are already extracted, reducing coupling around middleware and endpoint setup.
 - Some center-specific avalanche handling exists as explicit hotfix logic in `backend/index.js` — review before modifying avalanche parsing.
 - Backend module system is **CommonJS** (`require` / `module.exports`). Frontend is **ES modules** (`import` / `export`).
 
 **Future extraction candidates:**
 - Backend pipeline stages (`weather`, `alerts`, `precip`, `scoring`) into separate service modules
-- Planner subview containers and report-card composition logic in the frontend
+- Planner state in `useWorkspace` into smaller controllers in `frontend/src/field/model/`
 - Shared serialization/formatting helpers used by print, SAT, and trip features
