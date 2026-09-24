@@ -88,6 +88,7 @@ const makeApp = ({
       result: await createReport(query),
       reportUsage: REPORT_USAGE,
     })),
+    getUserUsage: jest.fn().mockResolvedValue(REPORT_USAGE),
   };
   const resolvedEmailService = emailService || {
     available: true,
@@ -287,7 +288,69 @@ test('saves a new report with every AI section under the signed-in user', async 
   expect(query.mock.calls[1][1]).toEqual([USER_ID]);
 });
 
-test('enforces the Free monthly report limit before inserting history', async () => {
+test('saving a report does not consume a monthly report slot', async () => {
+  const query = jest.fn()
+    .mockResolvedValueOnce({
+      rows: [{ id: REPORT_ID, share_token: SHARE_TOKEN, title: 'Mount Rainier', created_at: CREATED_AT, updated_at: CREATED_AT }],
+    })
+    .mockResolvedValueOnce({ rows: [{ report_count: '3' }] });
+  const exhausted = { ...REPORT_USAGE, usedReports: 50, remainingReports: 0, percentUsed: 100, exhausted: true };
+  const consumeReportSlot = jest.fn();
+  const getUserUsage = jest.fn().mockResolvedValue(exhausted);
+  const response = await request(makeApp({
+    query,
+    reportUsageService: { available: true, consumeReportSlot, getUserUsage },
+  }))
+    .post('/api/account/reports')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+
+  expect(response.status).toBe(201);
+  expect(response.body.reportUsage).toEqual(exhausted);
+  expect(consumeReportSlot).not.toHaveBeenCalled();
+});
+
+test('meters a generated report without storing it', async () => {
+  const query = jest.fn()
+    .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+    .mockResolvedValueOnce({ rows: [{ report_count: '4' }] });
+  const app = makeApp({ query });
+  const response = await request(app)
+    .post('/api/account/reports/generations')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ idempotencyKey: 'generation-key-1' });
+
+  expect(response.status).toBe(201);
+  expect(response.body).toEqual({ reportCount: 4, reportUsage: REPORT_USAGE });
+  const [sql, params] = query.mock.calls[0];
+  expect(sql).toContain('INSERT INTO feature_usage_events');
+  expect(sql).not.toContain('saved_reports');
+  expect(params).toEqual([`${USER_ID}:generation-key-1`, USER_ID, 'report_generation']);
+});
+
+test('a retried generation is not counted twice', async () => {
+  const query = jest.fn()
+    .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+    .mockResolvedValueOnce({ rows: [{ report_count: '4' }] });
+  const stored = { ...REPORT_USAGE, usedReports: 7 };
+  const reportUsageService = {
+    available: true,
+    consumeReportSlot: jest.fn(async (_userId, _tierKey, createReport) => ({
+      result: await createReport(query),
+      reportUsage: { ...REPORT_USAGE, usedReports: 8 },
+    })),
+    getUserUsage: jest.fn().mockResolvedValue(stored),
+  };
+  const response = await request(makeApp({ query, reportUsageService }))
+    .post('/api/account/reports/generations')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ idempotencyKey: 'generation-key-1' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.reportUsage).toEqual(stored);
+});
+
+test('enforces the Free monthly report limit when metering a generation', async () => {
   const query = jest.fn();
   const limitError = Object.assign(new Error('Monthly report limit reached.'), {
     code: 'REPORT_USAGE_LIMIT_REACHED',
@@ -297,10 +360,11 @@ test('enforces the Free monthly report limit before inserting history', async ()
   const response = await request(makeApp({
     query,
     reportUsageService: { available: true, consumeReportSlot },
+    tierService: { getAccountTier: jest.fn().mockResolvedValue({ key: 'free' }) },
   }))
-    .post('/api/account/reports')
+    .post('/api/account/reports/generations')
     .set('Cookie', 'bc_session=test-session')
-    .send({ report: SNAPSHOT });
+    .send({ idempotencyKey: 'generation-key-1' });
 
   expect(response.status).toBe(429);
   expect(response.body).toEqual({
@@ -308,30 +372,22 @@ test('enforces the Free monthly report limit before inserting history', async ()
     code: 'REPORT_USAGE_LIMIT_REACHED',
     reportUsage: limitError.usage,
   });
+  expect(consumeReportSlot).toHaveBeenCalledWith(USER_ID, 'free', expect.any(Function));
   expect(query).not.toHaveBeenCalled();
 });
 
-test('keeps Premium report creation unlimited', async () => {
-  const query = jest.fn()
-    .mockResolvedValueOnce({
-      rows: [{ id: REPORT_ID, share_token: SHARE_TOKEN, title: 'Mount Rainier', created_at: CREATED_AT, updated_at: CREATED_AT }],
-    })
-    .mockResolvedValueOnce({ rows: [{ report_count: '21' }] });
-  const consumeReportSlot = jest.fn(async (_userId, _tierKey, createReport) => ({
-    result: await createReport(query),
-    reportUsage: { ...REPORT_USAGE, tierKey: 'premium', unlimited: true, limitReports: null, remainingReports: null },
-  }));
-  const response = await request(makeApp({
-    query,
-    reportUsageService: { available: true, consumeReportSlot },
-    tierService: { getAccountTier: jest.fn().mockResolvedValue({ key: 'premium' }) },
-  }))
-    .post('/api/account/reports')
+test('rejects generation metering without a valid idempotency key or session', async () => {
+  const query = jest.fn();
+  const missingKey = await request(makeApp({ query }))
+    .post('/api/account/reports/generations')
     .set('Cookie', 'bc_session=test-session')
-    .send({ report: SNAPSHOT });
-
-  expect(response.status).toBe(201);
-  expect(consumeReportSlot).toHaveBeenCalledWith(USER_ID, 'premium', expect.any(Function));
+    .send({ idempotencyKey: 'bad key!' });
+  expect(missingKey.status).toBe(400);
+  const anonymous = await request(makeApp({ query, user: null }))
+    .post('/api/account/reports/generations')
+    .send({ idempotencyKey: 'generation-key-1' });
+  expect(anonymous.status).toBe(401);
+  expect(query).not.toHaveBeenCalled();
 });
 
 test('lists compact report history without returning full snapshots', async () => {

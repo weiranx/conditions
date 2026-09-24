@@ -118,6 +118,7 @@ export function Report({
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
   const decision = w.decision!;
+  const emailNeedsSave = !w.sharedReportToken && !w.activeSavedReportId;
   const passed = getPastPlannedStart(
     report.plan.forecastDate,
     report.plan.alpineStartTime,
@@ -253,9 +254,13 @@ export function Report({
           <span className="sr-only">More actions</span>
         </summary>
         <div className="report-actions-popover">
-          <button disabled={actionBusy} onClick={onEmail}>
+          <button
+            disabled={actionBusy}
+            onClick={onEmail}
+            title={emailNeedsSave ? "Saves this report to your account and emails you a link" : undefined}
+          >
             <Mail size={16} />
-            Email report
+            {emailNeedsSave ? "Save & email report" : "Email report"}
           </button>
           <button onClick={w.handleRetryFetch}>
             <RefreshCw size={16} />

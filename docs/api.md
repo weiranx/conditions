@@ -403,7 +403,7 @@ Free accounts receive separate monthly allowances: generated reports are count-b
 by total input and output tokens. Both meters reset at the next UTC month. `usedRequests` remains available for
 activity analytics but does not determine the AI limit. For Premium accounts, both usage objects set `unlimited`
 to `true`; their limit, remaining, and percentage fields are `null`, while current-month totals remain
-visible. `reportCount` remains the lifetime generated total.
+visible. `reportCount` remains the lifetime saved total.
 
 ### `POST /api/auth/register`
 
@@ -482,13 +482,20 @@ sessions for the account, and clears the current browser's session cookie.
 Accepts the complete preferences object under `preferences` and returns the updated signed-in account. The
 session cookie is required. Invalid values return `400`; a missing or expired session returns `401`.
 
-### Generated reports
+### Saved reports
 
-`GET /api/account/reports` lists the signed-in user's generated report summaries. `GET /api/account/reports/:reportId`
+Reports are stored only when the user explicitly saves (or emails) one; generating a report does not create a
+snapshot. Instead, the client sends `POST /api/account/reports/generations` with a client-generated
+`idempotencyKey` (8–64 URL-safe characters) once a signed-in user's report arrives. That call counts one report
+against the monthly allowance (recorded in `feature_usage_events`, without the report body) and returns
+`reportCount` and `reportUsage`; retrying the same key does not count twice, and an exhausted Free allowance
+returns `429` with `code: "REPORT_USAGE_LIMIT_REACHED"`. Saving a report does not consume the allowance.
+
+`GET /api/account/reports` lists the signed-in user's saved report summaries. `GET /api/account/reports/:reportId`
 returns one owned snapshot, and `POST /api/account/reports` creates a snapshot with a database-unique,
 cryptographically random `shareToken`. A successful create also returns the authoritative lifetime `reportCount`
 and current `reportUsage`; clients should update their counters from this response rather than incrementing locally.
-The client may send `PUT /api/account/reports/:reportId` after AI or route
+After a report is saved, the client may send `PUT /api/account/reports/:reportId` when AI or route
 analysis finishes; that endpoint updates only the snapshot's `ai` and `route` sections and preserves the original
 plan, conditions, preferences, title, and share token.
 

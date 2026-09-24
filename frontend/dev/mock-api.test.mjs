@@ -209,3 +209,15 @@ test('history endpoint filters all AI sections and pages beyond 100 without repe
   const empty = (await api.handle('/api/account/reports?q=NONEXISTENT&aiOnly=true')).payload;
   assert.deepEqual(empty, {reports:[], nextCursor:null});
 });
+test("metering a generated report does not add it to history", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "conditions-mock-"));
+  try {
+    const api = createMockApi({ databasePath: join(dir, "database.json") });
+    const metered = await api.handle("/api/account/reports/generations", "POST", { idempotencyKey: "mock-key-1" });
+    assert.equal(metered.payload.reportCount, 0);
+    assert.ok(metered.payload.reportUsage);
+    assert.equal((await api.handle("/api/account/reports")).payload.reports.length, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
