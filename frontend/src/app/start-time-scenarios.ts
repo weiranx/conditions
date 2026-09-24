@@ -1,5 +1,5 @@
-import type { DecisionLevel, SafetyData, SummitDecision, UserPreferences } from './types';
-import { normalizedDecisionScore, decisionLevelRank } from './decision';
+import type { SafetyData, SummitDecision, UserPreferences } from './types';
+import { normalizedDecisionScore, decisionLevelRank, trendRowsCoveringWindow } from './decision';
 import { isFiniteNumber, parseSolarClockMinutes, parseTimeInputMinutes } from './core';
 import { computeFeelsLikeF } from './planner-helpers';
 
@@ -76,10 +76,13 @@ export interface StartTimeScenario {
 
 export interface StartTimeScenarioComparison {
   scenarios: StartTimeScenario[];
+  /** The departure with the best decision, then score; not necessarily the most daylight. */
   bestStartTime: string;
   drivingRisk: StartTimeScenarioRisk;
   recommendationReason: string;
   effectivelyTied: boolean;
+  /** Every departure is a no-go, so none is suggested. */
+  allNoGo: boolean;
 }
 
 function clockFromMinutes(totalMinutes: number): string {
@@ -101,7 +104,9 @@ export function buildStartTimeScenario(
 ): StartTimeScenario {
   const startMinutes = parseTimeInputMinutes(startTime) ?? 0;
   const durationMinutes = Math.max(1, Math.round(Number(preferences.travelWindowHours) || 12)) * 60;
-  const trend = Array.isArray(data.weather?.trend) ? data.weather.trend.slice(0, preferences.travelWindowHours) : [];
+  const trend = Array.isArray(data.weather?.trend)
+    ? data.weather.trend.slice(0, trendRowsCoveringWindow(startTime, preferences.travelWindowHours))
+    : [];
   const peakGustMph = finiteMax([data.weather?.windGust, ...trend.map((point) => point.gust)]);
   const peakPrecipChance = finiteMax([data.weather?.precipChance, ...trend.map((point) => point.precipChance)]);
   const peakFeelsLikeF = finiteMax([
@@ -217,15 +222,18 @@ export function compareStartTimeScenarios(
   const scoreRange = range(scenarios.map((scenario) => scenario.score));
   const sameDecisionLevel = scenarios.every((scenario) => scenario.decision.level === best.decision.level);
   const effectivelyTied = sameDecisionLevel && scoreRange <= 1;
-  const cleanHourRange = range(scenarios.map((scenario) => scenario.cleanHours));
-  const levelLabel: Record<DecisionLevel, string> = { GO: 'go', CAUTION: 'caution', 'NO-GO': 'no-go' };
-  const recommendationReason = effectivelyTied
-    ? cleanHourRange > 0
-      ? `Overall scores are effectively tied; ${best.startTime} keeps ${best.cleanHours} of ${preferences.travelWindowHours} hours free of a thunderstorm signal and preserves the most daylight margin.`
-      : `Overall scores are effectively tied; ${best.startTime} is shown first because it preserves the most daylight margin.`
-    : hasMeaningfulSpread
-      ? `${drivingRisk} changes most across these departure windows; ${best.startTime} has the strongest overall ${levelLabel[best.decision.level]} assessment.`
-      : `${best.startTime} has the strongest score and daylight margin; the compared hazard values otherwise change little.`;
+  const allNoGo = scenarios.every((scenario) => scenario.decision.level === 'NO-GO');
+  // Only claim what holds for the suggested departure: it is ranked by
+  // decision, then score, and need not have the most daylight.
+  const daylight = scenarios.map((scenario) => scenario.daylightRemainingMinutes).filter(isFiniteNumber);
+  const mostDaylight = daylight.length > 1 && best.daylightRemainingMinutes === Math.max(...daylight);
+  const recommendationReason = allNoGo
+    ? 'Every departure compared here is a no-go, so changing the start time alone does not clear this plan.'
+    : effectivelyTied
+      ? `These departures score within a point of each other${mostDaylight ? '; the suggested one leaves the most daylight' : ''}.`
+      : hasMeaningfulSpread
+        ? `${drivingRisk === 'Storm / lightning' ? 'Storm signal' : drivingRisk} changes most across these departures; the suggested one has the best decision and score.`
+        : 'The suggested departure has the best decision and score; the compared hazards otherwise change little.';
 
   return {
     scenarios: sorted,
@@ -233,5 +241,6 @@ export function compareStartTimeScenarios(
     drivingRisk,
     recommendationReason,
     effectivelyTied,
+    allNoGo,
   };
 }

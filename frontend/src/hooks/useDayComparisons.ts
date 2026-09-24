@@ -3,7 +3,7 @@ import { fetchApi } from '../lib/api-client';
 import type { DayOverDayComparison, SafetyData, UserPreferences } from '../app/types';
 import { DATE_FMT } from '../app/constants';
 import { addDaysToIsoDate, parseOptionalFiniteNumber } from '../app/core';
-import { buildDayOverDayChanges } from '../app/day-over-day';
+import { buildDayOverDayChanges, scoresComparable } from '../app/day-over-day';
 import { comparisonReportMatches, comparisonRequestUrl, comparisonTravelHours, reportRequestedStartTime } from '../app/comparison-request';
 
 export interface UseDayComparisonsParams {
@@ -94,7 +94,8 @@ export function useDayComparisons({
               startTime,
               travelWindowHours,
               previousScore: prevScore,
-              delta: safetyData.safety.score - prevScore,
+              delta: Number((safetyData.safety.score - prevScore).toFixed(1)),
+              scoreComparable: scoresComparable(safetyData, previousPayload),
               changes: buildDayOverDayChanges(safetyData, previousPayload, { temperatureUnit, windSpeedUnit }),
             },
           });

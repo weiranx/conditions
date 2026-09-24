@@ -5,7 +5,7 @@ const groupLabels: Record<string, string> = {
   weather: "Weather & exposure",
   alerts: "Official alerts",
   airQuality: "Air quality",
-  fire: "Fire danger",
+  fire: "Fire risk",
   terrain: "Terrain",
 };
 const points = (value: number) => Number(value.toFixed(1)).toString();

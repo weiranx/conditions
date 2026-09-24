@@ -123,13 +123,19 @@ export function formatAgeFromNow(value: string | null | undefined): string {
   if (ms === null) {
     return 'Unavailable';
   }
-  const ageMinutes = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  if (ageMinutes < 60) {
-    return `${ageMinutes}m ago`;
+  const offsetMinutes = Math.round((Date.now() - ms) / 60000);
+  const span = (totalMinutes: number) => {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return hours === 0 ? `${minutes}m` : minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+  };
+  // Some sources are stamped with the forecast hour they describe (air quality
+  // and precipitation at the planned start), which can be hours ahead. That is
+  // when the value applies, not how old it is.
+  if (offsetMinutes < -5) {
+    return `valid in ${span(-offsetMinutes)}`;
   }
-  const hours = Math.floor(ageMinutes / 60);
-  const minutes = ageMinutes % 60;
-  return minutes === 0 ? `${hours}h ago` : `${hours}h ${minutes}m ago`;
+  return `${span(Math.max(0, offsetMinutes))} ago`;
 }
 
 export function freshnessClass(value: string | null | undefined, staleHours: number): FreshnessState {
@@ -477,6 +483,21 @@ export function formatDistanceForElevationUnit(distanceKm: number | null | undef
     return `${numericValue.toFixed(1)} km`;
   }
   return `${(numericValue / KM_PER_MILE).toFixed(1)} mi`;
+}
+
+/**
+ * Show "N km" in the viewer's distance unit, at the precision the text gave
+ * ("about 8 km" becomes "about 5 mi", not "5.0 mi"), and drop a miles note
+ * the text already carried, so "8 km (5 mi)" does not read "5 mi (5 mi)".
+ */
+export function localizeDistanceText(text: string, elevationUnit: ElevationUnit): string {
+  return text.replace(/(-?\d+(?:\.\d+)?)\s?km\b(?:\s*\(\s*-?\d+(?:\.\d+)?\s?mi\))?/gi, (_, value: string) => {
+    const km = Number(value);
+    if (!value.includes('.')) {
+      return elevationUnit === 'm' ? `${Math.round(km)} km` : `${Math.round(km / KM_PER_MILE)} mi`;
+    }
+    return formatDistanceForElevationUnit(km, elevationUnit);
+  });
 }
 
 export function formatRainAmountForElevationUnit(

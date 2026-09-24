@@ -36,6 +36,7 @@ import {
   formatTemperatureForUnit,
   formatWindForUnit,
   isFiniteNumber,
+  localizeDistanceText,
   minutesToTwentyFourHourClock,
   normalizeForecastDate,
   parseIsoToMs,
@@ -1908,7 +1909,7 @@ export function useWorkspace() {
       preferences.elevationUnit,
     );
   const localizeUnitText = (text: string): string =>
-    text
+    localizeDistanceText(text, preferences.elevationUnit)
       .replace(
         /SWE\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi,
         (_, value) =>
@@ -1928,12 +1929,6 @@ export function useWorkspace() {
         preferences.elevationUnit === "m"
           ? `${Math.round(Number(value) * 25.4)} mm of rain`
           : match,
-      )
-      .replace(/(-?\d+(?:\.\d+)?)\s?km\b/gi, (_, value) =>
-        formatDistanceForElevationUnit(
-          Number(value),
-          preferences.elevationUnit,
-        ),
       )
       .replace(/(-?\d+(?:\.\d+)?)\s?ft\b/gi, (_, value) =>
         formatElevationDisplay(Number(value)),

@@ -14,6 +14,7 @@ import {
   freshnessClass,
   isFiniteNumber,
   isTravelWindowCoveredByAlertWindow,
+  localizeDistanceText,
   parseSolarClockMinutes,
   parseTimeInputMinutes,
   pickNewestIsoTimestamp,
@@ -54,6 +55,16 @@ export function normalizedDecisionScore(data: SafetyData, options: DecisionEvalu
   }, 0);
 
   return Math.max(0, Math.min(100, safeRawScore + avalanchePenalty));
+}
+
+/**
+ * How many trend readings the travel window spans. The forecast opens with the
+ * hour that contains the start, so a start off the hour ends inside one more
+ * reading: a 5:30 start for 10 hours runs through the 3:00 PM reading.
+ */
+export function trendRowsCoveringWindow(startTime: string, travelWindowHours: number): number {
+  const startMinute = parseTimeInputMinutes(startTime);
+  return travelWindowHours + (startMinute !== null && startMinute % 60 !== 0 ? 1 : 0);
 }
 
 export function evaluateBackcountryDecision(
@@ -137,7 +148,7 @@ export function evaluateBackcountryDecision(
   let coldestIsInversion = Boolean(approach) && hasInversion(startPoint);
   let stormSignalHour = '';
   const windowTrend = (data.weather.trend || [])
-    .slice(0, preferences.travelWindowHours)
+    .slice(0, trendRowsCoveringWindow(cutoffTime, preferences.travelWindowHours))
     .map((point, index) => atPartyElevation(point, index));
   for (const wpt of windowTrend) {
     if (isFiniteNumber(wpt.gust) && (gust === null || wpt.gust > gust)) { gust = wpt.gust; peakGustHour = wpt.time || ''; }
@@ -199,6 +210,12 @@ export function evaluateBackcountryDecision(
   const fireRiskStatus = String(data.fireRisk?.status || '').toLowerCase();
   const fireRiskLevel = Number(data.fireRisk?.level);
   const hasFireRisk = fireRiskEnabled && Number.isFinite(fireRiskLevel) && fireRiskStatus !== 'unavailable';
+  // Say what sets the fire level (a nearby fire, fire weather, or smoke); the
+  // level's own label alone ("Extreme") does not tell the party what to check.
+  const fireRiskCause = localizeDistanceText(String(data.fireRisk?.reasons?.[0] || '').trim().replace(/\.$/, ''), preferences.elevationUnit)
+    .replace(/(-?\d+(?:\.\d+)?)F\b/g, (_, value) => formatTemp(Number(value)))
+    .replace(/(-?\d+(?:\.\d+)?) mph\b/g, (_, value) => formatWind(Number(value)));
+  const fireRiskStatement = (level: string) => `Fire risk is ${level}${fireRiskCause ? `: ${fireRiskCause}` : ''}.`;
 
   const heatRiskStatus = String(data.heatRisk?.status || '').toLowerCase();
   const heatRiskLevel = Number(data.heatRisk?.level);
@@ -311,11 +328,11 @@ export function evaluateBackcountryDecision(
 
   if (hasFireRisk) {
     if (fireRiskLevel >= 4) {
-      addBlocker(`Fire danger is extreme (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}). Choose another area or time, verify closures, and do not enter fire-affected terrain.`);
+      addBlocker(`${fireRiskStatement('extreme')} Choose another area or time, verify closures, and do not enter fire-affected terrain.`);
     } else if (fireRiskLevel >= 3) {
-      addCaution(`Fire danger is high (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}). Use a short objective with multiple exits, avoid ignition sources, and turn around for increasing smoke or wind.`);
+      addCaution(`${fireRiskStatement('high')} Use a short objective with multiple exits, avoid ignition sources, and turn around for increasing smoke or wind.`);
     } else if (fireRiskLevel >= 2) {
-      addCaution(`Fire danger is elevated (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}). Check closures and incident updates, avoid ignition sources, and keep a clear exit route.`);
+      addCaution(`${fireRiskStatement('elevated')} Check closures and incident updates, avoid ignition sources, and keep a clear exit route.`);
     }
   }
 
@@ -463,9 +480,9 @@ export function evaluateBackcountryDecision(
   if (hasFireRisk) {
     checks.push({
       key: 'fire-risk',
-      label: 'Fire danger is below High',
+      label: 'Fire risk is below High',
       ok: fireRiskLevel < 3,
-      detail: `${data.fireRisk?.label || 'Unknown'} (${Number.isFinite(fireRiskLevel) ? `L${Math.round(fireRiskLevel)}` : 'L?'})`,
+      detail: `${data.fireRisk?.label || 'Unknown'} (${Number.isFinite(fireRiskLevel) ? `L${Math.round(fireRiskLevel)}` : 'L?'})${fireRiskCause ? `. ${fireRiskCause}.` : ''}`,
       action: fireRiskLevel >= 3 ? 'Verify closures, use no flame or sparks, keep multiple exits, and leave for increasing smoke or wind.' : undefined,
     });
   }

@@ -25,11 +25,20 @@ export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp,
   if (!buffer && !night) return null;
   const at = (hoursAfterReturn: number) =>
     returnMinutes === null ? `${hoursLabel(hoursAfterReturn)} after return` : clock(returnMinutes + hoursAfterReturn * 60);
+  // Hours after return are rounded to a tenth; the event's own time is exact,
+  // so sunset reads as the sunset shown elsewhere in the report.
+  const returnMs = Date.parse(contingency.plannedReturnIso || "");
+  const atEvent = (iso: string | null | undefined, hoursAfterReturn: number) => {
+    const eventMs = Date.parse(iso || "");
+    return returnMinutes !== null && Number.isFinite(returnMs) && Number.isFinite(eventMs)
+      ? clock(returnMinutes + Math.round((eventMs - returnMs) / 60000))
+      : at(hoursAfterReturn);
+  };
 
   const bufferEvents = buffer
     ? [
-      ...buffer.onsetHazards.map((hazard) => `${hazard.label} from ${at(hazard.hoursAfterReturn)}`),
-      ...(buffer.nightfall ? [`Dark by ${at(buffer.nightfall.hoursAfterReturn)}`] : []),
+      ...buffer.onsetHazards.map((hazard) => `${hazard.label} from ${atEvent(hazard.onsetIso, hazard.hoursAfterReturn)}`),
+      ...(buffer.nightfall ? [`Dark by ${atEvent(buffer.nightfall.onsetIso, buffer.nightfall.hoursAfterReturn)}`] : []),
     ]
     : [];
   const nightConditions = night
@@ -85,7 +94,7 @@ export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp,
           </span>
           <p className="sky-cap is-body">
             {typeof night.hoursToDark === "number" && (
-              night.hoursToDark <= 0 ? "You'd already be out after dark. " : `Dark by ${at(night.hoursToDark)}. `
+              night.hoursToDark <= 0 ? "You'd already be out after dark. " : `Dark by ${atEvent(night.startIso, night.hoursToDark)}. `
             )}
             Coldest it feels overnight: <strong>{formatTemp(night.minFeelsLikeF)}</strong>
             {Number(night.peakGustMph) >= 20 && <>, gusts to {formatWind(night.peakGustMph)}</>}
