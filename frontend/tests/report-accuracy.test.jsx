@@ -142,6 +142,27 @@ test("the late-return card prints the exact sunset, not a rounded offset", () =>
   assert.match(html, /Dark by 19:13/);
 });
 
+test("the late-return card reads event times on the objective's clock across daylight saving", () => {
+  // Clocks fall back at 2:00 AM MDT on 1 November 2026. Return at 00:30 MDT;
+  // a storm at 02:30 MST is three elapsed hours later, not 03:30 on the clock.
+  const contingency = {
+    status: "ok",
+    plannedReturnIso: "2026-11-01T06:30:00.000Z",
+    summary: "",
+    delayBuffer: {
+      hours: 4, startIso: "2026-11-01T06:30:00.000Z", endIso: "2026-11-01T10:30:00.000Z", coveredHours: 4, complete: true,
+      minFeelsLikeF: 30, peakGustMph: 20, peakPrecipChance: 60, nightfall: null, summary: "",
+      onsetHazards: [{ key: "storm", label: "Thunderstorms", onsetIso: "2026-11-01T09:30:00.000Z", hoursAfterReturn: 3 }],
+    },
+    overnight: null,
+  };
+  const clock = (minute) => `${String(Math.floor(minute / 60) % 24).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+  const html = renderToStaticMarkup(<ContingencyCard contingency={contingency} returnMinutes={30} clock={clock} timeZone="America/Denver"
+    formatTemp={(v) => `${v}°F`} formatWind={(v) => `${v} mph`} />);
+  assert.match(html, /Thunderstorms from 02:30/);
+  assert.match(html, /back by 03:30/);
+});
+
 test("a trailhead-to-summit chart's range covers both ends", () => {
   const html = renderToStaticMarkup(<ConditionTrend label="Temperature, trailhead to summit" values={[34, 42]} format={(v) => `${v}°F`}
     start="5 AM" end="6 AM" compare={{ label: "Summit", primaryLabel: "Trailhead", values: [22, 30] }} />);

@@ -593,10 +593,12 @@ const calculateSafetyScore = ({
     && selectedStartMinutes < sunriseMinutes;
   // An alpine start before sunrise is normal; a start after sunset costs
   // navigation margin. Use the sun's times: NOAA's isDaytime flag is a fixed
-  // 6 AM-6 PM period, so it is only the fallback.
-  const solarTimesKnown = Number.isFinite(sunriseMinutes) && Number.isFinite(sunsetMinutes) && sunsetMinutes > sunriseMinutes;
+  // 6 AM-6 PM period, so it is only the fallback. Far north in summer the sun
+  // sets after midnight (a sunset clock earlier than sunrise): the short night
+  // then falls after midnight, where a start is an alpine start.
+  const solarTimesKnown = Number.isFinite(sunriseMinutes) && Number.isFinite(sunsetMinutes) && sunsetMinutes !== sunriseMinutes;
   const startsAfterSunset = solarTimesKnown && Number.isFinite(selectedStartMinutes)
-    ? selectedStartMinutes >= sunsetMinutes
+    ? sunsetMinutes > sunriseMinutes && selectedStartMinutes >= sunsetMinutes
     : isDaytime === false && !isNightBeforeSunrise;
   const forecastStartMs = parseIsoTimeToMs(weatherData?.forecastStartTime);
   const selectedDateMs =

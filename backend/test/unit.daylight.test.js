@@ -4,15 +4,19 @@ const { buildSunClock, windowIncludesDark, windowIncludesDaylight } = require('.
 const { buildLayeringGearSuggestions } = require('../src/utils/gear-suggestions');
 const { calculateSafetyScore } = require('../src/utils/safety-score');
 
-const denver = (solar) => buildSunClock({ solarData: solar, timeZone: 'America/Denver' });
+const denver = (solar, anchorIso = '2026-09-23T12:00:00-06:00') => buildSunClock({ solarData: solar, timeZone: 'America/Denver', anchorIso });
+const iso = (ms) => new Date(ms).toISOString();
 
 describe('sun clock', () => {
   const sun = denver({ sunrise: '6:30:00 AM', sunset: '6:45:00 PM' });
 
-  test('needs sun times and a time zone', () => {
-    expect(buildSunClock({ solarData: { sunrise: 'N/A', sunset: 'N/A' }, timeZone: 'America/Denver' })).toBeNull();
-    expect(buildSunClock({ solarData: { sunrise: '6:30 AM', sunset: '6:45 PM' }, timeZone: null })).toBeNull();
-    expect(buildSunClock({ solarData: { sunrise: '6:30 AM', sunset: '6:45 PM' }, timeZone: 'Not/AZone' })).toBeNull();
+  test('needs sun times, a time zone and a report date', () => {
+    const anchorIso = '2026-09-23T12:00:00-06:00';
+    expect(buildSunClock({ solarData: { sunrise: 'N/A', sunset: 'N/A' }, timeZone: 'America/Denver', anchorIso })).toBeNull();
+    expect(buildSunClock({ solarData: { sunrise: '6:30 AM', sunset: '6:30 AM' }, timeZone: 'America/Denver', anchorIso })).toBeNull();
+    expect(buildSunClock({ solarData: { sunrise: '6:30 AM', sunset: '6:45 PM' }, timeZone: null, anchorIso })).toBeNull();
+    expect(buildSunClock({ solarData: { sunrise: '6:30 AM', sunset: '6:45 PM' }, timeZone: 'Not/AZone', anchorIso })).toBeNull();
+    expect(buildSunClock({ solarData: { sunrise: '6:30 AM', sunset: '6:45 PM' }, timeZone: 'America/Denver' })).toBeNull();
   });
 
   test('reads light and dark from the local clock', () => {
@@ -27,10 +31,26 @@ describe('sun clock', () => {
     expect(new Date(sun.nextSunrise(Date.parse('2026-09-23T20:00:00-06:00'))).toISOString()).toBe('2026-09-24T12:30:00.000Z');
   });
 
-  test('keeps the local clock across daylight-saving changes', () => {
-    // Clocks spring forward on 8 March 2026 and fall back on 1 November 2026.
-    expect(new Date(sun.nextSunrise(Date.parse('2026-03-07T22:00:00-07:00'))).toISOString()).toBe('2026-03-08T12:30:00.000Z');
-    expect(new Date(sun.nextSunrise(Date.parse('2026-10-31T22:00:00-06:00'))).toISOString()).toBe('2026-11-01T13:30:00.000Z');
+  test('the next day keeps the sun time, not the clock time, across daylight saving', () => {
+    // Clocks fall back on 1 November 2026: a 7:30 AM MDT sunrise returns at
+    // about 6:30 AM MST, the same instant a day later, not at 7:30 MST.
+    const fallBack = denver({ sunrise: '7:30:00 AM', sunset: '6:00:00 PM' }, '2026-10-31T12:00:00-06:00');
+    expect(iso(fallBack.nextSunrise(Date.parse('2026-10-31T22:00:00-06:00')))).toBe('2026-11-01T13:30:00.000Z');
+    // Clocks spring forward on 8 March 2026: 6:30 AM MST returns at 7:30 AM MDT.
+    const springForward = denver({ sunrise: '6:30:00 AM', sunset: '6:00:00 PM' }, '2026-03-07T12:00:00-07:00');
+    expect(iso(springForward.nextSunrise(Date.parse('2026-03-07T22:00:00-07:00')))).toBe('2026-03-08T13:30:00.000Z');
+    expect(springForward.isDarkAt(Date.parse('2026-03-08T07:00:00-06:00'))).toBe(true);
+  });
+
+  test('a sunset after midnight keeps the evening light', () => {
+    // Fairbanks near the solstice: up at 2:58 AM, down at 12:47 AM the next day.
+    const north = buildSunClock({ solarData: { sunrise: '2:58:00 AM', sunset: '12:47:00 AM' }, timeZone: 'America/Anchorage', anchorIso: '2026-06-21T12:00:00-08:00' });
+    expect(north.isDarkAt(Date.parse('2026-06-21T23:30:00-08:00'))).toBe(false);
+    expect(north.isDarkAt(Date.parse('2026-06-22T01:00:00-08:00'))).toBe(true);
+    expect(north.isDarkAt(Date.parse('2026-06-22T03:30:00-08:00'))).toBe(false);
+    expect(iso(north.nextSunset(Date.parse('2026-06-21T20:00:00-08:00')))).toBe('2026-06-22T08:47:00.000Z');
+    expect(iso(north.nextSunrise(Date.parse('2026-06-22T01:00:00-08:00')))).toBe('2026-06-22T10:58:00.000Z');
+    expect(windowIncludesDark(north, '2026-06-21T14:00:00-08:00', 10)).toBe(false);
   });
 
   test('tells whether a window reaches the dark or the light', () => {
@@ -117,6 +137,11 @@ describe('darkness factor follows sunset', () => {
   test('an alpine start before sunrise is not penalized', () => {
     const weatherData = { ...winterWeather({ startHour: 4, hours: 4 }), isDaytime: false };
     expect(darkness(weatherData, winterSolar, '04:00')).toBeUndefined();
+  });
+
+  test('a 10 PM start is still daylight when the sun sets after midnight', () => {
+    const weatherData = { ...winterWeather({ startHour: 22, hours: 1 }), isDaytime: false };
+    expect(darkness(weatherData, { sunrise: '2:58:00 AM', sunset: '12:47:00 AM' }, '22:00')).toBeUndefined();
   });
 
   test('falls back to the forecast flag without sun times', () => {

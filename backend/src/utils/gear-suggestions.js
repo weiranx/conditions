@@ -125,8 +125,8 @@ const buildLayeringGearSuggestions = ({
   const hasFreshSnow = Number.isFinite(snow24hIn) && snow24hIn >= 2;
   // Sunrise and sunset decide light and dark; NOAA's isDaytime flag is a fixed
   // 6 AM-6 PM period and is only the fallback.
-  const sun = buildSunClock({ solarData, timeZone: weatherData?.timezone });
   const windowStartIso = selectedStartTime || weatherData?.forecastStartTime || null;
+  const sun = buildSunClock({ solarData, timeZone: weatherData?.timezone, anchorIso: windowStartIso });
   const hasDaylightInWindow = windowIncludesDaylight(sun, windowStartIso, windowHours)
     ?? (weatherData?.isDaytime !== false || trend.some((row) => row?.isDaytime === true));
   const convective = /thunder|lightning|t-storm|tstm/.test(windowDescription);

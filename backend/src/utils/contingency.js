@@ -313,7 +313,7 @@ const buildContingencyAssessment = ({
   const returnMs = startMs + windowHours * HOUR;
   const allRows = mergeRows(trend, afterWindowTrend);
   const windowRows = selectForecastIntervals(trend, startIso, windowHours).map(normalizeRow);
-  const sun = buildSunClock({ solarData, timeZone: weatherData?.timezone });
+  const sun = buildSunClock({ solarData, timeZone: weatherData?.timezone, anchorIso: startIso });
   const delayBuffer = buildDelayBuffer({ allRows, windowRows, returnMs, bufferHours: resolveDelayBufferHours(windowHours), sun });
   const overnight = buildOvernight({ allRows, returnMs, windowHours, winterTerrain: Boolean(winterTerrain), sun });
   const coverage = delayBuffer.coveredHours > 0 || overnight.status === 'ok';

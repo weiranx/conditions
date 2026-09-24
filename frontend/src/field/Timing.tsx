@@ -275,6 +275,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
             clock={clock}
             formatTemp={(value) => w.formatTempDisplay(value)}
             formatWind={(value) => w.formatWindDisplay(value)}
+            timeZone={w.objectiveTimezone}
           />
         </div>
       )}
