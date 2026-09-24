@@ -1,12 +1,15 @@
 import type { SafetyData } from "../app/types";
 
-export function SurfacePrediction({ condition }: { condition: SafetyData['terrainCondition'] }) {
+export function SurfacePrediction({ condition, localize = (text) => text }: {
+  condition: SafetyData['terrainCondition'];
+  localize?: (text: string) => string;
+}) {
   return (
     <>
       {condition?.outlook && (
         <div>
-          <p>{condition.outlook.terrainLimitations}</p>
-          {condition.outlook.travelEffects.map(effect => <p key={effect}>{effect}</p>)}
+          <p>{localize(condition.outlook.terrainLimitations)}</p>
+          {condition.outlook.travelEffects.map(effect => <p key={effect}>{localize(effect)}</p>)}
           <p>Temperature coverage: {condition.outlook.coverageHours.toFixed(1)} of {condition.outlook.requestedHours} planned hours.</p>
           {condition.outlook.timeline.length > 0 && (
             <details>
@@ -22,11 +25,11 @@ export function SurfacePrediction({ condition }: { condition: SafetyData['terrai
           )}
         </div>
       )}
-      {condition?.moisture && <p>{condition.moisture.summary}</p>}
+      {condition?.moisture && <p>{localize(condition.moisture.summary)}</p>}
       {Boolean(condition?.confidenceReasons?.length) && (
         <details>
           <summary>What limits this estimate</summary>
-          <ul>{condition?.confidenceReasons?.map(reason => <li key={reason}>{reason}</li>)}</ul>
+          <ul>{condition?.confidenceReasons?.map(reason => <li key={reason}>{localize(reason)}</li>)}</ul>
         </details>
       )}
     </>

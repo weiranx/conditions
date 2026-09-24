@@ -37,7 +37,7 @@ import {
   formatTemperatureForUnit,
   formatWindForUnit,
   isFiniteNumber,
-  localizeDistanceText,
+  localizeUnitText as localizeUnitTextForUnits,
   minutesToTwentyFourHourClock,
   normalizeForecastDate,
   parseIsoToMs,
@@ -1896,36 +1896,7 @@ export function useWorkspace() {
       preferences.elevationUnit,
     );
   const localizeUnitText = (text: string): string =>
-    localizeDistanceText(text, preferences.elevationUnit)
-      .replace(
-        /SWE\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi,
-        (_, value) =>
-          `SWE ~${formatSweForElevationUnit(Number(value), preferences.elevationUnit).replace(/\s*SWE$/i, "")}`,
-      )
-      .replace(
-        /depth\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi,
-        (_, value) =>
-          `depth ~${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)}`,
-      )
-      .replace(
-        /(\d+(?:\.\d+)?)\s?in of new snow\b/gi,
-        (_, value) =>
-          `${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)} of new snow`,
-      )
-      .replace(/(\d+(?:\.\d+)?)\s?in of rain\b/gi, (match, value) =>
-        preferences.elevationUnit === "m"
-          ? `${Math.round(Number(value) * 25.4)} mm of rain`
-          : match,
-      )
-      .replace(/(-?\d+(?:\.\d+)?)\s?ft\b/gi, (_, value) =>
-        formatElevationDisplay(Number(value)),
-      )
-      .replace(/(-?\d+(?:\.\d+)?)\s?mph\b/gi, (_, value) =>
-        formatWindDisplay(Number(value)),
-      )
-      .replace(/(-?\d+(?:\.\d+)?)F\b/g, (_, value) =>
-        formatTempDisplay(Number(value)),
-      );
+    localizeUnitTextForUnits(text, preferences);
 
   const cutoffMinutes = parseTimeInputMinutes(alpineStartTime);
   const displayStartTime = formatClockForStyle(

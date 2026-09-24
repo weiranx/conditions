@@ -45,7 +45,7 @@ test("fire-weather numbers in the reason follow the viewer's units", () => {
   const data = clearDay();
   data.fireRisk = { status: "ok", level: 3, label: "High", reasons: ["Warm, dry, breezy fire weather (86F, RH 20%, wind 18 mph)."] };
   const decision = evaluateBackcountryDecision(data, "07:00", { ...preferences, temperatureUnit: "c", windSpeedUnit: "kph" });
-  assert.match(decision.cautions.join(" "), /Fire risk is high: Warm, dry, breezy fire weather \(30°C, RH 20%, wind 29 kph\)\./);
+  assert.match(decision.cautions.join(" "), /Fire risk is high: Warm, dry, breezy fire weather \(30°C, RH 20%, wind 29 km\/h\)\./);
 });
 
 test("an off-the-hour start keeps its last partial hour in the decision", () => {

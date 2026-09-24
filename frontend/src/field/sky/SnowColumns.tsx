@@ -1,3 +1,4 @@
+import { formatSnowDepthForElevationUnit, formatSweForElevationUnit } from "../../app/core";
 import { useWidth } from "./useWidth";
 
 export type SnowColumn = {
@@ -37,7 +38,8 @@ export function SnowColumns({ columns, metric }: { columns: SnowColumn[]; metric
   const colW = Math.min(88, slot * 0.56);
   const unit = metric ? "cm" : "in";
   const toUnit = (inches: number) => (metric ? inches * 2.54 : inches);
-  const show = (inches: number) => `${Math.round(toUnit(inches) * (inches < 4 ? 10 : 1)) / (inches < 4 ? 10 : 1)} ${unit}`;
+  const depth = (inches: number) => formatSnowDepthForElevationUnit(inches, metric ? "m" : "ft");
+  const water = (inches: number) => formatSweForElevationUnit(inches, metric ? "m" : "ft").replace(/\s*SWE$/, "");
   const steps = metric ? [5, 10, 20, 25, 50, 100] : [2, 6, 12, 24, 36, 48];
   const maxUnit = toUnit(max);
   const step = steps.find((s) => maxUnit / s <= 5) ?? steps[steps.length - 1];
@@ -48,7 +50,7 @@ export function SnowColumns({ columns, metric }: { columns: SnowColumn[]; metric
     const chars = Math.max(4, Math.floor((slot - 6) / 6.2));
     return text.length > chars ? `${text.slice(0, chars - 1)}…` : text;
   };
-  const describe = columns.map((c) => `${c.label}: ${known(c.depthIn) ? `${show(c.depthIn)} deep` : "depth unavailable"}${known(c.sweIn) ? `, ${show(c.sweIn)} of water` : ""}`).join(". ");
+  const describe = columns.map((c) => `${c.label}: ${known(c.depthIn) ? `${depth(c.depthIn)} deep` : "depth unavailable"}${known(c.sweIn) ? `, ${water(c.sweIn)} of water` : ""}`).join(". ");
   return (
     <div className="sky-snow-columns" ref={ref}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Snow depth by source, to scale. ${describe}.`}>
@@ -76,7 +78,7 @@ export function SnowColumns({ columns, metric }: { columns: SnowColumn[]; metric
                 <>
                   <path className="sc-snow" d={`M${x0},${bottom} V${depthY + 4} q${colW * 0.25},-6 ${colW * 0.5},-2 t${colW * 0.5},-1 V${bottom} Z`} />
                   {sweY < bottom && <rect className="sc-swe" x={x0} y={sweY} width={colW} height={bottom - sweY} />}
-                  <text className="sc-depth" x={cx} y={depthY - 8} textAnchor="middle">{show(c.depthIn as number)}</text>
+                  <text className="sc-depth" x={cx} y={depthY - 8} textAnchor="middle">{depth(c.depthIn as number)}</text>
                 </>
               ) : (
                 <>

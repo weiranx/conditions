@@ -14,7 +14,7 @@ import {
   freshnessClass,
   isFiniteNumber,
   isTravelWindowCoveredByAlertWindow,
-  localizeDistanceText,
+  localizeUnitText,
   parseSolarClockMinutes,
   parseTimeInputMinutes,
   pickNewestIsoTimestamp,
@@ -212,9 +212,7 @@ export function evaluateBackcountryDecision(
   const hasFireRisk = fireRiskEnabled && Number.isFinite(fireRiskLevel) && fireRiskStatus !== 'unavailable';
   // Say what sets the fire level (a nearby fire, fire weather, or smoke); the
   // level's own label alone ("Extreme") does not tell the party what to check.
-  const fireRiskCause = localizeDistanceText(String(data.fireRisk?.reasons?.[0] || '').trim().replace(/\.$/, ''), preferences.elevationUnit)
-    .replace(/(-?\d+(?:\.\d+)?)F\b/g, (_, value) => formatTemp(Number(value)))
-    .replace(/(-?\d+(?:\.\d+)?) mph\b/g, (_, value) => formatWind(Number(value)));
+  const fireRiskCause = localizeUnitText(String(data.fireRisk?.reasons?.[0] || '').trim().replace(/\.$/, ''), preferences);
   const fireRiskStatement = (level: string) => `Fire risk is ${level}${fireRiskCause ? `: ${fireRiskCause}` : ''}.`;
 
   const heatRiskStatus = String(data.heatRisk?.status || '').toLowerCase();
