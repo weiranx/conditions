@@ -144,3 +144,35 @@ test('AI brief preserves the feature snapshot of a previously generated report',
   expect(askAI).toHaveBeenCalledTimes(1);
   expect(askAI.mock.calls[0][0]).toMatch(/Moderate/);
 });
+
+test('AI brief sends the forecast discussion once, without irrelevant sections', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn().mockResolvedValue('not json');
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({
+      decisionLevel: 'CAUTION',
+      report: {
+        safety: { score: 61, explanations: ['Rain arrives tonight.'] },
+        supplementalEvidence: {
+          discussion: {
+            text: 'FXUS66 RAW PRODUCT TEXT',
+            sections: [
+              { title: 'SHORT TERM', kind: 'period', matchesTrip: true, text: 'Rain spreads inland tonight.' },
+              { title: 'AVIATION', kind: 'not_relevant', text: 'MVFR ceilings at terminals.' },
+            ],
+          },
+        },
+      },
+    });
+
+  expect(response.status).toBe(200);
+  const prompt = askAI.mock.calls[0][0];
+  expect(prompt).toContain('Rain spreads inland tonight.');
+  expect(prompt).toContain('"title":"AVIATION"');
+  expect(prompt).not.toContain('RAW PRODUCT TEXT');
+  expect(prompt).not.toContain('MVFR ceilings');
+});

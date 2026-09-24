@@ -61,6 +61,34 @@ const parseTimeout = (value, fallback) => {
 const PRIMARY_TIMEOUT_MS = parseTimeout(process.env.AI_PRIMARY_TIMEOUT_MS, 28000);
 const FAST_TIMEOUT_MS = parseTimeout(process.env.AI_FAST_TIMEOUT_MS, 8000);
 
+// Reasoning models bill hidden thinking as output tokens, the most expensive kind.
+// Briefs and chat answers summarize supplied evidence, so a low effort keeps cost
+// down; "default" leaves each provider's own default in place.
+const REASONING_EFFORTS = new Set(['none', 'minimal', 'low', 'medium', 'high']);
+const parseReasoningEffort = (value) => {
+  const effort = String(value ?? 'low').trim().toLowerCase();
+  if (!effort || effort === 'default') return null;
+  if (!REASONING_EFFORTS.has(effort)) {
+    throw new Error(`AI_REASONING_EFFORT must be one of: default, ${[...REASONING_EFFORTS].join(', ')}`);
+  }
+  return effort;
+};
+const REASONING_EFFORT = parseReasoningEffort(process.env.AI_REASONING_EFFORT);
+
+// Only models known to accept an effort get one: an unsupported parameter is a 400.
+// Pro and chat variants reject reduced efforts; Gemini accepts low/medium/high.
+const reasoningEffortFor = (provider, model) => {
+  if (!REASONING_EFFORT) return null;
+  const id = String(model || '').toLowerCase();
+  if (provider === 'openai') {
+    return /^(?:gpt-5|o[134])(?:[.-]|$)/.test(id) && !/(?:^|-)(?:pro|chat)(?:-|$)/.test(id) ? REASONING_EFFORT : null;
+  }
+  if (provider === 'gemini') {
+    return /^gemini-(?:2\.5|[3-9])/.test(id) && ['low', 'medium', 'high'].includes(REASONING_EFFORT) ? REASONING_EFFORT : null;
+  }
+  return null;
+};
+
 let openAIClient;
 let anthropicClient;
 let geminiClient;
@@ -189,6 +217,18 @@ const requestOptions = (tier) => ({
   maxRetries: 0,
 });
 
+const withOpenAIReasoning = (params) => {
+  const effort = reasoningEffortFor('openai', params.model);
+  if (effort) params.reasoning = { effort };
+  return params;
+};
+
+const withGeminiReasoning = (params) => {
+  const effort = reasoningEffortFor('gemini', params.model);
+  if (effort) params.reasoning_effort = effort;
+  return params;
+};
+
 const readOpenAIText = (response, { maxTokens, model, operation }) => {
   const text = response.output_text?.trim();
   if (!text) {
@@ -276,11 +316,11 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
       const messages = [];
       if (system) messages.push({ role: 'system', content: system });
       messages.push({ role: 'user', content: prompt });
-      response = await getGeminiClient().chat.completions.create({
+      response = await getGeminiClient().chat.completions.create(withGeminiReasoning({
         model: resolvedModel,
         max_tokens: maxTokens,
         messages,
-      }, requestOptions(tier));
+      }), requestOptions(tier));
       const text = readGeminiText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
@@ -292,6 +332,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
       input: prompt,
     };
     if (system) params.instructions = system;
+    withOpenAIReasoning(params);
     response = await getOpenAIClient().responses.create(params, requestOptions(tier));
     const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
     await finish('success');
@@ -352,11 +393,11 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
           { type: 'text', text: prompt },
         ],
       });
-      response = await getGeminiClient().chat.completions.create({
+      response = await getGeminiClient().chat.completions.create(withGeminiReasoning({
         model: resolvedModel,
         max_tokens: maxTokens,
         messages,
-      }, requestOptions(tier));
+      }), requestOptions(tier));
       const text = readGeminiText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
       await finish('success');
       return text;
@@ -374,6 +415,7 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
       }],
     };
     if (system) params.instructions = system;
+    withOpenAIReasoning(params);
     response = await getOpenAIClient().responses.create(params, requestOptions(tier));
     const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
     await finish('success');
@@ -476,6 +518,7 @@ const getAIStatus = () => {
     defaultProvider: DEFAULT_AI_PROVIDER,
     primaryModel: MODEL_CONFIG[activeProvider].primary,
     fastModel: MODEL_CONFIG[activeProvider].fast,
+    reasoningEffort: REASONING_EFFORT || 'default',
     configured: MODEL_CONFIG[activeProvider].configured,
     fallbackProvider,
     fallbackPrimaryModel: MODEL_CONFIG[fallbackProvider].primary,
@@ -642,5 +685,6 @@ module.exports = {
   initializeAISettings,
   isAIAvailable,
   isAIFeatureAvailable,
+  reasoningEffortFor,
   updateAISettings,
 };

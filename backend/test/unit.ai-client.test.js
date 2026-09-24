@@ -30,6 +30,7 @@ const ENV_KEYS = [
   'GEMINI_MODEL_OPTIONS',
   'AI_PRIMARY_TIMEOUT_MS',
   'AI_FAST_TIMEOUT_MS',
+  'AI_REASONING_EFFORT',
 ];
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
@@ -59,6 +60,7 @@ describe('AI provider client wrapper', () => {
     delete process.env.GEMINI_MODEL_OPTIONS;
     delete process.env.AI_PRIMARY_TIMEOUT_MS;
     delete process.env.AI_FAST_TIMEOUT_MS;
+    delete process.env.AI_REASONING_EFFORT;
     delete process.env.AI_ENABLED;
     delete process.env.AI_FAILOVER_ENABLED;
     delete process.env.AI_SETTINGS_FILE;
@@ -116,7 +118,38 @@ describe('AI provider client wrapper', () => {
       max_output_tokens: 900,
       input: 'conditions',
       instructions: 'Be concise.',
+      reasoning: { effort: 'low' },
     }, { timeout: 28000, maxRetries: 0 });
+  });
+
+  test('caps reasoning effort only for models that accept one', async () => {
+    mockOpenAICreate.mockResolvedValue({ status: 'completed', output_text: 'ok' });
+    const { askAI, reasoningEffortFor } = loadClient('openai');
+
+    expect(reasoningEffortFor('openai', 'gpt-5.6-luna')).toBe('low');
+    expect(reasoningEffortFor('openai', 'o4-mini')).toBe('low');
+    expect(reasoningEffortFor('openai', 'gpt-5.5-pro')).toBeNull();
+    expect(reasoningEffortFor('openai', 'gpt-5-chat-latest')).toBeNull();
+    expect(reasoningEffortFor('openai', 'gpt-4.1')).toBeNull();
+    expect(reasoningEffortFor('gemini', 'gemini-3.5-flash-lite')).toBe('low');
+    expect(reasoningEffortFor('gemini', 'gemini-2.0-flash')).toBeNull();
+    expect(reasoningEffortFor('anthropic', 'claude-sonnet-5')).toBeNull();
+
+    await askAI('conditions', { model: 'gpt-4.1' });
+    expect(mockOpenAICreate.mock.calls[0][0]).not.toHaveProperty('reasoning');
+  });
+
+  test('AI_REASONING_EFFORT overrides or disables the effort cap', () => {
+    process.env.AI_REASONING_EFFORT = 'medium';
+    expect(loadClient('openai').reasoningEffortFor('openai', 'gpt-5.6-terra')).toBe('medium');
+    process.env.AI_REASONING_EFFORT = 'minimal';
+    expect(loadClient('openai').reasoningEffortFor('gemini', 'gemini-3.7-flash')).toBeNull();
+    process.env.AI_REASONING_EFFORT = 'default';
+    const client = loadClient('openai');
+    expect(client.reasoningEffortFor('openai', 'gpt-5.6-terra')).toBeNull();
+    expect(client.getAIStatus().reasoningEffort).toBe('default');
+    process.env.AI_REASONING_EFFORT = 'extreme';
+    expect(() => loadClient('openai')).toThrow('AI_REASONING_EFFORT must be one of');
   });
 
   test('uses the OpenAI fast model for fast-tier requests', async () => {
@@ -208,6 +241,7 @@ describe('AI provider client wrapper', () => {
         { role: 'system', content: 'Be concise.' },
         { role: 'user', content: 'conditions' },
       ],
+      reasoning_effort: 'low',
     }, { timeout: 28000, maxRetries: 0 });
   });
 
@@ -244,6 +278,7 @@ describe('AI provider client wrapper', () => {
       defaultProvider: 'anthropic',
       primaryModel: 'claude-sonnet-5',
       fastModel: 'claude-haiku-4-5-20251001',
+      reasoningEffort: 'low',
       configured: true,
       fallbackProvider: 'openai',
       fallbackPrimaryModel: 'gpt-5.6-terra',

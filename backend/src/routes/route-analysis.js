@@ -1,5 +1,6 @@
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
+const { compactReportForAI } = require('../utils/ai-report-context');
 const { assertFeatureEnabled, getFeatureFlags } = require('../utils/feature-flags');
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
@@ -45,8 +46,10 @@ const MAX_GENERATED_ELEVATION_FT = 29100;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 
-const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 100 });
-const waypointCache = createCache({ name: 'waypoints', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 200 });
+// Named routes and landmarks don't change day to day, so AI answers are kept for a
+// week without background regeneration, which would also reshuffle checkpoints.
+const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 7 * 24 * 60 * 60 * 1000, maxEntries: 100 });
+const waypointCache = createCache({ name: 'waypoints', ttlMs: 7 * 24 * 60 * 60 * 1000, maxEntries: 200 });
 const nominatimGeocodeCache = createCache({ name: 'nominatim-geocode', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 500 });
 
 // Number(null) and Number('') are 0, so check for absence before converting.
@@ -651,7 +654,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           etaTime: wp.eta_time,
           offsetMinutes: wp.offset_minutes,
           dataAvailable,
-          report: dataAvailable ? sanitizeReportForFeatureFlags(settled.value.payload, featureFlags) : null,
+          report: dataAvailable ? compactReportForAI(sanitizeReportForFeatureFlags(settled.value.payload, featureFlags)) : null,
         };
       });
       const failedWaypointNames = rawWaypointReports.filter((r) => !r.dataAvailable).map((r) => r.name).filter(Boolean);

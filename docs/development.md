@@ -57,6 +57,7 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `AI_FAILOVER_ENABLED` | `true` | Startup default for automatic provider failover; administrators can change it at runtime. |
 | `AI_PRIMARY_TIMEOUT_MS` | `28000` | Per-provider timeout for synthesis, briefs, and vision before failover. |
 | `AI_FAST_TIMEOUT_MS` | `8000` | Per-provider timeout for route suggestions and extraction before failover. |
+| `AI_REASONING_EFFORT` | `low` | Reasoning effort sent to OpenAI and Gemini reasoning models (hidden reasoning is billed as output tokens). `default` leaves the provider default. |
 | `OPENAI_API_KEY` | — | Enables OpenAI as preferred provider or fallback. |
 | `OPENAI_MODEL` | `gpt-5.6-terra` | Model for route synthesis, field briefs, and snow-image analysis. |
 | `OPENAI_FAST_MODEL` | `gpt-5.6-luna` | Lower-cost model for route suggestions and waypoint extraction. |
