@@ -40,6 +40,8 @@ export interface RouteWaypointSummary {
 }
 
 export interface RouteAnalysisResult {
+  /** The route name this analysis was requested for; older saved analyses lack it. */
+  routeName?: string;
   waypoints: Array<{
     name: string;
     lat: number;
@@ -234,7 +236,8 @@ export function useRouteAnalysis(initialState?: {
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
       if (!isCurrentRequest(request.id)) return;
-      setRouteAnalysis(payload as RouteAnalysisResult);
+      // Keep the name with the result, so renaming the route later can't relabel these checkpoints.
+      setRouteAnalysis({ ...(payload as RouteAnalysisResult), routeName: route });
     } catch (err) {
       if (request.controller.signal.aborted || !isCurrentRequest(request.id)) return;
       setRouteError(err instanceof Error ? err.message : 'Route analysis failed. Try again.');
