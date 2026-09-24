@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  backend:
     # workflow_run also fires for failed/cancelled CI and can receive PR runs.
     # Only successful pushes to this repository's main may use deploy secrets.
     if: >-
@@ -25,6 +25,8 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      released: ${{ steps.release.outputs.released }}
 
     steps:
       - name: Check out the commit that passed CI
@@ -34,6 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Deploy tested commit to VPS
+        id: ssh
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -52,6 +55,77 @@ jobs:
           # Send the tested bootstrap from the runner, including on the first
           # release when the VPS still has the previous deployment script.
           script_path: scripts/ci-deploy.sh
+          capture_stdout: true
+
+      # ci-deploy.sh exits 0 without releasing when main has moved past this
+      # commit. The frontend follows this one decision, so production never
+      # pairs this backend with an older frontend or the reverse.
+      - name: Record whether the backend released this commit
+        id: release
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_OUTPUT: ${{ steps.ssh.outputs.stdout }}
+        run: |
+          if grep -qF "==> Releasing tested commit $DEPLOY_SHA" <<< "$DEPLOY_OUTPUT"; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "==> Backend skipped $DEPLOY_SHA; skipping the frontend too."
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Cloudflare Pages' automatic production deployments must stay disabled
+  # (Settings → Build → Branch control) so the frontend, like the backend,
+  # ships only commits whose complete CI run passed.
+  frontend:
+    needs: backend
+    if: needs.backend.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out the commit that passed CI
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build
+        env:
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL || 'https://apivps.conditions.weiranxiong.com' }}
+        run: npm ci && npm run build
+
+      - name: Deploy tested commit to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'conditions' }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          npx --yes wrangler@4.139.0 pages deploy dist
+          --project-name "$PAGES_PROJECT" --branch main
+          --commit-hash "$DEPLOY_SHA" --commit-dirty=false
+
+  smoke-test:
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out the commit that passed CI
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       - name: Use Node.js 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

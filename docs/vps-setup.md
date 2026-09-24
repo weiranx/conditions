@@ -48,9 +48,14 @@ the MCP OAuth client settings. The backend refuses to start with
 the end for you to add. After editing `.env`, run
 `./scripts/backend-reload-env.sh`.
 
-**Frontend:** the frontend is a Cloudflare Worker that deploys from `main`
-through Cloudflare's Git integration. For a new API domain, set its build
-variable `VITE_API_BASE_URL` to the API origin.
+**Frontend:** the frontend is the Cloudflare Pages project `conditions`.
+`deploy.yml` builds and uploads it with Wrangler after the backend release, only
+for commits whose CI passed. Cloudflare's own automatic deployments must stay
+off (Settings → Build → Branch control), or Cloudflare would ship untested
+commits. The job needs the `CLOUDFLARE_API_TOKEN` (Account → Cloudflare Pages →
+Edit) and `CLOUDFLARE_ACCOUNT_ID` repository secrets. The build uses
+`PRODUCTION_API_URL` as `VITE_API_BASE_URL`, and the repository variable
+`CLOUDFLARE_PAGES_PROJECT` overrides the project name.
 
 The sections below document each step for manual setup and troubleshooting.
 
