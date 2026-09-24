@@ -41,6 +41,10 @@ jobs:
           host: ${{ secrets.DO_SSH_HOST }}
           username: ${{ secrets.DO_SSH_USER }}
           key: ${{ secrets.DO_SSH_KEY }}
+          # Pins the droplet's SSH host key when set (output of
+          # `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`, SHA256:...).
+          # Left unset, the action skips host verification.
+          fingerprint: ${{ secrets.DO_SSH_FINGERPRINT }}
           version: 1.8.4 # ssh-action adds the release tag's v prefix.
           timeout: 30s
           command_timeout: 20m

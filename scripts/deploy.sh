@@ -106,7 +106,22 @@ fi
 echo "==> SummitSafe deploy starting"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+# Must match the backend image name in docker-compose.yml.
+BACKEND_IMAGE=summitsafe-backend:latest
+ROLLBACK_IMAGE=summitsafe-backend:rollback
+rollback_available=false
+
 if [ "$NO_BUILD" = false ]; then
+  # Keep the image of the backend that is actually running, so an unhealthy
+  # build can be reverted without a rebuild. :latest is not used because an
+  # earlier release may have built it and then failed before restarting. With
+  # no running backend (first deployment) there is nothing known-good to keep.
+  running_backend="$(docker compose ps --quiet backend 2>/dev/null || true)"
+  if [ -n "$running_backend" ]; then
+    running_image="$(docker inspect --format '{{.Image}}' "$running_backend")"
+    docker image tag "$running_image" "$ROLLBACK_IMAGE"
+    rollback_available=true
+  fi
   echo "==> Building backend image..."
   docker compose build --pull backend
 fi
@@ -140,19 +155,34 @@ fi
 echo "==> Restarting backend container..."
 docker compose up -d --force-recreate --no-deps backend
 
+wait_for_backend() {
+  for _ in {1..30}; do
+    if curl --fail --silent --connect-timeout 2 --max-time 5 http://localhost:3001/healthz | grep --quiet '"ok":true'; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 echo "==> Waiting for health check..."
-backend_ready=false
-for _ in {1..30}; do
-  if curl --fail --silent --connect-timeout 2 --max-time 5 http://localhost:3001/healthz | grep --quiet '"ok":true'; then
-    backend_ready=true
-    break
-  fi
-  sleep 1
-done
-if [ "$backend_ready" != true ]; then
+if ! wait_for_backend; then
   docker compose ps backend >&2
   docker compose logs --tail 50 backend >&2
   echo "Backend did not become healthy after 30 attempts." >&2
+  if [ "$rollback_available" = true ]; then
+    # Migrations are not reverted; they must stay compatible with the previous
+    # release. The deployment still fails so the bad commit is visible in CI.
+    echo "==> Rolling back to the previous backend image..." >&2
+    docker image tag "$ROLLBACK_IMAGE" "$BACKEND_IMAGE"
+    docker compose up -d --force-recreate --no-deps backend
+    if wait_for_backend; then
+      echo "Previous backend image restored and healthy." >&2
+    else
+      docker compose logs --tail 50 backend >&2
+      echo "Rollback image is also unhealthy; manual intervention required." >&2
+    fi
+  fi
   exit 1
 fi
 
@@ -181,5 +211,12 @@ if [ "$NO_NGINX" = false ]; then
   echo "==> Validating and reloading host nginx..."
   nginx -t && systemctl reload nginx
 fi
+
+# Each build leaves the previous image untagged. Remove dangling images and
+# week-old build cache so repeated releases do not fill the droplet's disk.
+echo "==> Pruning unused Docker images and build cache..."
+docker image prune --force >/dev/null || echo "==> Warning: image prune failed." >&2
+docker builder prune --force --filter until=168h >/dev/null \
+  || echo "==> Warning: build cache prune failed." >&2
 
 echo "==> Deploy complete."
