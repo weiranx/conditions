@@ -44,6 +44,11 @@ const COPIED_OBJECTIVE_COORDINATE_KM = 0.25;
 // Above Everest's summit, a generated landmark elevation is a hallucination.
 const MAX_GENERATED_ELEVATION_FT = 29100;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
+// A mapped trail that comes within this distance of the objective is preferred
+// over AI-generated landmarks; one farther off is only a fallback.
+const MAX_MAPPED_GAP_KM = 2;
+// An AI landmark found on the map within this distance of a mapped checkpoint names it.
+const MAPPED_NAME_MATCH_KM = 0.6;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 
 // Named routes and landmarks don't change day to day, so AI answers are kept for a
@@ -311,6 +316,83 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
   }).catch(() => null);
 };
 
+// Checkpoint labels that only say where along the route a point is.
+const GENERIC_CHECKPOINT_NAME = /^(?:route (?:start|finish)|high point|low point|\d{1,3}% checkpoint|route checkpoint \d+|.+ (?:start|checkpoint \d+))$/i;
+// Map features whose names mean something on the ground; roads and admin areas don't.
+const NAMEABLE_CATEGORIES = new Set(['natural', 'tourism', 'leisure', 'waterway', 'water', 'mountain_pass', 'amenity', 'place']);
+const EXACT_PLACE_KM = 0.1;
+const NEARBY_PLACE_KM = 0.4;
+
+// The named map feature at a point (Nominatim reverse, cached), or null.
+const reverseGeocodePlace = (lat, lon, fetchWithTimeout, fetchHeaders) => nominatimGeocodeCache.getOrFetch(
+  `reverse|${Number(lat).toFixed(4)}|${Number(lon).toFixed(4)}`,
+  async () => {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&lat=${lat}&lon=${lon}`;
+    const res = await fetchWithTimeout(url, { headers: fetchHeaders });
+    if (!res?.ok) return null;
+    const place = await res.json();
+    const name = String(place?.name || '').trim().slice(0, 80);
+    if (!name || !NAMEABLE_CATEGORIES.has(String(place?.category || ''))) return null;
+    const km = haversineKm(lat, lon, Number(place.lat), Number(place.lon));
+    return Number.isFinite(km) && km <= NEARBY_PLACE_KM ? { name, km } : null;
+  },
+).catch(() => null);
+
+/**
+ * Give checkpoints that only have a positional label ("40% checkpoint", "Route
+ * start") the name of a map feature at or near them: "Crystal Lake", or "Near
+ * Crystal Lake", "High point near Crystal Lake". Lookups run one at a time, as
+ * Nominatim asks; a failed lookup keeps the label.
+ */
+const nameGenericCheckpoints = async (waypoints, { fetchWithTimeout, fetchHeaders, skip = new Set() }) => {
+  for (const waypoint of waypoints) {
+    if (skip.has(waypoint) || !GENERIC_CHECKPOINT_NAME.test(String(waypoint.name || ''))) continue;
+    const place = await withTimeout(reverseGeocodePlace(waypoint.lat, waypoint.lon, fetchWithTimeout, fetchHeaders), 5000, 'Checkpoint name lookup').catch(() => null);
+    if (!place) continue;
+    const role = /^high point$/i.test(waypoint.name) ? 'High point'
+      : /^low point$/i.test(waypoint.name) ? 'Low point'
+        : /start$/i.test(waypoint.name) ? 'Start'
+          : /^route finish$/i.test(waypoint.name) ? 'Finish' : null;
+    waypoint.name = place.km <= EXACT_PLACE_KM ? place.name : role ? `${role} near ${place.name}` : `Near ${place.name}`;
+  }
+};
+
+/**
+ * Name checkpoints on a mapped trail after the AI's landmarks: each landmark the
+ * map search finds within MAPPED_NAME_MATCH_KM of a checkpoint lends it its name,
+ * and the objective takes the objective landmark's name. Positions stay on the
+ * mapped trail; unmatched checkpoints keep their trail-based names.
+ */
+const nameMappedCheckpoints = async (waypoints, landmarks, { safeLat, safeLon, safePeak, fetchWithTimeout, fetchHeaders }) => {
+  if (!Array.isArray(landmarks) || !landmarks.length || waypoints.length < 2) return;
+  const objectiveIndex = landmarks.findIndex((landmark) => landmark.objective === true);
+  const objectiveLandmark = landmarks[objectiveIndex >= 0 ? objectiveIndex : landmarks.length - 1];
+  waypoints[waypoints.length - 1].name = objectiveLandmark?.name || safePeak;
+  const others = landmarks.filter((landmark) => landmark !== objectiveLandmark);
+  const located = await Promise.all(others.map(async (landmark) => ({
+    name: landmark.name,
+    geo: await geocodeWaypoint(landmark.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders),
+  })));
+  const named = new Set([waypoints.length - 1]);
+  for (const { name, geo } of located) {
+    if (!geo) continue;
+    let best = -1;
+    let bestKm = MAPPED_NAME_MATCH_KM;
+    waypoints.forEach((waypoint, index) => {
+      if (named.has(index)) return;
+      const km = haversineKm(waypoint.lat, waypoint.lon, geo.lat, geo.lon);
+      if (km <= bestKm) {
+        best = index;
+        bestKm = km;
+      }
+    });
+    if (best >= 0) {
+      waypoints[best].name = name;
+      named.add(best);
+    }
+  }
+};
+
 const describeTiming = ({ basis, roundTrip, routeShape, travelWindowHours, pace, paceSource }, daylightEnabled = true) => {
   const weighting = basis === 'distance-and-vert'
     ? `weighted by segment distance and elevation change (${pace.minutesPerMile} min per mile, ${pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing${paceSource === 'user' ? ' from the traveler\'s pace settings' : ', a default ratio'})`
@@ -433,21 +515,20 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 
     try {
       // Step 1: Use authoritative GPX checkpoints when provided. For named routes,
-      // AI-assisted analysis uses real named landmarks; mapped trail geometry is
-      // the non-AI fallback.
+      // mapped trail geometry (NPS, then OpenStreetMap) comes first when it reaches
+      // the objective, with AI landmarks naming points along it. Otherwise the AI's
+      // named landmarks are used, and mapped geometry is the fallback.
       let routeSource = 'generated';
       let routeSourceDetails = null;
+      let routeGeometry = null;
       let waypointsCopy;
       let routeShape = 'out-and-back';
       const locatedAtObjectiveByMistake = new Set();
-      if (suppliedWaypoints) {
-        routeSource = 'gpx';
-        waypointsCopy = suppliedWaypoints.map((waypoint) => ({ ...waypoint }));
-      } else if (aiFeatureEnabled) {
+      const generateLandmarks = () => {
         // Version the cache key so older generic "checkpoint 2" results are not
         // reused after tightening the waypoint-name contract.
         const wpCacheKey = `named-v3|${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
-        const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
+        return waypointCache.getOrFetch(wpCacheKey, async () => {
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             const waypointText = await withTimeout(askAI(
@@ -466,66 +547,88 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           }
           throw lastError;
         });
-        // Clone so summit pinning doesn't mutate the cached array.
-        waypointsCopy = generatedWaypoints.map(({ objective, ...wp }) => ({ ...wp }));
-        const shape = classifyGeneratedRoute(generatedWaypoints);
-        routeShape = shape.routeShape;
-        const summit = waypointsCopy[shape.objectiveIndex];
-        summit.lat = safeLat;
-        summit.lon = safeLon;
-        // A loop ends where it began, so its last checkpoint takes the trailhead's place.
-        const loopEnd = routeShape === 'loop' ? waypointsCopy[waypointsCopy.length - 1] : null;
-
-        await Promise.all(
-          waypointsCopy.filter((wp) => wp !== summit && wp !== loopEnd).map(async (wp) => {
-            const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
-            if (geo) {
-              wp.lat = geo.lat;
-              wp.lon = geo.lon;
-              wp.geocodingVerified = true;
-            } else {
-              wp.geocodingVerified = false;
-              // Unfound landmarks keep the AI's coordinates, which are sometimes
-              // just the objective's, echoed from the prompt. A terrain lookup
-              // there would give a trailhead the summit's elevation.
-              if (haversineKm(wp.lat, wp.lon, safeLat, safeLon) < COPIED_OBJECTIVE_COORDINATE_KM) {
-                locatedAtObjectiveByMistake.add(wp);
-              }
-            }
-          })
-        );
-        if (loopEnd) {
-          const start = waypointsCopy[0];
-          Object.assign(loopEnd, {
-            name: `Return to ${start.name}`,
-            lat: start.lat,
-            lon: start.lon,
-            geocodingVerified: start.geocodingVerified,
-          });
-          if (knownElevation(start.elev_ft) !== null) loopEnd.elev_ft = start.elev_ft;
-          if (locatedAtObjectiveByMistake.has(start)) locatedAtObjectiveByMistake.add(loopEnd);
-        }
+      };
+      const useMappedRoute = (mapped) => {
+        routeSource = mapped.source;
+        routeSourceDetails = {
+          sourceLabel: mapped.sourceLabel,
+          matchedName: mapped.matchedName,
+          matchScore: mapped.matchScore,
+          metadata: mapped.metadata,
+        };
+        routeGeometry = Array.isArray(mapped.geometry) ? mapped.geometry : null;
+        waypointsCopy = mapped.waypoints.map((waypoint) => ({ ...waypoint }));
+        waypointsCopy[waypointsCopy.length - 1].name = safePeak;
+      };
+      if (suppliedWaypoints) {
+        routeSource = 'gpx';
+        waypointsCopy = suppliedWaypoints.map((waypoint) => ({ ...waypoint }));
       } else {
-        const mappedRoute = await routeDataService.resolveMappedRoute({
-          peak: safePeak,
-          route: safeRoute,
-          lat: safeLat,
-          lon: safeLon,
-        });
-        if (mappedRoute?.waypoints?.length >= 2) {
-          routeSource = mappedRoute.source;
-          routeSourceDetails = {
-            sourceLabel: mappedRoute.sourceLabel,
-            matchedName: mappedRoute.matchedName,
-            matchScore: mappedRoute.matchScore,
-            metadata: mappedRoute.metadata,
-          };
-          waypointsCopy = mappedRoute.waypoints.map((waypoint) => ({ ...waypoint }));
+        // The mapped lookup and the AI landmarks don't depend on each other.
+        const [mappedSettled, landmarksSettled] = await Promise.allSettled([
+          routeDataService.resolveMappedRoute({ peak: safePeak, route: safeRoute, lat: safeLat, lon: safeLon }),
+          aiFeatureEnabled ? generateLandmarks() : Promise.resolve(null),
+        ]);
+        const mappedRoute = mappedSettled.status === 'fulfilled' && mappedSettled.value?.waypoints?.length >= 2 ? mappedSettled.value : null;
+        const generatedWaypoints = landmarksSettled.status === 'fulfilled' ? landmarksSettled.value : null;
+        const mappedReachesObjective = mappedRoute && !(mappedRoute.gapKm > MAX_MAPPED_GAP_KM);
+        if (mappedRoute && (mappedReachesObjective || !generatedWaypoints)) {
+          useMappedRoute(mappedRoute);
+          if (generatedWaypoints) {
+            await nameMappedCheckpoints(waypointsCopy, generatedWaypoints, { safeLat, safeLon, safePeak, fetchWithTimeout, fetchHeaders });
+          }
+        } else if (generatedWaypoints) {
+          // Clone so summit pinning doesn't mutate the cached array.
+          waypointsCopy = generatedWaypoints.map(({ objective, ...wp }) => ({ ...wp }));
+          const shape = classifyGeneratedRoute(generatedWaypoints);
+          routeShape = shape.routeShape;
+          const summit = waypointsCopy[shape.objectiveIndex];
+          summit.lat = safeLat;
+          summit.lon = safeLon;
+          // A loop ends where it began, so its last checkpoint takes the trailhead's place.
+          const loopEnd = routeShape === 'loop' ? waypointsCopy[waypointsCopy.length - 1] : null;
+
+          await Promise.all(
+            waypointsCopy.filter((wp) => wp !== summit && wp !== loopEnd).map(async (wp) => {
+              const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
+              if (geo) {
+                wp.lat = geo.lat;
+                wp.lon = geo.lon;
+                wp.geocodingVerified = true;
+              } else {
+                wp.geocodingVerified = false;
+                // Unfound landmarks keep the AI's coordinates, which are sometimes
+                // just the objective's, echoed from the prompt. A terrain lookup
+                // there would give a trailhead the summit's elevation.
+                if (haversineKm(wp.lat, wp.lon, safeLat, safeLon) < COPIED_OBJECTIVE_COORDINATE_KM) {
+                  locatedAtObjectiveByMistake.add(wp);
+                }
+              }
+            })
+          );
+          if (loopEnd) {
+            const start = waypointsCopy[0];
+            Object.assign(loopEnd, {
+              name: `Return to ${start.name}`,
+              lat: start.lat,
+              lon: start.lon,
+              geocodingVerified: start.geocodingVerified,
+            });
+            if (knownElevation(start.elev_ft) !== null) loopEnd.elev_ft = start.elev_ft;
+            if (locatedAtObjectiveByMistake.has(start)) locatedAtObjectiveByMistake.add(loopEnd);
+          }
+        } else if (aiFeatureEnabled && landmarksSettled.status === 'rejected') {
+          throw landmarksSettled.reason;
         } else {
           return res.status(503).json({
             error: 'AI waypoint generation is unavailable. Import a GPX route or enter a mapped trail name.',
           });
         }
+      }
+
+      // GPX and mapped checkpoints without a landmark name take one from the map.
+      if (routeSource !== 'generated') {
+        await nameGenericCheckpoints(waypointsCopy, { fetchWithTimeout, fetchHeaders });
       }
 
       // Step 2: Estimate arrival times, then evaluate each checkpoint at its ETA
@@ -560,7 +663,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         });
       }
       if (routeSource !== 'gpx') {
-        distanceBasis = assignRouteDistances(waypointsCopy, haversineKm, knownRouteDistanceRtMiles);
+        distanceBasis = assignRouteDistances(waypointsCopy, haversineKm, knownRouteDistanceRtMiles, {
+          measuredAlongTrail: routeSource === 'nps' || routeSource === 'openstreetmap',
+        });
         const progress = computeDistanceProgress(waypointsCopy, haversineKm);
         waypointsCopy.forEach((waypoint, index) => {
           if (progress) waypoint.progress_percent = progress[index];
@@ -726,6 +831,7 @@ Use plain, calm language that feels like advice from an experienced trip partner
         routeSource,
         timing,
         ...(routeSourceDetails ? { routeSourceDetails } : {}),
+        ...(routeGeometry ? { routeGeometry } : {}),
         ...(terrainProfile ? { terrainProfile } : {}),
         ...(routeMetadata ? { routeMetadata } : {}),
       });

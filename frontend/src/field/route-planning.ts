@@ -345,6 +345,8 @@ export function describeRouteTiming(timing: RouteTiming | undefined): string {
         : `Arrivals are spaced evenly across ${window} because route distances are unknown.`;
   const distance = timing.distanceBasis === "straight-line"
     ? " Distances are straight lines between checkpoints, so the trail is longer."
+    : timing.distanceBasis === "along-trail"
+      ? " Distances are measured along the mapped trail."
     : timing.distanceBasis === "route-length"
       ? " Distances are scaled to the route's listed length."
       : "";

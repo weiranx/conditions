@@ -62,6 +62,26 @@ test('GPX display tracks stay within the saved-report limit and survive a round 
   }
 });
 
+test('GPX checkpoints always include the high point and a deep low point, named by the file where it can', () => {
+  // 101 points north: down into a canyon, up to a summit at 70%, then down to the finish.
+  const elevation = (i) => (i <= 20 ? 2000 - i * 15 : i <= 70 ? 1700 + (i - 20) * 30 : 3200 - (i - 70) * 20);
+  const track = Array.from({ length: 101 }, (_, i) =>
+    `<trkpt lat="${(40 + i * 0.001).toFixed(4)}" lon="-105"><ele>${elevation(i)}</ele></trkpt>`).join('');
+  const route = parseGpx(`<wpt lat="40.0401" lon="-105.0001"><name>Hidden Lake</name></wpt>
+    <wpt lat="41" lon="-105"><name>Far away</name></wpt><trk><trkseg>${track}</trkseg></trk>`);
+  const names = route.checkpoints.map((checkpoint) => checkpoint.name);
+  assert.ok(route.checkpoints.length >= 6 && route.checkpoints.length <= 7, names.join(', '));
+  assert.equal(names[0], 'Route start');
+  assert.equal(names.at(-1), 'Route finish');
+  const high = route.checkpoints.find((checkpoint) => checkpoint.name === 'High point');
+  assert.equal(high.elev_ft, route.maxElevationFt);
+  assert.equal(route.checkpoints.find((checkpoint) => checkpoint.name === 'Low point').elev_ft, Math.round(1700 * 3.28084));
+  assert.ok(names.includes('Hidden Lake'));
+  assert.ok(!names.includes('Far away'));
+  const distances = route.checkpoints.map((checkpoint) => checkpoint.distance_miles);
+  assert.deepEqual(distances, [...distances].sort((a, b) => a - b));
+});
+
 test('GPX route elements do not add distance or ascent across disconnected routes', () => {
   const first = '<rte><rtept lat="34" lon="-117"><ele>100</ele></rtept><rtept lat="34.01" lon="-117"><ele>110</ele></rtept></rte>';
   const second = '<rte><rtept lat="40" lon="-117"><ele>1000</ele></rtept><rtept lat="40.01" lon="-117"><ele>1010</ele></rtept></rte>';

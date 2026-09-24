@@ -71,6 +71,8 @@ export interface RouteAnalysisResult {
     matchScore?: number;
     metadata?: Record<string, unknown>;
   };
+  /** The mapped trail's line, thinned for drawing, with distance along it; only for NPS and OpenStreetMap routes. */
+  routeGeometry?: Array<{ lat: number; lon: number; distance_miles?: number }>;
   terrainProfile?: {
     sampledPointCount?: number;
     sampledDistanceMiles?: number;
@@ -111,8 +113,11 @@ export interface RouteTiming {
   travelWindowHours: number;
   pace: RoutePace;
   paceSource: 'user' | 'default';
-  /** How named-route checkpoint distances were found: scaled to the route's length, or straight lines. */
-  distanceBasis?: 'route-length' | 'straight-line';
+  /**
+   * How named-route checkpoint distances were found: measured along a mapped
+   * trail, scaled to the route's listed length, or straight lines.
+   */
+  distanceBasis?: 'along-trail' | 'route-length' | 'straight-line';
 }
 
 export interface GpxRouteMetadata {

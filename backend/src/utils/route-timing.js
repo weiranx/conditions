@@ -111,14 +111,34 @@ const computeCheckpointFractions = (waypoints, { haversineKm, pace } = {}) => {
 
 /**
  * Give an out-and-back route without GPX distances a running distance at each
- * checkpoint, return leg included. Straight lines between checkpoints undercount
+ * checkpoint, return leg included. Distances measured along a mapped trail are
+ * kept. Straight lines between checkpoints undercount
  * a winding trail, so when the route's round-trip length is known they are
  * scaled to it. Returns how the distances were found, or null when they could
  * not be.
  */
-const assignRouteDistances = (waypoints, haversineKm, roundTripMiles = null) => {
+const assignRouteDistances = (waypoints, haversineKm, roundTripMiles = null, { measuredAlongTrail = false } = {}) => {
   const points = Array.isArray(waypoints) ? waypoints : [];
   if (points.length < 2 || typeof haversineKm !== 'function' || !points.every(hasCoordinates)) return null;
+  // Mapped trails come with distances measured along the trail; keep them, and
+  // mirror them for the return, which retraces the same trail.
+  const outboundPoints = points.filter((point) => point.leg !== 'return');
+  const outboundMiles = outboundPoints.map((point) => knownNumber(point.distance_miles));
+  const alongTrail = measuredAlongTrail && outboundPoints.length >= 2
+    && outboundMiles.every((miles, index) => miles !== null && miles >= 0 && (index === 0 || miles >= outboundMiles[index - 1]))
+    && outboundMiles[outboundMiles.length - 1] > 0;
+  if (alongTrail) {
+    const total = outboundMiles[outboundMiles.length - 1];
+    let returned = 0;
+    points.forEach((point) => {
+      if (point.leg !== 'return') return;
+      // Return checkpoints retrace the outbound ones in reverse order, as appendReturnCheckpoint builds them.
+      const twin = outboundMiles[outboundMiles.length - 2 - returned];
+      returned += 1;
+      point.distance_miles = Math.round((total + (total - (twin ?? 0))) * 100) / 100;
+    });
+    return 'along-trail';
+  }
   const outbound = [];
   const legs = points.slice(1).map((point, index) => {
     // Return checkpoints retrace outbound segments, as in computeCheckpointFractions.

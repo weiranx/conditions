@@ -37,42 +37,122 @@ const sampleCoordinates = (coordinates, maxPoints = 8) => {
   return Array.from({ length: maxPoints }, (_, index) => valid[Math.round((index * (valid.length - 1)) / (maxPoints - 1))]);
 };
 
-const samplePointObjects = (coordinates, maxPoints = 8) => {
-  if (coordinates.length <= maxPoints) return coordinates;
-  return Array.from({ length: maxPoints }, (_, index) => coordinates[Math.round((index * (coordinates.length - 1)) / (maxPoints - 1))]);
-};
+const MILES_PER_KM = 0.621371;
+// Trail segments whose ends are this close are treated as one continuous trail.
+const JOIN_KM = 0.05;
+// Checkpoints taken along a mapped trail, the start and the objective included.
+const MAPPED_CHECKPOINT_COUNT = 6;
+// Points kept of the mapped line for drawing the route on a map.
+const MAX_GEOMETRY_POINTS = 200;
 
-const flattenArcGisPaths = (geometry) => {
-  const paths = Array.isArray(geometry?.paths) ? geometry.paths : [];
-  return paths.reduce((longest, path) => (Array.isArray(path) && path.length > longest.length ? path : longest), []);
-};
+const toPoints = (coordinates) => (Array.isArray(coordinates) ? coordinates : [])
+  .map((coordinate) => (Array.isArray(coordinate)
+    ? { lon: Number(coordinate[0]), lat: Number(coordinate[1]) }
+    : { lat: Number(coordinate?.lat), lon: Number(coordinate?.lon) }))
+  .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
 
-const ensureObjectiveLast = (coordinates, objectiveLat, objectiveLon, haversineKm) => {
-  const result = [...coordinates];
-  if (!result.length) return result;
-  const firstDistance = haversineKm(result[0].lat, result[0].lon, objectiveLat, objectiveLon);
-  const lastDistance = haversineKm(result[result.length - 1].lat, result[result.length - 1].lon, objectiveLat, objectiveLon);
-  if (firstDistance < lastDistance) result.reverse();
-  const endpoint = result[result.length - 1];
-  if (haversineKm(endpoint.lat, endpoint.lon, objectiveLat, objectiveLon) > 0.75) {
-    result.push({ lat: objectiveLat, lon: objectiveLon });
-  } else {
-    result[result.length - 1] = { lat: objectiveLat, lon: objectiveLon };
+/**
+ * Join trail pieces end to end into one line, starting from `first`. Mapped
+ * trails are often split into many ways or paths; any piece with an end within
+ * JOIN_KM of the line's start or end is added, reversed when needed.
+ */
+const stitchLines = (first, others, haversineKm) => {
+  let line = [...first];
+  const remaining = others.filter((piece) => piece !== first && piece.length >= 2);
+  const near = (a, b) => haversineKm(a.lat, a.lon, b.lat, b.lon) <= JOIN_KM;
+  let joined = true;
+  while (joined && remaining.length) {
+    joined = false;
+    for (let index = 0; index < remaining.length; index += 1) {
+      const piece = remaining[index];
+      const head = line[0];
+      const tail = line[line.length - 1];
+      if (near(tail, piece[0])) line = [...line, ...piece.slice(1)];
+      else if (near(tail, piece[piece.length - 1])) line = [...line, ...[...piece].reverse().slice(1)];
+      else if (near(head, piece[piece.length - 1])) line = [...piece.slice(0, -1), ...line];
+      else if (near(head, piece[0])) line = [...[...piece].reverse().slice(0, -1), ...line];
+      else continue;
+      remaining.splice(index, 1);
+      joined = true;
+      break;
+    }
   }
-  return samplePointObjects(result, 8);
+  return line;
 };
 
-const toWaypoints = ({ coordinates, name, source }) => coordinates.map((coordinate, index) => ({
-  name: index === 0
-    ? `${name} start`
-    : index === coordinates.length - 1
-      ? `${name} objective`
-      : `${name} checkpoint ${index + 1}`,
-  lat: coordinate.lat,
-  lon: coordinate.lon,
-  progress_percent: Math.round((index / Math.max(1, coordinates.length - 1)) * 100),
-  source,
-}));
+const cumulativeKm = (points, haversineKm) => points.reduce((totals, point, index) => {
+  totals.push(index === 0 ? 0 : totals[index - 1] + haversineKm(points[index - 1].lat, points[index - 1].lon, point.lat, point.lon));
+  return totals;
+}, []);
+
+/**
+ * Run a mapped line from its trailhead to the objective. The point nearest the
+ * objective ends the approach; when the trail carries on past it, the longer side
+ * is taken as the approach. The objective itself is added when the trail stops
+ * short of it. Also returns how far the trail comes from the objective.
+ */
+const orientToObjective = (points, objectiveLat, objectiveLon, haversineKm) => {
+  if (points.length < 2) return { points, gapKm: Infinity };
+  const distances = points.map((point) => haversineKm(point.lat, point.lon, objectiveLat, objectiveLon));
+  const nearest = distances.indexOf(Math.min(...distances));
+  const before = points.slice(0, nearest + 1);
+  const after = points.slice(nearest).reverse();
+  const length = (line) => cumulativeKm(line, haversineKm).at(-1) || 0;
+  const approach = length(before) >= length(after) ? before : after;
+  const gapKm = distances[nearest];
+  const oriented = gapKm > 0.1 ? [...approach, { lat: objectiveLat, lon: objectiveLon }] : [...approach.slice(0, -1), { lat: objectiveLat, lon: objectiveLon }];
+  return { points: oriented.length >= 2 ? oriented : [approach[0], { lat: objectiveLat, lon: objectiveLon }], gapKm };
+};
+
+/** Indexes of points at even distances along a line, both ends included. */
+const evenDistanceIndexes = (cumulative, count) => {
+  const total = cumulative[cumulative.length - 1];
+  if (cumulative.length <= count || !(total > 0)) return cumulative.map((_, index) => index);
+  const picked = [0];
+  for (let slot = 1; slot < count - 1; slot += 1) {
+    const target = (total * slot) / (count - 1);
+    let best = picked[picked.length - 1] + 1;
+    for (let index = best; index < cumulative.length - (count - slot); index += 1) {
+      if (Math.abs(cumulative[index] - target) < Math.abs(cumulative[best] - target)) best = index;
+    }
+    picked.push(best);
+  }
+  picked.push(cumulative.length - 1);
+  return picked;
+};
+
+/**
+ * Checkpoints along a mapped trail, with each one's distance measured along the
+ * trail itself rather than in straight lines between checkpoints, plus a thinned
+ * copy of the line for drawing it.
+ */
+const buildMappedRoute = ({ line, name, source, objectiveLat, objectiveLon, haversineKm }) => {
+  const { points, gapKm } = orientToObjective(line, objectiveLat, objectiveLon, haversineKm);
+  const cumulative = cumulativeKm(points, haversineKm);
+  const totalKm = cumulative[cumulative.length - 1];
+  const indexes = evenDistanceIndexes(cumulative, MAPPED_CHECKPOINT_COUNT);
+  const stride = Math.max(1, Math.ceil(points.length / MAX_GEOMETRY_POINTS));
+  const geometry = points
+    .map((point, index) => ({ lat: Number(point.lat.toFixed(6)), lon: Number(point.lon.toFixed(6)), distance_miles: Number((cumulative[index] * MILES_PER_KM).toFixed(2)) }))
+    .filter((_, index) => index % stride === 0 || index === points.length - 1);
+  return {
+    gapKm,
+    lengthMiles: Number((totalKm * MILES_PER_KM).toFixed(2)),
+    geometry,
+    waypoints: indexes.map((pointIndex, index) => ({
+      name: index === 0
+        ? `${name} start`
+        : index === indexes.length - 1
+          ? `${name} objective`
+          : `${name} checkpoint ${index + 1}`,
+      lat: points[pointIndex].lat,
+      lon: points[pointIndex].lon,
+      distance_miles: Number((cumulative[pointIndex] * MILES_PER_KM).toFixed(2)),
+      progress_percent: totalKm > 0 ? Math.round((cumulative[pointIndex] / totalKm) * 100) : Math.round((index / Math.max(1, indexes.length - 1)) * 100),
+      source,
+    })),
+  };
+};
 
 const createRouteDataService = ({ fetchWithTimeout, fetchHeaders = {}, haversineKm, requestTimeoutMs = 15000 } = {}) => {
   const fetchNpsRoute = async ({ route, peak, lat, lon }) => {
@@ -99,17 +179,21 @@ const createRouteDataService = ({ fetchWithTimeout, fetchHeaders = {}, haversine
     }).filter((candidate) => candidate.score > 0).sort((a, b) => b.score - a.score);
     const best = candidates[0];
     if (!best || (normalizeName(route) && best.score < 12)) return null;
-    const raw = flattenArcGisPaths(best.feature?.geometry);
-    const sampled = sampleCoordinates(raw, 8);
-    if (sampled.length < 2) return null;
-    const ordered = ensureObjectiveLast(sampled, lat, lon, haversineKm);
+    // Every piece of the same named trail, joined onto the best match's longest path.
+    const sameName = candidates.filter((candidate) => normalizeName(candidate.candidateName) === normalizeName(best.candidateName));
+    const piecesOf = (candidate) => (Array.isArray(candidate.feature?.geometry?.paths) ? candidate.feature.geometry.paths : []).map(toPoints);
+    const bestPieces = piecesOf(best);
+    const pieces = [...bestPieces, ...sameName.filter((candidate) => candidate !== best).flatMap(piecesOf)];
+    const first = bestPieces.reduce((longest, piece) => (piece.length > longest.length ? piece : longest), []);
+    if (first.length < 2) return null;
+    const mapped = buildMappedRoute({ line: stitchLines(first, pieces, haversineKm), name: best.candidateName || route, source: 'nps', objectiveLat: lat, objectiveLon: lon, haversineKm });
     return {
       source: 'nps',
       sourceLabel: 'National Park Service public trail geometry',
       matchedName: best.candidateName,
       matchScore: best.score,
       metadata: best.feature?.attributes || {},
-      waypoints: toWaypoints({ coordinates: ordered, name: best.candidateName || route, source: 'nps' }),
+      ...mapped,
     };
   };
 
@@ -141,17 +225,19 @@ const createRouteDataService = ({ fetchWithTimeout, fetchHeaders = {}, haversine
       .sort((a, b) => b.score - a.score || b.element.geometry.length - a.element.geometry.length);
     const best = candidates[0];
     if (!best || (normalizeName(route) && best.score < 12)) return null;
-    const coordinates = best.element.geometry.map((point) => ({ lat: Number(point?.lat), lon: Number(point?.lon) }));
-    const sampled = sampleCoordinates(coordinates.map((point) => [point.lon, point.lat]), 8);
-    if (sampled.length < 2) return null;
-    const ordered = ensureObjectiveLast(sampled, lat, lon, haversineKm);
+    // OpenStreetMap splits a trail into many ways; join those sharing its name.
+    const sameName = candidates.filter((candidate) => normalizeName(candidate.candidateName) === normalizeName(best.candidateName));
+    const pieces = sameName.map((candidate) => toPoints(candidate.element.geometry));
+    const first = pieces[sameName.indexOf(best)];
+    if (first.length < 2) return null;
+    const mapped = buildMappedRoute({ line: stitchLines(first, pieces, haversineKm), name: best.candidateName || route, source: 'openstreetmap', objectiveLat: lat, objectiveLon: lon, haversineKm });
     return {
       source: 'openstreetmap',
       sourceLabel: 'OpenStreetMap mapped trail geometry',
       matchedName: best.candidateName,
       matchScore: best.score,
       metadata: best.element?.tags || {},
-      waypoints: toWaypoints({ coordinates: ordered, name: best.candidateName || route, source: 'openstreetmap' }),
+      ...mapped,
     };
   };
 
@@ -221,7 +307,9 @@ const buildRouteTerrainProfile = (waypoints, haversineKm) => {
 
 module.exports = {
   createRouteDataService,
+  buildMappedRoute,
   buildRouteTerrainProfile,
   nameScore,
   sampleCoordinates,
+  stitchLines,
 };

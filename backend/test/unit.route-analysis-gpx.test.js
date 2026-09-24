@@ -654,3 +654,117 @@ test('GPX elevations are kept rather than replaced by terrain lookups', async ()
   expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([5400, 1]);
   expect(fetchElevationFt).toHaveBeenCalledTimes(1);
 });
+
+// Mapped-trail stubs: an NPS trail, and Nominatim finding only the named trailhead.
+const mappedRouteApp = ({ npsPath, askAI }) => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45, windGust: 10, precipChance: 5 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async (url) => {
+      const text = String(url);
+      if (text.includes('mapservices.nps.gov')) {
+        return { ok: true, json: async () => ({ features: [{ attributes: { TRLNAME: 'Mist Trail' }, geometry: { paths: [npsPath] } }] }) };
+      }
+      if (text.includes('nominatim') && text.includes('Happy%20Isles%20Nature%20Center')) {
+        return { ok: true, json: async () => [{ lat: '37.7330', lon: '-119.5586' }] };
+      }
+      return { ok: false, json: async () => ({}) };
+    }),
+    fetchHeaders: {},
+    fetchElevationFt: async () => ({ elevationFt: null }),
+  });
+  return app;
+};
+const mistTrailLandmarks = async (prompt, options) => (options.feature === 'route-waypoints'
+  ? '[{"name":"Happy Isles Nature Center","lat":37.7329,"lon":-119.5587},{"name":"Vernal Fall Footbridge","lat":37.7275,"lon":-119.5431},{"name":"Half Dome","lat":37.7459,"lon":-119.5332,"objective":true}]'
+  : 'Named route briefing');
+
+test('a mapped trail reaching the objective is used before AI landmarks, which name points along it', async () => {
+  const app = mappedRouteApp({
+    npsPath: [[-119.5587, 37.7329], [-119.5500, 37.7300], [-119.5431, 37.7275], [-119.5380, 37.7380], [-119.5332, 37.7459]],
+    askAI: mistTrailLandmarks,
+  });
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Half Dome Mapped First Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.routeSource).toBe('nps');
+  expect(response.body.timing).toMatchObject({ distanceBasis: 'along-trail', roundTrip: true });
+  const names = response.body.waypoints.map((waypoint) => waypoint.name);
+  expect(names[0]).toBe('Happy Isles Nature Center');
+  expect(names.filter((name) => !name.startsWith('Return')).at(-1)).toBe('Half Dome');
+  expect(names.at(-1)).toBe('Return to Happy Isles Nature Center');
+  // The trailhead stays on the mapped trail rather than moving to the geocoded point.
+  expect(response.body.waypoints[0]).toMatchObject({ lat: 37.7329, lon: -119.5587 });
+  // The return retraces the trail, so the outing is twice the trail's length.
+  const outbound = response.body.waypoints.filter((waypoint) => waypoint.leg !== 'return');
+  const trail = outbound.at(-1).distance_miles;
+  expect(response.body.waypoints.at(-1).distance_miles).toBeCloseTo(trail * 2, 1);
+  expect(response.body.routeGeometry.length).toBeGreaterThanOrEqual(5);
+});
+
+test('a mapped trail that stops far from the objective loses to AI landmarks, but stands in when they fail', async () => {
+  const shortTrail = [[-119.5587, 37.7329], [-119.5550, 37.7310]];
+  const generated = await request(mappedRouteApp({ npsPath: shortTrail, askAI: mistTrailLandmarks }))
+    .post('/api/route-analysis')
+    .send({ peak: 'Half Dome Far Trail Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
+  expect(generated.status).toBe(200);
+  expect(generated.body.routeSource).toBe('generated');
+
+  const failingAI = async (prompt, options) => {
+    if (options.feature === 'route-waypoints') throw new Error('provider down');
+    return 'Named route briefing';
+  };
+  const fallback = await request(mappedRouteApp({ npsPath: shortTrail, askAI: failingAI }))
+    .post('/api/route-analysis')
+    .send({ peak: 'Half Dome Fallback Trail Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
+  expect(fallback.status).toBe(200);
+  expect(fallback.body.routeSource).toBe('nps');
+});
+
+test('GPX checkpoints with only a positional label take the name of a map feature at or near them', async () => {
+  const app = express();
+  app.use(express.json());
+  const places = {
+    // A lake right at the 50% checkpoint, and a peak 300 m from the high point.
+    '46.8100': { name: 'Crystal Lake', category: 'natural', lat: '46.8100', lon: '-121.7000' },
+    '46.8200': { name: 'Pinnacle Peak', category: 'natural', lat: '46.8227', lon: '-121.7000' },
+    // A road is not a useful checkpoint name.
+    '46.8000': { name: 'Forest Road 52', category: 'highway', lat: '46.8000', lon: '-121.7000' },
+  };
+  const reverseCalls = [];
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => 'GPX briefing',
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 40 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async (url) => {
+      const match = /reverse\?.*lat=([\d.-]+)/.exec(String(url));
+      if (!match) return { ok: false };
+      reverseCalls.push(match[1]);
+      const place = places[Number(match[1]).toFixed(4)];
+      return { ok: Boolean(place), json: async () => place };
+    }),
+    fetchHeaders: {},
+  });
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Reverse Name Test Peak', route: 'My track', lat: 46.82, lon: -121.7, date: '2026-07-12', start: '06:00',
+      waypoints: [
+        { name: 'Route start', lat: 46.8, lon: -121.7, elev_ft: 5000, distance_miles: 0 },
+        { name: '50% checkpoint', lat: 46.81, lon: -121.7, elev_ft: 6000, distance_miles: 1 },
+        { name: 'High point', lat: 46.82, lon: -121.7, elev_ft: 7000, distance_miles: 2 },
+        { name: 'Camp Muir', lat: 46.83, lon: -121.7, elev_ft: 6500, distance_miles: 3 },
+      ],
+    });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.name)).toEqual(['Route start', 'Crystal Lake', 'High point near Pinnacle Peak', 'Camp Muir']);
+  // A checkpoint that already has a real name is not looked up. (Lookups are
+  // cached across tests, so only the absence is checked.)
+  expect(reverseCalls).not.toContain('46.83');
+});
