@@ -162,3 +162,20 @@ test('approach inputs are sent with the plan', () => {
   assert.ok(pairs.every(([minute], i) => i === 0 || minute >= pairs[i - 1][0]));
 });
 
+
+test('an analyzed route is sent as its checkpoints, below a GPX track, with the typed trailhead to fall back on', () => {
+  const routeCheckpoints = [
+    { elev_ft: 7400, offset_minutes: 0 },
+    { elev_ft: null, offset_minutes: 60 },
+    { elev_ft: 9600, offset_minutes: 120 },
+    { elev_ft: 11000, offset_minutes: 240 },
+  ];
+  // The checkpoint with an unknown elevation is left out, never sent as 0 ft.
+  assert.deepEqual(buildApproachRequestParams({ enabled: true, trailheadElevationFt: 7000, routeCheckpoints, timing }), {
+    approach_checkpoints: '0:7400,120:9600,240:11000', trailhead_ft: '7000', ascent_min_per_kft: '45',
+  });
+  const displayTrack = [{ lat: 0, lon: 0, progress_percent: 0, elev_ft: 7500 }, { lat: 0, lon: 0, progress_percent: 100, elev_ft: 11000 }];
+  const gpx = buildApproachRequestParams({ enabled: true, gpxRoute: { distanceMiles: 8, displayTrack }, routeCheckpoints, timing });
+  assert.equal(gpx.approach_checkpoints, undefined);
+  assert.ok(gpx.approach_route);
+});

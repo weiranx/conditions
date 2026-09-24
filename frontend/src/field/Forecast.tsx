@@ -89,6 +89,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft` }:
   const selectedRow = rows[selectedIndex];
   const temp = (value: number | null | undefined) => formatTemperatureForUnit(value, preferences.temperatureUnit);
   const wind = (value: number | null | undefined) => formatWindForUnit(value, preferences.windSpeedUnit);
+  const percent = (value: number | null | undefined) => (finite(value) ? `${Math.round(value)}%` : "—");
   const clock = (value: string) => formatClockForStyle(value, preferences.timeStyle);
 
   if (!selected)
@@ -221,9 +222,9 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft` }:
               <div><dt>Feels like</dt><dd>{temp(feelsLike)}</dd></div>
               <div><dt>Wind</dt><dd>{wind(selected.wind)}</dd></div>
               <div><dt>Gusts</dt><dd className={!selectedAdjusted && selectedRow.failedRuleLabels.includes("Gust above limit") ? "is-over" : undefined}>{wind(selected.gust)}</dd></div>
-              <div><dt>Rain chance</dt><dd className={selectedRow.failedRuleLabels.includes("Precip above limit") ? "is-over" : undefined}>{selected.precipChance ?? "—"}%</dd></div>
-              <div><dt>Cloud cover</dt><dd>{selected.cloudCover ?? "—"}%</dd></div>
-              <div><dt>Humidity</dt><dd>{selected.humidity ?? "—"}%</dd></div>
+              <div><dt>Rain chance</dt><dd className={selectedRow.failedRuleLabels.includes("Precip above limit") ? "is-over" : undefined}>{percent(selected.precipChance)}</dd></div>
+              <div><dt>Cloud cover</dt><dd>{percent(selected.cloudCover)}</dd></div>
+              <div><dt>Humidity</dt><dd>{percent(selected.humidity)}</dd></div>
               <div><dt>Dew point</dt><dd>{temp(selected.dewPoint)}</dd></div>
               <div><dt>Pressure</dt><dd>{selected.pressure ?? "—"} hPa</dd></div>
               <div><dt>Wind from</dt><dd>{selected.windDirection || "—"}</dd></div>

@@ -369,7 +369,8 @@ const safetyHandler = async (req, res) => {
     typeof travelWindowHoursRaw === 'string' ? travelWindowHoursRaw : typeof travelWindowHours === 'string' ? travelWindowHours : null,
     12,
   );
-  // Optional: the planned activity tailors the gear list; general backcountry otherwise.
+  // Optional: the planned activity tailors gear, hazard weights and avalanche
+  // relevance (see src/utils/activity-profiles.js); general backcountry otherwise.
   const requestedActivity = normalizeGearActivity(typeof activity === 'string' ? activity : null);
   // Optional: where the party starts, so comfort scores the approach hours there.
   const approachRequest = parseApproachQuery(req.query);
@@ -598,6 +599,7 @@ const safetyHandler = async (req, res) => {
       avalancheData,
       snowpackData,
       rainfallData,
+      activity: requestedActivity,
     });
     avalancheData = {
       ...avalancheData,
@@ -649,6 +651,7 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
       contingencyData,
+      activity: requestedActivity,
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData,
@@ -770,6 +773,7 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
       contingencyData: safeContingencyData,
+      activity: requestedActivity,
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData: safeWeatherData,

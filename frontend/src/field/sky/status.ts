@@ -19,8 +19,8 @@ export function plainRule(rule: string): string {
   if (m) return `Feels like ${m[1]}, above your ${m[2]} ceiling`;
   m = /^condition: (.+)$/i.exec(text);
   if (m) return `${m[1]} forecast`;
-  m = /^snow depth (\d+)\s*in$/i.exec(text);
-  if (m) return `${m[1]} in of snow on the ground`;
+  m = /^snow depth (.+)$/i.exec(text);
+  if (m) return `${m[1]} of snow on the ground`;
   return text;
 }
 

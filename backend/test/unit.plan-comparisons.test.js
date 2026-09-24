@@ -156,7 +156,7 @@ describe('day over day', () => {
       deltaLabel: '+21',
       scoreComparable: true,
     });
-    expect(res.body.comparison.changes).toContain('Wind gust changed -24 kph.');
+    expect(res.body.comparison.changes).toContain('Wind gust changed -24 km/h.');
   });
 
   test('no comparison without a scored prior day', async () => {

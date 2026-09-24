@@ -280,7 +280,7 @@ test("reports come back evaluated for the plan, and can be re-evaluated for anot
   assert.match(report.evaluation.decision.level, /^(GO|CAUTION|NO-GO)$/);
   const { payload } = await api.handle("/api/evaluate", "POST", { report, plan: { ...plan, max_gust_mph: "10", wind_unit: "kph" } });
   assert.equal(payload.evaluation.plan.limits.maxWindGustMph, 10);
-  assert.equal(payload.evaluation.decision.checks.find((check) => check.key === "wind-gust").label, "Wind gusts are at or below 16 kph");
+  assert.equal(payload.evaluation.decision.checks.find((check) => check.key === "wind-gust").label, "Wind gusts are at or below 16 km/h");
   assert.equal((await api.handle("/api/evaluate", "POST", { plan })).status, 400);
 });
 

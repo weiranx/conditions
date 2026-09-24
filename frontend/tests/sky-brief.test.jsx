@@ -136,9 +136,24 @@ function briefWorkspace(overrides = {}, dataOverrides = {}) {
     ...overrides,
   };
 }
-const brief = (w, hours = buildSkyHours([row()], plan)) => renderToStaticMarkup(
+const brief = (w, hours = buildSkyHours([row()], plan), activity = "backcountry") => renderToStaticMarkup(
   <BriefSections w={w} hours={hours} clock={fmt.clock} scoreValue={74} insufficient={false} bridge=""
-    onOpen={() => {}} onReadAll={() => {}} routeEnabled gearEnabled />);
+    onOpen={() => {}} onReadAll={() => {}} routeEnabled gearEnabled activity={activity} />);
+const checkOrder = (html) => [...html.matchAll(/sky-check[^"]*"><span class="sky-card-head"><span>([^<]+)</g)].map((m) => m[1]);
+
+test("the checks read in the activity's order and say so", () => {
+  const w = briefWorkspace({ sourceFreshnessRows: [{ label: "Alerts", issued: null, staleHours: 6, stateOverride: "fresh" }] });
+  assert.deepEqual(checkOrder(brief(w)), ["Weather", "Alerts", "Daylight", "Terrain &amp; snow", "Avalanche", "Air &amp; fire"]);
+  const ski = brief(w, undefined, "ski-touring");
+  assert.deepEqual(checkOrder(ski), ["Avalanche", "Terrain &amp; snow", "Weather", "Alerts", "Daylight", "Air &amp; fire"]);
+  assert.match(ski, /Ordered for ski touring: avalanche and snowpack first/);
+  assert.doesNotMatch(brief(w), /Ordered for/);
+});
+
+test("a failing check leads whatever the activity puts first", () => {
+  const w = briefWorkspace({ returnMinutes: 1200, sourceFreshnessRows: [{ label: "Alerts", issued: null, staleHours: 6, stateOverride: "fresh" }] });
+  assert.equal(checkOrder(brief(w, undefined, "ski-touring"))[0], "Daylight");
+});
 
 test("alerts the feed cannot date are not presented as clear", () => {
   const html = brief(briefWorkspace());

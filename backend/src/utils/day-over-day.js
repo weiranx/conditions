@@ -2,7 +2,7 @@
 
 // What changed from the day before, for the same objective, start and window.
 
-const { convertTempF, convertWindMph, normalizeUnits } = require('./display-format');
+const { convertTempF, convertWindMph, normalizeUnits, windSpeedUnitLabel } = require('./display-format');
 const { toFiniteOrNull } = require('./numbers');
 
 const oneDecimal = (value) => Number(value.toFixed(1));
@@ -52,7 +52,7 @@ const buildDayOverDayChanges = (current, previous, rawUnits) => {
   const currentGust = toFiniteOrNull(current?.weather?.windGust);
   const previousGust = toFiniteOrNull(previous?.weather?.windGust);
   if (currentGust !== null && previousGust !== null && Math.abs(currentGust - previousGust) >= 3) {
-    changes.push(`Wind gust changed ${formatSignedDelta(convertWindMph(currentGust - previousGust, units.wind))} ${units.wind}.`);
+    changes.push(`Wind gust changed ${formatSignedDelta(convertWindMph(currentGust - previousGust, units.wind))} ${windSpeedUnitLabel(units.wind)}.`);
   }
   const currentFeels = feelsLikeOf(current);
   const previousFeels = feelsLikeOf(previous);

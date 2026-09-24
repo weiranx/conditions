@@ -31,11 +31,9 @@ import {
   formatDistanceForElevationUnit,
   formatElevationDeltaForUnit,
   formatElevationForUnit,
-  formatSnowDepthForElevationUnit,
-  formatSweForElevationUnit,
   formatTemperatureForUnit,
   formatWindForUnit,
-  localizeDistanceText,
+  localizeUnitText as localizeUnitTextForUnits,
   minutesToTwentyFourHourClock,
   normalizeForecastDate,
   parseIsoToMs,
@@ -111,7 +109,8 @@ import {
   TRAVEL_THRESHOLD_PRESETS,
 } from "../../hooks/usePreferenceHandlers";
 import type { TravelThresholdPresetKey } from "../../hooks/usePreferenceHandlers";
-import { useProductFeatureFlags } from "../../contexts/feature-flags";
+import { resolveReportFeatureFlags, useProductFeatureFlags } from "../../contexts/feature-flags";
+import { buildRouteReportContext } from "../route-planning";
 import { useAccount } from "../../hooks/useAccount";
 import {
   getSharedReport,
@@ -1280,6 +1279,7 @@ export function useWorkspace() {
         enabled: preferences.approachElevationAdjustment,
         trailheadElevationFt,
         gpxRoute: importedGpxRoute,
+        routeCheckpoints: routeAnalysis?.waypoints,
         timing: {
           paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
           ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
@@ -1289,6 +1289,7 @@ export function useWorkspace() {
     [
       trailheadElevationFt,
       importedGpxRoute,
+      routeAnalysis,
       preferences.approachElevationAdjustment,
       preferences.runnerPaceMinutesPerMile,
       preferences.runnerAscentMinutesPer1000Ft,
@@ -1706,36 +1707,7 @@ export function useWorkspace() {
       preferences.elevationUnit,
     );
   const localizeUnitText = (text: string): string =>
-    localizeDistanceText(text, preferences.elevationUnit)
-      .replace(
-        /SWE\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi,
-        (_, value) =>
-          `SWE ~${formatSweForElevationUnit(Number(value), preferences.elevationUnit).replace(/\s*SWE$/i, "")}`,
-      )
-      .replace(
-        /depth\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi,
-        (_, value) =>
-          `depth ~${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)}`,
-      )
-      .replace(
-        /(\d+(?:\.\d+)?)\s?in of new snow\b/gi,
-        (_, value) =>
-          `${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)} of new snow`,
-      )
-      .replace(/(\d+(?:\.\d+)?)\s?in of rain\b/gi, (match, value) =>
-        preferences.elevationUnit === "m"
-          ? `${Math.round(Number(value) * 25.4)} mm of rain`
-          : match,
-      )
-      .replace(/(-?\d+(?:\.\d+)?)\s?ft\b/gi, (_, value) =>
-        formatElevationDisplay(Number(value)),
-      )
-      .replace(/(-?\d+(?:\.\d+)?)\s?mph\b/gi, (_, value) =>
-        formatWindDisplay(Number(value)),
-      )
-      .replace(/(-?\d+(?:\.\d+)?)F\b/g, (_, value) =>
-        formatTempDisplay(Number(value)),
-      );
+    localizeUnitTextForUnits(text, preferences);
 
   const cutoffMinutes = parseTimeInputMinutes(alpineStartTime);
   const displayStartTime = formatClockForStyle(
@@ -1963,12 +1935,21 @@ export function useWorkspace() {
   // Where the backend modeled the party's start; null scores every hour at the objective.
   const planApproach = evaluation?.plan.approach ?? null;
 
+  // The analyzed route, for the AI explanation and chat to read with the report.
+  const routeReportContext = useMemo(
+    () =>
+      safetyData && resolveReportFeatureFlags(safetyData.featureFlags).routeAnalysis
+        ? buildRouteReportContext(plannedRouteName, routeAnalysis)
+        : null,
+    [safetyData, plannedRouteName, routeAnalysis],
+  );
   const handleRequestAiBriefAction = async () => {
     if (!safetyData || !decision || aiBriefLoading) return;
     if (!requestAiAccess()) return;
     void handleRequestAiBrief({
       safetyData,
       decisionLevel: decision.level,
+      route: routeReportContext,
     });
   };
 
@@ -1993,7 +1974,8 @@ export function useWorkspace() {
   const startLabel = "Start time";
   // What each source means for the plan, from the backend's evaluation.
   const interpretation = evaluation?.interpretation ?? null;
-  const elevationForecastBands = safetyData?.weather.elevationForecast || [];
+  // The plan's elevation bands at the start (from a known trailhead), from the backend.
+  const elevationForecastBands = evaluation?.elevation.bandsByHour[0] ?? safetyData?.weather.elevationForecast ?? [];
   // Hour-by-hour checks at the planned times, from the backend's evaluation.
   const travelWindowRows = evaluation?.travelWindow.planned.rows ?? EMPTY_ROWS;
   const travelWindowSummary = evaluation?.travelWindow.planned.insights.summary ?? "";
@@ -2067,6 +2049,7 @@ export function useWorkspace() {
             pleasantness: safetyData.pleasantness || null,
             safety: safetyData.safety,
             decision: evaluation?.decision ?? null,
+            ...(routeReportContext ? { route: routeReportContext } : {}),
           })
         : "",
     [
@@ -2082,6 +2065,7 @@ export function useWorkspace() {
       targetElevationFt,
       evaluation,
       rainfallPayload,
+      routeReportContext,
     ],
   );
 

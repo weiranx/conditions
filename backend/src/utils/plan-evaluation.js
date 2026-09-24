@@ -164,9 +164,11 @@ const evaluatePlan = (report, context) => {
       avalanche: interpretation.avalanche,
       windLoading,
       limits: context.limits,
+      approach,
     }),
-    // The elevation bands, and the plan's target elevation, for each planned hour.
-    elevation: buildElevationByHour(report, plannedRows, context.targetElevationFt),
+    // The elevation bands (from a known trailhead), and the plan's target
+    // elevation, for each planned hour.
+    elevation: buildElevationByHour(report, plannedRows, context.targetElevationFt, approach),
   };
 };
 

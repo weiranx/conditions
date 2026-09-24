@@ -3562,7 +3562,7 @@ const calmWeather = (overrides = {}) => ({
 
 test('calculateSafetyScore stamps the scoring model version', () => {
   const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
-  expect(result.scoreVersion).toBe('2.12.0');
+  expect(result.scoreVersion).toBe('2.13.0');
 });
 
 test('calculateSafetyScore gives benign conditions the full 100-point baseline', () => {

@@ -12,7 +12,7 @@ const {
   formatTemperature,
   formatWind,
   isFiniteNumber,
-  localizeDistanceText,
+  localizeUnitText,
   parseSolarClockMinutes,
   parseTimeInputMinutes,
 } = require('./display-format');
@@ -219,9 +219,7 @@ const evaluateDecision = (report, context) => {
   const hasFireRisk = fireRiskEnabled && Number.isFinite(fireRiskLevel) && fireRiskStatus !== 'unavailable';
   // Say what sets the fire level (a nearby fire, fire weather, or smoke); the
   // level's own label alone ("Extreme") does not tell the party what to check.
-  const fireRiskCause = localizeDistanceText(String(fireRisk.reasons?.[0] || '').trim().replace(/\.$/, ''), units.elevation)
-    .replace(/(-?\d+(?:\.\d+)?)F\b/g, (_, value) => formatTempValue(Number(value)))
-    .replace(/(-?\d+(?:\.\d+)?) mph\b/g, (_, value) => formatWindValue(Number(value)));
+  const fireRiskCause = localizeUnitText(String(fireRisk.reasons?.[0] || '').trim().replace(/\.$/, ''), units);
   const fireRiskStatement = (level) => `Fire risk is ${level}${fireRiskCause ? `: ${fireRiskCause}` : ''}.`;
 
   const heatRisk = report?.heatRisk || {};

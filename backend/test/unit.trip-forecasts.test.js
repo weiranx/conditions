@@ -230,7 +230,7 @@ test('each day is checked against the plan and the days come back ranked', async
   // Days are compared at the objective: an approach belongs to one route.
   expect(invokeSafetyHandler.mock.calls[0][0]).toMatchObject({ max_gust_mph: '30', wind_unit: 'kph', approach: 'off', lat: '47.4' });
   expect(response.body.days.map((day) => [day.date, day.decisionLevel])).toEqual([[first, 'GO'], [second, 'NO-GO']]);
-  expect(response.body.days[1].concerns).toContain('Wind gusts reach about 87 kph');
+  expect(response.body.days[1].concerns).toContain('Wind gusts reach about 87 km/h');
   expect(response.body.days[0].safetyData.evaluation.travelWindow.planned.rows).toHaveLength(12);
   expect(response.body.ranking).toEqual({ order: [first, second], bestDate: first, tiedWithBest: [] });
   expect(response.body.note).toBe('Only 2 days are available inside the current forecast range.');

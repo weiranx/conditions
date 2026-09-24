@@ -32,6 +32,51 @@ const rebaseElevationBands = (bands, base) => {
   return bands.map((band) => ({ ...band, ...estimateAtElevation(base, band.deltaFromObjectiveFt) }));
 };
 
+/** Share of the trailhead-to-objective drop at which the in-between bands sit. */
+const ROUTE_BAND_STEPS = [
+  { label: 'Trailhead', share: 1 },
+  { label: 'Mid Route', share: 0.5 },
+  { label: 'Near Objective', share: 0.2 },
+  { label: 'Objective Elevation', share: 0 },
+];
+/** Below this drop the default bands already describe the route. */
+const MIN_TRAILHEAD_DROP_FT = 300;
+
+/**
+ * The forecast bands step down from the objective by fixed amounts. When the
+ * trailhead is known (typed, GPX, or an analyzed route), span the bands from
+ * that trailhead to the objective instead, so the lowest band is where the
+ * party actually starts. Uses the objective band's readings and the same
+ * lapse-rate model; returns the bands unchanged when either is missing.
+ */
+const bandsFromTrailhead = (bands, trailheadElevationFt) => {
+  const objective = bands.find((band) => band.deltaFromObjectiveFt === 0);
+  if (!objective || typeof trailheadElevationFt !== 'number' || !isNum(trailheadElevationFt)) return bands;
+  const dropFt = objective.elevationFt - Math.max(0, trailheadElevationFt);
+  if (dropFt < MIN_TRAILHEAD_DROP_FT) return bands;
+  const base = { temp: objective.temp, wind: objective.windSpeed, gust: objective.windGust };
+  if (!isNum(base.temp) || !isNum(base.wind)) return bands;
+  const seen = new Set();
+  return ROUTE_BAND_STEPS
+    .map(({ label, share }) => {
+      // The trailhead keeps its exact elevation; in-between bands round to 100 ft.
+      const delta = share === 1 ? -Math.round(dropFt) : share === 0 ? 0 : -Math.round((dropFt * share) / 100) * 100;
+      return { label, elevationFt: objective.elevationFt + delta, deltaFromObjectiveFt: delta, ...estimateAtElevation(base, delta) };
+    })
+    .filter((band) => !seen.has(band.elevationFt) && Boolean(seen.add(band.elevationFt)))
+    .sort((a, b) => a.elevationFt - b.elevationFt);
+};
+
+/**
+ * The elevation bands for the plan: from a known trailhead to the objective;
+ * with an estimated trailhead (already the lowest default band) or no
+ * approach, the report's own bands.
+ */
+const planElevationBands = (report, approach) => {
+  const bands = Array.isArray(report?.weather?.elevationForecast) ? report.weather.elevationForecast : [];
+  return approach && approach.source !== 'estimated' ? bandsFromTrailhead(bands, approach.trailheadElevationFt) : bands;
+};
+
 // A planned hour's objective readings: approach hours carry them separately.
 const objectiveBase = (row) => {
   const reading = row?.objectiveReading ?? row;
@@ -39,12 +84,12 @@ const objectiveBase = (row) => {
 };
 
 /**
- * The elevation bands for each planned hour (the first is the report's own,
- * from the start-hour forecast), and the estimate at a target elevation (the
+ * The plan's elevation bands for each planned hour (the first from the
+ * start-hour forecast), and the estimate at a target elevation (the
  * objective's, without one) for each hour.
  */
-const buildElevationByHour = (report, plannedRows, targetElevationFt) => {
-  const bands = Array.isArray(report?.weather?.elevationForecast) ? report.weather.elevationForecast : [];
+const buildElevationByHour = (report, plannedRows, targetElevationFt, approach = null) => {
+  const bands = planElevationBands(report, approach);
   const bandsByHour = plannedRows.map((row, index) => (index === 0 ? bands : rebaseElevationBands(bands, objectiveBase(row))));
   const weather = report?.weather || {};
   const objectiveFt = toFiniteOrNull(weather.elevation);
@@ -197,12 +242,12 @@ const featureEnabled = (report, key) => report?.featureFlags?.[key] !== false;
  * terrain and wind loading count only where the report shows them, and lee
  * aspects only when there is snow for the wind to move.
  */
-const buildTerrainView = (report, { rows, avalanche, windLoading, limits }) => {
+const buildTerrainView = (report, { rows, avalanche, windLoading, limits, approach = null }) => {
   const avalancheDetails = featureEnabled(report, 'avalancheDetails');
   const showWindLoading = featureEnabled(report, 'windLoadingDetails') && Boolean(windLoading?.applies);
   const input = {
     rows,
-    elevationBands: Array.isArray(report?.weather?.elevationForecast) ? report.weather.elevationForecast : [],
+    elevationBands: planElevationBands(report, approach),
     avalancheProblems: avalancheDetails && Array.isArray(report?.avalanche?.problems) ? report.avalanche.problems : [],
     avalancheRelevant: avalancheDetails && avalanche.relevant,
     avalancheUnknown: avalancheDetails && avalanche.unknown,
@@ -222,6 +267,8 @@ const buildTerrainView = (report, { rows, avalanche, windLoading, limits }) => {
 module.exports = {
   estimateAtElevation,
   rebaseElevationBands,
+  bandsFromTrailhead,
+  planElevationBands,
   buildElevationByHour,
   buildTerrainWindow,
   buildTerrainWindowByAspect,

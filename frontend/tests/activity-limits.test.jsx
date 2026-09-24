@@ -5,9 +5,11 @@ import {
   activeActivityLabel,
   applyPreferencePatch,
   builtInActivityLimits,
+  builtInRouteTiming,
   createCustomActivityPatch,
   deleteCustomActivityPatch,
   pickActivityLimits,
+  pickRouteTiming,
   renameCustomActivityPatch,
 } from '../src/app/activity-limits';
 import { getDefaultUserPreferences, normalizeUserPreferences } from '../src/app/preferences';
@@ -127,4 +129,72 @@ test('normalization drops malformed custom activities and orphaned limits', () =
   assert.equal(prefs.customActivityId, null);
   assert.equal(prefs.activityLimits['custom-gone'], undefined);
   assert.equal(prefs.activityLimits['custom-ok'].maxWindGustMph, 80);
+});
+
+test('switching activity loads that activity\'s route timing, from Settings or the planner', () => {
+  const prefs = applyPreferencePatch(start(), { defaultActivity: 'trail-running', customActivityId: null });
+  assert.deepEqual(pickRouteTiming(prefs), builtInRouteTiming('trail-running'));
+  assert.equal(prefs.runnerPaceMinutesPerMile, 20);
+  // Weather limits are untouched by route timing and vice versa.
+  assert.deepEqual(pickActivityLimits(prefs), builtInActivityLimits('trail-running'));
+});
+
+test('an edited pace belongs to the activity it was edited for', () => {
+  let prefs = applyPreferencePatch(start(), { defaultActivity: 'trail-running' });
+  prefs = applyPreferencePatch(prefs, { runnerPaceMinutesPerMile: 14, runnerStopBufferMinutes: 10 });
+  prefs = applyPreferencePatch(prefs, { defaultActivity: 'mountaineering' });
+  assert.deepEqual(pickRouteTiming(prefs), builtInRouteTiming('mountaineering'));
+  prefs = applyPreferencePatch(prefs, { defaultActivity: 'trail-running' });
+  assert.equal(prefs.runnerPaceMinutesPerMile, 14);
+  assert.equal(prefs.runnerStopBufferMinutes, 10);
+  assert.equal(prefs.runnerAscentMinutesPer1000Ft, builtInRouteTiming('trail-running').runnerAscentMinutesPer1000Ft);
+  assert.equal(prefs.maxWindGustMph, builtInActivityLimits('trail-running').maxWindGustMph);
+});
+
+test('custom activities start from their base activity\'s timing and keep their own', () => {
+  let prefs = applyPreferencePatch(start(), { defaultActivity: 'ski-touring' });
+  prefs = applyPreferencePatch(prefs, { runnerPaceMinutesPerMile: 25 });
+  prefs = applyPreferencePatch(prefs, { defaultActivity: 'hiking' });
+  prefs = applyPreferencePatch(prefs, createCustomActivityPatch(prefs, 'Dawn patrol', 'ski-touring'));
+  const id = prefs.customActivityId;
+  assert.equal(prefs.runnerPaceMinutesPerMile, 25);
+  prefs = applyPreferencePatch(prefs, { runnerPaceMinutesPerMile: 18 });
+  prefs = applyPreferencePatch(prefs, { defaultActivity: 'ski-touring', customActivityId: null });
+  assert.equal(prefs.runnerPaceMinutesPerMile, 25);
+  prefs = applyPreferencePatch(prefs, { defaultActivity: 'ski-touring', customActivityId: id });
+  assert.equal(prefs.runnerPaceMinutesPerMile, 18);
+  prefs = applyPreferencePatch(prefs, deleteCustomActivityPatch(prefs, id));
+  assert.equal(prefs.runnerPaceMinutesPerMile, 25);
+  assert.equal(prefs.activityRouteTiming[id], undefined);
+});
+
+test('stored route timing round-trips and is clamped', () => {
+  let prefs = applyPreferencePatch(start(), { defaultActivity: 'scrambling' });
+  prefs = applyPreferencePatch(prefs, { runnerPaceMinutesPerMile: 33 });
+  prefs = applyPreferencePatch(prefs, { defaultActivity: 'hiking' });
+  const restored = normalizeUserPreferences(JSON.parse(JSON.stringify(prefs)), { adoptActivityDefaults: true });
+  assert.equal(restored.activityRouteTiming.scrambling.runnerPaceMinutesPerMile, 33);
+  const clamped = normalizeUserPreferences({
+    ...prefs,
+    activityRouteTiming: { ...prefs.activityRouteTiming, 'alpine-climbing': { runnerPaceMinutesPerMile: 500 } },
+  });
+  assert.equal(clamped.activityRouteTiming['alpine-climbing'].runnerPaceMinutesPerMile, 90);
+  assert.equal(
+    clamped.activityRouteTiming['alpine-climbing'].runnerStopBufferMinutes,
+    builtInRouteTiming('alpine-climbing').runnerStopBufferMinutes,
+  );
+});
+
+test('a legacy global pace left at an activity\'s defaults adopts the active activity\'s timing', () => {
+  // Picking trail running in Settings used to copy its pace into the one global
+  // setting; switching to mountaineering in the planner left it there.
+  const legacy = { ...getDefaultUserPreferences(), defaultActivity: 'mountaineering', ...builtInRouteTiming('trail-running') };
+  delete legacy.activityRouteTiming;
+  const prefs = normalizeUserPreferences(legacy, { adoptActivityDefaults: true });
+  assert.deepEqual(pickRouteTiming(prefs), builtInRouteTiming('mountaineering'));
+
+  const tuned = { ...legacy, runnerPaceMinutesPerMile: 17 };
+  const kept = normalizeUserPreferences(tuned, { adoptActivityDefaults: true });
+  assert.equal(kept.runnerPaceMinutesPerMile, 17);
+  assert.equal(kept.activityRouteTiming.mountaineering.runnerPaceMinutesPerMile, 17);
 });

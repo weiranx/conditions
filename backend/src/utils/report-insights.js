@@ -1,5 +1,6 @@
 const { buildPlannedStartIso } = require('./time');
 const { FIRE_NEAR_KM, MI_PER_KM, fireEdgeKm, isNearFire } = require('./fire-proximity');
+const { addActivityInsights } = require('./activity-insights');
 const HOUR = 3600000;
 const number = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const stamp = value => typeof value === 'string' && /(?:Z|[+-]\d\d:\d\d)$/i.test(value) && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null;
@@ -11,7 +12,6 @@ const link = value => /^https?:\/\//i.test(value || '') ? value : undefined;
 function buildReportInsights(report) {
   const local = report.localConditions || {};
   const supplemental = report.supplementalEvidence || {};
-  if (!report.localConditions && !report.supplementalEvidence) return undefined;
   const flags = report.featureFlags || {};
   const enabled = key => flags[key] !== false;
   const generated = stamp(report.generatedAt);
@@ -27,6 +27,9 @@ function buildReportInsights(report) {
     items.push({ id, tone, title, meaning, action, evidence, features, decisionRelevant });
   };
   const evidence = (source, detail, time, url) => ({ source, detail: clean(detail), ...(time ? { time } : {}), ...(link(url) ? { url: link(url) } : {}) });
+  addActivityInsights(report, add, evidence);
+  // Without field evidence there is nothing else to interpret.
+  if (!report.localConditions && !report.supplementalEvidence && !items.length) return undefined;
   const fieldFeatures = ['fieldObservations'];
   const access = local.access;
   const notices = local.closures;
@@ -186,7 +189,7 @@ function buildReportInsights(report) {
     `The report could not establish ${gaps.join(', ')}. Missing evidence is not confirmation of clear conditions.`,
     'Check the relevant official sources before departure; refresh this report when new readings are available.', [], fieldFeatures);
   const rank = { caution: 0, gap: 1, context: 2, support: 3 };
-  const priority = { lightning: 0, 'fire-access': 1, access: 2, 'station-wind': 3, 'wind-range': 4, water: 5 };
+  const priority = { lightning: 0, 'exposed-lightning': 1, 'fire-access': 2, access: 3, 'fresh-load': 4, refreeze: 5, 'runner-heat': 6, 'wet-rock': 7, 'station-wind': 8, 'wind-range': 9, water: 10 };
   items.sort((a, b) => rank[a.tone] - rank[b.tone] || (priority[a.id] ?? 20) - (priority[b.id] ?? 20));
   const concerns = items.filter(i => i.decisionRelevant);
   return { version: 1, summary: concerns.length ? `${concerns[0].title}. ${concerns.length > 1 ? 'Additional field and forecast checks also need review.' : 'Resolve this check alongside the main forecast before committing.'}` : 'Use the available field evidence to check the forecast and approach; it does not establish conditions for the whole route.', items };

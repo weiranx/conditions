@@ -188,9 +188,9 @@ describe('precipitation, surface, visibility and weather trend', () => {
   test('recent precipitation reads in the plan units and a gap is not zero', () => {
     const rainfall = { status: 'ok', mode: 'observed_recent', totals: { rainPast24hIn: 0.7, rainPast24hMm: 17.8, snowPast24hIn: 3, snowPast24hCm: 7.6 } };
     const display = buildRainfallDisplay(rainfall, metric, 8);
-    expect(display.rainDisplay.past24h).toBe('18 mm');
+    expect(display.rainDisplay.past24h).toBe('17.8 mm');
     expect(display.snowDisplay.past24h).toBe('7.6 cm');
-    expect(display.insightLine).toBe('Mixed precip signal: 24h rain 18 mm plus 24h snow 7.6 cm.');
+    expect(display.insightLine).toBe('Mixed precip signal: 24h rain 17.8 mm plus 24h snow 7.6 cm.');
     expect(display.rainIn).toEqual({ past12h: null, past24h: 0.7, past48h: null });
     expect(display.modeLabel).toBe('Observed recent accumulation');
     expect(buildRainfallDisplay(null, imperial, 8).insightLine).toBe('Recent rain/snow totals are unavailable for this objective/time.');
@@ -222,7 +222,7 @@ describe('precipitation, surface, visibility and weather trend', () => {
     // 30 heavy snow + 20 precipitation + 12 wind + 16 humid overcast.
     expect(visibility).toMatchObject({ level: 'High', score: 78, status: 'over' });
     expect(visibility.source).toBe('Derived from selected weather hour');
-    expect(visibility.detail).toBe('reduced-visibility weather signal • precip 85% • wind/gust 64 kph');
+    expect(visibility.detail).toBe('reduced-visibility weather signal • precip 85% • wind/gust 64 km/h');
     // A missing precipitation chance is not 0%, and the forecast's own assessment wins.
     const provided = buildVisibility({ weather: { visibilityRisk: { level: 'low', score: 25, factors: ['patchy fog'], source: 'NOAA' } } }, imperial);
     expect(provided).toMatchObject({ level: 'Low', score: 25, detail: 'patchy fog', source: 'NOAA' });
@@ -354,5 +354,60 @@ describe('elevation by hour', () => {
     // Without a target, the objective itself.
     const objective = attachPlanEvaluation(makeReport(), { approach: 'off' }).evaluation.elevation.target;
     expect(objective).toMatchObject({ elevationFt: Math.round(makeReport().weather.elevation), deltaFt: 0 });
+  });
+});
+
+describe('elevation bands from a known trailhead', () => {
+  const objectiveBand = { label: 'Objective Elevation', elevationFt: 11000, deltaFromObjectiveFt: 0, temp: 20, feelsLike: 8, windSpeed: 15, windGust: 25 };
+  const defaults = [{ ...objectiveBand, label: 'Approach Terrain', elevationFt: 8200, deltaFromObjectiveFt: -2800 }, objectiveBand];
+  const { bandsFromTrailhead, planElevationBands } = require('../src/utils/terrain-window');
+
+  test('the bands span the trailhead to the objective', () => {
+    const rebuilt = bandsFromTrailhead(defaults, 6950);
+    expect(rebuilt.map((band) => [band.label, band.elevationFt, band.deltaFromObjectiveFt])).toEqual([
+      ['Trailhead', 6950, -4050],
+      ['Mid Route', 9000, -2000],
+      ['Near Objective', 10200, -800],
+      ['Objective Elevation', 11000, 0],
+    ]);
+    // 4,050 ft lower: 3.3 °F warmer and 2 mph calmer per 1,000 ft.
+    expect([rebuilt[0].temp, rebuilt[0].windSpeed, rebuilt[3].temp]).toEqual([33, 7, 20]);
+    expect(bandsFromTrailhead(defaults, 10900)).toBe(defaults);
+    expect(bandsFromTrailhead(defaults, null)).toBe(defaults);
+    expect(bandsFromTrailhead([defaults[0]], 7000)).toHaveLength(1);
+  });
+
+  test('an estimated trailhead keeps the forecast bands; a known one rebuilds them', () => {
+    const report = { weather: { elevationForecast: defaults } };
+    expect(planElevationBands(report, null)).toBe(defaults);
+    expect(planElevationBands(report, { source: 'estimated', trailheadElevationFt: 8200 })).toBe(defaults);
+    expect(planElevationBands(report, { source: 'route', trailheadElevationFt: 6950 })[0].label).toBe('Trailhead');
+  });
+});
+
+// The same cases as the frontend's localizeUnitText (frontend/tests/report-units.test.jsx),
+// so text written by the backend reads like text localized in the app.
+describe('provider text in the viewer units', () => {
+  const { localizeUnitText } = require('../src/utils/display-format');
+  const units = { temperature: 'c', wind: 'kph', elevation: 'm' };
+  const cases = [
+    ['Feels-like temperatures span 20–35°F.', 'Feels-like temperatures span -7–2°C.'],
+    ['10–25 mph sustained wind', '16–40 km/h sustained wind'],
+    ['Gusts at 12,000-13,000 ft', 'Gusts at 3,658-3,962 m'],
+    ['adjustments per 1,000 ft.', 'adjustments per 1,000 ft.'],
+    ['temperature swing (30F) suggests', 'temperature swing (17°C) suggests'],
+    ['A station reads 9F warmer than forecast.', 'A station reads 5°C warmer than forecast.'],
+    ['within about 10 mi of the objective (nearest about 6.5 mi)', 'within about 16 km of the objective (nearest about 10.5 km)'],
+    ['Snowpack signal near objective: depth 40.0 in, SWE 12.0 in.', 'Snowpack signal near objective: depth 102 cm, SWE 305 mm.'],
+    ['Recent rainfall: 0.10 in (12h), 0.25 in (24h).', 'Recent rainfall: 2.5 mm (12h), 6.3 mm (24h).'],
+    ['4 in of new snow', '10.2 cm of new snow'],
+    ['2 in the full feed; 3 alerts in effect.', '2 in the full feed; 3 alerts in effect.'],
+  ];
+  test.each(cases)('%s', (text, expected) => {
+    expect(localizeUnitText(text, units)).toBe(expected);
+  });
+  test('imperial readers keep imperial text, re-rounded', () => {
+    expect(localizeUnitText('Temperature near 28F.', { temperature: 'f', wind: 'mph', elevation: 'ft' })).toBe('Temperature near 28°F.');
+    expect(localizeUnitText('between the objective and 13775 ft', { temperature: 'f', wind: 'mph', elevation: 'ft' })).toBe('between the objective and 13,775 ft');
   });
 });

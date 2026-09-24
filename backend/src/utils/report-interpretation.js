@@ -567,13 +567,15 @@ const buildHeatRiskDisplay = (report) => {
 
 const CAUTION_SURFACES = ['snow_ice', 'snow_fresh_powder', 'snow_mixed', 'spring_snow', 'wet_snow', 'wet_muddy', 'cold_slick', 'dry_loose'];
 
-const buildTerrainConditionDisplay = (report) => {
+const buildTerrainConditionDisplay = (report, units) => {
   const terrain = report?.terrainCondition;
+  // Provider sentences quote imperial values ("Temperature near 28F.").
+  const localize = (text) => (units ? localizeUnitText(text, units) : text);
   const snowProfile = terrain?.snowProfile
     ? {
       label: terrain.snowProfile.label || 'Snow profile unavailable',
-      summary: terrain.snowProfile.summary || '',
-      reasons: Array.isArray(terrain.snowProfile.reasons) ? terrain.snowProfile.reasons.slice(0, 4) : [],
+      summary: localize(terrain.snowProfile.summary || ''),
+      reasons: Array.isArray(terrain.snowProfile.reasons) ? terrain.snowProfile.reasons.slice(0, 4).map(localize) : [],
       confidence: terrain.snowProfile.confidence || null,
       meltFreeze: terrain.snowProfile.meltFreeze || null,
     }
@@ -592,12 +594,12 @@ const buildTerrainConditionDisplay = (report) => {
   }
   return {
     summary: hasDetail
-      ? terrain.summary || 'Surface classification is based on weather, precipitation totals, trend, and snowpack observations.'
+      ? localize(terrain.summary || 'Surface classification is based on weather, precipitation totals, trend, and snowpack observations.')
       : 'Surface classification is based on weather description, precip probability, rolling rain/snow totals, temperature trend, and available snowpack observations.',
-    reasons: hasDetail && Array.isArray(terrain.reasons) ? terrain.reasons.slice(0, 6) : [],
+    reasons: hasDetail && Array.isArray(terrain.reasons) ? terrain.reasons.slice(0, 6).map(localize) : [],
     confidence: hasDetail ? terrain.confidence || null : null,
     impact: hasDetail ? terrain.impact || null : null,
-    recommendedTravel: hasDetail ? terrain.recommendedTravel || null : null,
+    recommendedTravel: hasDetail && terrain.recommendedTravel ? localize(terrain.recommendedTravel) : null,
     snowProfile,
     tone,
     // Matches the decision: these surfaces are cautions, and an unavailable
@@ -855,7 +857,7 @@ const buildReportInterpretation = (report, context) => {
     },
     fireRisk: buildFireRiskDisplay(report),
     heatRisk: buildHeatRiskDisplay(report),
-    terrainCondition: buildTerrainConditionDisplay(report),
+    terrainCondition: buildTerrainConditionDisplay(report, units),
     sourceFreshness: buildSourceFreshness(report, avalanche.relevant, travelWindowHours, nowMs),
     visibility: buildVisibility(report, units),
     pressureTrend: buildPressureTrend(trendWindow, travelWindowHours),

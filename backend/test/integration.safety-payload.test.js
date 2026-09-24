@@ -246,7 +246,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.status).toBe(200);
     expect(res.body.evaluation.plan.limits.maxWindGustMph).toBe(12);
     const gust = res.body.evaluation.decision.checks.find((check) => check.key === 'wind-gust');
-    expect(gust.label).toBe('Wind gusts are at or below 19 kph');
+    expect(gust.label).toBe('Wind gusts are at or below 19 km/h');
   }, 20000);
 
   test('GET /api/safety uses the documented 12-hour travel window when none is requested', async () => {

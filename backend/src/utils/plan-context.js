@@ -49,6 +49,7 @@ const PLAN_PARAM_KEYS = [
   'trailhead_ft',
   'ascent_min_per_kft',
   'approach_route',
+  'approach_checkpoints',
   'target_elevation_ft',
 ];
 

@@ -44,39 +44,62 @@ const numberParam = (value, min, max) => {
  * Invalid values are ignored rather than rejected, so a bad optional input
  * never costs the user their report.
  */
+// "minute:feet,…" pairs; null when any pair is unreadable or out of range.
+const parseTimelineParam = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const pairs = value.split(',');
+  if (pairs.length > MAX_ROUTE_POINTS) return null;
+  const points = pairs.map((pair) => {
+    const [minute, elevationFt] = pair.split(':');
+    return {
+      minute: numberParam(minute, 0, MAX_ROUTE_MINUTES),
+      elevationFt: numberParam(elevationFt, MIN_ELEVATION_FT, MAX_ELEVATION_FT),
+    };
+  });
+  const valid = points.length >= 2
+    && points.every((point, index) => point.minute !== null && point.elevationFt !== null
+      && (index === 0 || point.minute >= points[index - 1].minute));
+  return valid ? points : null;
+};
+
 const parseApproachQuery = (query = {}) => {
   if (String(query.approach || '').toLowerCase() === 'off') return { enabled: false };
   const trailheadElevationFt = numberParam(query.trailhead_ft, MIN_ELEVATION_FT, MAX_ELEVATION_FT);
   const ascentMinutesPer1000Ft = numberParam(query.ascent_min_per_kft, 1, 120);
-  let timeline = null;
-  if (typeof query.approach_route === 'string' && query.approach_route.trim()) {
-    const points = query.approach_route.split(',').slice(0, MAX_ROUTE_POINTS + 1).map((pair) => {
-      const [minute, elevationFt] = pair.split(':');
-      return {
-        minute: numberParam(minute, 0, MAX_ROUTE_MINUTES),
-        elevationFt: numberParam(elevationFt, MIN_ELEVATION_FT, MAX_ELEVATION_FT),
-      };
-    });
-    const valid = points.length >= 2 && points.length <= MAX_ROUTE_POINTS
-      && points.every((point, index) => point.minute !== null && point.elevationFt !== null
-        && (index === 0 || point.minute >= points[index - 1].minute));
-    if (valid) timeline = points;
-  }
-  return { enabled: true, trailheadElevationFt, ascentMinutesPer1000Ft, timeline };
+  // A GPX track's timeline, from the start of the track.
+  const timeline = parseTimelineParam(query.approach_route);
+  // An analyzed route's checkpoints; the first must be the start.
+  const checkpoints = parseTimelineParam(query.approach_checkpoints);
+  const routeTimeline = checkpoints && checkpoints[0].minute === 0 ? checkpoints : null;
+  return { enabled: true, trailheadElevationFt, ascentMinutesPer1000Ft, timeline, routeTimeline };
 };
 
 /**
- * Elevation over time. A route timeline (from GPX) wins, then a typed
+ * Elevation over time. A GPX track wins, then an analyzed route's checkpoints
+ * (both give the full route: approach, summit and descent), then a typed
  * trailhead, then the lowest forecast band. Without a route, the party climbs
  * at the ascent rate and then stays at the objective; descent is not modeled.
  */
-const buildApproachProfile = ({ objectiveElevationFt, trailheadElevationFt = null, timeline = null, elevationBands = [], ascentMinutesPer1000Ft = null }) => {
+const buildApproachProfile = ({
+  objectiveElevationFt,
+  trailheadElevationFt = null,
+  timeline = null,
+  routeTimeline = null,
+  elevationBands = [],
+  ascentMinutesPer1000Ft = null,
+}) => {
   const objective = Number(objectiveElevationFt);
   if (!finite(objective) || objective <= 0) return null;
 
   if (Array.isArray(timeline) && timeline.length >= 2) {
     if (objective - Math.min(...timeline.map((entry) => entry.elevationFt)) < MIN_APPROACH_DROP_FT) return null;
     return { source: 'gpx', trailheadElevationFt: timeline[0].elevationFt, objectiveElevationFt: objective, timeline };
+  }
+
+  // A route that stays near the objective falls through to the trailhead.
+  if (Array.isArray(routeTimeline) && routeTimeline.length >= 2
+    && objective - Math.min(...routeTimeline.map((entry) => entry.elevationFt)) >= MIN_APPROACH_DROP_FT) {
+    return { source: 'route', trailheadElevationFt: routeTimeline[0].elevationFt, objectiveElevationFt: objective, timeline: routeTimeline };
   }
 
   const lowestBand = (Array.isArray(elevationBands) ? elevationBands : [])
@@ -185,6 +208,7 @@ const resolveApproach = ({ approachRequest, weatherData, solarData }) => {
     objectiveElevationFt: weatherData?.elevation,
     trailheadElevationFt: approachRequest.trailheadElevationFt,
     timeline: approachRequest.timeline,
+    routeTimeline: approachRequest.routeTimeline,
     elevationBands: weatherData?.elevationForecast,
     ascentMinutesPer1000Ft: approachRequest.ascentMinutesPer1000Ft,
   });

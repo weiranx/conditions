@@ -17,6 +17,7 @@ const {
   formatClockForStyle,
   formatSnowDepth,
   formatTemperature,
+  windSpeedUnitLabel,
   minutesToTwentyFourHourClock,
   parseSolarClockMinutes,
 } = require('./display-format');
@@ -55,7 +56,7 @@ const buildTravelWindowRows = (trend, context, { snowDepthIn = null } = {}) => {
     const displayFeelsLike = formatTemperature(feelsLike, units.temperature);
 
     if (gust > limits.maxWindGustMph) {
-      failedRules.push(`gust ${displayGust}>${displayMaxGust} ${units.wind}`);
+      failedRules.push(`gust ${displayGust}>${displayMaxGust} ${windSpeedUnitLabel(units.wind)}`);
       failedRuleLabels.push('Gust above limit');
     }
     if (precipChance > limits.maxPrecipChance) {

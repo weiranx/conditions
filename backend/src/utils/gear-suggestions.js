@@ -1,23 +1,10 @@
 const { clampTravelWindowHours } = require('./time');
 const { computeFeelsLikeF } = require('./weather-normalizers');
 const { buildSunClock, windowIncludesDark, windowIncludesDaylight } = require('./daylight');
-
-const GEAR_ACTIVITIES = new Set([
-  'backcountry',
-  'hiking',
-  'scrambling',
-  'alpine-climbing',
-  'mountaineering',
-  'snow-climbing',
-  'ski-touring',
-  'trail-running',
-]);
+const { normalizeActivity } = require('./activity-profiles');
 
 // Unknown or missing activities get the general backcountry list.
-const normalizeGearActivity = (value) => {
-  const key = String(value || '').trim().toLowerCase();
-  return GEAR_ACTIVITIES.has(key) ? key : 'backcountry';
-};
+const normalizeGearActivity = normalizeActivity;
 
 const buildLayeringGearSuggestions = ({
   weatherData,

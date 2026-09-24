@@ -43,11 +43,14 @@ const formatTemperature = (tempF, unit, options = {}) => {
   return options.includeUnit === false ? `${rounded}°` : `${rounded}°${String(unit).toUpperCase()}`;
 };
 
+/** "mph" or "km/h": the label shown after a wind speed. */
+const windSpeedUnitLabel = (unit) => (unit === 'kph' ? 'km/h' : 'mph');
+
 const formatWind = (windMph, unit, options = {}) => {
   const value = toNumberOrNaN(windMph);
   if (!Number.isFinite(value)) return 'N/A';
   const rounded = roundTo(convertWindMph(value, unit), options.precision ?? 0);
-  return options.includeUnit === false ? rounded : `${rounded} ${unit}`;
+  return options.includeUnit === false ? rounded : `${rounded} ${windSpeedUnitLabel(unit)}`;
 };
 
 const formatElevation = (elevationFt, unit, options = {}) => {
@@ -68,9 +71,12 @@ const formatDistance = (distanceKm, elevationUnit) => {
 };
 
 const formatSnowDepth = (inches, elevationUnit) => {
-  const value = toNumberOrNaN(inches);
-  if (!Number.isFinite(value)) return 'N/A';
-  return elevationUnit === 'm' ? `${Math.round(value * CM_PER_INCH)} cm` : `${Math.round(value)} in`;
+  const inValue = toNumberOrNaN(inches);
+  if (!Number.isFinite(inValue)) return 'N/A';
+  const value = elevationUnit === 'm' ? inValue * CM_PER_INCH : inValue;
+  // A trace of snow reads "0.4 in", not "0 in".
+  const shown = value > 0 && value < 1 ? value.toFixed(1) : String(Math.round(value));
+  return `${shown} ${elevationUnit === 'm' ? 'cm' : 'in'}`;
 };
 
 const formatSwe = (inches, elevationUnit) => {
@@ -84,8 +90,8 @@ const formatRainAmount = (inches, millimeters, elevationUnit) => {
   const inValue = toNumberOrNaN(inches);
   const mmValue = toNumberOrNaN(millimeters);
   if (elevationUnit === 'm') {
-    if (Number.isFinite(mmValue)) return `${Math.round(mmValue)} mm`;
-    if (Number.isFinite(inValue)) return `${Math.round(inValue * MM_PER_INCH)} mm`;
+    if (Number.isFinite(mmValue)) return `${mmValue.toFixed(1)} mm`;
+    if (Number.isFinite(inValue)) return `${(inValue * MM_PER_INCH).toFixed(1)} mm`;
     return 'N/A';
   }
   if (Number.isFinite(inValue)) return `${inValue.toFixed(2)} in`;
@@ -102,8 +108,8 @@ const formatSnowfallAmount = (inches, centimeters, elevationUnit) => {
     if (Number.isFinite(inValue)) return `${(inValue * CM_PER_INCH).toFixed(1)} cm`;
     return 'N/A';
   }
-  if (Number.isFinite(inValue)) return `${inValue.toFixed(2)} in`;
-  if (Number.isFinite(cmValue)) return `${(cmValue / CM_PER_INCH).toFixed(2)} in`;
+  if (Number.isFinite(inValue)) return `${inValue.toFixed(1)} in`;
+  if (Number.isFinite(cmValue)) return `${(cmValue / CM_PER_INCH).toFixed(1)} in`;
   return 'N/A';
 };
 
@@ -122,7 +128,7 @@ const formatDurationMinutes = (value) => {
  * the text already carried, so "8 km (5 mi)" does not read "5 mi (5 mi)".
  */
 const localizeDistanceText = (text, elevationUnit) =>
-  String(text ?? '').replace(/(-?\d+(?:\.\d+)?)\s?km\b(?:\s*\(\s*-?\d+(?:\.\d+)?\s?mi\))?/gi, (_, value) => {
+  String(text ?? '').replace(/(-?\d+(?:\.\d+)?)\s?km\b(?!\/)(?:\s*\(\s*-?\d+(?:\.\d+)?\s?mi\))?/gi, (_, value) => {
     const km = Number(value);
     if (!value.includes('.')) {
       return elevationUnit === 'm' ? `${Math.round(km)} km` : `${Math.round(km / KM_PER_MILE)} mi`;
@@ -130,22 +136,91 @@ const localizeDistanceText = (text, elevationUnit) =>
     return formatDistance(km, elevationUnit);
   });
 
+// A number as a provider or the API writes it: "-4", "0.25", "13,775".
+const TEXT_NUMBER = String.raw`-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?`;
+// "20–35", "20-35", "20 to 35".
+const TEXT_RANGE_SEPARATOR = String.raw`\s?[–—]\s?|-|\s+to\s+`;
+
 /**
- * Localize imperial values inside text written by a provider or another
- * backend module ("gusts 35 mph", "20F", "depth ~14 in") to the viewer's units.
+ * Rewrite each "<number> <unit>" or "<low>–<high> <unit>" in text with
+ * `format`, which returns null to keep a match as written. A number inside a
+ * word or a hyphenated name ("P10", "per-1,000 ft") is never matched.
  */
-const localizeUnitText = (text, rawUnits) => {
+const replaceQuantities = (text, unit, format, followedBy = '') => {
+  const pattern = new RegExp(
+    String.raw`(^|[^\w.,-])(${TEXT_NUMBER})(?:(${TEXT_RANGE_SEPARATOR})(${TEXT_NUMBER}))?\s?(?:${unit})(?!\w)${followedBy}`,
+    'gi',
+  );
+  return text.replace(pattern, (match, prefix, first, separator, second, offset) => {
+    const before = text.slice(0, offset + prefix.length);
+    const after = text.slice(offset + match.length);
+    const high = format(Number((second ?? first).replace(/,/g, '')), { before, after });
+    if (high === null) return match;
+    if (second === undefined) return `${prefix}${high}`;
+    const low = format(Number(first.replace(/,/g, '')), { before, after });
+    // "20–35°F" keeps one unit: drop it from the low end.
+    return low === null ? match : `${prefix}${low.replace(/\s?[^\d\s]+$/, '')}${separator}${high}`;
+  });
+};
+
+const precipKind = (word) => {
+  const lower = word.toLowerCase();
+  if (lower === 'swe' || lower.startsWith('water')) return 'swe';
+  if (lower === 'depth' || lower === 'deep' || lower === 'snowpack') return 'depth';
+  if (lower.startsWith('snow') || lower === 'powder') return 'snowfall';
+  return 'rain';
+};
+
+const PRECIP_WORD = String.raw`SWE|water equivalent|depth|deep|snowpack|snowfall|snow|powder|rainfall|rain|precip\w*|QPE`;
+
+/**
+ * Put the unit words providers and backend modules write into the viewer's
+ * units: "28F", "24°F", "20–35°F", "25 mph", "13,775 ft", "8 km", "5 mi", and
+ * rain and snow amounts in inches ("0.25 in of rain", "depth 40 in, SWE 12
+ * in"). Values already in the viewer's units are re-rounded to the same
+ * precision as the formatters. Mirrors the frontend's localizeUnitText.
+ */
+const localizeUnitText = (rawText, rawUnits) => {
   const units = normalizeUnits(rawUnits);
-  return localizeDistanceText(text, units.elevation)
-    .replace(/SWE\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi, (_, value) =>
-      `SWE ~${formatSwe(Number(value), units.elevation).replace(/\s*SWE$/i, '')}`)
-    .replace(/depth\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi, (_, value) => `depth ~${formatSnowDepth(Number(value), units.elevation)}`)
-    .replace(/(\d+(?:\.\d+)?)\s?in of new snow\b/gi, (_, value) => `${formatSnowDepth(Number(value), units.elevation)} of new snow`)
-    .replace(/(\d+(?:\.\d+)?)\s?in of rain\b/gi, (match, value) =>
-      units.elevation === 'm' ? `${Math.round(Number(value) * MM_PER_INCH)} mm of rain` : match)
-    .replace(/(-?\d+(?:\.\d+)?)\s?ft\b/gi, (_, value) => formatElevation(Number(value), units.elevation))
-    .replace(/(-?\d+(?:\.\d+)?)\s?mph\b/gi, (_, value) => formatWind(Number(value), units.wind))
-    .replace(/(-?\d+(?:\.\d+)?)F\b/g, (_, value) => formatTemperature(Number(value), units.temperature));
+  let out = localizeDistanceText(String(rawText ?? ''), units.elevation);
+
+  if (units.elevation === 'm') {
+    out = replaceQuantities(out, 'mi|miles?', (miles) => {
+      const km = miles * KM_PER_MILE;
+      return Number.isInteger(miles) ? `${Math.round(km)} km` : formatDistance(km, 'm');
+    });
+  }
+
+  // Inches are only rain or snow amounts: the word before or after the amount
+  // says which, and a bare "3 in the" is a preposition, not a unit.
+  out = replaceQuantities(out, 'inches|in', (inches, { before, after }) => {
+    const next = new RegExp(String.raw`^\s*(?:of\s+)?(?:new\s+|fresh\s+)?(${PRECIP_WORD})\b`, 'i').exec(after);
+    const sentence = before.split(/[.!?;]\s/).pop() || '';
+    const previous = [...sentence.matchAll(new RegExp(String.raw`\b(${PRECIP_WORD})\b`, 'gi'))].pop();
+    const word = next?.[1] ?? previous?.[1];
+    if (!word) return null;
+    switch (precipKind(word)) {
+      case 'swe': return formatSwe(inches, units.elevation).replace(/\s*SWE$/, '');
+      case 'depth': return formatSnowDepth(inches, units.elevation);
+      case 'snowfall': return formatSnowfallAmount(inches, null, units.elevation);
+      default: return formatRainAmount(inches, null, units.elevation);
+    }
+  }, String.raw`(?=\s*(?:$|[.,;:()•/]|in\s+\d|(?:of|and|or|on|at|over|depth|deep|SWE)\b))`);
+
+  // "per 1,000 ft" names a rate, and stays as written.
+  out = replaceQuantities(out, 'ft|feet', (feet, { before }) =>
+    (/\bper\s$/i.test(before) ? null : formatElevation(feet, units.elevation)));
+
+  out = replaceQuantities(out, 'mph', (mph) => formatWind(mph, units.wind));
+
+  return replaceQuantities(out, String.raw`°\s?F|F`, (tempF, { before, after }) => {
+    // A difference ("a 20F swing", "8°F warmer") scales without the 32° offset.
+    const isDifference = /\b(?:swing|spread|adds(?: up to)?|by)\s*\(?\s*$/i.test(before)
+      || /^\s+(?:warmer|colder|cooler)\b/i.test(after);
+    if (!isDifference) return formatTemperature(tempF, units.temperature);
+    const delta = units.temperature === 'c' ? tempF * (5 / 9) : tempF;
+    return `${Math.round(delta)}°${units.temperature.toUpperCase()}`;
+  });
 };
 
 // ── Clock times ──────────────────────────────────────────────────────────────
@@ -268,6 +343,7 @@ module.exports = {
   convertTempF,
   convertWindMph,
   convertElevationFt,
+  windSpeedUnitLabel,
   formatTemperature,
   formatWind,
   formatElevation,

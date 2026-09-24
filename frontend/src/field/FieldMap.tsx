@@ -149,7 +149,12 @@ export default function FieldMap({
           url={source.url}
           maxNativeZoom={source.maxNativeZoom}
         />
-        <ScaleControl position="bottomleft" />
+        {/* One scale in the reader's distance unit; with no workspace, show both. */}
+        <ScaleControl
+          position="bottomleft"
+          metric={w?.preferences.elevationUnit !== "ft"}
+          imperial={w?.preferences.elevationUnit !== "m"}
+        />
         <Position
           lat={lat}
           lon={lon}

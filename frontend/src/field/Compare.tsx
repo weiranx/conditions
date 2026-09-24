@@ -17,7 +17,13 @@ import "./sky/chapters.css";
 import { MiniSky } from "./sky/MiniSky";
 import { buildSkyHours } from "./sky/sky-model";
 import { readPlanEvaluation } from "../app/plan-evaluation";
-import { formatClockForStyle, minutesToTwentyFourHourClock, parseSolarClockMinutes } from "../app/core";
+import {
+  formatClockForStyle,
+  formatRainAmountForElevationUnit,
+  formatSnowfallAmountForElevationUnit,
+  minutesToTwentyFourHourClock,
+  parseSolarClockMinutes,
+} from "../app/core";
 import ObjectiveShortlist from "./ObjectiveShortlist";
 import { revealStart } from "./page-scroll";
 import { longestStretch } from "./trip-days";
@@ -97,9 +103,9 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
   const amount = (value: number | null, snow = false) =>
     !isNumber(value)
       ? "Unavailable"
-      : w.preferences.elevationUnit === "m"
-        ? `${(value * (snow ? 2.54 : 25.4)).toFixed(1)} ${snow ? "cm" : "mm"}`
-        : `${value.toFixed(2)} in`;
+      : snow
+        ? formatSnowfallAmountForElevationUnit(value, null, w.preferences.elevationUnit)
+        : formatRainAmountForElevationUnit(value, null, w.preferences.elevationUnit);
   async function copyBrief() {
     const text = [
       w.objectiveName,

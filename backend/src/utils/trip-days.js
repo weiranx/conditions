@@ -207,6 +207,8 @@ const buildTripChatContext = ({ days, ranking, objective, context, featureFlags 
   const enabled = (key) => featureFlags?.[key] !== false;
   return {
     contextType: 'multi-day-trip-plan',
+    // Built-in activity the days were checked as; frames the chat's answers.
+    activity: context.activity,
     featureFlags,
     objective,
     plan: {

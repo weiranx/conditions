@@ -117,15 +117,15 @@ describe('decision', () => {
     const report = makeReport();
     report.fireRisk = { status: 'ok', level: 3, label: 'High', reasons: ['Warm, dry, breezy fire weather (86F, RH 20%, wind 18 mph).'] };
     const decision = decide(report, { temp_unit: 'c', wind_unit: 'kph' });
-    expect(decision.cautions.join(' ')).toMatch(/Fire risk is high: Warm, dry, breezy fire weather \(30°C, RH 20%, wind 29 kph\)\./);
+    expect(decision.cautions.join(' ')).toMatch(/Fire risk is high: Warm, dry, breezy fire weather \(30°C, RH 20%, wind 29 km\/h\)\./);
   });
 
   test('limits and messages follow the requested units', () => {
     const report = makeReport();
     report.weather.trend[2].gust = 30;
     const decision = decide(report, { wind_unit: 'kph', temp_unit: 'c' });
-    expect(check(decision, 'wind-gust').label).toBe('Wind gusts are at or below 40 kph');
-    expect(check(decision, 'wind-gust').detail).toBe('Peak 48 kph at 09:00 in window (limit 40 kph).');
+    expect(check(decision, 'wind-gust').label).toBe('Wind gusts are at or below 40 km/h');
+    expect(check(decision, 'wind-gust').detail).toBe('Peak 48 km/h at 09:00 in window (limit 40 km/h).');
     expect(check(decision, 'feels-like').label).toBe('Apparent temperature is at or above -15°C');
   });
 
@@ -189,7 +189,7 @@ describe('travel window rows', () => {
     const report = makeReport({ hours: 1 });
     report.weather.trend[0].gust = 40;
     const [row] = plannedFor(report, { travel_window_hours: '1', wind_unit: 'kph', approach: 'off' });
-    expect(row.failedRules).toEqual(['gust 64>40 kph']);
+    expect(row.failedRules).toEqual(['gust 64>40 km/h']);
   });
 
   test('the best continuous window ends when its last hour ends', () => {
@@ -336,7 +336,7 @@ describe('critical window', () => {
   test('reasons use the requested units', () => {
     const assessment = assessCriticalWindowPoint({ condition: 'Snow showers', temp: 5, gust: 50, precipChance: 80 }, { wind: 'kph', temperature: 'c' });
     expect(assessment.level).toBe('high');
-    expect(assessment.reasons).toEqual(['winter precip signal', 'precip 80%', 'gusts 80 kph', 'cold -15°C']);
+    expect(assessment.reasons).toEqual(['winter precip signal', 'precip 80%', 'gusts 80 km/h', 'cold -15°C']);
   });
 
   test('the evaluation names the first highest-scoring hour', () => {
@@ -364,7 +364,7 @@ describe('display text', () => {
 
   test('imperial values in provider text follow the viewer\'s units', () => {
     expect(localizeUnitText('gusts 35 mph near 9000 ft, 20F', { wind: 'kph', elevation: 'm', temperature: 'c' }))
-      .toBe('gusts 56 kph near 2,743 m, -7°C');
+      .toBe('gusts 56 km/h near 2,743 m, -7°C');
   });
 });
 

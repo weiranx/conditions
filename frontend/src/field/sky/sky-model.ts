@@ -5,6 +5,7 @@ import { weatherAppearance } from "../weather-appearance";
 /** How the party's start was found, as the approach notes name it. */
 export const APPROACH_SOURCE_LABEL: Record<ApproachElevationSource, string> = {
   gpx: "from your GPX track",
+  route: "from your analyzed route",
   manual: "from your trailhead",
   estimated: "trailhead estimated",
 };

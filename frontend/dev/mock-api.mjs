@@ -735,7 +735,7 @@ export function createMockApi({ databasePath } = {}) {
       };
       const offsets = [0, Math.round(windowMinutes * 0.3), Math.round(windowMinutes * 0.6), windowMinutes];
       return ok({
-        waypoints,
+        waypoints: waypoints.map((w, i) => ({ ...w, offset_minutes: offsets[i] })),
         timing: {
           basis: "distance-and-vert",
           roundTrip: true,

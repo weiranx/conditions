@@ -3,7 +3,8 @@ import type { ParsedGpxRoute, RouteTimingProfile } from '../lib/gpx';
 /**
  * The approach inputs sent with a plan. The backend works out where the party
  * is at each hour and checks those hours at that elevation; this only turns
- * the planner's inputs (trailhead, imported route, pace) into request params.
+ * the planner's inputs (trailhead, imported or analyzed route, pace) into
+ * request params.
  */
 
 type Timeline = Array<{ minute: number; elevationFt: number }>;
@@ -54,14 +55,24 @@ function timelineKey(timeline: Timeline): string {
     .join(',');
 }
 
+/** A checkpoint from route analysis: its elevation and arrival minutes after the start. */
+export interface RouteElevationCheckpoint {
+  elev_ft: number | null;
+  offset_minutes?: number;
+}
+
 /**
- * Params that tell the backend where the party starts. Without a trailhead or
- * route, the backend estimates the trailhead from the forecast bands.
+ * Params that tell the backend where the party starts: a GPX track, else an
+ * analyzed route's checkpoints (with the typed trailhead to fall back on),
+ * else the typed trailhead. Without any, the backend estimates the trailhead
+ * from the forecast bands.
  */
 export function buildApproachRequestParams(input: {
   enabled: boolean;
   trailheadElevationFt?: number | null;
   gpxRoute?: Pick<ParsedGpxRoute, 'distanceMiles' | 'displayTrack'> | null;
+  /** Checkpoints of the analyzed route, in travel order. */
+  routeCheckpoints?: RouteElevationCheckpoint[] | null;
   timing: RouteTimingProfile;
 }): Record<string, string> {
   if (!input.enabled) return { approach: 'off' };
@@ -69,8 +80,15 @@ export function buildApproachRequestParams(input: {
   const track = input.gpxRoute ? buildGpxElevationTimeline(input.gpxRoute, input.timing) : null;
   if (track) {
     params.approach_route = timelineKey(track);
-  } else if (finite(input.trailheadElevationFt) && input.trailheadElevationFt >= 0) {
-    params.trailhead_ft = String(Math.round(input.trailheadElevationFt));
+  } else {
+    // Checkpoints whose elevation or arrival is unknown are left out, never sent as 0.
+    const checkpoints = (input.routeCheckpoints || [])
+      .filter((checkpoint) => finite(checkpoint.elev_ft) && finite(checkpoint.offset_minutes))
+      .map((checkpoint) => ({ minute: checkpoint.offset_minutes as number, elevationFt: checkpoint.elev_ft as number }));
+    if (checkpoints.length >= 2) params.approach_checkpoints = timelineKey(checkpoints);
+    if (finite(input.trailheadElevationFt) && input.trailheadElevationFt >= 0) {
+      params.trailhead_ft = String(Math.round(input.trailheadElevationFt));
+    }
   }
   if (input.timing.ascentMinutesPer1000Ft > 0) params.ascent_min_per_kft = String(Math.round(input.timing.ascentMinutesPer1000Ft));
   return params;
