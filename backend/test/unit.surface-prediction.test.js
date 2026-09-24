@@ -122,3 +122,12 @@ test('forecast snowfall is not paired with a no-snow melt/freeze summary', () =>
   expect(result.outlook.coverage).toBe('snow_signal');
   expect(result.snowProfile.meltFreeze.phase).not.toBe('no_snow');
 });
+
+test('partial-hour travel intervals report rounded wet hours', () => {
+  const rainy = { ...weather, description: 'Rain', precipChance: 80,
+    trend: weather.trend.map((p) => ({ ...p, temp: 50, precipChance: 80, condition: 'Rain' })) };
+  const result = deriveTerrainCondition(rainy, null, rain, { selectedStartClock: '08:17', selectedTravelWindowHours: 4 });
+  const wet = result.signals.wetTrendHours;
+  expect(wet).toBe(3.7);
+  expect(result.reasons.join(' ')).not.toMatch(/\d\.\d{2,} wet/);
+});

@@ -161,6 +161,9 @@ const deriveSnowProfile = ({
   };
 };
 
+// Travel intervals can be partial hours, so summed durations are fractional.
+const roundHours = (hours) => Math.round(hours * 10) / 10;
+
 const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData = null, options = {}) => {
 
   const description = String(weatherData?.description || '').toLowerCase();
@@ -175,17 +178,17 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   const travelIntervals = surfaceIntervals(weatherData, options);
   const nearTermTrend = travelIntervals.rows.length ? travelIntervals.rows : trend.slice(0, options.selectedTravelWindowHours || 6);
   const contextTrend = trend.slice(0, 24);
-  const wetTrendHours = nearTermTrend.filter((point) => {
+  const wetTrendHours = roundHours(nearTermTrend.filter((point) => {
     const pointPrecip = toFinite(point?.precipChance);
     const pointCondition = String(point?.condition || '').toLowerCase();
     return (pointPrecip !== null && pointPrecip >= 55) || /rain|drizzle|shower|thunder|storm|wet/.test(pointCondition);
-  }).reduce((sum, point) => sum + (point.durationHours ?? 1), 0);
-  const snowTrendHours = nearTermTrend.filter((point) => {
+  }).reduce((sum, point) => sum + (point.durationHours ?? 1), 0));
+  const snowTrendHours = roundHours(nearTermTrend.filter((point) => {
     const pointPrecip = toFinite(point?.precipChance);
     const pointTemp = toFinite(point?.temp);
     const pointCondition = String(point?.condition || '').toLowerCase();
     return (pointPrecip !== null && pointPrecip >= 35 && pointTemp !== null && pointTemp <= 34) || /snow|sleet|freezing|flurr|wintry|ice/.test(pointCondition);
-  }).reduce((sum, point) => sum + (point.durationHours ?? 1), 0);
+  }).reduce((sum, point) => sum + (point.durationHours ?? 1), 0));
   const trendTemps = nearTermTrend.map((point) => toFinite(point?.temp)).filter((value) => value !== null);
   const trendMaxTemp = trendTemps.length > 0 ? Math.max(...trendTemps) : null;
   const contextTrendTemps = contextTrend.map((point) => toFinite(point?.temp)).filter((value) => value !== null);
