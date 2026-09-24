@@ -1,4 +1,4 @@
-import { normalizeSuggestionText, type Suggestion } from '../lib/search';
+import { normalizeSuggestionText, uniqueSuggestionPlaces, type Suggestion } from '../lib/search';
 
 export function suggestionIdentityKey(item: Pick<Suggestion, 'lat' | 'lon' | 'name'>): string {
   return `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}:${normalizeSuggestionText(item.name || '')}`;
@@ -70,20 +70,9 @@ export function writeStoredSuggestions(storageKey: string, items: Suggestion[], 
   }
 }
 
+/** Earlier buckets win: a recent pick keeps its place over the same peak from a catalog. */
 export function mergeSuggestionBuckets(buckets: Suggestion[][], limit: number): Suggestion[] {
-  const output: Suggestion[] = [];
-  const seen = new Set<string>();
-  buckets.forEach((bucket) => {
-    bucket.forEach((item) => {
-      const key = suggestionIdentityKey(item);
-      if (seen.has(key)) {
-        return;
-      }
-      seen.add(key);
-      output.push(item);
-    });
-  });
-  return output.slice(0, limit);
+  return uniqueSuggestionPlaces(buckets.flat()).slice(0, limit);
 }
 
 export function filterSuggestionBucket(items: Suggestion[], query: string): Suggestion[] {

@@ -5,6 +5,7 @@ import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
+import { dateLabel } from "./data";
 import {
   buildCheckpointProfile,
   buildProfileTicks,
@@ -135,7 +136,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
             {result ? "Analyze again" : "Analyze route"}
           </button>
           <p className="field-route-plan-context">
-            {w.forecastDate} · {w.alpineStartTime} start · {w.travelWindowHours} hours
+            {dateLabel(w.forecastDate)} · {w.displayStartTime} start · {w.travelWindowHours} hours
             {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
             {!w.plannedRouteName && !result ? " · Name a route to check conditions along it." : ""}
           </p>

@@ -46,6 +46,35 @@ export function normalizeSuggestionText(value: string): string {
     .trim();
 }
 
+// The same summit arrives from this catalog, the server's catalog and OpenStreetMap
+// with coordinates a few metres apart and fuller or shorter names ("Grand Teton",
+// "Grand Teton, Wyoming", "Grand Teton, Teton County, …"). Within about 1 km with
+// the same leading name, they are one place.
+const SAME_PLACE_DEGREES = 0.01;
+
+function primarySuggestionName(suggestion: Suggestion): string {
+  return normalizeSuggestionText(suggestion.name.split(',')[0] ?? '');
+}
+
+export function isSameSuggestionPlace(a: Suggestion, b: Suggestion): boolean {
+  return (
+    primarySuggestionName(a) === primarySuggestionName(b) &&
+    Math.abs(Number(a.lat) - Number(b.lat)) <= SAME_PLACE_DEGREES &&
+    Math.abs(Number(a.lon) - Number(b.lon)) <= SAME_PLACE_DEGREES
+  );
+}
+
+/** Keeps the first suggestion for each place, in order. */
+export function uniqueSuggestionPlaces(items: Suggestion[]): Suggestion[] {
+  const output: Suggestion[] = [];
+  items.forEach((item) => {
+    if (!output.some((kept) => isSameSuggestionPlace(kept, item))) {
+      output.push(item);
+    }
+  });
+  return output;
+}
+
 function suggestionRank(name: string, query: string): number {
   const normalizedName = normalizeSuggestionText(name);
   const normalizedQuery = normalizeSuggestionText(query);
@@ -77,15 +106,7 @@ function suggestionRank(name: string, query: string): number {
 }
 
 export function rankAndDeduplicateSuggestions(items: Suggestion[], query: string): Suggestion[] {
-  const deduped = new Map<string, Suggestion>();
-  items.forEach((item) => {
-    const key = `${normalizeSuggestionText(item.name)}|${Number(item.lat).toFixed(4)}|${Number(item.lon).toFixed(4)}`;
-    if (!deduped.has(key)) {
-      deduped.set(key, item);
-    }
-  });
-
-  return Array.from(deduped.values())
+  return uniqueSuggestionPlaces(items)
     .sort((a, b) => {
       const rankDiff = suggestionRank(a.name, query) - suggestionRank(b.name, query);
       if (rankDiff !== 0) {

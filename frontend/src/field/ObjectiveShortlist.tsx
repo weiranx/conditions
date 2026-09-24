@@ -7,7 +7,7 @@ import { useObjectiveShortlist } from './model/useObjectiveShortlist';
 import { SHORTLIST_KEY, objectiveFrom, readShortlist, shortlistDates, shortlistValidation, sameChoice, rankShortlist,
   type ShortlistState, type ShortlistChoice, type ShortlistObjective } from '../app/objective-shortlist';
 import { resolveObjectiveTimeZone } from '../app/planned-start';
-import { addDaysToIsoDate } from '../app/core';
+import { addDaysToIsoDate, formatClockForStyle } from '../app/core';
 import { dateLabel, ageLabel } from './data';
 import { sameTripRank, type MultiDayTripForecastDay } from '../app/trip-forecast';
 import { dayConcerns, longestStretch } from './trip-days';
@@ -66,6 +66,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
   const selectedDay = comparison.results.find(r => r.objectiveId === selected?.objectiveId)?.days.find(d => d.date === selected?.date);
   const selectedConcerns = selectedDay ? dayConcerns(selectedDay) : [];
   const selectedStretch = selectedDay ? longestStretch(selectedDay, w.preferences.timeStyle) : null;
+  const clockText = (value: string) => formatClockForStyle(value, w.preferences.timeStyle);
   function open(objective: ShortlistObjective, choice: ShortlistChoice) {
     w.handleOpenComparisonPlan({ lat: objective.lat, lon: objective.lon, objectiveName: objective.name,
       searchQuery: objective.name, forecastDate: choice.date, alpineStartTime: choice.startTime,
@@ -157,7 +158,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
             const choice = state[slot], objective = state.objectives.find(o => o.id === choice?.objectiveId);
             return <section className={`sky-card shortlist-plan${choice && objective ? ' is-set' : ''}`} key={slot}>
               <span className="sky-card-head"><span>{slot === 'planA' ? 'Plan A' : 'Plan B'}</span>{choice && objective && <span className="sky-status is-ok">Saved</span>}</span>
-              {choice && objective ? <><h3>{objective.name}</h3><p>{dateLabel(choice.date)} · {choice.startTime} local · {choice.hours} hours</p>
+              {choice && objective ? <><h3>{objective.name}</h3><p>{dateLabel(choice.date)} · {clockText(choice.startTime)} local · {choice.hours} hours</p>
                 <div className="field-action-row"><button className="field-text-button" onClick={() => open(objective, choice)}>Open in planner <ArrowRight size={14} /></button>
                   <button className="field-text-button" aria-label={`Clear ${slot === 'planA' ? 'Plan A' : 'Plan B'}`} onClick={() => setState(current => ({ ...current, [slot]: null }))}>Clear</button></div></>
                 : <><h3>{slot === 'planA' ? 'Your first choice' : 'Keep an alternative'}</h3><p>Select a result below to save this plan.</p></>}
@@ -205,7 +206,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
           <p className="sky-cap shortlist-caption">Scroll across for more dates. Peak gust and rain / snow chance are the highest from departure through the trip; cloud cover is at departure.</p>
           <div className="sky-card sky-table-card">
           <div className="compare-table-scroll" role="region" tabIndex={0} aria-label="Objective and date comparison">
-            <table className="sky-table compare-table shortlist-table"><caption className="sr-only">Conditions at each objective and date, departing {state.startTime} local for {state.hours} hours</caption>
+            <table className="sky-table compare-table shortlist-table"><caption className="sr-only">Conditions at each objective and date, departing {clockText(state.startTime)} local for {state.hours} hours</caption>
               <thead><tr><th scope="col">Objective</th>{dates.map(date => <th scope="col" key={date}>{dateLabel(date)}</th>)}</tr></thead>
               <tbody>{state.objectives.map(objective => {
                 const result = comparison.results.find(r => r.objectiveId === objective.id);
@@ -238,7 +239,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
           {selectedDay && selectedObjective && <section className="sky-card sky-section shortlist-detail" aria-label="Selected objective details">
             <span className="sky-card-head"><span>Selected option</span><span className={`compare-decision is-${tone(selectedDay)}`}>{selectedDay.decisionLevel}</span></span>
             <h2 className="sky-card-lede">{selectedObjective.name}</h2>
-            <p className="sky-cap">{dateLabel(selectedDay.date)} · {state.startTime} local · {state.hours} hours</p>
+            <p className="sky-cap">{dateLabel(selectedDay.date)} · {clockText(state.startTime)} local · {state.hours} hours</p>
             <p className="sky-cap is-body">{selectedDay.decisionHeadline}</p>
             {selectedConcerns.length > 0 && <ul className="sky-limiting compare-limiting" aria-label="Checks setting this option's decision">
               {selectedConcerns.map(concern => <li key={concern}>{concern}</li>)}

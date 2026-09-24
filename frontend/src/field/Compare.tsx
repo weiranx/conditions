@@ -78,6 +78,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
   const selected = days.find((day) => day.date === selectedDate) || best;
   const [copyStatus, setCopyStatus] = useState("");
   const timeStyle = w.preferences.timeStyle;
+  const departure = formatClockForStyle(w.tripStartTime, timeStyle);
   const wind = (value: number | null) => isNumber(value) ? w.formatWindDisplay(value) : "Unavailable";
   const extremes = [
     {
@@ -109,7 +110,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
   async function copyBrief() {
     const text = [
       w.objectiveName,
-      `${w.tripStartDate} · ${w.tripStartTime} daily start · ${w.travelWindowHours} hours`,
+      `${w.tripStartDate} · ${departure} daily start · ${w.travelWindowHours} hours`,
       ...days.map((day) => {
         const concerns = dayConcerns(day);
         return `${day.date}: ${day.decisionLevel}, ${isNumber(day.score) ? `${day.score}/100` : "score unavailable"}. ${day.decisionHeadline}${concerns.length ? ` ${concerns.join("; ")}.` : ""} ${day.weatherDescription}. Gusts peak at ${wind(day.peakGustMph)}; rain / snow chance peaks at ${percent(day.peakPrecipChance)}; ${hoursLabel(day, timeStyle)}. ${day.partialData ? "Partial data. " : ""}Forecast issued: ${ageLabel(day.sourceIssuedTime)}.`;
@@ -253,7 +254,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     </div>
                   )}
                   <p className="sky-cap">
-                    {days.length} days at {w.objectiveName || "the selected objective"} · {w.tripStartTime} daily departure · {w.travelWindowHours} hours
+                    {days.length} {days.length === 1 ? "day" : "days"} at {w.objectiveName || "the selected objective"} · {departure} daily departure · {w.travelWindowHours} hours
                     {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
                   </p>
                   <p className="sky-cap compare-method">
@@ -413,14 +414,14 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                           { label: "Visibility risk", value: (d: MultiDayTripForecastDay) => d.visibilityLevel || "Unavailable" },
                           { label: "Air quality", value: (d: MultiDayTripForecastDay) => isNumber(d.airQualityAqi) ? `${d.airQualityAqi} AQI` : "Unavailable" },
                           { label: "Active alerts", value: (d: MultiDayTripForecastDay) => String(d.alertCount) },
-                          { label: "Sunrise / sunset", value: (d: MultiDayTripForecastDay) => `${d.sunrise || "—"} / ${d.sunset || "—"}` },
+                          { label: "Sunrise / sunset", value: (d: MultiDayTripForecastDay) => `${d.sunrise ? formatClockForStyle(d.sunrise, timeStyle) : "—"} / ${d.sunset ? formatClockForStyle(d.sunset, timeStyle) : "—"}` },
                         ].map((metric) => (
                           <tr key={metric.label}><th scope="row">{metric.label}</th>{days.map((day) => <td key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>{metric.value(day)}</td>)}</tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <p className="sky-cap compare-table-note">{w.tripStartTime} departure each day · {w.travelWindowHours}-hour plan. Peak gust and rain / snow chance are the highest forecast from departure through the plan; hours within limits check each forecast hour.</p>
+                  <p className="sky-cap compare-table-note">{departure} departure each day · {w.travelWindowHours}-hour plan. Peak gust and rain / snow chance are the highest forecast from departure through the plan; hours within limits check each forecast hour.</p>
                 </div>
                 <div className="compare-export">
                   <button className="field-button" onClick={() => void copyBrief()}>Copy trip brief</button>

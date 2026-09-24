@@ -5,6 +5,8 @@ import { copyTextToClipboard } from '../app/clipboard';
 import { useAccount } from '../hooks/useAccount';
 import { buildSavedReportShareUrl, getSavedReport, listSavedReportsPage, type SavedReportSummary } from '../lib/saved-reports';
 import type { Page } from './data';
+import { formatClockForStyle } from '../app/core';
+import type { TimeStyle } from '../app/types';
 import './report-history.css';
 
 function planDate(value: string | null) {
@@ -14,18 +16,19 @@ function planDate(value: string | null) {
     month: 'short', day: 'numeric', year: 'numeric',
   });
 }
-function timestamp(value: string | null | undefined) {
+function timestamp(value: string | null | undefined, timeStyle: TimeStyle) {
   const date = new Date(value || '');
   return Number.isNaN(date.getTime()) ? 'unavailable' : date.toLocaleString([], {
-    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: timeStyle !== '24h',
   });
 }
 
-export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled }: {
+export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, timeStyle = 'ampm' }: {
   localReport: PersistedReport | null;
   onOpen: (report: PersistedReport, token?: string, reportId?: string) => void;
   navigate: (page: Page) => void;
   sharingEnabled: boolean;
+  timeStyle?: TimeStyle;
 }) {
   const account = useAccount();
   const searchId = useId();
@@ -162,8 +165,8 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled }:
           {badge(localReport.plan.forecastDate)}
           <span className="sky-report-copy">
             <strong>{localReport.plan.objectiveName}</strong>
-            <small>{planDate(localReport.plan.forecastDate)} · {localReport.plan.alpineStartTime} start</small>
-            <small>Generated {timestamp(localReport.safetyData.generatedAt)}</small>
+            <small>{planDate(localReport.plan.forecastDate)} · {formatClockForStyle(localReport.plan.alpineStartTime, timeStyle)} start</small>
+            <small>Generated {timestamp(localReport.safetyData.generatedAt, timeStyle)}</small>
           </span>
           <b className={`sky-score-chip ${scoreTone(localScore)}`} aria-label={`Snapshot score ${Number.isFinite(localScore) ? Math.round(localScore!) : 'unavailable'}`}>
             {Number.isFinite(localScore) ? Math.round(localScore!) : '—'}<small>/100</small>
@@ -226,8 +229,8 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled }:
                 {badge(report.forecastDate)}
                 <span className="sky-report-copy">
                   <strong>{report.objectiveName || report.title}</strong>
-                  <small>{planDate(report.forecastDate)}{report.alpineStartTime && ` · ${report.alpineStartTime} start`}{report.hasAi && <span className="sky-ai-tag"> · <Sparkles size={12} aria-hidden="true" /> AI</span>}</small>
-                  <small>Generated {timestamp(report.generatedAt)} · Saved {timestamp(report.createdAt)}{report.hasAi && ' · Includes AI content'}</small>
+                  <small>{planDate(report.forecastDate)}{report.alpineStartTime && ` · ${formatClockForStyle(report.alpineStartTime, timeStyle)} start`}{report.hasAi && <span className="sky-ai-tag"> · <Sparkles size={12} aria-hidden="true" /> AI</span>}</small>
+                  <small>Generated {timestamp(report.generatedAt, timeStyle)} · Saved {timestamp(report.createdAt, timeStyle)}{report.hasAi && ' · Includes AI content'}</small>
                 </span>
                 <b className={`sky-score-chip ${scoreTone(report.score)}`} aria-label={`Snapshot score ${report.score === null ? 'unavailable' : Math.round(report.score)}`}>
                   {report.score === null ? '—' : Math.round(report.score)}<small>/100</small>

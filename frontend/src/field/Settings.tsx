@@ -1,127 +1,199 @@
-import { useId, type ChangeEvent, type FocusEvent } from "react";
-import { Check, Compass, TriangleAlert } from "lucide-react";
-import type { UserPreferences } from "../app/types";
+import { useId, useState, type FormEvent } from "react";
+import { Check, Compass, Plus, Trash2, TriangleAlert } from "lucide-react";
+import type { ActivityType, UserPreferences } from "../app/types";
 import type { Workspace } from "./model/useWorkspace";
 import {
   ACTIVITY_PROFILES,
   ACTIVITY_PROFILE_ORDER,
 } from "../app/activity-profiles";
-import { TRAVEL_THRESHOLD_PRESETS } from "../hooks/usePreferenceHandlers";
+import {
+  MAX_CUSTOM_ACTIVITIES,
+  MAX_CUSTOM_ACTIVITY_LABEL_LENGTH,
+  activeActivityKey,
+  activeActivityLabel,
+  createCustomActivityPatch,
+  deleteCustomActivityPatch,
+  findCustomActivity,
+  renameCustomActivityPatch,
+} from "../app/activity-limits";
+import { NumberField, Row, Thresholds } from "./Thresholds";
 import { Account } from "./Account";
 import { useAccount } from "../hooks/useAccount";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import "./settings.css";
 
-/** A settings row: the label on the left, its control on the right. */
-function Row({ label, hint, children, htmlFor }: { label: string; hint?: string; children: React.ReactNode; htmlFor?: string }) {
-  return (
-    <div className="sky-setting-row">
-      <div className="sky-setting-label">
-        {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <span>{label}</span>}
-        {hint && <small>{hint}</small>}
-      </div>
-      <div className="sky-setting-control">{children}</div>
-    </div>
-  );
+/** Route timing a Settings pick applies; a custom activity uses its base activity's. */
+function routePacePatch(activity: ActivityType): Partial<UserPreferences> {
+  const profile = ACTIVITY_PROFILES[activity].preferencePatch;
+  return {
+    runnerPaceMinutesPerMile: profile.runnerPaceMinutesPerMile,
+    runnerAscentMinutesPer1000Ft: profile.runnerAscentMinutesPer1000Ft,
+    runnerStopBufferMinutes: profile.runnerStopBufferMinutes,
+  };
 }
 
-function NumberField({ id, value, unit, min, max, step, onChange, onBlur }: {
-  id: string;
-  value: string | number;
-  unit: string;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onBlur?: (event: FocusEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <span className="sky-number-field">
-      <input id={id} type="number" inputMode="decimal" value={value} min={min} max={max} step={step} onChange={onChange} onBlur={onBlur} />
-      <span aria-hidden="true">{unit}</span>
-    </span>
-  );
-}
-
-export function Thresholds({ workspace: w }: { workspace: Workspace }) {
+/**
+ * Every activity, built-in or the user's own, as one grid of cards. Choosing
+ * a card loads that activity's weather limits into the editor below it; the
+ * last card creates a new activity in place.
+ */
+function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
   const id = useId();
-  const limits = [
-    {
-      label: "Wind gusts up to",
-      unit: w.windUnitLabel,
-      value: w.maxWindGustDraft,
-      min: w.windThresholdMin,
-      max: w.windThresholdMax,
-      step: w.windThresholdStep,
-      onChange: w.handleWindThresholdDisplayChange,
-      onBlur: w.handleWindThresholdDisplayBlur,
-    },
-    {
-      label: "Rain or snow chance up to",
-      unit: "%",
-      value: w.maxPrecipChanceDraft,
-      min: 0,
-      max: 100,
-      step: 1,
-      onChange: w.handleMaxPrecipChanceDraftChange,
-      onBlur: w.handleMaxPrecipChanceDraftBlur,
-    },
-    {
-      label: "Feels-like at least",
-      unit: w.tempUnitLabel,
-      value: w.minFeelsLikeDraft,
-      min: w.feelsLikeThresholdMin,
-      max: w.feelsLikeThresholdMax,
-      step: w.feelsLikeThresholdStep,
-      onChange: w.handleFeelsLikeThresholdDisplayChange,
-      onBlur: w.handleFeelsLikeThresholdDisplayBlur,
-    },
-    {
-      label: "Feels-like at most",
-      unit: w.tempUnitLabel,
-      value: w.maxFeelsLikeDraft,
-      min: w.heatCeilingMin,
-      max: w.heatCeilingMax,
-      step: w.feelsLikeThresholdStep,
-      onChange: w.handleHeatCeilingDisplayChange,
-      onBlur: w.handleHeatCeilingDisplayBlur,
-    },
-  ];
+  const p = w.preferences;
+  const activityKey = activeActivityKey(p);
+  const selectedCustom = findCustomActivity(p, activityKey);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [base, setBase] = useState<ActivityType>(p.defaultActivity);
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
+  const full = p.customActivities.length >= MAX_CUSTOM_ACTIVITIES;
+
+  const create = (event: FormEvent) => {
+    event.preventDefault();
+    const patch = createCustomActivityPatch(p, name, base);
+    if (!patch) return;
+    w.updatePreferences({ ...patch, ...routePacePatch(base) });
+    setName("");
+    setCreating(false);
+  };
+  const commitRename = () => {
+    if (selectedCustom && renameDraft !== null) {
+      const patch = renameCustomActivityPatch(p, selectedCustom.id, renameDraft);
+      if (patch) w.updatePreferences(patch);
+    }
+    setRenameDraft(null);
+  };
+
   return (
-    <div className="sky-thresholds">
-      <div
-        className="field-preset-list sky-preset-row"
-        role="group"
-        aria-label="Weather threshold presets"
-      >
-        {Object.entries(TRAVEL_THRESHOLD_PRESETS).map(([key, preset]) => (
+    <>
+      <div className="field-profile-options sky-profile-grid" role="group" aria-label="Activity">
+        {ACTIVITY_PROFILE_ORDER.map((key) => {
+          const Icon = ACTIVITY_ICONS[key] || Compass;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={activityKey === key}
+              onClick={() => w.updatePreferences({ defaultActivity: key, customActivityId: null, ...routePacePatch(key) })}
+            >
+              <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
+              <strong>{ACTIVITY_PROFILES[key].label}</strong>
+              <small>{ACTIVITY_PROFILES[key].description}</small>
+            </button>
+          );
+        })}
+        {p.customActivities.map((custom) => {
+          const Icon = ACTIVITY_ICONS[custom.baseActivity] || Compass;
+          return (
+            <button
+              key={custom.id}
+              type="button"
+              aria-pressed={activityKey === custom.id}
+              onClick={() => {
+                setRenameDraft(null);
+                w.updatePreferences({
+                  defaultActivity: custom.baseActivity,
+                  customActivityId: custom.id,
+                  ...routePacePatch(custom.baseActivity),
+                });
+              }}
+            >
+              <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
+              <strong>{custom.label}</strong>
+              <small>Your activity · planned like {ACTIVITY_PROFILES[custom.baseActivity].label.toLowerCase()}</small>
+            </button>
+          );
+        })}
+        {!full && !creating && (
           <button
-            key={key}
             type="button"
-            aria-pressed={w.activeTravelThresholdPreset === key}
-            onClick={() =>
-              w.handleApplyTravelThresholdPreset(
-                key as keyof typeof TRAVEL_THRESHOLD_PRESETS,
-              )
-            }
+            className="sky-profile-new"
+            onClick={() => {
+              setBase(p.defaultActivity);
+              setCreating(true);
+            }}
           >
-            {preset.label}
+            <Plus size={22} strokeWidth={1.7} aria-hidden="true" />
+            <strong>New activity</strong>
+            <small>Name the way you travel and give it its own limits.</small>
           </button>
-        ))}
+        )}
       </div>
-      <div className="sky-setting-group">
-        {limits.map((limit, index) => (
-          <Row key={limit.label} label={limit.label} htmlFor={`${id}-${index}`}>
-            <NumberField id={`${id}-${index}`} value={limit.value} unit={limit.unit} min={limit.min} max={limit.max}
-              step={limit.step} onChange={limit.onChange} onBlur={limit.onBlur} />
+
+      {creating && (
+        <form className="sky-card sky-custom-activity-form" onSubmit={create} aria-label="New activity">
+          <label htmlFor={`${id}-name`}>
+            Name
+            <input
+              id={`${id}-name`}
+              type="text"
+              autoFocus
+              placeholder="e.g. Winter peak bagging"
+              maxLength={MAX_CUSTOM_ACTIVITY_LABEL_LENGTH}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+          <label htmlFor={`${id}-base`}>
+            Plan it like
+            <select id={`${id}-base`} value={base} onChange={(e) => setBase(e.target.value as ActivityType)}>
+              {ACTIVITY_PROFILE_ORDER.map((key) => (
+                <option key={key} value={key}>{ACTIVITY_PROFILES[key].label}</option>
+              ))}
+            </select>
+          </label>
+          <p className="sky-setting-footnote">
+            It starts with the {ACTIVITY_PROFILES[base].label.toLowerCase()} limits and route pace. Change them below once it
+            is created.
+          </p>
+          <div className="sky-toolbar-actions">
+            <button type="submit" className="field-button field-button-primary" disabled={!name.trim()}>
+              Create activity
+            </button>
+            <button type="button" className="field-button" onClick={() => setCreating(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      {full && (
+        <p className="sky-setting-footnote">You can keep up to {MAX_CUSTOM_ACTIVITIES} activities of your own. Delete one to add another.</p>
+      )}
+
+      {selectedCustom && !creating && (
+        <div className="sky-setting-group sky-custom-activity-bar">
+          <Row label="Name" htmlFor={`${id}-rename`}>
+            <span className="sky-custom-activity-edit">
+              <input
+                id={`${id}-rename`}
+                type="text"
+                maxLength={MAX_CUSTOM_ACTIVITY_LABEL_LENGTH}
+                value={renameDraft ?? selectedCustom.label}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") setRenameDraft(null);
+                }}
+              />
+              <button
+                type="button"
+                className="field-button sky-delete-activity"
+                onClick={() => {
+                  if (window.confirm(`Delete "${selectedCustom.label}" and its limits?`)) {
+                    setRenameDraft(null);
+                    w.updatePreferences(deleteCustomActivityPatch(p, selectedCustom.id));
+                  }
+                }}
+              >
+                <Trash2 size={15} aria-hidden="true" />
+                Delete
+              </button>
+            </span>
           </Row>
-        ))}
-      </div>
-      <p className="sky-setting-footnote">
-        Planning thresholds guide the hourly assessment; they do not define safe
-        conditions.
-      </p>
-    </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -156,7 +228,6 @@ export function Settings({
 }) {
   const account = useAccount();
   const sectionId = useId();
-  const activity = ACTIVITY_PROFILES[p.defaultActivity];
   const sample = [
     { label: "Wind gust", value: w.formatWindDisplay(32), pass: 32 < p.maxWindGustMph },
     { label: "Rain or snow chance", value: "5%", pass: 5 < p.maxPrecipChance },
@@ -166,7 +237,7 @@ export function Settings({
   const sections = [
     ["display", "Display"],
     ["plan", "Default plan"],
-    ["weather", "Weather limits"],
+    ["weather", "Activities and limits"],
     ["route", "Route timing"],
     ["save", "Save and apply"],
   ] as const;
@@ -179,7 +250,7 @@ export function Settings({
           <p className="sky-lead"><span className="sky-lead-note">Your profile, sign-in, allowances and connected apps.</span></p>
         ) : (
           <p className="sky-lead">
-            You plan as <strong>{activity?.label || "a backcountry traveller"}</strong> for{" "}
+            You plan as <strong>{activeActivityLabel(p)}</strong> for{" "}
             <strong>{p.travelWindowHours} hours</strong> from <strong>{w.formatClockForStyle(p.defaultStartTime, p.timeStyle)}</strong>, turning back when gusts pass{" "}
             <strong>{w.formatWindDisplay(p.maxWindGustMph)}</strong>, rain chance passes <strong>{p.maxPrecipChance}%</strong>, or it feels colder than{" "}
             <strong>{w.formatTempDisplay(p.minFeelsLikeF)}</strong>.
@@ -251,29 +322,15 @@ export function Settings({
                   onChange={w.handleTravelWindowHoursDraftChange} onBlur={w.handleTravelWindowHoursDraftBlur} />
               </Row>
             </div>
-            <h3 className="sky-setting-subhead">Activity</h3>
-            <p className="sky-setting-footnote is-above">Choosing an activity sets its limits and route pace. You can still adjust each value.</p>
-            <div className="field-profile-options sky-profile-grid" role="group" aria-label="Activity profile">
-              {ACTIVITY_PROFILE_ORDER.map((key) => {
-                const Icon = ACTIVITY_ICONS[key] || Compass;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    aria-pressed={p.defaultActivity === key}
-                    onClick={() => w.updatePreferences(ACTIVITY_PROFILES[key].preferencePatch)}
-                  >
-                    <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
-                    <strong>{ACTIVITY_PROFILES[key].label}</strong>
-                    <small>{ACTIVITY_PROFILES[key].description}</small>
-                  </button>
-                );
-              })}
-            </div>
           </section>
 
           <section id={`${sectionId}-weather`} tabIndex={-1} aria-labelledby={`${sectionId}-weather-h`} className="sky-setting-section">
-            <h2 id={`${sectionId}-weather-h`}>Weather limits</h2>
+            <h2 id={`${sectionId}-weather-h`}>Activities and limits</h2>
+            <p className="sky-setting-footnote is-above">
+              Each activity remembers its own weather limits. Pick one to see or change its limits; the planner uses
+              the limits of the activity you plan with.
+            </p>
+            <ActivityPicker workspace={w} />
             <Thresholds workspace={w} />
             <h3 className="sky-setting-subhead">Approach</h3>
             <div className="sky-setting-group">

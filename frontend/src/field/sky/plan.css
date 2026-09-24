@@ -46,7 +46,7 @@
 .sky-stepper:disabled { opacity: 0.4; cursor: default; }
 .sky-stepper:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: -3px; }
 
-.sky-plan-activities { margin: 28px 0 0; padding: 0; border: 0; min-width: 0; }
+.sky-plan-activities { margin: 28px 0 0; padding: 0; border: 0; min-width: 0; container-type: inline-size; }
 .sky-plan-activities > legend { float: left; width: 100%; }
 .sky-activity-grid { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; }
 .field-plan-form.sky-plan label.sky-activity {
@@ -54,13 +54,6 @@
   border-radius: 16px; background: var(--sky-surface, var(--f-paper)); border: 1px solid var(--sky-field-border, var(--f-line));
   color: var(--sky-label, var(--f-ink)); font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-  /* The name wraps inside the card instead of widening its track into the padding. */
-  grid-template-columns: minmax(0, 1fr); overflow-wrap: break-word;
-}
-/* Two narrow columns beside the map: a little less padding keeps "Mountaineering" on one line. */
-.sky-activity-grid { container-type: inline-size; }
-@container (max-width: 299px) {
-  .field-plan-form.sky-plan label.sky-activity { padding-inline: 10px; font-size: 14px; }
 }
 .field-plan-form.sky-plan label.sky-activity:hover { border-color: var(--sky-field-border-hover); box-shadow: 0 6px 14px -10px rgba(24, 32, 28, 0.35); }
 .field-plan-form.sky-plan .sky-activity input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }
@@ -87,15 +80,28 @@
 .field-plan-form.sky-plan .field-form-submit { margin-top: 24px; min-height: 52px; border-radius: 14px; font-size: 17px; }
 
 @media (max-width: 650px) {
-  /* Icon beside the name: seven choices in about half the height, so the
-     submit button is closer on a phone. */
-  .sky-activity-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  /* Icon beside the name, so the choices take less height and the submit button
+     is closer on a phone. Two columns only where each half fits "Mountaineering";
+     a 375px phone lists them as one column of single-line rows. */
+  .sky-activity-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 8px; }
   .field-plan-form.sky-plan label.sky-activity {
     grid-template-columns: 30px minmax(0, 1fr); align-items: center; align-content: center;
-    gap: 10px; min-height: 56px; padding: 8px 12px; font-size: 14px; line-height: 1.3;
+    gap: 10px; min-height: 48px; padding: 8px 12px; font-size: 14px; line-height: 1.3;
   }
   .sky-activity svg { width: 18px; height: 18px; padding: 6px; border-radius: 9px; }
   /* The filled glyph well marks the choice here; a corner check would crowd the name. */
+  .sky-activity.is-checked::before, .sky-activity.is-checked::after { content: none; }
+}
+/* A narrow form column (Compare, or the plan card on a small laptop) has no room for
+   two cards side by side: "Mountaineering" overflowed them, and one card per row made
+   eight tall cards. List the choices as rows, icon beside the name. */
+@container (max-width: 300px) {
+  .sky-activity-grid { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .field-plan-form.sky-plan label.sky-activity {
+    grid-template-columns: 30px minmax(0, 1fr); align-items: center; align-content: center;
+    gap: 10px; min-height: 48px; padding: 7px 12px; font-size: 14px; line-height: 1.3;
+  }
+  .sky-activity svg { width: 18px; height: 18px; padding: 6px; border-radius: 9px; }
   .sky-activity.is-checked::before, .sky-activity.is-checked::after { content: none; }
 }
 
@@ -146,6 +152,30 @@
 }
 .field-app .field-workspace-empty strong { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
 .field-app .field-workspace-empty p { font-size: 14px; color: var(--sky-secondary); }
+
+/* The chosen activity's weather limits, editable in place. */
+.sky-plan-limits {
+  clear: both; margin: 12px 0 0; border-radius: 14px; background: var(--sky-fill, var(--f-wash));
+  color: var(--sky-label, var(--f-ink));
+}
+.sky-plan-limits > summary {
+  display: grid; gap: 8px; padding: 12px 14px; cursor: pointer; list-style: none; border-radius: 14px;
+}
+.sky-plan-limits > summary::-webkit-details-marker { display: none; }
+.sky-plan-limits > summary:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; }
+.sky-plan-limits-title { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; font-weight: 650; }
+.sky-plan-limits-edit { font-weight: 600; color: var(--sky-accent, var(--f-primary)); }
+.sky-plan-limits[open] .sky-plan-limits-edit { visibility: hidden; }
+.sky-plan-limit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sky-plan-limit-chips > span {
+  padding: 3px 9px; border-radius: 999px; background: var(--sky-surface, var(--f-paper));
+  font-size: 13px; color: var(--sky-secondary, var(--f-muted));
+}
+.sky-plan-limits .sky-thresholds { padding: 0 10px 4px; }
+.sky-plan-limits-link {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 14px; padding: 0; border: 0; background: none;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--sky-accent, var(--f-primary)); cursor: pointer;
+}
 
 /* Optional fourth step: a route to check at timed checkpoints once the brief is ready. */
 .sky-plan-route { margin: 28px 0 0; }

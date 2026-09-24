@@ -331,6 +331,8 @@ html[data-theme="dark"] {
 .field-app .shortlist-mode { margin-top: 20px; }
 .field-app :is(.field-plan-form, .field-planner-map, .field-workspace-bottom > section) { border: 0; border-radius: 20px; }
 .field-app :is(.field-plan-form, .field-planner-map, .field-workspace-bottom > section, .field-empty-state) { background-image: var(--sky-sheen); box-shadow: var(--sky-elevation); }
+/* The last card stops short of the footer rule, as on Workspace and Compare. */
+.field-app .field-library { padding-bottom: 40px; }
 @media (max-width: 850px) {
   .field-app :is(.field-settings-shortcuts button, .field-button[aria-pressed], .field-preset-list button, .shortlist-mode .field-button) { min-height: 44px; }
 }

@@ -116,11 +116,13 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData, localCondi
   } else if (nearestActive && nearestActive.edgeKm <= FIRE_NEAR_KM) {
     raise(3, 'fire', describeIncident(nearestActive));
   } else if (unplacedIncidents > 0) {
-    raise(2, 'fire', `${unplacedIncidents} current WFIGS fire incident/perimeter signal(s) within 150 km have no reported location, so they are treated as nearby.`);
+    raise(2, 'fire', unplacedIncidents === 1
+      ? '1 current WFIGS fire incident/perimeter signal within 150 km has no reported location, so it is treated as nearby.'
+      : `${unplacedIncidents} current WFIGS fire incident/perimeter signals within 150 km have no reported location, so they are treated as nearby.`);
   } else if (nearestContained && nearestContained.edgeKm <= FIRE_NEAR_KM) {
     raise(1, 'fire', `${describeIncident(nearestContained)} It is largely contained, but closures and smoke can remain.`);
   } else if (nearbyIncidents.length > 0) {
-    raise(1, 'fire', `${nearbyIncidents.length} current WFIGS fire incident/perimeter signal(s) are within 150 km, the nearest approximately ${distanceText(nearestIncidentKm)} away; none are within ${FIRE_NEAR_KM} km.`);
+    raise(1, 'fire', `${nearbyIncidents.length === 1 ? '1 current WFIGS fire incident/perimeter signal is' : `${nearbyIncidents.length} current WFIGS fire incident/perimeter signals are`} within 150 km, the nearest approximately ${distanceText(nearestIncidentKm)} away; none are within ${FIRE_NEAR_KM} km.`);
   }
   if (Number.isFinite(nearestDetectionKm) && nearestDetectionKm <= 25) {
     raise(3, 'fire', `NASA FIRMS detected recent thermal activity approximately ${Math.round(nearestDetectionKm)} km away.`);
