@@ -262,10 +262,11 @@ export function useWorkspace() {
     ) {
       return parsedInitialLinkState;
     }
+    // Restore the last report's plan behind the requested page; opening `/`
+    // stays on the workspace instead of jumping to the brief.
     const plan = initialPersistedReport.plan;
     return {
       ...parsedInitialLinkState,
-      view: "planner" as const,
       position: { lat: plan.lat, lng: plan.lon },
       hasObjective: true,
       objectiveName: plan.objectiveName,
