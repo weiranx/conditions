@@ -78,9 +78,11 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
   const score = safetyData.safety?.assessmentStatus === 'insufficient_evidence' || !Number.isFinite(safetyData.safety?.score) ? null : Math.round(safetyData.safety.score);
   const scoreLabel = score === null ? 'Insufficient evidence' : `${score}/100`;
   const generatedAt = safetyData.generatedAt ? new Date(safetyData.generatedAt).toLocaleString() : 'Unknown';
-  const hazards = [...decision.blockers, ...decision.cautions, ...(decision.advisories ?? [])]
+  const hazards = [...decision.blockers, ...decision.cautions]
     .map(compact)
     .filter(Boolean);
+  // Advisories do not set the decision, so they are listed apart from its hazards.
+  const advisories = (decision.advisories ?? []).map(compact).filter(Boolean);
   const triggers = decision.checks
     .filter((check) => !check.ok)
     .map((check) => compact(check.action || check.detail || check.label))
@@ -149,6 +151,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
     planLines.join('\n'),
     `DECISION\n${decision.level} · ${scoreLabel}\n${compact(decision.headline)}`,
     `DECISIVE HAZARDS\n${(hazards.length ? hazards : ['No modeled blocker; normal mountain hazards still apply.']).map((item) => `- ${item}`).join('\n')}`,
+    advisories.length ? `ADVISORIES (DO NOT CHANGE THE DECISION)\n${advisories.map((item) => `- ${item}`).join('\n')}` : '',
     `TURNAROUND TRIGGERS\n${triggers.map((item) => `- ${item}`).join('\n') || '- Set objective-specific turnaround triggers before departure.'}`,
     `VERIFY BEFORE LEAVING\n${verificationItems.map((item) => `- ${item}`).join('\n')}`,
     insightLines.length ? `REPORT INSIGHTS\n${insightLines.map(item => `- ${item}`).join('\n')}` : '',
@@ -210,6 +213,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
         <section class="card"><p class="section-label">What can change the decision</p><h2>Decisive hazards</h2>${renderList(hazards, 'No modeled blocker; normal mountain hazards still apply.')}</section>
         <section class="card"><p class="section-label">Pre-committed limits</p><h2>Turnaround triggers</h2>${renderList(triggers, 'Set objective-specific turnaround triggers before departure.')}</section>
       </div>
+      ${advisories.length ? `<section class="card"><p class="section-label">Within your limits</p><h2>Advisories</h2>${renderList(advisories, '')}</section>` : ''}
       ${insightLines.length ? `<section class="card"><h2>What this means for your trip</h2>${renderList(insightLines, '')}</section>` : ''}
       <section class="card verify"><p class="section-label">Trailhead check</p><h2>Verify before leaving</h2>${renderList(verificationItems, 'Recheck official sources immediately before departure.')}</section>
       <div class="columns">

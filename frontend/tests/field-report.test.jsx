@@ -1006,6 +1006,11 @@ test('minor signals inside the limits advise without lowering a GO', () => {
   for (const text of ['Air quality is moderate', 'Fire risk is elevated', 'Heat risk is elevated', 'Terrain and trail surfaces']) {
     assert.ok(decision.advisories.some(item => item.startsWith(text)), text);
   }
+  const brief = buildFieldBrief({ objectiveName: 'Test', forecastDate: '2026-09-16', startTime: '07:00', returnTime: '12:00', travelWindowHours: 5, activity: 'hiking', safetyData: data, decision, actionLine: '' });
+  const decisive = brief.text.split('DECISIVE HAZARDS')[1].split('\n\n')[0];
+  assert.doesNotMatch(decisive, /Air quality is moderate/);
+  assert.match(brief.text, /ADVISORIES \(DO NOT CHANGE THE DECISION\)\n- Air quality is moderate/);
+  assert.match(brief.html, /<h2>Advisories<\/h2><ul><li>Air quality is moderate/);
   data.terrainCondition = { code: 'snow_ice', label: 'Icy / Firm Snow', impact: 'high' };
   const icy = evaluateBackcountryDecision(data, '23:59', relaxed);
   assert.equal(icy.level, 'CAUTION');
