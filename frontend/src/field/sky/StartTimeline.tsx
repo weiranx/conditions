@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import type { SkyHour } from "./sky-model";
 import { isOverHour } from "./sky-model";
+import { useWidth } from "./useWidth";
 
 export type TimelineRow = {
   key: string;
@@ -15,6 +16,99 @@ export type TimelineRow = {
   noteTone: "ok" | "over" | "missing";
   action?: ReactNode;
 };
+
+const SKY = { night: "#26304a", twilight: "#f0b98a", day: "#8fbde6" };
+
+/**
+ * The day's sky over the departures' clock: night, twilight and daylight
+ * shade the backdrop, the sun's arc runs from sunrise to sunset, and each
+ * departure is drawn as its own climb and descent, with the hours that cross
+ * a limit in the caution colour. Your plan and the best margin are emphasised.
+ */
+function DepartureSky({ rows, lo, hi, sunrise, sunset, clock }: {
+  rows: TimelineRow[];
+  lo: number;
+  hi: number;
+  sunrise: number | null;
+  sunset: number | null;
+  clock: (minute: number) => string;
+}) {
+  const [ref, width] = useWidth<HTMLDivElement>(600);
+  const id = useId().replace(/:/g, "");
+  const height = 118;
+  const horizon = height - 16;
+  const x = (m: number) => ((m - lo) / (hi - lo)) * width;
+  const known = sunrise !== null && sunset !== null && sunset > sunrise;
+  const light = (m: number) => {
+    if (!known) return SKY.day;
+    const d = ((m % 1440) + 1440) % 1440;
+    if (d < sunrise - 30 || d > sunset + 30) return SKY.night;
+    if (Math.abs(d - sunrise) <= 45 || Math.abs(d - sunset) <= 45) return SKY.twilight;
+    return SKY.day;
+  };
+  const stops: { offset: number; color: string }[] = [];
+  for (let m = lo; m <= hi; m += 15) stops.push({ offset: (m - lo) / (hi - lo), color: light(m) });
+  const sunTop = 14;
+  const arcAt = (m: number) => {
+    const t = (m - (sunrise as number)) / ((sunset as number) - (sunrise as number));
+    return horizon - Math.sin(Math.PI * t) * (horizon - sunTop);
+  };
+  const sample = (from: number, to: number, f: (m: number) => number) => {
+    const pts: string[] = [];
+    const n = Math.max(2, Math.ceil((to - from) / 10));
+    for (let k = 0; k <= n; k += 1) {
+      const m = from + ((to - from) * k) / n;
+      pts.push(`${x(m).toFixed(1)},${f(m).toFixed(1)}`);
+    }
+    return pts.join(" ");
+  };
+  const tripHeight = (horizon - sunTop) * 0.55;
+  return (
+    <div className="sky-timeline-sky" ref={ref} aria-hidden="true">
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        <defs>
+          <linearGradient id={`${id}-sky`} x1="0" x2="1">
+            {stops.map((stop, i) => <stop key={i} offset={stop.offset.toFixed(4)} stopColor={stop.color} />)}
+          </linearGradient>
+          <linearGradient id={`${id}-fade`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fff" stopOpacity="0.9" /><stop offset="1" stopColor="#fff" stopOpacity="0.35" />
+          </linearGradient>
+          <mask id={`${id}-mask`}><rect width={width} height={height} fill={`url(#${id}-fade)`} /></mask>
+        </defs>
+        <rect width={width} height={horizon} rx="10" fill={`url(#${id}-sky)`} mask={`url(#${id}-mask)`} className="tl-sky" />
+        {known && sunset! > lo && sunrise! < hi && (
+          <>
+            <polyline className="tl-sun-arc" points={sample(Math.max(lo, sunrise!), Math.min(hi, sunset!), arcAt)} />
+            {(() => {
+              const noon = (sunrise! + sunset!) / 2;
+              return noon > lo && noon < hi ? <circle className="tl-sun" cx={x(noon)} cy={arcAt(noon)} r="9" /> : null;
+            })()}
+            {sunrise! > lo && <text className="tl-sun-label" x={x(sunrise!)} y={horizon - 5} textAnchor="middle">↑ {clock(sunrise!)}</text>}
+            {sunset! < hi && <text className="tl-sun-label" x={x(sunset!)} y={horizon - 5} textAnchor="middle">↓ {clock(sunset!)}</text>}
+          </>
+        )}
+        {[...rows].sort((a, b) => Number(Boolean(a.current || a.best)) - Number(Boolean(b.current || b.best))).map((row) => {
+          const end = row.start + row.hours.length * 60;
+          const trip = (m: number) => horizon - Math.sin(Math.PI * ((m - row.start) / Math.max(60, end - row.start))) * tripHeight;
+          const tone = row.best ? "is-best" : row.current ? "is-current" : "";
+          return (
+            <g key={row.key} className={`tl-trip ${tone}`}>
+              <polyline points={sample(row.start, end, trip)} />
+              {row.hours.map((hour) => isOverHour(hour) && (
+                <polyline key={hour.index} className="tl-trip-over"
+                  points={sample(row.start + hour.index * 60, row.start + hour.index * 60 + 60, trip)} />
+              ))}
+              {(row.best || row.current) && (
+                <text x={x(row.start + (end - row.start) / 2)} y={trip(row.start + (end - row.start) / 2) - 7} textAnchor="middle">{row.label}</text>
+              )}
+            </g>
+          );
+        })}
+        <line className="tl-horizon" x1="0" x2={width} y1={horizon} y2={horizon} />
+      </svg>
+    </div>
+  );
+}
 
 /**
  * Departures side by side on one clock. Each hour of each departure is drawn
@@ -59,6 +153,16 @@ export function StartTimeline({ rows, sunrise, sunset, clock, caption }: {
     <figure className="sky-timeline">
       <figcaption className="sr-only">{caption}</figcaption>
       <div className="sky-timeline-rows">
+        <div className="sky-timeline-row is-sky">
+          <div className="sky-timeline-label"><strong>Sky</strong><span>each trip's arc</span></div>
+          <DepartureSky rows={rows} lo={lo} hi={hi} sunrise={sunrise} sunset={sunset} clock={clock} />
+          <div className="sky-timeline-note">
+            <span>
+              <strong>{sunrise !== null && sunset !== null ? `${clock(sunrise)} – ${clock(sunset)}` : "Daylight unknown"}</strong>
+              <small>Arcs peak at each trip's halfway point</small>
+            </span>
+          </div>
+        </div>
         {rows.map((row) => (
           <div key={row.key} className={`sky-timeline-row${row.best ? " is-best" : ""}${row.current ? " is-current" : ""}`}>
             <div className="sky-timeline-label">

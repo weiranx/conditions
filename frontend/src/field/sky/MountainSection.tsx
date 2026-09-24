@@ -2,18 +2,11 @@ import { useId, type ReactElement } from "react";
 import type { ElevationForecastBand } from "../../app/types";
 import { useWidth } from "./useWidth";
 import { spreadLabels } from "./spread-labels";
-import type { SkyHour } from "./sky-model";
+import { noise, precipText, ridgeShape, type Weather } from "./ridge";
 
 type Level = { label: string; ft: number; tone: "cold" | "snow" };
-type Weather = Pick<SkyHour, "kind" | "condition" | "precipChance" | "night">;
 
-/** Deterministic 0–1 noise so precipitation marks hold still between renders. */
-const noise = (i: number, j: number, salt: number) => {
-  const v = Math.sin(i * 127.1 + j * 311.7 + salt * 74.7) * 43758.5453;
-  return v - Math.floor(v);
-};
-
-function Cloud({ x, y, s, className }: { x: number; y: number; s: number; className: string }) {
+export function Cloud({ x, y, s, className }: { x: number; y: number; s: number; className: string }) {
   return (
     <g className={className} transform={`translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${s})`}>
       <circle cx="-16" cy="4" r="12" />
@@ -29,7 +22,7 @@ function Cloud({ x, y, s, className }: { x: number; y: number; s: number; classN
  * precipitation that falls as snow above the snow level (or freezing level)
  * and as rain below it. Illustrative, like the ridge; driven by the forecast.
  */
-function WeatherSky({ weather, plotW, height, y, phaseFt }: {
+export function WeatherSky({ weather, plotW, height, y, phaseFt }: {
   weather: Weather;
   plotW: number;
   height: number;
@@ -95,7 +88,7 @@ function WeatherSky({ weather, plotW, height, y, phaseFt }: {
 }
 
 /** Low valley fog, drawn over the ridge. */
-function Fog({ plotW, height }: { plotW: number; height: number }) {
+export function Fog({ plotW, height }: { plotW: number; height: number }) {
   return (
     <g className="mt-fog" aria-hidden="true">
       {[0.62, 0.72, 0.82].map((fy, i) => (
@@ -105,13 +98,7 @@ function Fog({ plotW, height }: { plotW: number; height: number }) {
   );
 }
 
-/** Condition and precipitation chance; `maxLength` shortens the condition for the visible label. */
-function precipText(weather: Weather, maxLength = Infinity) {
-  const chance = Number.isFinite(weather.precipChance) ? Math.round(weather.precipChance) : null;
-  const condition = weather.condition.trim();
-  const shown = condition.length > maxLength ? `${condition.slice(0, maxLength - 1)}…` : condition;
-  return [shown, chance !== null && chance > 0 ? `${chance}% precip` : null].filter(Boolean).join(" · ");
-}
+
 
 /** Vertical space one band label (name line + temperature line) needs. */
 const BAND_LABEL_GAP = 38;
@@ -149,25 +136,7 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
   const side = width < 560 ? 132 : 190;
   const plotW = width - side;
   const y = (ft: number) => 16 + (1 - (ft - lo) / (hi - lo)) * (height - 32);
-  const peakX = plotW * 0.62;
-  const peakY = y(top + 250);
-  // Illustrative ridge: rises from the lowest band on the left to the summit, falls away to the right.
-  const ridge = [
-    [0, y(base - 200)], [plotW * 0.18, y(base + (top - base) * 0.22)], [plotW * 0.34, y(base + (top - base) * 0.48)],
-    [plotW * 0.47, y(base + (top - base) * 0.8)], [peakX, peakY], [plotW * 0.74, y(base + (top - base) * 0.72)],
-    [plotW * 0.86, y(base + (top - base) * 0.5)], [plotW, y(base + (top - base) * 0.34)], [plotW, height], [0, height],
-  ];
-  const ridgePath = `M${ridge.map((p) => p.map((v) => v.toFixed(1)).join(",")).join(" L")} Z`;
-  // x on the rising side of the ridge for a given elevation.
-  const ridgeX = (ft: number) => {
-    const pts = ridge.slice(0, 5);
-    const yy = y(ft);
-    for (let i = 1; i < pts.length; i += 1) {
-      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
-      if (yy <= y0 && yy >= y1) return x0 + ((y0 - yy) / (y0 - y1 || 1)) * (x1 - x0);
-    }
-    return yy > pts[0][1] ? 0 : peakX;
-  };
+  const { path: ridgePath, x: ridgeX } = ridgeShape({ plotW, height, y, base, top });
   const labelYs = spreadLabels(sorted.map((b) => y(b.elevationFt)), BAND_LABEL_GAP, 20, height - 20);
   const snow = levelsInView.find((l) => l.tone === "snow");
   const phaseLevel = levels.find((l) => l.tone === "snow" && Number.isFinite(l.ft)) ?? levels.find((l) => l.tone === "cold" && Number.isFinite(l.ft));

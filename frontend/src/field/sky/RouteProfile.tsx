@@ -10,7 +10,9 @@ export type ProfileStop = { name: string; eta: string; tone: "within" | "over" |
  * checkpoint whose forecast crosses a limit are hatched, and stretches reached
  * after dark are shaded.
  */
-export function RouteProfile({ points, stops, selected, onSelect, caption, ticks = [] }: {
+export type ProfileLevel = { y: number; label: string; tone: "cold" | "snow" };
+
+export function RouteProfile({ points, stops, selected, onSelect, caption, ticks = [], levels = [] }: {
   points: { x: number; y: number }[];
   stops: ProfileStop[];
   selected: number;
@@ -18,6 +20,11 @@ export function RouteProfile({ points, stops, selected, onSelect, caption, ticks
   caption: string;
   /** Elevation gridlines in the same frame units as the points. */
   ticks?: { y: number; label: string }[];
+  /**
+   * Freezing and snow levels in frame units. The snow level caps the
+   * profile in snow above it, the way the mountain section does.
+   */
+  levels?: ProfileLevel[];
 }) {
   const [ref, width] = useWidth<HTMLDivElement>(900);
   const id = useId().replace(/:/g, "");
@@ -29,6 +36,21 @@ export function RouteProfile({ points, stops, selected, onSelect, caption, ticks
   const pts = points.map((p) => [px(p.x), py(p.y)] as const);
   const line = pts.map((p) => p.join(",")).join(" ");
   const area = `M${pts[0][0]},${base} L${pts.map((p) => p.join(",")).join(" L")} L${pts[pts.length - 1][0]},${base} Z`;
+  // Levels may sit a little above the high point (frame y down to 0) but not below the base.
+  const shown = levels.filter((l) => Number.isFinite(l.y) && l.y >= 0 && l.y <= 180);
+  const snow = levels.find((l) => l.tone === "snow" && Number.isFinite(l.y));
+  const snowTop = snow ? Math.min(base, Math.max(0, py(snow.y))) : null;
+  // Profile height at an x, for placing level labels away from the line and its stops.
+  const profileY = (x: number) => {
+    for (let i = 1; i < pts.length; i += 1) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+      if (x <= x1) return y0 + ((x - x0) / (x1 - x0 || 1)) * (y1 - y0);
+    }
+    return pts[pts.length - 1][1];
+  };
+  const labelX = (y: number) => [0.2, 0.35, 0.5, 0.65, 0.8]
+    .map((f) => m.l + f * (width - m.l - m.r))
+    .reduce((best, x) => (Math.abs(profileY(x) - y) > Math.abs(profileY(best) - y) ? x : best));
   const showEvery = width / Math.max(1, pts.length) < 70 ? 2 : 1;
   // A dark checkpoint shades the half-segments on either side of it.
   const night = pts.map(([x], i) => stops[i]?.dark ? {
@@ -43,6 +65,7 @@ export function RouteProfile({ points, stops, selected, onSelect, caption, ticks
             <rect width="7" height="7" className="rp-over-bg" />
             <line x1="0" y1="0" x2="0" y2="7" className="rp-over-line" strokeWidth="2" />
           </pattern>
+          <clipPath id={`${id}-area`}><path d={area} /></clipPath>
           <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" className="rp-fill-top" />
             <stop offset="100%" className="rp-fill-bottom" />
@@ -60,6 +83,15 @@ export function RouteProfile({ points, stops, selected, onSelect, caption, ticks
           </g>
         ))}
         <path d={area} fill={`url(#${id}-fill)`} className="rp-area" />
+        {snowTop !== null && snowTop > 0 && (
+          <rect x="0" y="0" width={width} height={snowTop} clipPath={`url(#${id}-area)`} className="rp-snow" aria-hidden="true" />
+        )}
+        {shown.map((level) => (
+          <g key={level.label} className={`rp-level is-${level.tone}`} aria-hidden="true">
+            <line x1={m.l} x2={width - m.r} y1={py(level.y)} y2={py(level.y)} strokeDasharray="5 4" />
+            <text x={labelX(py(level.y))} y={py(level.y) - 5} textAnchor="middle">{level.label}</text>
+          </g>
+        ))}
         {pts.slice(1).map((p, i) => stops[i + 1]?.tone === "over" && (
           <path key={i} d={`M${pts[i][0]},${base} L${pts[i][0]},${pts[i][1]} L${p[0]},${p[1]} L${p[0]},${base} Z`} fill={`url(#${id}-hatch)`} />
         ))}
