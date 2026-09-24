@@ -116,7 +116,7 @@ test("hourly forecast converts temperature and wind using the report preferences
     />,
   );
   assert.match(html, /10°C/);
-  assert.match(html, /16 kph/);
+  assert.match(html, /16 km\/h/);
   assert.doesNotMatch(html, /50°F/);
 });
 test("a missing hourly forecast is explicitly unavailable", () => {

@@ -9,10 +9,12 @@ import type {
 import {
   convertWindMphToDisplayValue,
   formatClockForStyle,
+  formatSnowDepthForElevationUnit,
   formatTemperatureForUnit,
   minutesToTwentyFourHourClock,
   parseHourLabelToMinutes,
   parseTimeInputMinutes,
+  windSpeedUnitLabel,
 } from './core';
 import { computeFeelsLikeF } from './planner-helpers';
 
@@ -41,7 +43,7 @@ export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: U
     const displayMaxFeelsLike = formatTemperatureForUnit(maxFeelsLike, preferences.temperatureUnit);
 
     if (gust > maxGust) {
-      failedRules.push(`gust ${displayGust}>${displayMaxGust} ${preferences.windSpeedUnit}`);
+      failedRules.push(`gust ${displayGust}>${displayMaxGust} ${windSpeedUnitLabel(preferences.windSpeedUnit)}`);
       failedRuleLabels.push('Gust above limit');
     }
     if (precipChance > maxPrecip) {
@@ -65,7 +67,7 @@ export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: U
 
     const snowDepth = context?.snowDepthIn;
     if (Number.isFinite(snowDepth) && (snowDepth as number) >= 12) {
-      failedRules.push(`snow depth ${Math.round(snowDepth as number)}in`);
+      failedRules.push(`snow depth ${formatSnowDepthForElevationUnit(snowDepth as number, preferences.elevationUnit)}`);
       failedRuleLabels.push('Deep snow / postholing risk');
     }
 
