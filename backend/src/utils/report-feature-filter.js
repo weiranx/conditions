@@ -323,6 +323,7 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
     }
     if (!isFeatureEnabled(flags, 'weatherContextDetails')) disabledGearIds.add('navigation-low-vis');
     if (!isFeatureEnabled(flags, 'contingencyPlanning')) disabledGearIds.add('overnight-insulation');
+    if (!isFeatureEnabled(flags, 'daylightTimeline')) disabledGearIds.add('headlamp-dark');
     filtered.gear = withoutDisabledReferenceItems(
       filtered.gear.filter((item) => !disabledGearIds.has(String(item?.id || ''))),
     );

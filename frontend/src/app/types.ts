@@ -673,7 +673,7 @@ export interface SafetyData {
     hasAnySignal?: boolean;
     generatedTime?: string | null;
   } | null;
-  gear?: (string | { id?: string; title: string; detail: string; category: string; tone: string })[];
+  gear?: (string | { id?: string; title: string; detail: string; reason?: string; category: string; tone: string })[];
   contingency?: ContingencyData | null;
   trail?: string;
   terrainCondition?: {
