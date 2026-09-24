@@ -45,7 +45,10 @@ export function ComfortScore({ comfort, localize = (text) => text, approach, ele
       )}
       {stale && (
         <p className="sky-cap comfort-approach is-stale" role="status">
-          Comfort was scored for a different approach than your current plan. Generate the report again to update it.
+          {approach?.source === "route"
+            // The route is analyzed after the report, so regenerating would not help.
+            ? "Comfort was scored before your route was analyzed, so it does not follow the route's elevations. The brief and forecast do."
+            : "Comfort was scored for a different approach than your current plan. Generate the report again to update it."}
         </p>
       )}
       <div className="comfort-evidence">

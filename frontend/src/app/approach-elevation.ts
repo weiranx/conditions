@@ -36,7 +36,13 @@ const INVERSION_MAX_PRECIP_CHANCE = 50;
 const INVERSION_MORNING_PERSISTENCE_MINUTES = 120;
 const DEFAULT_ASCENT_MINUTES_PER_1000FT = 45;
 
-export type ApproachElevationSource = 'gpx' | 'manual' | 'estimated';
+export type ApproachElevationSource = 'gpx' | 'route' | 'manual' | 'estimated';
+
+/** A checkpoint from route analysis: its elevation and arrival minutes after the start. */
+export interface RouteElevationCheckpoint {
+  elev_ft: number | null;
+  offset_minutes?: number;
+}
 
 export interface ApproachProfile {
   source: ApproachElevationSource;
@@ -51,6 +57,8 @@ export interface ApproachProfileInput {
   /** Trailhead elevation the user entered, in feet. */
   trailheadElevationFt?: number | null;
   gpxRoute?: Pick<ParsedGpxRoute, 'distanceMiles' | 'displayTrack'> | null;
+  /** Checkpoints of the analyzed route, in travel order. */
+  routeCheckpoints?: RouteElevationCheckpoint[] | null;
   elevationBands?: ElevationForecastBand[] | null;
   timing: RouteTimingProfile;
 }
@@ -83,10 +91,27 @@ export function buildGpxElevationTimeline(
 }
 
 /**
+ * Elevation over time along an analyzed route, from each checkpoint's arrival
+ * time. Needs the start and one more checkpoint with a known elevation;
+ * checkpoints whose elevation is unknown are skipped rather than read as 0 ft.
+ */
+export function buildRouteElevationTimeline(
+  checkpoints: RouteElevationCheckpoint[],
+): ApproachProfile['timeline'] | null {
+  const timeline = (checkpoints || [])
+    .filter((checkpoint) => finite(checkpoint.elev_ft) && finite(checkpoint.offset_minutes) && checkpoint.offset_minutes >= 0)
+    .map((checkpoint) => ({ minute: checkpoint.offset_minutes as number, elevationFt: checkpoint.elev_ft as number }));
+  if (timeline.length < 2 || timeline[0].minute !== 0) return null;
+  if (timeline.some((entry, index) => index > 0 && entry.minute < timeline[index - 1].minute)) return null;
+  return timeline;
+}
+
+/**
  * Model elevation over time. A GPX track with elevations gives the full route
- * (approach, summit and descent). Without one, the party climbs from the
- * trailhead at the ascent rate and then stays at the objective: descent is not
- * modeled, so late hours keep the more severe objective conditions.
+ * (approach, summit and descent), then an analyzed route's checkpoints do the
+ * same. Without either, the party climbs from the trailhead at the ascent rate
+ * and then stays at the objective: descent is not modeled, so late hours keep
+ * the more severe objective conditions.
  */
 export function buildApproachProfile(input: ApproachProfileInput): ApproachProfile | null {
   const objective = Number(input.objectiveElevationFt);
@@ -97,6 +122,11 @@ export function buildApproachProfile(input: ApproachProfileInput): ApproachProfi
     const trailhead = track[0].elevationFt;
     if (objective - Math.min(...track.map((entry) => entry.elevationFt)) < MIN_APPROACH_DROP_FT) return null;
     return { source: 'gpx', trailheadElevationFt: trailhead, objectiveElevationFt: objective, timeline: track };
+  }
+
+  const routeTimeline = input.routeCheckpoints ? buildRouteElevationTimeline(input.routeCheckpoints) : null;
+  if (routeTimeline && objective - Math.min(...routeTimeline.map((entry) => entry.elevationFt)) >= MIN_APPROACH_DROP_FT) {
+    return { source: 'route', trailheadElevationFt: routeTimeline[0].elevationFt, objectiveElevationFt: objective, timeline: routeTimeline };
   }
 
   const manual = input.trailheadElevationFt;
@@ -257,6 +287,7 @@ export function summarizeApproachHours(hours: ApproachHourFlags[]): ApproachSumm
 
 export const APPROACH_SOURCE_LABEL: Record<ApproachElevationSource, string> = {
   gpx: 'from your GPX track',
+  route: 'from your analyzed route',
   manual: 'from your trailhead',
   estimated: 'trailhead estimated',
 };

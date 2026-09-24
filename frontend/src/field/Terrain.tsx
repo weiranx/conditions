@@ -375,7 +375,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               <span>Trailhead elevation ({w.elevationUnitLabel})</span>
               <input className="sky-approach-input" inputMode="numeric" placeholder="Estimated"
                 value={w.trailheadElevationInput} onChange={w.handleTrailheadElevationChange}
-                disabled={!w.preferences.approachElevationAdjustment || approach?.source === "gpx"} />
+                disabled={!w.preferences.approachElevationAdjustment || approach?.source === "gpx" || approach?.source === "route"} />
             </label>
             {approach && (
               <dl className="sky-inline-facts">
@@ -392,7 +392,9 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 ? "No approach below the objective is known, so every hour is checked at the objective. Enter your trailhead elevation to adjust the early hours."
                 : `${approach.source === "gpx"
                   ? "Elevation over time follows your imported GPX track and route timing."
-                  : approach.source === "manual"
+                  : approach.source === "route"
+                    ? "Elevation over time follows the checkpoints of your analyzed route, starting from its trailhead."
+                    : approach.source === "manual"
                     ? "You climb from your trailhead at your ascent rate, then stay at the objective."
                     : "Trailhead estimated from the lowest forecast band. Enter yours for a better estimate."} Temperature and wind use standard per-1,000 ft rates; rain and storm signals are never adjusted.${inversionHours > 0
                   ? ` Clear, calm conditions make a valley inversion likely for ${inversionHours} approach hour${inversionHours === 1 ? "" : "s"}: those hours are treated as colder, not warmer, than the objective.`
