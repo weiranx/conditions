@@ -195,6 +195,7 @@ const resolveApproach = ({ approachRequest, weatherData, solarData }) => {
 
 module.exports = {
   resolveApproach,
+  TEMP_LAPSE_F_PER_1000FT,
   MAX_APPROACH_WARMING_F,
   INVERSION_COOLING_F_PER_1000FT,
   MAX_INVERSION_COOLING_F,

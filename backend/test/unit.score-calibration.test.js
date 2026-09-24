@@ -208,6 +208,50 @@ test('null snow measurements cannot reduce avalanche uncertainty as minimal snow
   expect(nulls.explanations.join(' ')).not.toMatch(/snowpack is minimal/);
 });
 
+describe('station cross-check', () => {
+  // Forecast: 58F and 5 mph at 6,000 ft, starting 08:00Z today.
+  const scoreWithStation = (station) => {
+    const weatherData = calmWeather({ elevation: 6000 });
+    return calculateSafetyScore({
+      ...baseSafetyInput(),
+      weatherData,
+      localConditionsData: { weatherObservation: { available: true, distanceKm: 5, observedTime: weatherData.forecastStartTime, ...station } },
+    });
+  };
+  const stationReasons = (result) => result.confidenceReasons.filter((reason) => /nearby station/iu.test(reason));
+
+  test('a comparable station that disagrees lowers confidence', () => {
+    const result = scoreWithStation({ tempF: 80, windMph: 25, elevationFt: 6000 });
+    expect(stationReasons(result)).toEqual([
+      expect.stringMatching(/22F warmer than the forecast for your start;/),
+      expect.stringMatching(/wind 20 mph stronger than the forecast/),
+    ]);
+  });
+
+  test('a lower station is compared after the lapse-rate adjustment', () => {
+    // 2,500 ft lower: the forecast warms about 8F there, so 66F agrees.
+    expect(stationReasons(scoreWithStation({ tempF: 66, windMph: 5, elevationFt: 3500 }))).toEqual([]);
+    // Unadjusted, a 25F gap would have read as a discrepancy.
+    expect(stationReasons(scoreWithStation({ tempF: 91, windMph: 5, elevationFt: 3500 }))).toEqual([
+      expect.stringMatching(/25F warmer than the forecast for your start after adjusting for its elevation/),
+    ]);
+  });
+
+  test('wind is not compared across a large elevation gap', () => {
+    expect(stationReasons(scoreWithStation({ tempF: 66, windMph: 40, elevationFt: 3500 }))).toEqual([]);
+  });
+
+  test('a reading hours from the planned start is not compared', () => {
+    const evening = new Date(Date.parse(`${now().slice(0, 10)}T08:00:00Z`) - 10 * 3600000).toISOString();
+    expect(stationReasons(scoreWithStation({ tempF: 20, windMph: 40, elevationFt: 6000, observedTime: evening }))).toEqual([]);
+  });
+
+  test('a distant station or unknown elevation is not compared', () => {
+    expect(stationReasons(scoreWithStation({ tempF: 20, windMph: 40, elevationFt: 6000, distanceKm: 60 }))).toEqual([]);
+    expect(stationReasons(scoreWithStation({ tempF: 20, windMph: 40 }))).toEqual([]);
+  });
+});
+
 test('null station readings do not create forecast discrepancies', () => {
   const result = calculateSafetyScore({ ...baseSafetyInput(),
     localConditionsData: { weatherObservation: { available: true, tempF: null, windMph: null } },
@@ -333,15 +377,17 @@ test.each([
 });
 
 test('field-observation flag removes observation factors and confidence penalties', () => {
+  const weatherData = calmWeather({ elevation: 6000 });
   const input = {
     ...baseSafetyInput(),
+    weatherData,
     localConditionsData: {
       radar: { rain24hIn: 1.2, source: 'NWS RFC QPE' },
       streamflow: {
         dischargeCfs: 100,
         forecast: { peakFlowCfs: 200, source: 'NOAA NWPS' },
       },
-      weatherObservation: { available: true, tempF: 90, windMph: 45 },
+      weatherObservation: { available: true, tempF: 90, windMph: 45, observedTime: weatherData.forecastStartTime, elevationFt: 6100, distanceKm: 4 },
     },
   };
   const enabled = calculateSafetyScore(input);

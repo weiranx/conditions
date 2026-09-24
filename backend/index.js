@@ -601,6 +601,7 @@ const safetyHandler = async (req, res) => {
       selectedStartTime: alertTargetTimeIso,
       selectedTravelWindowHours: requestedTravelWindowHours,
       winterTerrain: isWinterTerrain({ avalancheData, snowpackData }),
+      solarData,
     });
 
     gearSuggestions = buildLayeringGearSuggestions({
@@ -616,6 +617,8 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
       contingencyData,
+      solarData,
+      selectedStartTime: alertTargetTimeIso,
     });
 
     const analysis = calculateSafetyScore({
@@ -737,6 +740,7 @@ const safetyHandler = async (req, res) => {
       selectedStartTime: fallbackStartTime,
       selectedTravelWindowHours: requestedTravelWindowHours,
       winterTerrain: isWinterTerrain({ avalancheData: safeAvalancheData, snowpackData: safeSnowpackData }),
+      solarData,
     });
     const analysis = calculateSafetyScore({
       weatherData: safeWeatherData,
@@ -781,6 +785,8 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
       contingencyData: safeContingencyData,
+      solarData,
+      selectedStartTime: fallbackStartTime,
     });
 
     const fallbackGeneratedAt = new Date().toISOString();

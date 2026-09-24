@@ -6,13 +6,14 @@ const { clampTravelWindowHours, parseClockToMinutes, parseIsoClockMinutes } = re
 const { normalizeAlertSeverity } = require('./alerts');
 const { deriveTerrainCondition } = require('./terrain-condition');
 const { describeOnset } = require('./contingency');
+const { TEMP_LAPSE_F_PER_1000FT } = require('./approach-elevation');
 
 // --- Scoring Config: all thresholds, group scales, tier definitions ---
 // scoreVersion is stamped onto every result so logged scores stay comparable
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.11.0',
+  scoreVersion: '2.12.0',
   maxScore: 100,
   scorePrecision: 1,
 
@@ -73,6 +74,15 @@ const SCORING_CONFIG = {
       missingDimensionImpact: 6,
       missingDimensionConfidence: 6,
       incompleteCoverageConfidence: 12,
+    },
+    // When a station reading is close enough in time, place and elevation to
+    // cross-check the start-time forecast. Temperature is shifted by the lapse
+    // rate first; wind has no such adjustment, so it needs similar elevation.
+    stationComparison: {
+      maxHoursFromStart: 2,
+      maxDistanceKm: 25,
+      maxTempElevationGapFt: 3000,
+      maxWindElevationGapFt: 500,
     },
     avalanche: {
       unknown: 16,
@@ -574,12 +584,20 @@ const calculateSafetyScore = ({
   const expectedRainWindowIn = measurement(rainfallExpected?.rainWindowIn);
   const expectedSnowWindowIn = measurement(rainfallExpected?.snowWindowIn);
   const sunriseMinutes = parseClockToMinutes(solarData?.sunrise);
+  const sunsetMinutes = parseClockToMinutes(solarData?.sunset);
   const selectedStartMinutes = parseClockToMinutes(selectedStartClock) ?? parseIsoClockMinutes(weatherData?.forecastStartTime);
   const isNightBeforeSunrise =
     isDaytime === false
     && Number.isFinite(selectedStartMinutes)
     && Number.isFinite(sunriseMinutes)
     && selectedStartMinutes < sunriseMinutes;
+  // An alpine start before sunrise is normal; a start after sunset costs
+  // navigation margin. Use the sun's times: NOAA's isDaytime flag is a fixed
+  // 6 AM-6 PM period, so it is only the fallback.
+  const solarTimesKnown = Number.isFinite(sunriseMinutes) && Number.isFinite(sunsetMinutes) && sunsetMinutes > sunriseMinutes;
+  const startsAfterSunset = solarTimesKnown && Number.isFinite(selectedStartMinutes)
+    ? selectedStartMinutes >= sunsetMinutes
+    : isDaytime === false && !isNightBeforeSunrise;
   const forecastStartMs = parseIsoTimeToMs(weatherData?.forecastStartTime);
   const selectedDateMs =
     typeof selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)
@@ -908,8 +926,13 @@ const calculateSafetyScore = ({
     applyFactor('Winter Weather', T.storm.expectedSnowLowImpact, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
   }
 
-  if (daylightEnabled && isDaytime === false && !isNightBeforeSunrise) {
-    applyFactor('Darkness', T.darknessImpact, 'Selected forecast period is nighttime, reducing navigation margin and terrain visibility.', `${weatherProvider(weatherData)} isDaytime flag`);
+  if (daylightEnabled && startsAfterSunset) {
+    applyFactor(
+      'Darkness',
+      T.darknessImpact,
+      'The planned start is after sunset, reducing navigation margin and terrain visibility.',
+      solarTimesKnown ? 'Sunrise and sunset times' : `${weatherProvider(weatherData)} isDaytime flag`,
+    );
   }
 
   const delayBuffer = contingencyEnabled ? contingencyData?.delayBuffer : null;
@@ -1023,12 +1046,15 @@ const calculateSafetyScore = ({
   }
 
   const fireLevel = fireRiskEnabled ? measurement(fireRiskData?.level) : null;
+  // Name what set the fire level (fire weather, smoke, or a nearby fire).
+  const fireCause = String(Array.isArray(fireRiskData?.reasons) ? fireRiskData.reasons[0] || '' : '').trim();
+  const fireMessage = (fallback, prefix) => (fireCause ? `${prefix}: ${fireCause}` : fallback);
   if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 4) {
-    applyFactor('Fire Danger', T.fire.level4, 'Extreme fire-weather/alert signal for this objective window.', fireRiskData?.source || 'Fire risk synthesis');
+    applyFactor('Fire Danger', T.fire.level4, fireMessage('Extreme fire-weather/alert signal for this objective window.', 'Extreme fire risk'), fireRiskData?.source || 'Fire risk synthesis');
   } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 3) {
-    applyFactor('Fire Danger', T.fire.level3, 'High fire-weather signal: elevated spread potential or fire-weather alerts.', fireRiskData?.source || 'Fire risk synthesis');
+    applyFactor('Fire Danger', T.fire.level3, fireMessage('High fire-weather signal: elevated spread potential or fire-weather alerts.', 'High fire risk'), fireRiskData?.source || 'Fire risk synthesis');
   } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 2) {
-    applyFactor('Fire Danger', T.fire.level2, 'Elevated fire risk signal from weather, smoke, or alert context.', fireRiskData?.source || 'Fire risk synthesis');
+    applyFactor('Fire Danger', T.fire.level2, fireMessage('Elevated fire risk signal from weather, smoke, or alert context.', 'Elevated fire risk'), fireRiskData?.source || 'Fire risk synthesis');
   }
 
   // Unknown core weather conditions must affect both the score and confidence.
@@ -1117,9 +1143,9 @@ const calculateSafetyScore = ({
     applyGroupImpactFloor('weather', impactFloors.weather.caution, 'High heat risk');
   }
   if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 4) {
-    applyGroupImpactFloor('fire', impactFloors.fire.level4, 'Extreme fire danger');
+    applyGroupImpactFloor('fire', impactFloors.fire.level4, 'Extreme fire risk');
   } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 3) {
-    applyGroupImpactFloor('fire', impactFloors.fire.level3, 'High fire danger');
+    applyGroupImpactFloor('fire', impactFloors.fire.level3, 'High fire risk');
   }
 
   if (alertsRelevantForSelectedTime && Number.isFinite(alertsCount) && alertsCount > 0) {
@@ -1227,13 +1253,27 @@ const calculateSafetyScore = ({
     }
   }
 
+  // A station reading only tests the forecast when it describes the same hour
+  // and similar terrain. A valley station read the evening before a dawn summit
+  // start differs by the lapse rate and the clock, not by forecast error.
   const observedTempF = measurement(observedStation?.tempF);
   const observedWindMph = measurement(observedStation?.windMph);
-  if (observedStation?.available && Number.isFinite(observedTempF) && Number.isFinite(tempF) && Math.abs(observedTempF - tempF) >= 15) {
-    applyConfidencePenalty(5, `Nearby station temperature differs from the forecast by ${Math.round(Math.abs(observedTempF - tempF))}F; mountain microclimates may be significant.`);
+  const observedMs = parseIsoTimeToMs(observedStation?.observedTime);
+  const stationTimed = Boolean(observedStation?.available) && observedMs !== null && plannedStart !== null
+    && Math.abs(observedMs - plannedStart) <= T.stationComparison.maxHoursFromStart * 3600000;
+  const stationDistanceKm = measurement(observedStation?.distanceKm);
+  const stationNearby = !Number.isFinite(stationDistanceKm) || stationDistanceKm <= T.stationComparison.maxDistanceKm;
+  const stationBelowFt = measurement(weatherData?.elevation) - measurement(observedStation?.elevationFt);
+  const forecastTempAtStationF = tempF + (stationBelowFt / 1000) * TEMP_LAPSE_F_PER_1000FT;
+  if (stationTimed && stationNearby && Math.abs(stationBelowFt) <= T.stationComparison.maxTempElevationGapFt
+    && Number.isFinite(observedTempF) && Number.isFinite(forecastTempAtStationF)
+    && Math.abs(observedTempF - forecastTempAtStationF) >= 15) {
+    const elevationNote = Math.abs(stationBelowFt) >= 100 ? ' after adjusting for its elevation' : '';
+    applyConfidencePenalty(5, `A nearby station reads ${Math.round(Math.abs(observedTempF - forecastTempAtStationF))}F ${observedTempF > forecastTempAtStationF ? 'warmer' : 'colder'} than the forecast for your start${elevationNote}; mountain microclimates may be significant.`);
   }
-  if (observedStation?.available && Number.isFinite(observedWindMph) && Number.isFinite(wind) && Math.abs(observedWindMph - wind) >= 15) {
-    applyConfidencePenalty(5, `Nearby station wind differs from the forecast by ${Math.round(Math.abs(observedWindMph - wind))} mph; exposed terrain may vary further.`);
+  if (stationTimed && stationNearby && Math.abs(stationBelowFt) <= T.stationComparison.maxWindElevationGapFt
+    && Number.isFinite(observedWindMph) && Number.isFinite(wind) && Math.abs(observedWindMph - wind) >= 15) {
+    applyConfidencePenalty(5, `A nearby station reads wind ${Math.round(Math.abs(observedWindMph - wind))} mph ${observedWindMph > wind ? 'stronger' : 'lighter'} than the forecast for your start; exposed terrain may vary further.`);
   }
 
   if (avalancheRelevant) {
