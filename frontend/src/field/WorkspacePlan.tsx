@@ -29,6 +29,7 @@ import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import { liftAboveKeyboard } from "./touch";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { RouteSuggestions } from "./RouteSuggestions";
+import { SuggestionLabel } from "./SuggestionLabel";
 import { ItineraryCamps, ItineraryWhen } from "./ItineraryPlan";
 
 
@@ -236,7 +237,7 @@ export function WorkspacePlan({
                     onClick={() => w.selectSuggestion(item)}
                   >
                     <MapPin size={15} />
-                    <span>{item.name}</span>
+                    <SuggestionLabel item={item} elevationUnit={w.preferences.elevationUnit} />
                     <ArrowRight size={14} />
                   </button>
                 ))}

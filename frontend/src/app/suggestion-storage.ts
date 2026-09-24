@@ -1,4 +1,4 @@
-import { normalizeSuggestionText, uniqueSuggestionPlaces, type Suggestion } from '../lib/search';
+import { normalizeSuggestionText, suggestionMatchesQuery, uniqueSuggestionPlaces, type Suggestion } from '../lib/search';
 
 export function suggestionIdentityKey(item: Pick<Suggestion, 'lat' | 'lon' | 'name'>): string {
   return `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}:${normalizeSuggestionText(item.name || '')}`;
@@ -21,6 +21,8 @@ export function normalizeStoredSuggestion(item: unknown, fallbackClass?: string)
     lon: Number(lon.toFixed(6)),
     class: String(raw.class || fallbackClass || '').trim() || undefined,
     type: raw.type,
+    ...(typeof raw.kind === 'string' && raw.kind.trim() ? { kind: raw.kind.trim() } : {}),
+    ...(typeof raw.elevationFt === 'number' && Number.isFinite(raw.elevationFt) ? { elevationFt: Math.round(raw.elevationFt) } : {}),
   };
 }
 
@@ -76,9 +78,5 @@ export function mergeSuggestionBuckets(buckets: Suggestion[][], limit: number): 
 }
 
 export function filterSuggestionBucket(items: Suggestion[], query: string): Suggestion[] {
-  const normalizedQuery = normalizeSuggestionText(query);
-  if (!normalizedQuery) {
-    return items;
-  }
-  return items.filter((item) => normalizeSuggestionText(item.name).includes(normalizedQuery));
+  return items.filter((item) => suggestionMatchesQuery(item.name, query));
 }

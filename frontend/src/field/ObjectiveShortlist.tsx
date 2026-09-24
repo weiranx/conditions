@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowRight, MapPin, Search, X } from 'lucide-react';
 import type L from 'leaflet';
 import type { Workspace } from './model/useWorkspace';
@@ -11,6 +11,7 @@ import { addDaysToIsoDate, formatClockForStyle } from '../app/core';
 import { dateLabel, ageLabel } from './data';
 import type { MultiDayTripForecastDay } from '../app/types';
 import { longestStretch, sameTripRank } from './trip-days';
+import { SuggestionLabel } from './SuggestionLabel';
 import './shortlist.css';
 
 const finite = (value: number | null | undefined): value is number => value != null && Number.isFinite(value);
@@ -52,7 +53,10 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
   const addFromSearch = useCallback((position: L.LatLngLiteral, name?: string) => {
     if (add(position, name)) clearSearch.current('');
   }, [add]);
-  const search = useSearchSuggestions({ initialSearchQuery: '', updateObjectivePosition: addFromSearch });
+  const nearLat = w.hasObjective ? w.position?.lat : undefined;
+  const nearLon = w.hasObjective ? w.position?.lng : undefined;
+  const searchNear = useMemo(() => (nearLat !== undefined && nearLon !== undefined ? { lat: nearLat, lon: nearLon } : null), [nearLat, nearLon]);
+  const search = useSearchSuggestions({ initialSearchQuery: '', updateObjectivePosition: addFromSearch, searchNear });
   useEffect(() => { clearSearch.current = search.setSearchQuery; }, [search.setSearchQuery]);
   const { searchWrapperRef, searchInputRef } = search;
   const dates = shortlistDates(state);
@@ -112,7 +116,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               {search.parsedTypedCoordinates && <button type="button" role="option" aria-selected="false" onMouseDown={e => e.preventDefault()} onClick={() => search.handleUseTypedCoordinates(search.searchQuery)}><MapPin size={15} />Add these coordinates</button>}
               {search.suggestions.map((item, index) => <button id={`${id}-suggestion-${index}`} type="button" role="option" key={`${item.lat}-${item.lon}-${index}`}
                 aria-selected={search.activeSuggestionIndex === index} onMouseDown={e => e.preventDefault()} onClick={() => search.selectSuggestion(item)}>
-                <MapPin size={15} /><span>{item.name}</span>
+                <MapPin size={15} /><SuggestionLabel item={item} elevationUnit={w.preferences.elevationUnit} />
               </button>)}
               {!search.suggestions.length && <p>{search.searchLoading ? 'Searching…' : 'Search for a place or enter latitude, longitude.'}</p>}
             </div>}

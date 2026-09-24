@@ -5,7 +5,9 @@ import type { ItineraryPickTarget } from "./model/useItinerary";
 import { fetchApi } from "../lib/api-client";
 import { formatClockForStyle, parseCoordinates } from "../app/core";
 import { parseGpxFile } from "../lib/gpx";
-import type { Suggestion } from "../lib/search";
+import { searchRequestPath, type SearchNear, type Suggestion } from "../lib/search";
+import type { ElevationUnit } from "../app/types";
+import { SuggestionLabel } from "./SuggestionLabel";
 import {
   MAX_DAY_CHECKPOINTS,
   campPoint,
@@ -224,6 +226,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                     </p>
                   ) : (
                     <PlaceField
+                      elevationUnit={w.preferences.elevationUnit}
+                      near={placeSearchNear(w)}
                       label={`Camp for night ${index + 1}`}
                       value={draft.camps[index].point}
                       onChange={(point) => setCamp(index, point)}
@@ -246,6 +250,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                   {draft.exit || choosingExit ? (
                     <>
                       <PlaceField
+                        elevationUnit={w.preferences.elevationUnit}
+                        near={placeSearchNear(w)}
                         label="Exit trailhead"
                         value={draft.exit}
                         onChange={(exit) => {
@@ -305,6 +311,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
         </ul>
         {draft.bailPoints.length < MAX_BAIL_POINTS && (
           <PlaceField
+            elevationUnit={w.preferences.elevationUnit}
+            near={placeSearchNear(w)}
             label="Add a bail point"
             value={null}
             onChange={(point) => {
@@ -388,6 +396,8 @@ function DayRow({
       ))}
       {day.checkpoints.length < MAX_DAY_CHECKPOINTS && (
         <PlaceField
+          elevationUnit={w.preferences.elevationUnit}
+          near={placeSearchNear(w)}
           label="Add a pass or high point"
           value={null}
           onChange={(point) => {
@@ -413,8 +423,13 @@ export function PlaceField({
   onChange,
   onPickOnMap,
   picking = false,
+  elevationUnit,
+  near,
 }: {
   label: string;
+  elevationUnit: ElevationUnit;
+  /** Where results should lean toward: the trip's trailhead or objective. */
+  near: SearchNear | null;
   value: ItineraryPoint | null;
   onChange: (point: ItineraryPoint | null) => void;
   onPickOnMap?: () => void;
@@ -427,6 +442,9 @@ export function PlaceField({
   const [editing, setEditing] = useState(false);
   const coordinates = parseCoordinates(query);
   const typedCoordinates = coordinates !== null;
+  // Read when a search runs; a moved trailhead need not restart one in flight.
+  const nearRef = useRef(near);
+  nearRef.current = near;
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < 3 || typedCoordinates) {
@@ -437,7 +455,7 @@ export function PlaceField({
     const timer = window.setTimeout(async () => {
       setSearching(true);
       try {
-        const { response, payload } = await fetchApi(`/api/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal });
+        const { response, payload } = await fetchApi(searchRequestPath(trimmed, nearRef.current), { signal: controller.signal });
         if (response.ok && Array.isArray(payload)) setResults((payload as Suggestion[]).slice(0, 5));
       } catch {
         // A failed search leaves the typed text; coordinates and the map still work.
@@ -503,7 +521,7 @@ export function PlaceField({
           {results.map((item, index) => (
             <button type="button" role="option" aria-selected="false" key={`${item.name}-${index}`} onClick={() => choose(suggestionPoint(item))}>
               <MapPin size={15} />
-              <span>{item.name}</span>
+              <SuggestionLabel item={item} elevationUnit={elevationUnit} />
               <ArrowRight size={14} />
             </button>
           ))}
@@ -526,11 +544,17 @@ export function PlaceField({
   );
 }
 
+function placeSearchNear(w: Workspace): SearchNear | null {
+  const trailhead = w.itinerary.draft.trailhead;
+  if (trailhead) return { lat: trailhead.lat, lon: trailhead.lon };
+  return w.hasObjective ? { lat: w.position.lat, lon: w.position.lng } : null;
+}
+
 function suggestionPoint(item: Suggestion): ItineraryPoint {
   return {
     name: item.name.split(",")[0].trim(),
     lat: Number(item.lat),
     lon: Number(item.lon),
-    elevationFt: null,
+    elevationFt: typeof item.elevationFt === "number" && Number.isFinite(item.elevationFt) ? item.elevationFt : null,
   };
 }

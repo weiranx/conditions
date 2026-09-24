@@ -647,9 +647,14 @@ export function useWorkspace() {
     ],
   );
 
+  const searchNear = useMemo(
+    () => (hasObjective ? { lat: position.lat, lon: position.lng } : null),
+    [hasObjective, position.lat, position.lng],
+  );
   const searchHook = useSearchSuggestions({
     initialSearchQuery: initialLinkState.searchQuery,
     updateObjectivePosition,
+    searchNear,
   });
   const {
     searchQuery,
