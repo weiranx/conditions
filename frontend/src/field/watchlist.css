@@ -57,3 +57,4 @@
   .sky-watch-actions .field-button-primary { flex-basis: 100%; margin-right: 0; }
   .sky-watch-actions .sky-icon-only { flex: 0 0 44px; }
 }
+.field-watch-route { display: block; margin-top: 2px; font-size: 13px; }

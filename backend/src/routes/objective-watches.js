@@ -13,6 +13,7 @@ const {
   OBJECTIVE_WATCH_CLAIM_LEASE_MS,
   normalizeWatchChange,
   planDateHasEnded,
+  readWatchRoute,
 } = require('../services/objective-watch-checker');
 const { normalizeSavedReport } = require('./saved-reports');
 
@@ -136,11 +137,21 @@ const mapUnreviewedChanges = (value) => {
   };
 };
 
+// The analyzed route a watch also re-checks, when its report has one.
+const watchRouteSummary = (row) => {
+  const points = readWatchRoute(row);
+  if (!points) return {};
+  const analysis = row.baseline_report?.route?.routeAnalysis;
+  const name = String(analysis?.routeName || row.baseline_report?.route?.customRouteName || '').trim().slice(0, 200);
+  return { route: { name: name || null, checkpointCount: points.length } };
+};
+
 const mapObjectiveWatch = (row, { includeBaseline = false, policy = null } = {}) => ({
   id: row.id,
   title: row.title,
   plan: row.plan,
   ...(includeBaseline ? { baselineReport: row.baseline_report } : {}),
+  ...watchRouteSummary(row),
   lastAttemptedAt: normalizeTimestamp(row.last_attempted_at),
   lastCheckedAt: normalizeTimestamp(row.last_checked_at),
   nextCheckAt: policy?.automaticChecks === false ? null : normalizeTimestamp(row.next_check_at),

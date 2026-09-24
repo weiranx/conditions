@@ -3,6 +3,7 @@ const request = require('supertest');
 
 const {
   createWatchFingerprint,
+  mapObjectiveWatch,
   normalizeObjectiveWatch,
   registerObjectiveWatchRoutes,
 } = require('../src/routes/objective-watches');
@@ -851,4 +852,25 @@ test('lists changes made since the last review with the direction of older event
   expect(sql).toContain('events.created_at > objective_watches.reviewed_at');
   expect(sql).toContain("COALESCE(events.change->>'direction', 'worse') <> 'better'");
   expect(params).toEqual([USER_ID, 90]);
+});
+
+test('a watch lists the analyzed route it also re-checks, and nothing without one', () => {
+  const row = {
+    id: 'watch-route', title: 'Rainier', plan: {}, created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z',
+    baseline_report: {
+      route: {
+        customRouteName: 'DC',
+        routeAnalysis: {
+          routeName: 'Disappointment Cleaver',
+          waypoints: [
+            { name: 'Paradise', lat: 46.78, lon: -121.74, offset_minutes: 0 },
+            { name: 'Camp Muir', lat: 46.83, lon: -121.73, offset_minutes: 300 },
+            { name: 'Bad point', lat: null, lon: -121.7, offset_minutes: 400 },
+          ],
+        },
+      },
+    },
+  };
+  expect(mapObjectiveWatch(row).route).toEqual({ name: 'Disappointment Cleaver', checkpointCount: 2 });
+  expect(mapObjectiveWatch({ ...row, baseline_report: { safetyData: {} } }).route).toBeUndefined();
 });

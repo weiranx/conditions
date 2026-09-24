@@ -267,3 +267,15 @@ test('the report learns whether its exact plan is already watched', async t => {
   assert.equal(status.watching, false);
   assert.equal(lookups.length, 3);
 });
+
+test('a watch that covers an analyzed route says so, and route reasons read in the preferred unit', async t => {
+  const reason = worse('Along the route, peak gusts increased from 20 mph to 42 mph.', 'route_wind_gust');
+  await setup(t, () => ({ payload: { watches: [
+    watch('Rainier', { route: { name: 'Disappointment Cleaver', checkpointCount: 5 }, latestCheck: changed([reason]) }),
+    watch('Hood'),
+  ], policy } }), kph);
+  const card = (title) => [...document.querySelectorAll('.field-watch-card')].find((el) => el.querySelector('h2').textContent === title);
+  assert.match(card('Rainier').querySelector('.field-watch-route').textContent, /Also checks 5 checkpoints along Disappointment Cleaver/);
+  assert.equal(card('Hood').querySelector('.field-watch-route'), null);
+  assert.match(card('Rainier').textContent, /Along the route, peak gusts increased from 32 kph to 68 kph/);
+});

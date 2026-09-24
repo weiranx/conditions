@@ -134,7 +134,13 @@ const SIGNAL_REASON_KEYS = {
   maxWindGust: ['wind_gust', 'wind_gust_improvement'],
   maxPrecipChance: ['precipitation', 'precipitation_improvement'],
   terrainImpact: ['terrain_condition', 'terrain_condition_improvement'],
+  // Along an analyzed route saved with the watch's report, at each checkpoint's arrival.
+  routeMaxWindGust: ['route_wind_gust', 'route_wind_gust_improvement'],
+  routeMaxPrecipChance: ['route_precipitation', 'route_precipitation_improvement'],
+  routeAlertKeys: ['route_weather_alert', 'route_weather_alert_cleared'],
 };
+// Route checkpoints re-checked per watch; each is a safety report.
+const MAX_ROUTE_CHECKPOINTS = 10;
 const COMPARED_SIGNALS = Object.keys(SIGNAL_REASON_KEYS);
 const IMPROVEMENT_REASON_KEYS = new Set(Object.values(SIGNAL_REASON_KEYS).map(([, better]) => better));
 
@@ -201,6 +207,59 @@ const readStoredSignals = (value) => {
     terrainImpact: terrainRank(terrainImpact) > 0 ? terrainImpact : '',
     closureTitles: Array.isArray(value.closureTitles) ? uniqueSorted(value.closureTitles) : null,
     alertKeys: Array.isArray(value.alertKeys) ? uniqueSorted(value.alertKeys) : null,
+    routeMaxWindGust: finiteNumber(value.routeMaxWindGust),
+    routeMaxPrecipChance: finiteNumber(value.routeMaxPrecipChance),
+    routeAlertKeys: Array.isArray(value.routeAlertKeys) ? uniqueSorted(value.routeAlertKeys) : null,
+  };
+};
+
+/**
+ * The analyzed route saved with a watch's report: each checkpoint's place and its
+ * arrival in minutes after the start, so it can be re-timed from the watch's plan.
+ * Null when the report has no route analysis.
+ */
+const readWatchRoute = (watch) => {
+  const waypoints = watch?.baseline_report?.route?.routeAnalysis?.waypoints;
+  if (!Array.isArray(waypoints)) return null;
+  const points = waypoints
+    .map((point) => ({
+      name: String(point?.name || 'Route checkpoint').slice(0, 100),
+      lat: finiteNumber(point?.lat),
+      lon: finiteNumber(point?.lon),
+      offsetMinutes: finiteNumber(point?.offset_minutes),
+    }))
+    .filter((point) => point.lat !== null && point.lon !== null && point.offsetMinutes !== null && point.offsetMinutes >= 0)
+    .slice(0, MAX_ROUTE_CHECKPOINTS);
+  return points.length >= 2 ? points : null;
+};
+
+/** A checkpoint's arrival date and clock from the plan's date and start, plus its offset. */
+const checkpointArrival = (plan, offsetMinutes) => {
+  const start = /^\d{2}:\d{2}$/u.test(String(plan?.alpineStartTime || '')) ? plan.alpineStartTime : '06:00';
+  const at = new Date(`${plan.forecastDate}T${start}:00.000Z`);
+  if (Number.isNaN(at.getTime())) return null;
+  const arrival = new Date(at.getTime() + Math.round(offsetMinutes) * 60 * 1000);
+  return { date: arrival.toISOString().slice(0, 10), start: arrival.toISOString().slice(11, 16) };
+};
+
+/**
+ * Gusts, rain chance and alerts along a watch's route, each checkpoint checked at
+ * its arrival on the watch's current plan. Null without a route; an unanswered or
+ * partial checkpoint leaves the route signals unknown rather than calm.
+ */
+const extractRouteSignals = (payloads) => {
+  if (!Array.isArray(payloads) || !payloads.length || payloads.some((payload) => !payload || payload.partialData === true)) {
+    return { routeMaxWindGust: null, routeMaxPrecipChance: null, routeAlertKeys: null };
+  }
+  const readings = (key, trendKey) => payloads.flatMap((payload) => [
+    payload.weather?.[key],
+    ...(Array.isArray(payload.weather?.trend) ? payload.weather.trend.slice(0, 1).map((point) => point?.[trendKey]) : []),
+  ]);
+  const alertSets = payloads.map((payload) => readAlertKeys(payload.alerts));
+  return {
+    routeMaxWindGust: maxFinite(readings('windGust', 'gust')),
+    routeMaxPrecipChance: maxFinite(readings('precipChance', 'precipChance')),
+    routeAlertKeys: alertSets.some((keys) => keys === null) ? null : uniqueSorted(alertSets.flat()),
   };
 };
 
@@ -268,32 +327,48 @@ const compareWatchSignals = (reference, current) => {
     if (added.length > 0) add('new_weather_alert', 'worse', `New weather alert: ${listItems(added, formatAlertKey)}.`);
     if (cleared.length > 0) add('weather_alert_cleared', 'better', `Weather alert cleared: ${listItems(cleared, formatAlertKey)}.`);
   }
-  if (known('maxWindGust')) {
-    const from = reference.maxWindGust;
-    const to = current.maxWindGust;
+  const compareGusts = (signal, [worseKey, betterKey], where) => {
+    if (!known(signal)) return;
+    const from = reference[signal];
+    const to = current[signal];
     const rose = (to >= WIND_GUST_ALERT_MPH && from < WIND_GUST_ALERT_MPH && to - from >= WIND_GUST_CROSSING_MARGIN_MPH)
       || (to >= WIND_GUST_JUMP_FLOOR_MPH && to - from >= WIND_GUST_JUMP_MPH);
     const eased = (from >= WIND_GUST_ALERT_MPH && to < WIND_GUST_ALERT_MPH && from - to >= WIND_GUST_CROSSING_MARGIN_MPH)
       || (from >= WIND_GUST_JUMP_FLOOR_MPH && from - to >= WIND_GUST_JUMP_MPH);
-    if (rose) add('wind_gust', 'worse', `Peak gusts increased from ${Math.round(from)} mph to ${Math.round(to)} mph.`);
-    if (eased) add('wind_gust_improvement', 'better', `Peak gusts decreased from ${Math.round(from)} mph to ${Math.round(to)} mph.`);
-  }
-  if (known('maxPrecipChance')) {
-    const from = reference.maxPrecipChance;
-    const to = current.maxPrecipChance;
+    if (rose) add(worseKey, 'worse', `${where}eak gusts increased from ${Math.round(from)} mph to ${Math.round(to)} mph.`);
+    if (eased) add(betterKey, 'better', `${where}eak gusts decreased from ${Math.round(from)} mph to ${Math.round(to)} mph.`);
+  };
+  const comparePrecip = (signal, [worseKey, betterKey], where) => {
+    if (!known(signal)) return;
+    const from = reference[signal];
+    const to = current[signal];
     if (to >= PRECIP_ALERT_PERCENT && from < PRECIP_ALERT_PERCENT && to - from >= PRECIP_CROSSING_MARGIN_PERCENT) {
-      add('precipitation', 'worse', `Precipitation chance increased from ${Math.round(from)}% to ${Math.round(to)}%.`);
+      add(worseKey, 'worse', `${where}recipitation chance increased from ${Math.round(from)}% to ${Math.round(to)}%.`);
     }
     if (from >= PRECIP_ALERT_PERCENT && to < PRECIP_ALERT_PERCENT && from - to >= PRECIP_CROSSING_MARGIN_PERCENT) {
-      add('precipitation_improvement', 'better', `Precipitation chance decreased from ${Math.round(from)}% to ${Math.round(to)}%.`);
+      add(betterKey, 'better', `${where}recipitation chance decreased from ${Math.round(from)}% to ${Math.round(to)}%.`);
     }
-  }
+  };
+  compareGusts('maxWindGust', SIGNAL_REASON_KEYS.maxWindGust, 'P');
+  comparePrecip('maxPrecipChance', SIGNAL_REASON_KEYS.maxPrecipChance, 'P');
   if (known('terrainImpact')) {
     const from = terrainRank(reference.terrainImpact);
     const to = terrainRank(current.terrainImpact);
     if (from > 0 && to > from) add('terrain_condition', 'worse', `Terrain impact increased from ${reference.terrainImpact} to ${current.terrainImpact}.`);
     if (to > 0 && from > to) add('terrain_condition_improvement', 'better', `Terrain impact decreased from ${reference.terrainImpact} to ${current.terrainImpact}.`);
   }
+
+  // Along the route: the worst checkpoint reading at its arrival, and any alert at a checkpoint.
+  if (known('routeAlertKeys')) {
+    const before = new Set(reference.routeAlertKeys);
+    const after = new Set(current.routeAlertKeys);
+    const added = current.routeAlertKeys.filter((alert) => !before.has(alert));
+    const cleared = reference.routeAlertKeys.filter((alert) => !after.has(alert));
+    if (added.length > 0) add('route_weather_alert', 'worse', `New weather alert along the route: ${listItems(added, formatAlertKey)}.`);
+    if (cleared.length > 0) add('route_weather_alert_cleared', 'better', `Weather alert cleared along the route: ${listItems(cleared, formatAlertKey)}.`);
+  }
+  compareGusts('routeMaxWindGust', SIGNAL_REASON_KEYS.routeMaxWindGust, 'Along the route, p');
+  comparePrecip('routeMaxPrecipChance', SIGNAL_REASON_KEYS.routeMaxPrecipChance, 'Along the route, p');
 
   return [
     ...reasons.filter((reason) => reason.direction === 'worse'),
@@ -571,6 +646,33 @@ const createObjectiveWatchChecker = ({
     let checked = 0;
     let changed = 0;
     let failed = 0;
+    // Watches of the same route and plan share one set of checkpoint reports.
+    const routeChecks = new Map();
+    const checkWatchRoute = (watch) => {
+      const points = readWatchRoute(watch);
+      if (!points) return Promise.resolve(null);
+      const key = JSON.stringify([watch.plan.forecastDate, watch.plan.alpineStartTime, points]);
+      if (!routeChecks.has(key)) {
+        routeChecks.set(key, Promise.all(points.map(async (point) => {
+          const arrival = checkpointArrival(watch.plan, point.offsetMinutes);
+          if (!arrival) return null;
+          try {
+            const result = await invokeSafetyHandler({
+              lat: String(point.lat),
+              lon: String(point.lon),
+              date: arrival.date,
+              start: arrival.start,
+              travel_window_hours: '1',
+              name: `Route checkpoint: ${point.name}`,
+            }, { suppressReportLog: true });
+            return result?.statusCode === 200 ? result.payload : null;
+          } catch {
+            return null;
+          }
+        })).then(extractRouteSignals));
+      }
+      return routeChecks.get(key);
+    };
     await mapWithConcurrency([...groups.values()], concurrency, async (group) => {
       const sample = group[0];
       try {
@@ -604,9 +706,12 @@ const createObjectiveWatchChecker = ({
           throw new Error(result?.payload?.error || `Safety report returned ${result?.statusCode || 'no response'}.`);
         }
 
-        const currentSignals = extractWatchSignals(result.payload);
-        const partial = currentSignals.partial;
+        const objectiveSignals = extractWatchSignals(result.payload);
+        const partial = objectiveSignals.partial;
         for (const watch of group) {
+          // A route that couldn't be checked stays unknown; the objective still is.
+          const routeSignals = partial ? null : await checkWatchRoute(watch);
+          const currentSignals = routeSignals ? { ...objectiveSignals, ...routeSignals } : objectiveSignals;
           // Without stored reference signals (a new or re-baselined watch, or
           // one saved before they existed) compare with the latest snapshot,
           // else the baseline, so an upgrade does not replay old drift as new.
@@ -722,4 +827,5 @@ module.exports = {
   extractWatchSignals,
   normalizeWatchChange,
   planDateHasEnded,
+  readWatchRoute,
 };
