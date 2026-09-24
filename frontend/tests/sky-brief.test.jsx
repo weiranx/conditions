@@ -288,6 +288,13 @@ test("MountainSection draws the hour's weather: snow above the snow level, rain 
   assert.doesNotMatch(clear, /mt-cloud|mt-drop|mt-flake/);
   assert.match(clear, />Sunny</);
   assert.doesNotMatch(renderToStaticMarkup(<MountainSection {...props} />), /mt-weather|mt-condition/);
+  const unknown = renderToStaticMarkup(<MountainSection {...props} weather={{ kind: "neutral", condition: "Unavailable", precipChance: NaN, night: true }} />);
+  assert.doesNotMatch(unknown, /mt-sun|mt-moon|mt-star/, "an unknown sky is not drawn as clear");
+  assert.match(unknown, />Unavailable</);
+  const long = "Slight Chance Rain And Snow Showers Then Mostly Cloudy";
+  const verbose = renderToStaticMarkup(<MountainSection {...props} weather={{ kind: "snow", condition: long, precipChance: 20, night: false }} />);
+  assert.match(verbose, /class="mt-condition"[^>]*>Slight Chance Rain And Snow Sho… · 20% precip</);
+  assert.ok(verbose.includes(`aria-label="Conditions by elevation at your start. ${long} · 20% precip.`), "screen readers get the full condition");
 });
 
 test("an hour missing only precipitation still has elevation inputs; a missing temperature does not", async () => {

@@ -42,7 +42,8 @@ function WeatherSky({ weather, plotW, height, y, phaseFt }: {
   const wet = kind === "rain" || kind === "snow" || kind === "storm" || chance >= 50;
   const clouds = kind === "storm" ? 5 : wet || kind === "cloudy" ? 4 : kind === "partly" || kind === "fog" ? 2 : 0;
   const heavy = wet || kind === "storm";
-  const showSun = kind === "clear" || kind === "partly" || kind === "neutral" || (kind === "fog" && !wet);
+  // "neutral" means the condition is unknown or unavailable, so draw no sun or stars for it.
+  const showSun = kind === "clear" || kind === "partly" || (kind === "fog" && !wet);
   const cloudY = 34;
   const cloudSpots = [[0.3, 0], [0.72, 6], [0.5, -4], [0.12, 8], [0.9, 2]] as const;
   const scale = plotW < 420 ? 0.9 : 1.2;
@@ -68,7 +69,7 @@ function WeatherSky({ weather, plotW, height, y, phaseFt }: {
   const sunX = plotW * 0.14, sunY = cloudY + 6;
   return (
     <g className="mt-weather" aria-hidden="true">
-      {night && (kind === "clear" || kind === "partly" || kind === "neutral") && [0.08, 0.22, 0.41, 0.58, 0.83, 0.94].map((fx, i) => (
+      {night && (kind === "clear" || kind === "partly") && [0.08, 0.22, 0.41, 0.58, 0.83, 0.94].map((fx, i) => (
         <circle key={fx} className="mt-star" cx={plotW * fx} cy={14 + noise(i, 0, 9) * 60} r={i % 2 ? 1 : 1.4} />
       ))}
       {showSun && (night
@@ -104,11 +105,12 @@ function Fog({ plotW, height }: { plotW: number; height: number }) {
   );
 }
 
-function precipText(weather: Weather) {
+/** Condition and precipitation chance; `maxLength` shortens the condition for the visible label. */
+function precipText(weather: Weather, maxLength = Infinity) {
   const chance = Number.isFinite(weather.precipChance) ? Math.round(weather.precipChance) : null;
   const condition = weather.condition.trim();
-  const short = condition.length > 32 ? `${condition.slice(0, 31)}…` : condition;
-  return [short, chance !== null && chance > 0 ? `${chance}% precip` : null].filter(Boolean).join(" · ");
+  const shown = condition.length > maxLength ? `${condition.slice(0, maxLength - 1)}…` : condition;
+  return [shown, chance !== null && chance > 0 ? `${chance}% precip` : null].filter(Boolean).join(" · ");
 }
 
 /** Vertical space one band label (name line + temperature line) needs. */
@@ -169,9 +171,10 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
   const labelYs = spreadLabels(sorted.map((b) => y(b.elevationFt)), BAND_LABEL_GAP, 20, height - 20);
   const snow = levelsInView.find((l) => l.tone === "snow");
   const phaseLevel = levels.find((l) => l.tone === "snow" && Number.isFinite(l.ft)) ?? levels.find((l) => l.tone === "cold" && Number.isFinite(l.ft));
-  const weatherText = weather ? precipText(weather) : "";
+  const weatherText = weather ? precipText(weather, 32) : "";
+  const weatherDescription = weather ? precipText(weather) : "";
   const describe = [
-    ...(weatherText ? [weatherText] : []),
+    ...(weatherDescription ? [weatherDescription] : []),
     ...sorted.map((b) => `${b.label} ${format.elevation(b.elevationFt)}: ${format.temp(b.temp)}, gusts ${format.wind(b.windGust)}`),
     ...levelsInView.map((l) => `${l.label} ${format.elevation(l.ft)}`),
   ].join(". ");
