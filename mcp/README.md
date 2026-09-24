@@ -108,6 +108,11 @@ npm test
 docker compose -p conditions-mcp up -d --build
 ```
 
+In production, `scripts/deploy.sh` performs this release (with a health check
+and image rollback) whenever `/opt/summitsafe/mcp/.env` exists, so every
+CI-gated deployment of `main` also updates the MCP server.
+`scripts/setup-nginx.sh` writes the proxy routes below.
+
 Keep host port 8104 loopback-only. Proxy `/mcp` and
 `/.well-known/oauth-protected-resource` and
 `/.well-known/oauth-protected-resource/mcp` to port 8104, preserving Host and disabling

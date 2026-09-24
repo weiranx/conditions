@@ -213,6 +213,29 @@ migrations, restart, and readiness checks. Detached branches, tracked edits,
 divergent history, and commits present only on the server fail without resetting
 the checkout. Active deployments are never cancelled by a newer CI run.
 
+When `/opt/summitsafe/mcp/.env` exists, `deploy.sh` also releases the MCP server
+(`mcp/compose.yaml`, Compose project `conditions-mcp`) after the backend is
+healthy. It snapshots the running MCP image as `conditions-mcp:rollback`,
+rebuilds it, and recreates the container only when the image or configuration
+changed. It then checks `127.0.0.1:8104/health`, restoring the snapshot if the
+new image fails. An MCP failure fails the release but does not roll back the
+healthy backend.
+
+After the SSH step, the workflow runs `scripts/smoke-test.mjs` from the runner
+against the public origins (`PRODUCTION_API_URL` and `PRODUCTION_FRONTEND_URL`
+repository variables, defaulting to the current production domains). It checks
+fresh health with a connected database; CORS for the frontend origin; one
+end-to-end `/api/safety` report; MCP protected-resource and authorization-server
+metadata and the `/mcp` OAuth challenge; and the frontend's index, SPA fallback
+and script bundle. Run it by hand at any time:
+
+```bash
+node scripts/smoke-test.mjs --api https://apivps.conditions.weiranxiong.com --frontend https://conditions.weiranxiong.com
+```
+
+A new server is provisioned end to end with `scripts/provision.sh`; see
+[VPS Setup → Automated Provisioning](vps-setup.md#automated-provisioning).
+
 Before building, `deploy.sh` tags the running image as
 `summitsafe-backend:rollback`. If the new backend fails its 30 readiness
 probes, the script prints diagnostics, restores that image, recreates the
@@ -243,7 +266,7 @@ Local pipeline checks (requires Node, Git, Bash, actionlint, and ShellCheck):
 
 ```bash
 actionlint
-shellcheck scripts/deploy.sh scripts/ci-deploy.sh
+shellcheck scripts/deploy.sh scripts/ci-deploy.sh scripts/setup-nginx.sh scripts/provision.sh scripts/provision-server.sh
 node --test scripts/tests/*.test.mjs
 ```
 

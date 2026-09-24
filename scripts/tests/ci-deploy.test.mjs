@@ -28,6 +28,7 @@ function fixture(t) {
     ...gitEnv, PATH: `${bin}:${process.env.PATH}`, SUMMITSAFE_APP_DIR: host,
     TEST_BUILD_EXIT: '0', TEST_MIGRATION_EXIT: '0', TEST_HEALTH_EXIT: '0',
     TEST_BACKEND_RUNNING: '1', TEST_ROLLBACK_HEALTHY: '0',
+    TEST_MCP_BUILD_EXIT: '0', TEST_MCP_HEALTH_EXIT: '0', TEST_MCP_RUNNING: '1', TEST_MCP_ROLLBACK_HEALTHY: '0',
   };
   // macOS lacks the flock CLI. Use the same OS flock primitive for local tests;
   // Ubuntu CI and production use util-linux flock, including the contention test.
@@ -72,8 +73,25 @@ fi
 if [ "$*" = 'inspect --format {{.Image}} running-backend-container' ]; then
   echo sha256:running-image
 fi
+case "$*" in
+  *'conditions-mcp'*'build --pull conditions-mcp') exit "$TEST_MCP_BUILD_EXIT" ;;
+  *'conditions-mcp'*'ps --quiet conditions-mcp') [ "$TEST_MCP_RUNNING" = 1 ] && echo running-mcp-container ;;
+  'inspect --format {{.Image}} running-mcp-container') echo sha256:running-mcp-image ;;
+esac
+exit 0
 `);
   writeFileSync(join(bin, 'curl'), `#!/usr/bin/env bash
+case "$*" in *127.0.0.1:8104*)
+  printf '%s\\n' "$*" >> "$SUMMITSAFE_APP_DIR/mcp-health-calls.txt"
+  if [ "$TEST_MCP_ROLLBACK_HEALTHY" = 1 ] \\
+    && grep -qx 'image tag conditions-mcp:rollback conditions-mcp:latest' "$SUMMITSAFE_APP_DIR/docker-calls.txt"; then
+    printf '%s\\n' '{"status":"ok"}'
+    exit 0
+  fi
+  if [ "$TEST_MCP_HEALTH_EXIT" != 0 ]; then exit "$TEST_MCP_HEALTH_EXIT"; fi
+  printf '%s\\n' '{"status":"ok"}'
+  exit 0
+esac
 printf '%s\\n' "$*" >> "$SUMMITSAFE_APP_DIR/health-calls.txt"
 if [ "$TEST_ROLLBACK_HEALTHY" = 1 ] \\
   && grep -qx 'image tag summitsafe-backend:rollback summitsafe-backend:latest' "$SUMMITSAFE_APP_DIR/docker-calls.txt"; then
@@ -97,6 +115,11 @@ printf '%s\\n' '{"ok":true}'
       return spawnSync('bash', [bootstrap], {
         cwd: root, env: { ...env, DEPLOY_SHA: sha, ...overrides }, encoding: 'utf8', timeout: 10_000,
       });
+    },
+    enableMcp() {
+      mkdirSync(join(host, 'mcp'));
+      writeFileSync(join(host, 'mcp', 'compose.yaml'), '# test fixture\n');
+      writeFileSync(join(host, 'mcp', '.env'), '# no secrets in tests\n');
     },
     calls() {
       const file = join(host, 'docker-calls.txt');
@@ -287,4 +310,73 @@ test('rejects a competing release and releases the lock when the owner exits', {
   holder.stdin.end('release\n');
   await exited;
   assert.equal(f.run().status, 0);
+});
+
+test('skips the MCP server when mcp/.env is not configured', (t) => {
+  const f = fixture(t);
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /MCP server skipped/);
+  assert.doesNotMatch(f.calls(), /conditions-mcp/);
+});
+
+test('releases the MCP server after the healthy backend, snapshotting its running image', (t) => {
+  const f = fixture(t);
+  f.enableMcp();
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Deploy complete/);
+  const calls = f.calls();
+  assert.match(calls, /compose up -d --force-recreate --no-deps backend\n[^]*--project-name conditions-mcp --file \S+\/mcp\/compose\.yaml ps --quiet conditions-mcp\ninspect --format \{\{\.Image\}\} running-mcp-container\nimage tag sha256:running-mcp-image conditions-mcp:rollback\n\S.* build --pull conditions-mcp\n\S.* up -d conditions-mcp\n/);
+  assert.doesNotMatch(calls, /up -d --force-recreate conditions-mcp/);
+});
+
+test('a failed MCP build fails the release without touching the running MCP container', (t) => {
+  const f = fixture(t);
+  f.enableMcp();
+  const result = f.run(f.initial, { TEST_MCP_BUILD_EXIT: '44' });
+  assert.equal(result.status, 44, result.stderr);
+  assert.doesNotMatch(f.calls(), /up -d conditions-mcp/);
+});
+
+test('an unhealthy MCP release restores the previous MCP image and keeps the new backend', (t) => {
+  const f = fixture(t);
+  f.enableMcp();
+  const result = f.run(f.initial, { TEST_MCP_HEALTH_EXIT: '7', TEST_MCP_ROLLBACK_HEALTHY: '1' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /MCP server did not become healthy after 30 attempts/);
+  assert.match(result.stderr, /Previous MCP image restored and healthy/);
+  const calls = f.calls();
+  assert.match(calls, /image tag conditions-mcp:rollback conditions-mcp:latest\n\S.* up -d --force-recreate conditions-mcp\n/);
+  assert.doesNotMatch(calls, /summitsafe-backend:rollback summitsafe-backend:latest/);
+  assert.doesNotMatch(result.stdout, /Deploy complete/);
+});
+
+test('reports when the MCP rollback image is also unhealthy', (t) => {
+  const f = fixture(t);
+  f.enableMcp();
+  const result = f.run(f.initial, { TEST_MCP_HEALTH_EXIT: '7' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /Rollback MCP image is also unhealthy/);
+  const probes = readFileSync(join(f.host, 'mcp-health-calls.txt'), 'utf8').trim().split('\n');
+  assert.equal(probes.length, 60);
+});
+
+test('a first MCP release has no rollback image to restore', (t) => {
+  const f = fixture(t);
+  f.enableMcp();
+  const result = f.run(f.initial, { TEST_MCP_HEALTH_EXIT: '7', TEST_MCP_RUNNING: '0' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.doesNotMatch(f.calls(), /conditions-mcp:rollback/);
+});
+
+test('--no-build releases start the MCP server without rebuilding it', (t) => {
+  const f = fixture(t);
+  f.enableMcp();
+  const result = spawnSync('bash', [join(f.host, 'scripts', 'deploy.sh'), '--no-pull', '--no-build', '--no-nginx'], {
+    cwd: f.host, env: { ...f.env, DEPLOY_SHA: f.initial }, encoding: 'utf8', timeout: 10_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(f.calls(), /up -d conditions-mcp/);
+  assert.doesNotMatch(f.calls(), /image tag|build --pull/);
 });

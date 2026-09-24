@@ -4,6 +4,58 @@ This guide covers initial provisioning of the DigitalOcean droplet that runs
 the SummitSafe backend. nginx runs on the host (alongside any other services)
 and proxies to the backend container managed by Docker Compose.
 
+## Automated Provisioning
+
+`scripts/provision.sh` performs every step in this guide from your own machine
+in one command. It is idempotent, so it is also safe to rerun against the live
+server to repair drift:
+
+```bash
+CLOUDFLARE_API_TOKEN=… ./scripts/provision.sh \
+  --host 203.0.113.10 \
+  --domain api.example.com \
+  --frontend-origin https://app.example.com \
+  --email you@example.com
+```
+
+It needs SSH access as root (or a passwordless-sudo `--ssh-user`), `node`, and an
+authenticated `gh` CLI. In order, it:
+
+1. Creates the GitHub Actions deploy key `~/.ssh/summitsafe_deploy` if missing.
+2. Runs `scripts/provision-server.sh` on the droplet over SSH, which installs
+   packages, Docker, the firewall and fail2ban; creates the `deploy` user and
+   authorizes the deploy key; clones the repository into `/opt/summitsafe`;
+   creates `.env` and `mcp/.env`, filling in the CORS origin, email link origin,
+   Objective Watch secret and MCP origins without replacing existing values;
+   checks DNS; runs `setup-nginx.sh` to write nginx and issue the certificate;
+   deploys PostgreSQL on the first run; runs `deploy.sh`; and checks health
+   through the public domain.
+3. Shows the `DO_SSH_*` secrets (including the pinned host-key fingerprint) and
+   the `PRODUCTION_*_URL` variables, and sets them in the repository after you
+   confirm (`--yes` skips the prompt, `--no-github` skips this step).
+4. Runs `scripts/smoke-test.mjs` against the API, MCP server and frontend.
+
+**DNS:** DNS is on Cloudflare. With a `CLOUDFLARE_API_TOKEN` that has
+Zone → DNS → Edit permission, the script creates or updates the A record as
+DNS-only (not proxied). Certbot's HTTP challenge and MCP streaming must reach
+nginx directly. The token reaches the server over SSH stdin and never appears in
+a command line. Without a token, create the A record yourself; the script stops
+before TLS until the name resolves to the droplet.
+
+**Secrets it does not create:** API keys (`RESEND_API_KEY`, AI providers) and
+the MCP OAuth client settings. The backend refuses to start with
+`MCP_PUBLIC_URL` but incomplete `MCP_OAUTH_*` settings, so these are listed at
+the end for you to add. After editing `.env`, run
+`./scripts/backend-reload-env.sh`.
+
+**Frontend:** the frontend is a Cloudflare Worker that deploys from `main`
+through Cloudflare's Git integration. For a new API domain, set its build
+variable `VITE_API_BASE_URL` to the API origin.
+
+The sections below document each step for manual setup and troubleshooting.
+
+---
+
 ## Prerequisites
 
 - A DigitalOcean droplet running **Ubuntu 22.04 LTS** (minimum 1 GB RAM / 1 vCPU; 2 GB / 2 vCPU recommended).
@@ -200,80 +252,34 @@ backups to storage outside this Droplet and test a restore.
 
 ---
 
-## 6. Obtain a TLS Certificate (First Deploy Only)
+## 6. Configure nginx and TLS
 
-The nginx site config references cert files that must exist before it can load.
-Use certbot's standalone mode — it briefly binds port 80 itself, so nginx must
-be stopped first.
-
-```bash
-# Install certbot.
-apt-get install -y certbot
-
-# Stop nginx so certbot can bind port 80.
-systemctl stop nginx
-
-# Obtain the certificate.
-certbot certonly \
-  --standalone \
-  -d api.example.com \
-  --email you@example.com \
-  --agree-tos \
-  --non-interactive
-
-# Restart nginx.
-systemctl start nginx
-```
-
-Set up renewal hooks so future automatic renewals stop/start nginx around the
-ACME challenge:
-
-```bash
-echo "systemctl stop nginx" \
-  | tee /etc/letsencrypt/renewal-hooks/pre/stop-nginx.sh
-echo "systemctl start nginx" \
-  | tee /etc/letsencrypt/renewal-hooks/post/start-nginx.sh
-chmod +x /etc/letsencrypt/renewal-hooks/pre/stop-nginx.sh \
-         /etc/letsencrypt/renewal-hooks/post/start-nginx.sh
-```
-
-Certbot installs a systemd timer by default (`systemctl status certbot.timer`).
-If it's absent, add a cron job:
-
-```bash
-crontab -e
-# Add:
-0 3 * * * certbot renew --quiet
-```
-
-Dry-run to verify the renewal hooks work:
-
-```bash
-certbot renew --dry-run
-```
-
----
-
-## 7. Configure Host nginx
-
-Run the setup script, which writes the nginx site config and reloads nginx:
+`setup-nginx.sh` writes the host nginx site, including the MCP server and MCP
+OAuth routes, and obtains the Let's Encrypt certificate on its first run. It
+first serves the ACME challenge over plain HTTP, then issues the certificate with
+certbot's webroot mode, so nginx never has to stop. Renewals reload nginx through
+`/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh`.
 
 ```bash
 cd /opt/summitsafe
-sudo ./scripts/setup-nginx.sh --domain api.example.com
+sudo ./scripts/setup-nginx.sh --domain api.example.com --email you@example.com
 ```
 
-This creates `/etc/nginx/sites-available/summitsafe`, symlinks it into
-`sites-enabled`, and reloads nginx. Verify:
+Rerunning it reuses the existing certificate, prints a diff against the current
+site, keeps a timestamped backup, and restores that backup if `nginx -t` rejects
+the result. Preview the change without applying it:
 
 ```bash
-curl -I https://api.example.com/healthz
-# Should get a 502 at this point — backend isn't running yet. That's expected.
+./scripts/setup-nginx.sh --domain api.example.com --dry-run
 ```
+
+Pass `--no-mcp` for an API-only server. Certificates issued earlier with
+certbot's standalone mode keep their stop/start hooks and continue to renew.
+Verify renewal with `certbot renew --dry-run`.
 
 ---
 
-## 8. Configure Objective Watch Checks
+## 7. Configure Objective Watch Checks
 
 Objective Watch uses the existing backend and PostgreSQL container; the host cron only triggers the protected worker. Add a random secret to `/opt/summitsafe/.env`:
 
@@ -297,7 +303,7 @@ After deployment, Admin → Operations → Objective Watch scheduler reports the
 
 ---
 
-## 9. First Deploy
+## 8. First Deploy
 
 ```bash
 cd /opt/summitsafe
@@ -329,7 +335,7 @@ docker compose logs --tail 50 health-monitor
 
 ---
 
-## 10. Wire Up GitHub Actions CI/CD
+## 9. Wire Up GitHub Actions CI/CD
 
 In your GitHub repository: **Settings → Secrets and variables → Actions**
 
@@ -338,13 +344,17 @@ In your GitHub repository: **Settings → Secrets and variables → Actions**
 | `DO_SSH_HOST` | Droplet IP address or hostname |
 | `DO_SSH_USER` | `deploy` |
 | `DO_SSH_KEY` | Contents of `~/.ssh/summitsafe_deploy` (private key) |
+| `DO_SSH_FINGERPRINT` | `SHA256:…` from `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` |
+
+Optional **variables** (same page, Variables tab) point the post-deploy smoke
+test at other origins: `PRODUCTION_API_URL`, `PRODUCTION_FRONTEND_URL`.
 
 Push to `main` to trigger the deploy workflow. Monitor progress in the
 **Actions** tab on GitHub.
 
 ---
 
-## 11. Ongoing Operations
+## 10. Ongoing Operations
 
 Run the backend utility scripts from the production checkout:
 

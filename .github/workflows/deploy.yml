@@ -52,3 +52,18 @@ jobs:
           # Send the tested bootstrap from the runner, including on the first
           # release when the VPS still has the previous deployment script.
           script_path: scripts/ci-deploy.sh
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # Checks the release the way users reach it: DNS, TLS, nginx, CORS, the
+      # backend with PostgreSQL, one end-to-end report, MCP and the frontend.
+      # Repository variables override the production origins.
+      - name: Smoke test production
+        env:
+          SMOKE_API_URL: ${{ vars.PRODUCTION_API_URL || 'https://apivps.conditions.weiranxiong.com' }}
+          SMOKE_FRONTEND_URL: ${{ vars.PRODUCTION_FRONTEND_URL || 'https://conditions.weiranxiong.com' }}
+        run: node scripts/smoke-test.mjs

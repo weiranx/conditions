@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # deploy.sh — manual deploy script for the SummitSafe backend on the VPS.
 # Mirrors what the GitHub Actions workflow does; useful for hotfixes or when
-# bypassing CI is necessary.
+# bypassing CI is necessary. When mcp/.env exists, the MCP server
+# (mcp/compose.yaml) is released after the backend.
 #
 # Usage (run from /opt/summitsafe on the VPS):
 #   ./scripts/deploy.sh
@@ -205,6 +206,63 @@ if grep -Eq '^OBJECTIVE_WATCH_CRON_SECRET=.+$' .env; then
   fi
 else
   echo "==> Objective Watch cron disabled (OBJECTIVE_WATCH_CRON_SECRET is not configured)."
+fi
+
+# The MCP server has its own Compose project and .env (see mcp/README.md). It
+# is released after the backend, so an MCP failure never holds back the API.
+MCP_IMAGE=conditions-mcp:latest
+MCP_ROLLBACK_IMAGE=conditions-mcp:rollback
+
+mcp_compose() {
+  docker compose --project-name conditions-mcp --file "$APP_DIR/mcp/compose.yaml" "$@"
+}
+
+wait_for_mcp() {
+  for _ in {1..30}; do
+    if curl --fail --silent --connect-timeout 2 --max-time 5 http://127.0.0.1:8104/health | grep --quiet '"status":"ok"'; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+if [ -f mcp/.env ] && [ -f mcp/compose.yaml ]; then
+  mcp_rollback_available=false
+  if [ "$NO_BUILD" = false ]; then
+    running_mcp="$(mcp_compose ps --quiet conditions-mcp 2>/dev/null || true)"
+    if [ -n "$running_mcp" ]; then
+      docker image tag "$(docker inspect --format '{{.Image}}' "$running_mcp")" "$MCP_ROLLBACK_IMAGE"
+      mcp_rollback_available=true
+    fi
+    echo "==> Building MCP server image..."
+    mcp_compose build --pull conditions-mcp
+  fi
+
+  # Without --force-recreate, Compose leaves the container alone when neither
+  # the image nor its configuration changed.
+  echo "==> Starting MCP server..."
+  mcp_compose up -d conditions-mcp
+
+  echo "==> Waiting for MCP health check..."
+  if ! wait_for_mcp; then
+    mcp_compose ps conditions-mcp >&2
+    mcp_compose logs --tail 50 conditions-mcp >&2
+    echo "MCP server did not become healthy after 30 attempts." >&2
+    if [ "$mcp_rollback_available" = true ]; then
+      echo "==> Rolling back to the previous MCP image..." >&2
+      docker image tag "$MCP_ROLLBACK_IMAGE" "$MCP_IMAGE"
+      mcp_compose up -d --force-recreate conditions-mcp
+      if wait_for_mcp; then
+        echo "Previous MCP image restored and healthy." >&2
+      else
+        echo "Rollback MCP image is also unhealthy; manual intervention required." >&2
+      fi
+    fi
+    exit 1
+  fi
+else
+  echo "==> MCP server skipped (mcp/.env is not configured)."
 fi
 
 if [ "$NO_NGINX" = false ]; then
