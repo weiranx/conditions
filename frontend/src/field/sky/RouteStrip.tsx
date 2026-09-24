@@ -2,7 +2,7 @@ import type { RouteStopSummary } from "../route-planning";
 import { useWidth } from "./useWidth";
 
 const HEIGHT = 80;
-const TONE_WORD = { over: "over your limits", missing: "forecast incomplete", within: "within your limits" } as const;
+const TONE_WORD = { over: "over your limits", hazard: "alert or avalanche danger", missing: "forecast incomplete", within: "within your limits" } as const;
 
 /**
  * The route's checkpoints in order, each colored by its forecast against the
@@ -36,8 +36,9 @@ export function RouteStrip({ name, stops, profile, eta }: {
           </>
         )}
         {stops.map((stop, i) => (
-          <circle key={i} cx={x(i)} cy={y(i)} r={stop.tone === "over" ? 6.5 : 5.5}
-            className={stop.tone === "over" ? "f-caution" : stop.tone === "missing" ? "f-none s-missing" : "f-accent"}
+          <circle key={i} cx={x(i)} cy={y(i)} r={stop.tone === "over" || stop.tone === "hazard" ? 6.5 : 5.5}
+            className={stop.tone === "over" ? "f-caution" : stop.tone === "hazard" ? "f-none s-caution" : stop.tone === "missing" ? "f-none s-missing" : "f-accent"}
+            strokeWidth={stop.tone === "hazard" ? 2.5 : undefined}
             strokeDasharray={stop.tone === "missing" ? "2 2" : undefined} />
         ))}
         {firstOver >= 0 && stops[firstOver].eta && firstOver !== 0 && firstOver !== stops.length - 1 && (

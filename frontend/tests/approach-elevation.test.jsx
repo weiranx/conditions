@@ -154,12 +154,16 @@ test('approach inputs are sent with the plan', () => {
   }));
   const params = buildApproachRequestParams({ enabled: true, trailheadElevationFt: 6000, gpxRoute: { distanceMiles: 10, displayTrack }, timing });
   assert.equal(params.trailhead_ft, undefined, 'the route wins over a typed trailhead');
-  const pairs = params.approach_route.split(',').map((pair) => pair.split(':').map(Number));
+  // Sent as miles and feet; the backend times it with the checkpoints' pace model.
+  const pairs = params.approach_track.split(',').map((pair) => pair.split(':').map(Number));
   assert.ok(pairs.length <= 64);
   assert.deepEqual(pairs[0], [0, 7000]);
   assert.ok(pairs.some(([, ft]) => ft === 11500));
-  assert.equal(pairs[pairs.length - 1][1], 7000);
-  assert.ok(pairs.every(([minute], i) => i === 0 || minute >= pairs[i - 1][0]));
+  assert.deepEqual(pairs[pairs.length - 1], [10, 7000]);
+  assert.ok(pairs.every(([miles], i) => i === 0 || miles >= pairs[i - 1][0]));
+  assert.equal(params.pace_min_per_mi, String(timing.paceMinutesPerMile));
+  assert.equal(params.stop_min, String(timing.stopBufferMinutes));
+  assert.equal(params.approach_route, undefined);
 });
 
 
@@ -177,5 +181,9 @@ test('an analyzed route is sent as its checkpoints, below a GPX track, with the 
   const displayTrack = [{ lat: 0, lon: 0, progress_percent: 0, elev_ft: 7500 }, { lat: 0, lon: 0, progress_percent: 100, elev_ft: 11000 }];
   const gpx = buildApproachRequestParams({ enabled: true, gpxRoute: { distanceMiles: 8, displayTrack }, routeCheckpoints, timing });
   assert.equal(gpx.approach_checkpoints, undefined);
-  assert.ok(gpx.approach_route);
+  assert.ok(gpx.approach_track);
+  // When the analysis retraced a one-way track, its checkpoints cover the way back too.
+  const retraced = buildApproachRequestParams({ enabled: true, gpxRoute: { distanceMiles: 8, displayTrack }, routeCheckpoints, routeRetracesTrack: true, timing });
+  assert.equal(retraced.approach_track, undefined);
+  assert.equal(retraced.approach_checkpoints, '0:7400,120:9600,240:11000');
 });

@@ -13,7 +13,7 @@
 //   min_feels_like_f=5
 //   max_feels_like_f=95
 //   temp_unit=f|c  wind_unit=mph|kph  elevation_unit=ft|m  time_style=ampm|24h
-//   approach=off | trailhead_ft | ascent_min_per_kft | approach_route
+//   approach=off | trailhead_ft | ascent_min_per_kft | approach_track + pace_min_per_mi + stop_min | approach_route
 //
 // Invalid optional values fall back to defaults rather than failing the request.
 
@@ -49,6 +49,9 @@ const PLAN_PARAM_KEYS = [
   'trailhead_ft',
   'ascent_min_per_kft',
   'approach_route',
+  'approach_track',
+  'pace_min_per_mi',
+  'stop_min',
   'approach_checkpoints',
   'target_elevation_ft',
 ];

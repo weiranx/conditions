@@ -5,6 +5,7 @@
 // cell does not care how high you are.
 
 const { clockMinutes } = require('./display-format');
+const { buildTrackTimeline } = require('./route-timing');
 
 const TEMP_LAPSE_F_PER_1000FT = 3.3;
 const WIND_INCREASE_MPH_PER_1000FT = 2;
@@ -24,6 +25,7 @@ const DEFAULT_ASCENT_MINUTES_PER_1000FT = 45;
 
 const MAX_ROUTE_POINTS = 64;
 const MAX_ROUTE_MINUTES = 48 * 60;
+const MAX_TRACK_MILES = 1000;
 const MIN_ELEVATION_FT = -1500;
 const MAX_ELEVATION_FT = 29100;
 
@@ -40,7 +42,11 @@ const numberParam = (value, min, max) => {
  *   approach=off               score every hour at the objective
  *   trailhead_ft=7200          trailhead elevation the user entered
  *   ascent_min_per_kft=45      ascent rate for the climb from the trailhead
+ *   approach_track=0:7500,...  miles:elevation pairs along an imported GPX track,
+ *                              timed here by pace_min_per_mi, ascent_min_per_kft
+ *                              and stop_min, the same way route checkpoints are
  *   approach_route=0:7500,...  minute:elevation pairs from an imported GPX track
+ *                              (older clients, which timed the track themselves)
  * Invalid values are ignored rather than rejected, so a bad optional input
  * never costs the user their report.
  */
@@ -62,12 +68,45 @@ const parseTimelineParam = (value) => {
   return valid ? points : null;
 };
 
+// "miles:feet,…" pairs along a track, as { miles, elevFt }; null when unreadable.
+const parseTrackParam = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const pairs = value.split(',');
+  if (pairs.length < 2 || pairs.length > MAX_ROUTE_POINTS) return null;
+  const track = pairs.map((pair) => {
+    const [miles, elevationFt] = pair.split(':');
+    return { miles: numberParam(miles, 0, MAX_TRACK_MILES), elevFt: numberParam(elevationFt, MIN_ELEVATION_FT, MAX_ELEVATION_FT) };
+  });
+  const valid = track.every((point, index) => point.miles !== null && point.elevFt !== null
+    && (index === 0 || point.miles >= track[index - 1].miles)) && track[track.length - 1].miles > 0;
+  return valid ? track : null;
+};
+
+/**
+ * A GPX track timed by the traveler's pace: moving time by distance, climbing and
+ * descent (route-timing's model, shared with route checkpoints), with stops spread
+ * across it so the timeline ends when the trip does.
+ */
+const timeTrack = (track, { minutesPerMile, ascentMinutesPer1000Ft, stopMinutes }) => {
+  const moving = buildTrackTimeline(track, { minutesPerMile, ascentMinutesPer1000Ft: ascentMinutesPer1000Ft ?? 0 });
+  const total = moving[moving.length - 1];
+  if (!(total > 0)) return null;
+  const scale = (total + (stopMinutes ?? 0)) / total;
+  return track.map((point, index) => ({ minute: Math.round(moving[index] * scale), elevationFt: point.elevFt }));
+};
+
 const parseApproachQuery = (query = {}) => {
   if (String(query.approach || '').toLowerCase() === 'off') return { enabled: false };
   const trailheadElevationFt = numberParam(query.trailhead_ft, MIN_ELEVATION_FT, MAX_ELEVATION_FT);
   const ascentMinutesPer1000Ft = numberParam(query.ascent_min_per_kft, 1, 120);
-  // A GPX track's timeline, from the start of the track.
-  const timeline = parseTimelineParam(query.approach_route);
+  // A GPX track's timeline, from the start of the track: timed here when the
+  // track comes as distances, or as sent by an older client.
+  const track = parseTrackParam(query.approach_track);
+  const minutesPerMile = numberParam(query.pace_min_per_mi, 5, 120);
+  const timedTrack = track && minutesPerMile !== null
+    ? timeTrack(track, { minutesPerMile, ascentMinutesPer1000Ft, stopMinutes: numberParam(query.stop_min, 0, 240) })
+    : null;
+  const timeline = timedTrack ?? parseTimelineParam(query.approach_route);
   // An analyzed route's checkpoints; the first must be the start.
   const checkpoints = parseTimelineParam(query.approach_checkpoints);
   const routeTimeline = checkpoints && checkpoints[0].minute === 0 ? checkpoints : null;

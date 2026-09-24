@@ -167,6 +167,53 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
   throw new Error('API request failed');
 }
 
+export type StreamEvent = { type?: string; [key: string]: unknown };
+
+/**
+ * A request whose server may stream NDJSON progress lines: each line but the last
+ * goes to onEvent, and the final "result" (or "error") line is the payload. A
+ * plain JSON response, as from an older server, an error status or the mock,
+ * is returned as is.
+ */
+export async function fetchApiStream(path: string, init: RequestInit, onEvent: (event: StreamEvent) => void): Promise<{ ok: boolean; status: number; payload: unknown }> {
+  const response = await fetch(buildApiUrl(path), {
+    credentials: 'include',
+    ...init,
+    headers: { ...(init.headers as Record<string, string> | undefined), Accept: 'application/x-ndjson, application/json' },
+  });
+  if (!(response.headers.get('content-type') || '').includes('application/x-ndjson') || !response.body) {
+    return { ok: response.ok, status: response.status, payload: await parseJsonFromResponse(response) };
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let last: StreamEvent | null = null;
+  const handle = (line: string) => {
+    if (!line.trim()) return;
+    let event: StreamEvent;
+    try {
+      event = JSON.parse(line) as StreamEvent;
+    } catch {
+      return;
+    }
+    if (event.type === 'result' || event.type === 'error') last = event;
+    else onEvent(event);
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    lines.forEach(handle);
+  }
+  handle(buffer + decoder.decode());
+  const final = last as StreamEvent | null;
+  if (final?.type === 'result') return { ok: true, status: 200, payload: final.payload };
+  // A stream that ends without a result was cut off.
+  return { ok: false, status: Number(final?.status) || 502, payload: { error: final?.error || 'The route analysis stopped before it finished.' } };
+}
+
 export interface AiBriefRequest {
   decisionLevel: string;
   report: unknown;

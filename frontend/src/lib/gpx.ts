@@ -2,7 +2,17 @@ const METERS_TO_FEET = 3.28084;
 const METERS_PER_MILE = 1609.344;
 const MAX_GPX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_TRACK_POINTS = 100_000;
-const DEFAULT_CHECKPOINT_COUNT = 5;
+// Checkpoints taken from a track: the start, finish and high point always, a deep
+// low point and the file's own named waypoints when present, then even spacing.
+const TARGET_CHECKPOINT_COUNT = 6;
+// The route analysis accepts eight; one is left spare.
+const MAX_CHECKPOINT_COUNT = 7;
+// A named <wpt> this close to the track names the track point nearest it.
+const WAYPOINT_SNAP_METERS = 150;
+// A low point this far below both ends is worth checking (cold air pools there).
+const LOW_POINT_DROP_METERS = 150;
+// Checkpoints closer than this share of the route are merged.
+const MIN_CHECKPOINT_GAP_SHARE = 0.03;
 /** Most points kept in a route's display track, as saved with reports. */
 export const MAX_DISPLAY_TRACK_POINTS = 500;
 
@@ -134,48 +144,116 @@ function extractTrackPoints(document: Document): ParsedTrackPoint[] {
   return points;
 }
 
-function chooseCheckpoints(points: ParsedTrackPoint[], totalDistanceMeters: number): GpxCheckpoint[] {
-  const count = Math.min(DEFAULT_CHECKPOINT_COUNT, points.length);
-  const selectedIndexes: number[] = [0];
-  for (let i = 1; i < count - 1; i += 1) {
-    const targetDistance = (totalDistanceMeters * i) / (count - 1);
-    const minimumIndex = selectedIndexes[selectedIndexes.length - 1] + 1;
-    const maximumIndex = points.length - (count - i);
-    let selectedIndex = minimumIndex;
-    let smallestDifference = Infinity;
-    for (let index = minimumIndex; index <= maximumIndex; index += 1) {
-      const difference = Math.abs(points[index].distanceMeters - targetDistance);
-      if (difference < smallestDifference) {
-        selectedIndex = index;
-        smallestDifference = difference;
+type NamedWaypoint = { name: string; lat: number; lon: number };
+
+/** The file's own named waypoints (<wpt>), which name the track points they sit on. */
+function extractNamedWaypoints(document: Document): NamedWaypoint[] {
+  return elementsByLocalName(document, 'wpt').slice(0, 200).flatMap((element) => {
+    const lat = Number(element.getAttribute('lat'));
+    const lon = Number(element.getAttribute('lon'));
+    const name = childText(element, 'name')?.slice(0, 100);
+    return name && Number.isFinite(lat) && Number.isFinite(lon) ? [{ name, lat, lon }] : [];
+  });
+}
+
+type CheckpointRole = 'start' | 'finish' | 'waypoint' | 'high' | 'low' | 'even';
+// When two picks are too close together, the more important one stays.
+const ROLE_RANK: Record<CheckpointRole, number> = { start: 5, finish: 5, waypoint: 4, high: 3, low: 2, even: 1 };
+
+function chooseCheckpoints(points: ParsedTrackPoint[], totalDistanceMeters: number, waypoints: NamedWaypoint[] = []): GpxCheckpoint[] {
+  const picks: { index: number; role: CheckpointRole; name?: string }[] = [
+    { index: 0, role: 'start' },
+    { index: points.length - 1, role: 'finish' },
+  ];
+  const withElevation = points.map((point, index) => ({ index, elevation: point.elevationMeters }))
+    .filter((entry): entry is { index: number; elevation: number } => entry.elevation !== null);
+  if (withElevation.length >= 2) {
+    const high = withElevation.reduce((best, entry) => (entry.elevation > best.elevation ? entry : best));
+    picks.push({ index: high.index, role: 'high' });
+    const ends = [points[0].elevationMeters, points[points.length - 1].elevationMeters].filter((value): value is number => value !== null);
+    const interior = withElevation.filter((entry) => entry.index > 0 && entry.index < points.length - 1);
+    const low = interior.length ? interior.reduce((best, entry) => (entry.elevation < best.elevation ? entry : best)) : null;
+    if (low && ends.length && low.elevation <= Math.min(...ends) - LOW_POINT_DROP_METERS) picks.push({ index: low.index, role: 'low' });
+  }
+  for (const waypoint of waypoints) {
+    let nearest = -1;
+    let nearestMeters = WAYPOINT_SNAP_METERS;
+    const target = { lat: waypoint.lat, lon: waypoint.lon, elevationMeters: null, segment: 0, distanceMeters: 0 };
+    points.forEach((point, index) => {
+      const meters = haversineMeters(point, target);
+      if (meters <= nearestMeters) {
+        nearest = index;
+        nearestMeters = meters;
+      }
+    });
+    if (nearest >= 0) picks.push({ index: nearest, role: 'waypoint', name: waypoint.name });
+  }
+
+  // Merge picks that sit on top of each other; a waypoint's name survives the merge.
+  const minGap = totalDistanceMeters * MIN_CHECKPOINT_GAP_SHARE;
+  const merged: typeof picks = [];
+  for (const pick of [...picks].sort((a, b) => points[a.index].distanceMeters - points[b.index].distanceMeters)) {
+    const previous = merged[merged.length - 1];
+    if (previous && points[pick.index].distanceMeters - points[previous.index].distanceMeters < minGap) {
+      const keep = ROLE_RANK[pick.role] > ROLE_RANK[previous.role] ? pick : previous;
+      const drop = keep === pick ? previous : pick;
+      merged[merged.length - 1] = { ...keep, name: keep.name ?? drop.name };
+      continue;
+    }
+    merged.push(pick);
+  }
+  // Too many named places: keep the ends and the most important of the rest.
+  let chosen = merged;
+  if (chosen.length > MAX_CHECKPOINT_COUNT) {
+    const ends = chosen.filter((pick) => pick.role === 'start' || pick.role === 'finish');
+    const middle = chosen.filter((pick) => !ends.includes(pick))
+      .sort((a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role])
+      .slice(0, MAX_CHECKPOINT_COUNT - ends.length);
+    chosen = [...ends, ...middle].sort((a, b) => a.index - b.index);
+  }
+  // Fill the widest gaps until the route has enough checkpoints.
+  while (chosen.length < Math.min(TARGET_CHECKPOINT_COUNT, points.length)) {
+    let widest = -1;
+    let widestGap = 0;
+    for (let i = 1; i < chosen.length; i += 1) {
+      const gap = points[chosen[i].index].distanceMeters - points[chosen[i - 1].index].distanceMeters;
+      if (gap > widestGap && chosen[i].index - chosen[i - 1].index > 1) {
+        widest = i;
+        widestGap = gap;
       }
     }
-    selectedIndexes.push(selectedIndex);
+    if (widest < 0) break;
+    const from = chosen[widest - 1].index;
+    const to = chosen[widest].index;
+    const middle = (points[from].distanceMeters + points[to].distanceMeters) / 2;
+    let best = from + 1;
+    for (let index = from + 1; index < to; index += 1) {
+      if (Math.abs(points[index].distanceMeters - middle) < Math.abs(points[best].distanceMeters - middle)) best = index;
+    }
+    chosen = [...chosen.slice(0, widest), { index: best, role: 'even' }, ...chosen.slice(widest)];
   }
-  if (points.length > 1) selectedIndexes.push(points.length - 1);
 
-  return selectedIndexes
-    .map((index, checkpointIndex, selected) => {
-      const point = points[index];
-      const progress = totalDistanceMeters > 0
-        ? Math.round((point.distanceMeters / totalDistanceMeters) * 100)
-        : Math.round((index / Math.max(1, points.length - 1)) * 100);
-      const name = checkpointIndex === 0
-        ? 'Route start'
-        : checkpointIndex === selected.length - 1
-          ? 'Route finish'
-          : `${progress}% checkpoint`;
-      return {
-        name,
-        lat: Number(point.lat.toFixed(6)),
-        lon: Number(point.lon.toFixed(6)),
-        ...(point.elevationMeters !== null
-          ? { elev_ft: Math.round(point.elevationMeters * METERS_TO_FEET) }
-          : {}),
-        distance_miles: Number((point.distanceMeters / METERS_PER_MILE).toFixed(2)),
-        progress_percent: progress,
-      };
-    });
+  return chosen.map(({ index, role, name }) => {
+    const point = points[index];
+    const progress = totalDistanceMeters > 0
+      ? Math.round((point.distanceMeters / totalDistanceMeters) * 100)
+      : Math.round((index / Math.max(1, points.length - 1)) * 100);
+    const fallback = role === 'start' ? 'Route start'
+      : role === 'finish' ? 'Route finish'
+        : role === 'high' ? 'High point'
+          : role === 'low' ? 'Low point'
+            : `${progress}% checkpoint`;
+    return {
+      name: name || fallback,
+      lat: Number(point.lat.toFixed(6)),
+      lon: Number(point.lon.toFixed(6)),
+      ...(point.elevationMeters !== null
+        ? { elev_ft: Math.round(point.elevationMeters * METERS_TO_FEET) }
+        : {}),
+      distance_miles: Number((point.distanceMeters / METERS_PER_MILE).toFixed(2)),
+      progress_percent: progress,
+    };
+  });
 }
 
 function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: number): GpxTrackPoint[] {
@@ -194,10 +272,42 @@ function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: num
   }));
 }
 
-export function estimateRouteDurationHours(route: Pick<ParsedGpxRoute, 'distanceMiles' | 'elevationGainFt'>, profile: RouteTimingProfile): number {
+/**
+ * The track's distance and elevation, [miles, feet | null] per display point, so
+ * route analysis can time arrivals over every climb and descent between checkpoints.
+ */
+export function gpxTrackForAnalysis(route: Pick<ParsedGpxRoute, 'distanceMiles' | 'displayTrack'>): Array<[number, number | null]> | undefined {
+  const points = (route.displayTrack || []).filter((point) => Number.isFinite(point.progress_percent));
+  if (points.length < 2 || !(route.distanceMiles > 0)) return undefined;
+  return points.map((point) => [
+    Number(((point.progress_percent / 100) * route.distanceMiles).toFixed(3)),
+    Number.isFinite(point.elev_ft) ? (point.elev_ft as number) : null,
+  ]);
+}
+
+// Descents cost a third of the climbing rate, as in the backend's route timing.
+const DESCENT_SHARE_OF_ASCENT = 1 / 3;
+
+/**
+ * Hours for a route at the traveler's pace: distance, climbing, descent and stops,
+ * the same model the backend uses for route checkpoints. Descent is the given
+ * loss, else the drops along the display track, else none.
+ */
+export function estimateRouteDurationHours(
+  route: Pick<ParsedGpxRoute, 'distanceMiles' | 'elevationGainFt'> & { elevationLossFt?: number | null; displayTrack?: GpxTrackPoint[] },
+  profile: RouteTimingProfile,
+): number {
+  const trackLoss = (route.displayTrack || []).reduce((total, point, index, track) => {
+    const previous = track[index - 1];
+    return previous && Number.isFinite(previous.elev_ft) && Number.isFinite(point.elev_ft)
+      ? total + Math.max(0, (previous.elev_ft as number) - (point.elev_ft as number)) : total;
+  }, 0);
+  const lossFt = Number.isFinite(route.elevationLossFt) ? Math.max(0, route.elevationLossFt as number) : trackLoss;
   const distanceMinutes = Math.max(0, route.distanceMiles) * Math.max(5, profile.paceMinutesPerMile);
-  const ascentMinutes = Math.max(0, route.elevationGainFt || 0) / 1000 * Math.max(0, profile.ascentMinutesPer1000Ft);
-  const totalMinutes = distanceMinutes + ascentMinutes + Math.max(0, profile.stopBufferMinutes);
+  const ascentRate = Math.max(0, profile.ascentMinutesPer1000Ft);
+  const ascentMinutes = Math.max(0, route.elevationGainFt || 0) / 1000 * ascentRate;
+  const descentMinutes = lossFt / 1000 * ascentRate * DESCENT_SHARE_OF_ASCENT;
+  const totalMinutes = distanceMinutes + ascentMinutes + descentMinutes + Math.max(0, profile.stopBufferMinutes);
   return Math.max(1, Math.min(24, Math.round(totalMinutes / 60)));
 }
 
@@ -241,7 +351,7 @@ export function parseGpxText(xmlText: string, fileName = 'Imported route.gpx'): 
     elevationGainFt: elevations.length > 1 ? Math.round(elevationGainMeters * METERS_TO_FEET) : null,
     minElevationFt: elevations.length > 0 ? Math.round(Math.min(...elevations) * METERS_TO_FEET) : null,
     maxElevationFt: elevations.length > 0 ? Math.round(Math.max(...elevations) * METERS_TO_FEET) : null,
-    checkpoints: chooseCheckpoints(points, totalDistanceMeters),
+    checkpoints: chooseCheckpoints(points, totalDistanceMeters, extractNamedWaypoints(document)),
     displayTrack: chooseDisplayTrack(points, totalDistanceMeters),
     routeShape: haversineMeters(points[0], points[points.length - 1]) <= 250 ? 'closed route' : 'point-to-point',
   };

@@ -13,6 +13,7 @@ const {
   OBJECTIVE_WATCH_CLAIM_LEASE_MS,
   normalizeWatchChange,
   planDateHasEnded,
+  readWatchRoute,
 } = require('../services/objective-watch-checker');
 const { normalizeSavedReport } = require('./saved-reports');
 
@@ -136,11 +137,33 @@ const mapUnreviewedChanges = (value) => {
   };
 };
 
+// Just the route parts of the baseline report, for listings that don't load the whole report.
+const BASELINE_ROUTE_SQL = `
+  jsonb_build_object(
+    'customRouteName', baseline_report #> '{route,customRouteName}',
+    'routeAnalysis', jsonb_build_object(
+      'routeName', baseline_report #> '{route,routeAnalysis,routeName}',
+      'waypoints', baseline_report #> '{route,routeAnalysis,waypoints}'
+    )
+  ) AS baseline_route
+`;
+
+// The analyzed route a watch also re-checks, when its report (or, in listings, its route parts) has one.
+const watchRouteSummary = (row) => {
+  const route = row.baseline_report?.route ?? row.baseline_route;
+  const points = readWatchRoute({ baseline_report: { route } });
+  if (!points) return {};
+  const analysis = route?.routeAnalysis;
+  const name = String(analysis?.routeName || route?.customRouteName || '').trim().slice(0, 200);
+  return { route: { name: name || null, checkpointCount: points.length } };
+};
+
 const mapObjectiveWatch = (row, { includeBaseline = false, policy = null } = {}) => ({
   id: row.id,
   title: row.title,
   plan: row.plan,
   ...(includeBaseline ? { baselineReport: row.baseline_report } : {}),
+  ...watchRouteSummary(row),
   lastAttemptedAt: normalizeTimestamp(row.last_attempted_at),
   lastCheckedAt: normalizeTimestamp(row.last_checked_at),
   nextCheckAt: policy?.automaticChecks === false ? null : normalizeTimestamp(row.next_check_at),
@@ -302,6 +325,7 @@ const registerObjectiveWatchRoutes = ({
         SELECT id, title, plan, last_attempted_at, last_checked_at, next_check_at, last_change,
                reviewed_at, consecutive_failures, notifications_enabled, created_at, updated_at,
                ${UNREVIEWED_CHANGES_SQL},
+               ${BASELINE_ROUTE_SQL},
                (
                  SELECT row_to_json(latest)
                  FROM (

@@ -31,6 +31,18 @@ describe('approach query', () => {
     expect(parseApproachQuery({ approach_route: '60:7500,0:11000' }).timeline).toBeNull();
     expect(parseApproachQuery({ approach_route: Array.from({ length: 65 }, (_, i) => `${i}:8000`).join(',') }).timeline).toBeNull();
   });
+
+  test('a GPX track sent as distances is timed with the checkpoints\' pace model, descent and stops included', () => {
+    // 2 mi up 2,000 ft, then 2 mi back down: 60 + 90 = 150 min up, 60 + 30 = 90 min down, 60 min of stops.
+    const query = { approach_track: '0:7000,2:9000,4:7000', pace_min_per_mi: '30', ascent_min_per_kft: '45', stop_min: '60' };
+    expect(parseApproachQuery(query).timeline).toEqual([
+      { minute: 0, elevationFt: 7000 }, { minute: 188, elevationFt: 9000 }, { minute: 300, elevationFt: 7000 },
+    ]);
+    // Without a pace the track can't be timed; an older client's timeline still works.
+    expect(parseApproachQuery({ ...query, pace_min_per_mi: undefined }).timeline).toBeNull();
+    expect(parseApproachQuery({ ...query, pace_min_per_mi: undefined, approach_route: '0:7000,100:9000' }).timeline).toHaveLength(2);
+    expect(parseApproachQuery({ ...query, approach_track: '2:7000,1:9000' }).timeline).toBeNull();
+  });
 });
 
 describe('analyzed route', () => {

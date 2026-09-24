@@ -30,7 +30,18 @@ const leafletCoordinateOnly = {
     build.onResolve({ filter: /^leaflet$/ }, () => ({ path: "leaflet", namespace: "coordinates" }));
     build.onLoad({ filter: /.*/, namespace: "coordinates" }, () => ({
       contents:
-        "export default { LatLng: class LatLng { constructor(lat,lng){this.lat=lat;this.lng=lng} } };",
+        "export default { LatLng: class LatLng { constructor(lat,lng){this.lat=lat;this.lng=lng} }, divIcon: (options) => options };",
+      loader: "js",
+    }));
+    // Maps are loaded lazily and never drawn under node, but bundling them would
+    // load the real Leaflet, which needs a browser window.
+    build.onResolve({ filter: /^react-leaflet$/ }, () => ({ path: "react-leaflet", namespace: "no-map" }));
+    build.onLoad({ filter: /.*/, namespace: "no-map" }, () => ({
+      contents: [
+        "const none = () => null;",
+        "export const MapContainer = none, TileLayer = none, Marker = none, Polyline = none, ScaleControl = none, Tooltip = none;",
+        "export const useMap = () => ({}), useMapEvents = () => ({});",
+      ].join("\n"),
       loader: "js",
     }));
   },
