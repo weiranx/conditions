@@ -204,6 +204,7 @@ test('AI named routes use specific landmark names instead of mapped checkpoint l
     'Happy Isles Trailhead',
     'Vernal Fall Footbridge',
     'Half Dome',
+    'Return to Vernal Fall Footbridge',
     'Return to Happy Isles Trailhead',
   ]);
   expect(response.body.waypoints.at(-1)).toMatchObject({ leg: 'return', lat: 37.7329, lon: -119.5587, elev_ft: 4035 });
@@ -487,8 +488,112 @@ test('AI-generated elevations are replaced by terrain lookups before ETAs are we
     .send({ peak: 'Half Dome Terrain Lookup Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
 
   expect(response.status).toBe(200);
-  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([4000, 4400, 8800, 4000]);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([4000, 4400, 8800, 4400, 4000]);
   expect(response.body.timing.basis).toBe('distance-and-vert');
+});
+
+test('an unfound landmark placed at the objective keeps its generated elevation', async () => {
+  const app = express();
+  app.use(express.json());
+  const fetchElevationFt = jest.fn(async (lat) => ({ elevationFt: lat === 34.0993 ? 11496 : 9293 }));
+  registerRouteAnalysisRoutes({
+    app,
+    // The trailhead echoes the objective's coordinates from the prompt.
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints'
+      ? '[{"name":"Vivian Creek Trailhead","lat":34.0993,"lon":-116.8249,"elev_ft":6080},{"name":"Vivian Creek Camp","lat":34.0786,"lon":-116.8710,"elev_ft":7100},{"name":"San Gorgonio Mountain","lat":34.0993,"lon":-116.8249,"elev_ft":11503}]'
+      : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45, elevation: 11400 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+    fetchElevationFt,
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'San Gorgonio Copied Coordinates Test', route: 'Vivian Creek Trail', lat: 34.0993, lon: -116.8249, date: '2026-09-26', start: '07:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([6080, 9293, 11496, 9293, 6080]);
+  expect(fetchElevationFt).toHaveBeenCalledTimes(2);
+});
+
+test('an implausible generated elevation at a mislocated landmark is dropped, not kept', async () => {
+  const app = express();
+  app.use(express.json());
+  const fetchElevationFt = jest.fn(async () => ({ elevationFt: 11496 }));
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints'
+      ? '[{"name":"Echoed Trailhead","lat":34.0993,"lon":-116.8249,"elev_ft":0},{"name":"Odd Camp","lat":34.0993,"lon":-116.8249,"elev_ft":-50000},{"name":"San Gorgonio Mountain","lat":34.0993,"lon":-116.8249,"elev_ft":11503}]'
+      : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45, elevation: 11400 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+    fetchElevationFt,
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'San Gorgonio Implausible Elevation Test', route: 'Vivian Creek Trail', lat: 34.0993, lon: -116.8249, date: '2026-09-26', start: '07:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([null, null, 11496, null, null]);
+});
+
+const generatedRouteApp = (waypointsJson) => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints' ? waypointsJson : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+    fetchElevationFt: async () => ({ elevationFt: null }),
+  });
+  return app;
+};
+
+test('a generated loop continues past the objective back to the trailhead instead of retracing', async () => {
+  const app = generatedRouteApp(JSON.stringify([
+    { name: 'Loop Trailhead', lat: 40.0, lon: -105.1, elev_ft: 8000 },
+    { name: 'North Ridge', lat: 40.02, lon: -105.08, elev_ft: 10000 },
+    { name: 'Loop Peak', lat: 40.03, lon: -105.05, elev_ft: 11000, objective: true },
+    { name: 'South Lake', lat: 40.01, lon: -105.04, elev_ft: 9500 },
+    { name: 'Loop Trailhead', lat: 40.0005, lon: -105.1005, elev_ft: 8000 },
+  ]));
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Loop Peak Shape Test', route: 'Loop Trail', lat: 40.03, lon: -105.05, date: '2026-07-12', start: '06:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.timing).toMatchObject({ roundTrip: false, routeShape: 'loop' });
+  expect(response.body.waypoints.map((waypoint) => waypoint.name)).toEqual([
+    'Loop Trailhead', 'North Ridge', 'Loop Peak', 'South Lake', 'Return to Loop Trailhead',
+  ]);
+  const [start, , summit, , end] = response.body.waypoints;
+  expect(summit).toMatchObject({ lat: 40.03, lon: -105.05 });
+  expect(end).toMatchObject({ lat: start.lat, lon: start.lon, elev_ft: 8000 });
+  expect(response.body.waypoints.every((waypoint) => waypoint.leg === undefined)).toBe(true);
+  expect(response.body.waypoints.at(-1).offset_minutes).toBe(12 * 60);
+  expect(response.body.waypoints.map((waypoint) => waypoint.distance_miles)).toEqual(
+    [...response.body.waypoints.map((waypoint) => waypoint.distance_miles)].sort((a, b) => a - b),
+  );
+});
+
+test('a generated traverse finishes past the objective without a return', async () => {
+  const app = generatedRouteApp(JSON.stringify([
+    { name: 'East Trailhead', lat: 40.0, lon: -105.0, elev_ft: 8000 },
+    { name: 'Traverse Peak', lat: 40.03, lon: -105.05, elev_ft: 11000, objective: true },
+    { name: 'West Trailhead', lat: 40.0, lon: -105.12, elev_ft: 7800 },
+  ]));
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Traverse Peak Shape Test', route: 'Grand Traverse', lat: 40.03, lon: -105.05, date: '2026-07-12', start: '06:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.timing).toMatchObject({ roundTrip: false, routeShape: 'point-to-point' });
+  expect(response.body.waypoints.map((waypoint) => waypoint.name)).toEqual(['East Trailhead', 'Traverse Peak', 'West Trailhead']);
 });
 
 test('GPX elevations are kept rather than replaced by terrain lookups', async () => {

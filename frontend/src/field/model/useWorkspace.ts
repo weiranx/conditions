@@ -1926,6 +1926,7 @@ export function useWorkspace() {
   const handleAnalyzePlannedRoute = useCallback(() => {
     if (!plannedRouteName || viewingHistoryReport) return;
     const gpx = importedGpxRoute;
+    const suggestion = routeSuggestions?.find((option) => option.name === plannedRouteName);
     handleFetchRouteAnalysis(
       objectiveName,
       plannedRouteName,
@@ -1947,10 +1948,13 @@ export function useWorkspace() {
               routeShape: gpx.routeShape,
             },
           }
-        : undefined,
+        : suggestion && Number.isFinite(suggestion.distance_rt_miles) && suggestion.distance_rt_miles > 0
+          ? { routeDistanceRtMiles: suggestion.distance_rt_miles }
+          : undefined,
     );
   }, [
     plannedRouteName,
+    routeSuggestions,
     viewingHistoryReport,
     importedGpxRoute,
     handleFetchRouteAnalysis,
