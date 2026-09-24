@@ -9,8 +9,10 @@ const {
   TRIP_CHAT_SYSTEM_PROMPT,
   createGeminiStreamingModel,
   createContextualFollowUps,
+  FOLLOW_UP_CONTEXT_MESSAGES,
   normalizeReport,
   registerReportChatRoute: registerReportChatRouteWithoutAccount,
+  streamingProviderOptions,
   sanitizeFollowUpSuggestions,
   sanitizeMessages,
 } = require('../src/routes/report-chat');
@@ -174,6 +176,70 @@ describe('report chat request handling', () => {
       { role: 'assistant', content: 'Wind gusts rise after 2 PM and affect the exposed ridge.' },
       { role: 'user', content: 'Generate the three best next questions for this conversation.' },
     ]);
+  });
+
+  test('bases follow-ups on a recent history that starts on a user turn', async () => {
+    const generateText = jest.fn(async () => ({
+      output: { suggestions: ['When do gusts peak?', 'Which source is stale?', 'Where should I turn around?'] },
+    }));
+    const modelMessages = Array.from({ length: 11 }, (_, index) => ({
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `turn ${index}`,
+    }));
+    const providerOptions = { openai: { reasoningEffort: 'low' } };
+
+    await createContextualFollowUps({
+      model: {}, modelMessages, answer: 'Latest answer.', messages: [],
+      abortSignal: new AbortController().signal, generateText,
+      jsonSchema: (schema) => schema, Output: { object: (options) => options },
+      providerOptions,
+    });
+
+    const sent = generateText.mock.calls[0][0];
+    expect(sent.providerOptions).toBe(providerOptions);
+    expect(sent.messages[0]).toEqual({ role: 'user', content: 'turn 6' });
+    expect(sent.messages.slice(0, -2)).toEqual(modelMessages.slice(-(FOLLOW_UP_CONTEXT_MESSAGES - 1)));
+  });
+
+  test('sets per-provider reasoning and OpenAI prompt cache options', () => {
+    expect(streamingProviderOptions('openai', 'gpt-5.6-terra', 'report-chat-abc')).toEqual({
+      openai: { reasoningEffort: 'low', promptCacheKey: 'report-chat-abc' },
+    });
+    expect(streamingProviderOptions('openai', 'gpt-4.1')).toBeUndefined();
+    expect(streamingProviderOptions('gemini', 'gemini-3.7-flash', 'ignored')).toEqual({
+      gemini: { reasoningEffort: 'low' },
+    });
+    expect(streamingProviderOptions('anthropic', 'claude-sonnet-5', 'ignored')).toBeUndefined();
+  });
+
+  test('omits the duplicated forecast discussion text from the chat context', async () => {
+    const app = express();
+    app.use(express.json());
+    const createStream = jest.fn(async ({ reportJson }) => ({ reportJson }));
+    const pipeStream = jest.fn(({ response, stream }) => response.status(200).json(stream));
+    registerReportChatRoute({ app, createStream, pipeStream });
+
+    const response = await request(app)
+      .post('/api/report-chat')
+      .send({
+        report: {
+          supplementalEvidence: {
+            discussion: {
+              text: 'RAW PRODUCT TEXT',
+              sections: [
+                { title: 'SHORT TERM', kind: 'period', text: 'Rain tonight.' },
+                { title: 'MARINE', kind: 'not_relevant', text: 'Small craft advisory.' },
+              ],
+            },
+          },
+        },
+        messages: [{ id: 'q', role: 'user', parts: [{ type: 'text', text: 'Will it rain?' }] }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.reportJson).toContain('Rain tonight.');
+    expect(response.body.reportJson).not.toContain('RAW PRODUCT TEXT');
+    expect(response.body.reportJson).not.toContain('Small craft advisory.');
   });
 
   test('falls back to line-delimited questions when structured output is unavailable', async () => {
