@@ -2,6 +2,7 @@
 import pleasantnessScoring from "../../backend/src/utils/pleasantness-score.js";
 import contingency from "../../backend/src/utils/contingency.js";
 import approachElevation from "../../backend/src/utils/approach-elevation.js";
+import gearSuggestions from "../../backend/src/utils/gear-suggestions.js";
 export const scenarios = [
   "mixed",
   "clear",
@@ -428,26 +429,25 @@ export function makeReport(params = {}, scenario = "mixed") {
       },
       confidenceReasons: ["All values are synthetic."],
     },
-    gear: [
-      {
-        title: "Shell layer",
-        detail: "Wind protection on exposed terrain.",
-        category: "Clothing",
-        tone: "neutral",
-      },
-      {
-        title: "Headlamp",
-        detail: "For an early start or delayed return.",
-        category: "Essentials",
-        tone: "neutral",
-      },
-    ],
   };
   report.contingency = contingency.buildContingencyAssessment({
     weatherData: { ...report.weather, afterWindowTrend },
     selectedStartTime: first.timeIso,
     selectedTravelWindowHours: count,
     winterTerrain: snowy,
+  });
+  report.gear = gearSuggestions.buildLayeringGearSuggestions({
+    weatherData: report.weather,
+    trailStatus: snowy ? "Snowy / Icy" : "Dry",
+    avalancheData: report.avalanche,
+    airQualityData: report.airQuality,
+    alertsData: report.alerts,
+    rainfallData: report.rainfall,
+    snowpackData: report.snowpack,
+    fireRiskData: report.fireRisk,
+    heatRiskData: report.heatRisk,
+    selectedTravelWindowHours: count,
+    contingencyData: report.contingency,
   });
   report.pleasantness = pleasantnessScoring.calculatePleasantnessScore({
     weatherData: report.weather,

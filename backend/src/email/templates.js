@@ -432,9 +432,9 @@ const buildReadableReportHtml = (report, { temperatureUnit, windUnit }) => {
 
   const gear = Array.isArray(data.gear) ? data.gear : [];
   if (gear.length) {
-    sections.push(reportSectionHtml({ eyebrow: 'Equipment', title: 'Recommended gear', intro: 'Items suggested by the conditions in this report.', body: reportItemCardsHtml(gear, (item) => typeof item === 'string'
+    sections.push(reportSectionHtml({ eyebrow: 'Equipment', title: 'Recommended gear', intro: 'Packing list based on the conditions in this report.', body: reportItemCardsHtml(gear, (item) => typeof item === 'string'
       ? `<strong style="color:#26382c;font-size:13px;">${escapeHtml(fullReportText(item))}</strong>`
-      : `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(item?.title, 'Gear item'))}</strong><span style="display:block;margin-top:3px;color:#718078;font-size:10px;font-weight:800;text-transform:uppercase;">${escapeHtml(fullReportText(item?.category))}</span>${fullReportText(item?.detail) ? `<p style="margin:6px 0 0;color:#526158;font-size:12px;line-height:1.5;">${escapeHtml(fullReportText(item.detail))}</p>` : ''}`) }));
+      : `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(item?.title, 'Gear item'))}</strong><span style="display:block;margin-top:3px;color:#718078;font-size:10px;font-weight:800;text-transform:uppercase;">${escapeHtml(fullReportText(item?.category))}</span>${fullReportText(item?.reason) ? `<p style="margin:6px 0 0;color:#26382c;font-size:12px;font-weight:700;line-height:1.5;">${escapeHtml(fullReportText(item.reason))}</p>` : ''}${fullReportText(item?.detail) ? `<p style="margin:6px 0 0;color:#526158;font-size:12px;line-height:1.5;">${escapeHtml(fullReportText(item.detail))}</p>` : ''}`) }));
   }
 
   const summaries = Array.isArray(routeAnalysis.summaries) ? routeAnalysis.summaries : [];
