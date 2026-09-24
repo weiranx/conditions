@@ -519,6 +519,7 @@ export function Report({
                 decision={decision}
                 actionLine={w.decisionActionLine}
                 onSources={() => go("sources")}
+                localize={w.localizeUnitText}
               />
             )}
           </Suspense>
