@@ -1,6 +1,7 @@
 jest.mock('../src/utils/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() } }));
 const {
   appendReturnCheckpoint,
+  assignRouteDistances,
   classifyDaylight,
   computeCheckpointFractions,
   computeDistanceProgress,
@@ -46,6 +47,32 @@ test('a return checkpoint retraces the outbound route with climbing as descent',
   expect(fractions[1]).toBeCloseTo(100 / 160, 2);
   expect(fractions[2]).toBe(1);
   expect(computeDistanceProgress(route, haversineKm)).toEqual([0, 50, 100]);
+});
+
+test('out-and-back checkpoints get running distances, return included', () => {
+  const route = appendReturnCheckpoint([at(0, 8000), at(1, 8000), at(3, 10000)]);
+  expect(assignRouteDistances(route, haversineKm)).toBe('straight-line');
+  expect(route.map((point) => point.distance_miles)).toEqual([0, 1, 3, 5, 6]);
+});
+
+test('checkpoint distances scale to a known route length, never below the straight line', () => {
+  const scaled = appendReturnCheckpoint([at(0, 8000), at(1, 8000), at(3, 10000)]);
+  expect(assignRouteDistances(scaled, haversineKm, 12)).toBe('route-length');
+  expect(scaled.map((point) => point.distance_miles)).toEqual([0, 2, 6, 10, 12]);
+  const tooShort = appendReturnCheckpoint([at(0, 8000), at(3, 10000)]);
+  expect(assignRouteDistances(tooShort, haversineKm, 2)).toBe('straight-line');
+  expect(tooShort.map((point) => point.distance_miles)).toEqual([0, 3, 6]);
+});
+
+test('the return passes back through each outbound checkpoint in reverse', () => {
+  const route = appendReturnCheckpoint([at(0, 8000), at(1, 8000), at(2, 10000)]);
+  expect(route.map((point) => point.name)).toEqual(['M0', 'M1', 'M2', 'Return to M1', 'Return to M0']);
+  expect(route.slice(3).map((point) => point.leg)).toEqual(['return', 'return']);
+  expect(route[3]).toMatchObject({ lat: route[1].lat, lon: route[1].lon, elev_ft: 8000 });
+  const { fractions } = computeCheckpointFractions(route, { haversineKm });
+  // Up: 20 + 80 min. Down the climb: 20 + 20 = 40 min, then the flat mile: 20 min.
+  expect(fractions.map((fraction) => Number(fraction.toFixed(3)))).toEqual([0, 0.125, 0.625, 0.875, 1]);
+  expect(computeDistanceProgress(route, haversineKm)).toEqual([0, 25, 50, 75, 100]);
 });
 
 test('an unknown elevation drops the climb weighting instead of counting as 0 ft', () => {
@@ -152,13 +179,15 @@ test('mapped routes reach the objective mid-window and check the return at its o
   const harness = mappedHarness({ elevations: { [(40 - 2 * MILE_DEG).toFixed(4)]: 8000, [(40 - MILE_DEG).toFixed(4)]: 8000, '40.0000': 10000 } });
   const result = await runMapped(harness);
   expect(result.timing).toMatchObject({ basis: 'distance-and-vert', roundTrip: true, travelWindowHours: 10, paceSource: 'default' });
-  expect(result.summaries.map((entry) => entry.name)).toEqual(['Test Trail start', 'Test Trail checkpoint 2', 'Test Trail objective', 'Return to Test Trail start']);
-  expect(result.summaries.map((entry) => entry.elev_ft)).toEqual([8000, 8000, 10000, 8000]);
-  expect(result.summaries.map((entry) => entry.progress_percent)).toEqual([0, 25, 50, 100]);
+  expect(result.summaries.map((entry) => entry.name)).toEqual([
+    'Test Trail start', 'Test Trail checkpoint 2', 'Test Trail objective', 'Return to Test Trail checkpoint 2', 'Return to Test Trail start',
+  ]);
+  expect(result.summaries.map((entry) => entry.elev_ft)).toEqual([8000, 8000, 10000, 8000, 8000]);
+  expect(result.summaries.map((entry) => entry.progress_percent)).toEqual([0, 25, 50, 75, 100]);
   expect(result.summaries.at(-1)).toMatchObject({ leg: 'return', etaTime: '16:00' });
-  // Up: 20 + 80 = 100 min; down: 40 + 20 = 60 min; 600 min window → 75, 375, 600 min.
-  expect(result.summaries.map((entry) => entry.etaTime)).toEqual(['06:00', '07:15', '12:15', '16:00']);
-  expect(harness.safetyQueries.map((query) => query.start)).toEqual(['06:00', '07:15', '12:15', '16:00']);
+  // Up: 20 + 80 = 100 min; down: 40 + 20 = 60 min; 600 min window → 75, 375, 525, 600 min.
+  expect(result.summaries.map((entry) => entry.etaTime)).toEqual(['06:00', '07:15', '12:15', '14:45', '16:00']);
+  expect(harness.safetyQueries.map((query) => query.start)).toEqual(['06:00', '07:15', '12:15', '14:45', '16:00']);
   expect(result.terrainProfile.sampledPointCount).toBe(3);
   expect(result.analysis).toContain('Return to Test Trail start at 16:00');
 });
@@ -179,6 +208,6 @@ test('user pace is applied and returned, and arrivals after sunset are flagged',
   });
   const result = await runMapped(harness);
   expect(result.timing).toMatchObject({ paceSource: 'user', pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 45 } });
-  expect(result.summaries.map((entry) => entry.daylight)).toEqual(['day', 'day', 'day', 'dark']);
+  expect(result.summaries.map((entry) => entry.daylight)).toEqual(['day', 'day', 'day', 'day', 'dark']);
   expect(result.analysis).toContain('outside daylight at Return to Test Trail start (16:00)');
 });

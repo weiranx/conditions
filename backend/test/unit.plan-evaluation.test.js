@@ -542,16 +542,36 @@ describe('decision and verdict edge cases', () => {
     expect(verdict).toMatchObject({ insufficient: true, scoreValue: null, bridge: '' });
   });
 
-  test('an access review becomes a decision check without changing the safety score', () => {
+  const lightningInsight = {
+    id: 'lightning',
+    tone: 'caution',
+    title: 'Lightning needs an immediate check',
+    meaning: 'Lightning was detected at the objective.',
+    action: 'Reassess exposed travel before committing.',
+    features: ['fieldObservations'],
+    decisionRelevant: true,
+    evidence: [],
+  };
+
+  test('a source review becomes a decision check without changing the safety score', () => {
+    const report = makeReport();
+    report.reportInsights = { version: 1, summary: '', items: [lightningInsight] };
+    const decision = decide(report);
+    expect(decision.level).toBe('CAUTION');
+    expect(check(decision, 'source-lightning')).toMatchObject({ ok: false, detail: lightningInsight.meaning });
+    expect(decision.cautions.some((text) => text.includes(lightningInsight.action))).toBe(true);
+    expect(report.safety.score).toBe(91);
+    report.featureFlags = { fieldObservations: false };
+    expect(check(decide(report), 'source-lightning')).toBeUndefined();
+  });
+
+  test('nearby closures not matched to the route are advice, not a caution', () => {
     const report = makeReport();
     report.reportInsights = { version: 1, summary: '', items: [accessInsight] };
     const decision = decide(report);
-    expect(decision.level).toBe('CAUTION');
-    expect(check(decision, 'source-access')).toMatchObject({ ok: false, detail: accessInsight.meaning });
-    expect(decision.cautions.some((text) => text.includes(accessInsight.action))).toBe(true);
-    expect(report.safety.score).toBe(91);
-    report.featureFlags = { fieldObservations: false };
-    expect(check(decide(report), 'source-access')).toBeUndefined();
+    expect(check(decision, 'source-access')).toBeUndefined();
+    expect(decision.cautions.some((text) => text.includes(accessInsight.action))).toBe(false);
+    expect(decision.advisories.some((text) => text.includes(accessInsight.action))).toBe(true);
   });
 
   test('a source review turns an otherwise GO decision to CAUTION and never weakens NO-GO', () => {
@@ -559,9 +579,30 @@ describe('decision and verdict edge cases', () => {
     const relaxed = { max_gust_mph: '80', max_precip_chance: '100', min_feels_like_f: '-40', max_feels_like_f: '120' };
     expect(decide(report, relaxed).level).toBe('GO');
     report.reportInsights = { version: 1, summary: '', items: [accessInsight] };
+    expect(decide(report, relaxed).level).toBe('GO');
+    report.reportInsights = { version: 1, summary: '', items: [accessInsight, lightningInsight] };
     expect(decide(report, relaxed).level).toBe('CAUTION');
     report.weather.description = 'Weather data unavailable';
     expect(decide(report, relaxed).level).toBe('NO-GO');
+  });
+
+  test('minor signals inside the limits advise without lowering a GO', () => {
+    const report = makeReport();
+    report.featureFlags = { avalancheDetails: false, daylightTimeline: false, snowpackDetails: false, airQualityDetails: true, heatRiskDetails: true, fireRiskDetails: true, fieldObservations: false };
+    report.airQuality = { status: 'ok', usAqi: 62, category: 'Moderate', measuredTime: new Date().toISOString() };
+    report.fireRisk = { status: 'ok', level: 2, label: 'Elevated', reasons: [] };
+    report.heatRisk = { status: 'ok', level: 2, label: 'Elevated' };
+    report.terrainCondition = { code: 'dry_loose', label: 'Drying / Footing Uncertain', impact: 'moderate' };
+    const relaxed = { max_gust_mph: '80', max_precip_chance: '100', min_feels_like_f: '-40', max_feels_like_f: '120' };
+    const decision = decide(report, relaxed);
+    expect(decision.level).toBe('GO');
+    for (const text of ['Air quality is moderate', 'Fire risk is elevated', 'Heat risk is elevated', 'Terrain and trail surfaces']) {
+      expect(decision.advisories.some((item) => item.startsWith(text))).toBe(true);
+    }
+    report.terrainCondition = { code: 'snow_ice', label: 'Icy / Firm Snow', impact: 'high' };
+    const icy = decide(report, relaxed);
+    expect(icy.level).toBe('CAUTION');
+    expect(icy.cautions.some((item) => item.startsWith('Terrain and trail surfaces'))).toBe(true);
   });
 
   test('the verdict explains a high score under a stricter decision only when they disagree', () => {

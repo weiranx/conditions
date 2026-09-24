@@ -1,6 +1,7 @@
-import { formatSnowDepthForElevationUnit } from "../app/core";
+import { KM_PER_MILE } from "../app/constants";
+import { formatSnowDepthForElevationUnit, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
 import { useState } from "react";
-import { CircleDashed, Clock, CloudRain, Info, Moon, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Wind } from "lucide-react";
+import { CircleCheck, CircleDashed, Clock, Eye, Signpost, type LucideIcon, CloudRain, Footprints, Info, Moon, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Wind } from "lucide-react";
 import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
 import { useAiAvailability } from "../hooks/useAiAvailability";
@@ -8,8 +9,11 @@ import { Details } from "./Details";
 import { dateLabel } from "./data";
 import {
   buildCheckpointProfile,
+  buildDistanceTicks,
   buildProfileTicks,
   buildRouteLegs,
+  checkpointFeelsLike,
+  checkpointLimitFlags,
   checkpointTone,
   describeRouteTiming,
   formatEtaDate,
@@ -18,8 +22,19 @@ import {
   splitRouteBriefing,
 } from "./route-planning";
 import "./route-planning.css";
+import { RouteWeatherChart } from "./RouteWeatherChart";
+import { WeatherSymbol } from "./Forecast";
+import "./forecast.css";
 import { RouteProfile, type ProfileLevel, type ProfileStop } from "./sky/RouteProfile";
 import { knownFeet } from "./sky/status";
+import { skyAt } from "./sky/sky-model";
+
+const BRIEF_ICONS: Record<string, LucideIcon> = {
+  "hazard-zones": TriangleAlert,
+  "weather-window": Clock,
+  "other-concerns": Eye,
+  "decision-points": Signpost,
+};
 
 export function Route({ workspace: w }: { workspace: Workspace }) {
   const [checkpoint, setCheckpoint] = useState(0);
@@ -34,9 +49,23 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const returned = result?.summaries.filter((p) => p.dataAvailable).length ?? 0;
   const displayNumber = (value: unknown, format: (n: number) => string) =>
     hasRouteNumber(value) ? format(value) : "Unavailable";
+  // Arrivals come back as 24-hour clocks; show them in the user's time style.
+  const clock = (value: string | undefined) => (value ? w.formatClockForStyle(value, w.preferences.timeStyle) : "");
+  // Straight lines between checkpoints undercount the trail, so mark them approximate.
+  const miles = (value: number) => `${result?.timing?.distanceBasis === "straight-line" ? "≈ " : ""}${w.formatDistanceDisplay(value)}`;
+  const sunrise = parseSolarClockMinutes(w.safetyData?.solar?.sunrise);
+  const sunset = parseSolarClockMinutes(w.safetyData?.solar?.sunset);
   const stops: ProfileStop[] = (result?.summaries ?? []).map((p) => ({
+    sky: (() => {
+      const arrival = parseTimeInputMinutes(p.etaTime || "");
+      if (arrival === null || !p.dataAvailable) return null;
+      return {
+        ...skyAt(arrival, sunrise, sunset, p.weather.description, p.weather.precipChance),
+        temp: hasRouteNumber(p.weather.temp) ? w.formatTempDisplay(p.weather.temp) : null,
+      };
+    })(),
     name: p.name,
-    eta: p.etaTime || "",
+    eta: clock(p.etaTime),
     tone: checkpointTone(p, w.preferences),
     dark: p.daylight === "dark",
   }));
@@ -51,9 +80,22 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const distance = hasRouteNumber(meta?.distanceMiles) ? meta.distanceMiles : hasRouteNumber(lastDistance) ? lastDistance : null;
   const gain = hasRouteNumber(meta?.elevationGainFt) ? meta.elevationGainFt : null;
   const highPoint = hasRouteNumber(meta?.maxElevationFt) ? meta.maxElevationFt : profile ? profile.high : null;
-  const returnStop = result?.summaries.at(-1)?.leg === "return" ? result.summaries.at(-1) : undefined;
+  // Out-and-backs and loops both end back at the start.
+  const returnStop = result?.summaries.at(-1)?.leg === "return" || result?.timing?.routeShape === "loop" ? result?.summaries.at(-1) : undefined;
   const lastStop = result?.summaries.at(-1);
   const legs = buildRouteLegs(result?.summaries ?? []);
+  const selectedTone = stops[selectedIndex]?.tone ?? "missing";
+  const selectedFeelsLike = selected?.dataAvailable ? checkpointFeelsLike(selected) : null;
+  const selectedFlags = selected ? checkpointLimitFlags(selected, w.preferences) : { feelsLike: false, gust: false, precip: false };
+  const vert = (feet: number) => (Math.abs(feet) < 10 ? "level" : w.formatElevationDeltaDisplay(feet));
+  const profileLegs = legs.map((leg) => {
+    const parts = [leg.distanceMiles !== null ? miles(leg.distanceMiles) : null, leg.elevationDeltaFt !== null ? vert(leg.elevationDeltaFt) : null]
+      .filter((part): part is string => part !== null);
+    return parts.length ? { label: parts.join(" · "), short: parts[0] } : null;
+  });
+  const metric = w.preferences.elevationUnit === "m";
+  const distanceTicks = buildDistanceTicks(profile?.spanMiles ?? null, metric ? KM_PER_MILE : 1)
+    .map((tick) => ({ x: tick.x, label: tick.value === 0 ? "0" : `${tick.value} ${metric ? "km" : "mi"}` }));
   const profileTicks = profile
     ? buildProfileTicks(profile.low, profile.high).map((tick) => ({ y: tick.y, label: w.formatElevationDisplay(tick.feet) }))
     : [];
@@ -69,13 +111,13 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const briefing = splitRouteBriefing(result?.analysis);
   const bottomLine = briefing?.find((part) => part.key === "bottom-line");
   const facts: { label: string; value: string; note?: string }[] = [
-    ...(distance !== null ? [{ label: "Distance", value: w.formatDistanceDisplay(distance) }] : []),
+    ...(distance !== null ? [{ label: "Distance", value: hasRouteNumber(meta?.distanceMiles) ? w.formatDistanceDisplay(distance) : miles(distance) }] : []),
     ...(gain !== null ? [{ label: "Gain", value: w.formatElevationDeltaDisplay(gain) }] : []),
     ...(highPoint !== null ? [{ label: "High point", value: w.formatElevationDisplay(highPoint) }] : []),
     ...(highIndex >= 0 && result?.summaries[highIndex]?.etaTime && highIndex !== (result?.summaries.length ?? 0) - 1
-      ? [{ label: "Top out", value: result.summaries[highIndex].etaTime as string }] : []),
+      ? [{ label: "Top out", value: clock(result.summaries[highIndex].etaTime) }] : []),
     ...(lastStop?.etaTime
-      ? [{ label: returnStop ? "Back at start" : "Finish", value: lastStop.etaTime, ...(lastStop.daylight === "dark" ? { note: "After dark" } : {}) }] : []),
+      ? [{ label: returnStop ? "Back at start" : "Finish", value: clock(lastStop.etaTime), ...(lastStop.daylight === "dark" ? { note: "After dark" } : {}) }] : []),
     { label: "Planned time", value: `${w.travelWindowHours} h` },
   ];
   const canAnalyze = !readOnly && !w.routeLoading && available.routeAnalysis && Boolean(w.plannedRouteName);
@@ -93,8 +135,8 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
             {gain !== null && <><strong>{w.formatElevationDeltaDisplay(gain)}</strong> of gain across </>}
             <strong>{result.summaries.length} checkpoints</strong>.{" "}
             {highIndex >= 0 && result.summaries[highIndex].etaTime && (
-              <>You reach the high point, {result.summaries[highIndex].name}, at <strong className={stops[highIndex]?.tone === "over" ? "is-over" : undefined}>{result.summaries[highIndex].etaTime}</strong>{returnStop?.etaTime
-                ? <> and are back at the start around <strong>{returnStop.etaTime}</strong>{returnStop.daylight === "dark" ? ", after dark" : ""}</>
+              <>You reach the high point, {result.summaries[highIndex].name}, at <strong className={stops[highIndex]?.tone === "over" ? "is-over" : undefined}>{clock(result.summaries[highIndex].etaTime)}</strong>{returnStop?.etaTime
+                ? <> and are back at the start around <strong>{clock(returnStop.etaTime)}</strong>{returnStop.daylight === "dark" ? ", after dark" : ""}</>
                 : null}. </>
             )}
             {overStops > 0
@@ -209,7 +251,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               )}
               {profile && (
                 <RouteProfile points={points} stops={stops} selected={selectedIndex} onSelect={setCheckpoint}
-                  ticks={profileTicks} levels={profileLevels}
+                  ticks={profileTicks} levels={profileLevels} distanceTicks={distanceTicks} legs={profileLegs}
                   caption={`Elevation profile across route checkpoints${profileLevels.length ? `. ${profileLevels.map((l) => l.label).join(". ")}` : ""}`} />
               )}
               {profile && (
@@ -226,6 +268,16 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                   </ul>
                 </div>
               )}
+              {result.summaries.length > 1 && (
+                <div className="sky-route-weather-block">
+                  <div className="sky-route-itinerary-head">
+                    <h3>Weather along the route</h3>
+                    <p>Each checkpoint's forecast at your estimated arrival. Hatched checkpoints cross a limit; the strip shows the sky.</p>
+                  </div>
+                  <RouteWeatherChart workspace={w} summaries={result.summaries} tones={stops.map((stop) => stop.tone)}
+                    selected={selectedIndex} onSelect={setCheckpoint} />
+                </div>
+              )}
               <div className="sky-route-itinerary-head">
                 <h3>Checkpoint itinerary</h3>
                 <p>{describeRouteTiming(result.timing)} Times are local to the objective.</p>
@@ -237,8 +289,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                   {result.summaries.map((point, i) => {
                     const leg = legs[i];
                     const showDate = i === 0 || point.etaDate !== result.summaries[i - 1].etaDate;
+                    const turnsBack = point.leg !== "return" && result.summaries[i + 1]?.leg === "return";
                     return (
-                      <li key={i} className={`is-${stops[i]?.tone}${point.leg === "return" ? " is-return" : ""}`}>
+                      <li key={i} className={`is-${stops[i]?.tone}${point.leg === "return" ? " is-return" : ""}${turnsBack ? " is-turnaround" : ""}`}>
                         <button
                           type="button"
                           className="field-route-stop"
@@ -251,11 +304,11 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                             <strong>{point.name}</strong>
                             <small>
                               {hasRouteNumber(point.elev_ft) ? w.formatElevationDisplay(point.elev_ft) : "Elevation unavailable"}
-                              {hasRouteNumber(point.distance_miles) ? ` · ${w.formatDistanceDisplay(point.distance_miles)} along route` : ""}
+                              {hasRouteNumber(point.distance_miles) && point.distance_miles > 0 ? ` · at ${miles(point.distance_miles)}` : ""}
                             </small>
                           </span>
                           <span className="field-route-stop-time">
-                            <strong>{point.etaTime || "Time unavailable"}</strong>
+                            <strong>{clock(point.etaTime) || "Time unavailable"}</strong>
                             <small>{showDate ? formatEtaDate(point.etaDate) || "Date unavailable" : " "}</small>
                           </span>
                           <span className="field-route-stop-wx">
@@ -274,17 +327,18 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                             {point.daylight === "dark" && <span className="sky-route-pill is-night"><Moon size={13} aria-hidden="true" />After dark</span>}
                           </span>
                         </button>
+                        {turnsBack && <p className="field-route-turn" aria-hidden="true">Return by the same route</p>}
                         {leg && (leg.minutes !== null || leg.elevationDeltaFt !== null || leg.distanceMiles !== null) && (
-                          <p className="field-route-leg">
-                            {leg.minutes !== null && <span><Clock size={13} aria-hidden="true" />{formatLegDuration(leg.minutes)}</span>}
+                          <p className="field-route-leg" aria-label={`To ${result.summaries[i + 1]?.name ?? "the next checkpoint"}`}>
+                            {leg.distanceMiles !== null && <span><Footprints size={13} aria-hidden="true" />{miles(leg.distanceMiles)}</span>}
                             {leg.elevationDeltaFt !== null && (
                               Math.abs(leg.elevationDeltaFt) < 10
                                 ? <span><MoveRight size={13} aria-hidden="true" />Level</span>
                                 : leg.elevationDeltaFt > 0
-                                  ? <span><TrendingUp size={13} aria-hidden="true" />{w.formatElevationDeltaDisplay(leg.elevationDeltaFt)}</span>
-                                  : <span><TrendingDown size={13} aria-hidden="true" />{w.formatElevationDeltaDisplay(leg.elevationDeltaFt)}</span>
+                                  ? <span className="is-up"><TrendingUp size={13} aria-hidden="true" />{w.formatElevationDeltaDisplay(leg.elevationDeltaFt)}</span>
+                                  : <span className="is-down"><TrendingDown size={13} aria-hidden="true" />{w.formatElevationDeltaDisplay(leg.elevationDeltaFt)}</span>
                             )}
-                            {leg.distanceMiles !== null && <span>{w.formatDistanceDisplay(leg.distanceMiles)}</span>}
+                            {leg.minutes !== null && <span><Clock size={13} aria-hidden="true" />{formatLegDuration(leg.minutes)}</span>}
                           </p>
                         )}
                       </li>
@@ -293,64 +347,49 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                 </ol>
               )}
               {selected && (
-                <div className="field-checkpoint" id="field-route-checkpoint-detail" role="region" aria-label="Selected checkpoint" aria-live="polite">
-                  <div className="field-checkpoint-head">
-                    <div>
-                      <h3>{selected.name}</h3>
-                      <p>
-                        {displayNumber(selected.elev_ft, w.formatElevationDisplay)}
-                        {hasRouteNumber(selected.distance_miles) ? ` · ${w.formatDistanceDisplay(selected.distance_miles)} along route` : ""}
-                        {" · "}Arrive {selected.etaDate ? `${formatEtaDate(selected.etaDate)} ` : ""}
-                        {selected.etaTime || "Time unavailable"}
-                        {selected.daylight === "dark" ? " · after dark" : ""}
-                      </p>
-                    </div>
-                    <span className={`sky-chip is-${stops[selectedIndex]?.tone}`}>
-                      {stops[selectedIndex]?.tone === "over" ? "Over a limit" : stops[selectedIndex]?.tone === "missing" ? "Can't check every limit" : "Within your limits"}
+                <div className={`field-checkpoint forecast-readout is-${selectedTone}`} id="field-route-checkpoint-detail" role="region" aria-label="Selected checkpoint" aria-live="polite">
+                  <div className="forecast-readout-main">
+                    <span className="field-checkpoint-kicker">
+                      <span className={`field-route-stop-number is-${selectedTone}`} aria-hidden="true">{selectedIndex + 1}</span>
+                      {clock(selected.etaTime) || "Time unavailable"}{selected.etaDate ? ` · ${formatEtaDate(selected.etaDate)}` : ""}
                     </span>
+                    <h3>{selected.name}</h3>
+                    <div className="forecast-readout-temp">
+                      <strong>{selected.dataAvailable ? displayNumber(selected.weather.temp, w.formatTempDisplay) : "—"}</strong>
+                      {selected.dataAvailable && <WeatherSymbol point={{ condition: selected.weather.description || "", isDaytime: selected.daylight !== "dark" }} size={34} />}
+                    </div>
+                    <span>{selected.dataAvailable ? selected.weather.description || "Conditions not described" : "Forecast did not load"}</span>
                   </div>
-                  <dl className="sky-stat-grid">
-                    <div>
-                      <dt>Planning score</dt>
-                      <dd>{selected.dataAvailable ? displayNumber(selected.score, (n) => `${n}/100`) : "Unavailable"}</dd>
-                      <small>
-                        {selected.dataAvailable
-                          ? "Forecast available"
-                          : "Missing data"}
-                      </small>
-                    </div>
-                    <div>
-                      <dt>Weather</dt>
-                      <dd>{selected.dataAvailable ? displayNumber(selected.weather.temp, w.formatTempDisplay) : "Unavailable"}</dd>
-                      <small>{selected.dataAvailable ? selected.weather.description : "Forecast did not load"}</small>
-                    </div>
-                    <div>
-                      <dt>Wind gust</dt>
-                      <dd>{selected.dataAvailable ? displayNumber(selected.weather.windGust, w.formatWindDisplay) : "Unavailable"}</dd>
-                      <small>
-                        Feels like{" "}
-                        {selected.dataAvailable ? displayNumber(selected.weather.feelsLike, w.formatTempDisplay) : "unavailable"}
-                      </small>
-                    </div>
-                    <div>
-                      <dt>Precipitation</dt>
-                      <dd>{selected.dataAvailable ? displayNumber(selected.weather.precipChance, (n) => `${n}%`) : "Unavailable"}</dd>
-                    </div>
-                    <div>
-                      <dt>Avalanche</dt>
-                      <dd>{(selected.dataAvailable && selected.avalanche?.risk) || "Unavailable"}</dd>
-                    </div>
-                    <div>
-                      <dt>Alerts / snow depth</dt>
-                      <dd>
-                        {selected.dataAvailable ? displayNumber(selected.activeAlerts, (n) => `${n} alerts`) : "Alerts unavailable"} ·{" "}
-                        {formatSnowDepthForElevationUnit(
-                          selected.dataAvailable ? selected.snowDepthIn : null,
-                          w.preferences.elevationUnit,
-                        )}
-                      </dd>
-                    </div>
+                  <dl className="forecast-readout-grid">
+                    <div><dt>Feels like</dt><dd className={selectedFlags.feelsLike ? "is-over" : undefined}>{selectedFeelsLike !== null ? w.formatTempDisplay(selectedFeelsLike) : "—"}</dd></div>
+                    <div><dt>Gusts</dt><dd className={selectedFlags.gust ? "is-over" : undefined}>{selected.dataAvailable && hasRouteNumber(selected.weather.windGust) ? w.formatWindDisplay(selected.weather.windGust) : "—"}</dd></div>
+                    <div><dt>Rain chance</dt><dd className={selectedFlags.precip ? "is-over" : undefined}>{selected.dataAvailable && hasRouteNumber(selected.weather.precipChance) ? `${selected.weather.precipChance}%` : "—"}</dd></div>
+                    <div><dt>Elevation</dt><dd>{hasRouteNumber(selected.elev_ft) ? w.formatElevationDisplay(selected.elev_ft) : "—"}</dd></div>
+                    <div><dt>Along route</dt><dd>{hasRouteNumber(selected.distance_miles) ? (selected.distance_miles > 0 ? miles(selected.distance_miles) : "Start") : "—"}</dd></div>
+                    <div><dt>Planning score</dt><dd>{selected.dataAvailable && hasRouteNumber(selected.score) ? `${selected.score}/100` : "—"}</dd></div>
+                    {selected.dataAvailable && selected.avalanche?.risk && <div><dt>Avalanche</dt><dd>{selected.avalanche.risk}</dd></div>}
+                    <div><dt>Alerts</dt><dd className={selected.activeAlerts > 0 ? "is-over" : undefined}>{selected.dataAvailable ? (selected.activeAlerts > 0 ? `${selected.activeAlerts} active` : "None") : "—"}</dd></div>
+                    {selected.dataAvailable && hasRouteNumber(selected.snowDepthIn) && selected.snowDepthIn > 0 && (
+                      <div><dt>Snow depth</dt><dd>{formatSnowDepthForElevationUnit(selected.snowDepthIn, w.preferences.elevationUnit)}</dd></div>
+                    )}
                   </dl>
+                  <p className={`forecast-readout-status is-${selectedTone}`}>
+                    {selectedTone === "over" ? <TriangleAlert size={16} aria-hidden="true" />
+                      : selectedTone === "missing" ? <CircleDashed size={16} aria-hidden="true" />
+                        : <CircleCheck size={16} aria-hidden="true" />}
+                    <span>
+                      {selectedTone === "over"
+                        ? `Over your limits: ${[
+                          selectedFlags.feelsLike && selectedFeelsLike !== null ? `feels like ${w.formatTempDisplay(selectedFeelsLike)}` : null,
+                          selectedFlags.gust ? `gusts ${w.formatWindDisplay(selected.weather.windGust)} (limit ${w.formatWindDisplay(w.preferences.maxWindGustMph)})` : null,
+                          selectedFlags.precip ? `rain chance ${selected.weather.precipChance}% (limit ${w.preferences.maxPrecipChance}%)` : null,
+                        ].filter(Boolean).join(", ")}.`
+                        : selectedTone === "missing"
+                          ? "Some readings are missing here, so not every limit can be checked."
+                          : "Within your limits at this arrival."}
+                      {selected.daylight === "dark" ? " You arrive after dark." : ""}
+                    </span>
+                  </p>
                 </div>
               )}
             </div>
@@ -370,18 +409,16 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                   </div>
                 )}
                 <div className="sky-route-brief-grid">
-                  {briefing.filter((part) => part !== bottomLine).map((part) => (
-                    <div key={part.key} className={`sky-route-brief-part is-${part.key}`}>
-                      <h3>{part.label}</h3>
-                      {part.key === "gear-check" ? (
-                        <ul className="sky-route-gear">
-                          {part.text.split(/;\s*/).map((item) => item.trim().replace(/\.$/, "")).filter(Boolean).map((item, i) => <li key={i}>{item}</li>)}
-                        </ul>
-                      ) : (
+                  {/* Gear is covered by the Gear & actions chapter; older analyses still carry a gear check. */}
+                  {briefing.filter((part) => part !== bottomLine && part.key !== "gear-check").map((part) => {
+                    const Icon = BRIEF_ICONS[part.key] ?? Info;
+                    return (
+                      <div key={part.key} className={`sky-route-brief-part is-${part.key}`}>
+                        <h3><Icon size={16} aria-hidden="true" />{part.label}</h3>
                         <p>{part.text}</p>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             ) : (

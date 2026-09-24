@@ -124,10 +124,10 @@ test("the route profile draws freezing and snow levels and caps the route in sno
       levels={[{ y: 90, label: "Snow level 9,000 ft", tone: "snow" }, { y: 400, label: "Far below", tone: "cold" }]}
     />,
   );
-  assert.match(html, /rp-level is-snow/);
+  assert.match(html, /mt-level is-snow/);
   assert.match(html, />Snow level 9,000 ft</);
   assert.doesNotMatch(html, /Far below/, "levels far outside the route are left off");
-  assert.match(html, /class="rp-snow"/);
+  assert.match(html, /class="mt-snow"/);
 });
 
 test("start times are drawn as arcs under the day's sky, with over-limit hours marked on each", () => {

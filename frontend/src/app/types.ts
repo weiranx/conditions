@@ -807,6 +807,8 @@ export interface SummitDecision {
   headline: string;
   blockers: string[];
   cautions: string[];
+  /** Worth acting on but inside the limits: listed with the cautions without lowering the level. */
+  advisories?: string[];
   checks: { key?: string; label: string; ok: boolean; detail?: string; action?: string }[];
 }
 

@@ -15,6 +15,7 @@ const { toFiniteOrNull } = require('../utils/numbers');
 const {
   DEFAULT_ROUTE_PACE,
   appendReturnCheckpoint,
+  assignRouteDistances,
   classifyDaylight,
   computeCheckpointFractions,
   computeDistanceProgress,
@@ -36,6 +37,11 @@ const withTimeout = (promise, ms, label) => {
 };
 
 const MAX_SUPPLIED_WAYPOINTS = 8;
+// A generated landmark this close to the objective, and not the objective itself,
+// has the objective's coordinates rather than its own.
+const COPIED_OBJECTIVE_COORDINATE_KM = 0.25;
+// Above Everest's summit, a generated landmark elevation is a hallucination.
+const MAX_GENERATED_ELEVATION_FT = 29100;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 
@@ -118,7 +124,6 @@ const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = [], un
     `WEATHER WINDOW: Checkpoint forecasts follow estimated arrival times from ${timing}. ${gustText} ${precipText}${incompleteWeather ? ' Weather coverage is incomplete; missing values are unknown.' : ''}`,
     `OTHER CONCERNS: ${concerns ? `${concerns} ` : ''}This briefing uses forecast and modeled checkpoint data. Verify official alerts, route access, surface conditions, and any unavailable checkpoint before departure.`,
     `DECISION POINTS: Reassess at each timed checkpoint${worst ? `, especially before ${worst.name}` : ''}. Turn around when observed conditions arrive earlier or are worse than the checkpoint forecast.`,
-    'GEAR CHECK: Offline route and navigation backup; emergency communication; weather protection matched to the report; lighting and reserve power; normal backcountry emergency kit.',
     `BOTTOM LINE: ${available.some((summary) => (finiteNumber(summary.score) && summary.score < 40) || summary.tier === 'Extreme') ? 'The route contains a low-margin checkpoint and should not be treated as a go.' : !scored.length ? 'Checkpoint scores are unavailable; there is insufficient evidence for a route decision.' : 'Use the timed checkpoints as verification gates rather than a guarantee.'} Rebuild the route brief when timing or pace changes.`,
   ].join('\n');
 };
@@ -165,15 +170,39 @@ const sanitizeGeneratedWaypoints = (rawWaypoints) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
       throw new Error(`AI waypoint ${index + 1} must have valid coordinates`);
     }
+    // Generated elevations may be kept when the terrain lookup is skipped or
+    // fails, so drop implausible ones (the prompt's own example is 0 ft).
     const elevation = raw.elev_ft == null ? null : Number(raw.elev_ft);
+    const plausible = Number.isFinite(elevation) && elevation > 0 && elevation <= MAX_GENERATED_ELEVATION_FT;
+    const { objective, elev_ft: _generatedElevation, ...rest } = raw;
     return {
-      ...raw,
+      ...rest,
       name,
       lat,
       lon,
-      ...(Number.isFinite(elevation) ? { elev_ft: Math.round(elevation) } : {}),
+      ...(plausible ? { elev_ft: Math.round(elevation) } : {}),
+      ...(objective === true ? { objective: true } : {}),
     };
   });
+};
+
+// A loop's last landmark is its trailhead again: the same name, or practically the same place.
+const LOOP_CLOSE_KM = 0.5;
+
+/**
+ * Where the objective sits in generated landmarks and how the route runs past it.
+ * Landmarks after the objective either close a loop back at the trailhead or
+ * continue a traverse to somewhere else; with none, the route is an out-and-back.
+ */
+const classifyGeneratedRoute = (waypoints) => {
+  const flagged = waypoints.findIndex((waypoint) => waypoint.objective === true);
+  const objectiveIndex = flagged >= 0 ? flagged : waypoints.length - 1;
+  if (objectiveIndex === waypoints.length - 1) return { objectiveIndex, routeShape: 'out-and-back' };
+  const first = waypoints[0];
+  const last = waypoints[waypoints.length - 1];
+  const closes = normalizeTextKey(first.name) === normalizeTextKey(last.name)
+    || haversineKm(first.lat, first.lon, last.lat, last.lon) < LOOP_CLOSE_KM;
+  return { objectiveIndex, routeShape: closes ? 'loop' : 'point-to-point' };
 };
 
 // Haversine distance in km between two lat/lon points
@@ -279,13 +308,13 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
   }).catch(() => null);
 };
 
-const describeTiming = ({ basis, roundTrip, travelWindowHours, pace, paceSource }, daylightEnabled = true) => {
+const describeTiming = ({ basis, roundTrip, routeShape, travelWindowHours, pace, paceSource }, daylightEnabled = true) => {
   const weighting = basis === 'distance-and-vert'
     ? `weighted by segment distance and elevation change (${pace.minutesPerMile} min per mile, ${pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing${paceSource === 'user' ? ' from the traveler\'s pace settings' : ', a default ratio'})`
     : basis === 'distance'
       ? 'weighted by segment distance only because some checkpoint elevations are unknown'
       : basis === 'progress' ? 'spaced by reported route progress' : 'spaced evenly because route distances are unknown';
-  return `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the window and the final checkpoint (leg "return") is the estimated return to the start by the same route.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
+  return `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the window and the checkpoints after it (leg "return") retrace the same route back to the start, the final one being the estimated return to the start.' : ''}${routeShape === 'loop' ? ' The route is a loop: checkpoints after the objective continue around it, and the final checkpoint is the return to the start.' : routeShape === 'point-to-point' ? ' The route is a traverse: checkpoints after the objective continue to a different finish.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
 };
 
 const registerRouteAnalysisRoutes = ({
@@ -349,9 +378,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
   });
 
   // POST /api/route-analysis
-  // Body: { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints?, route_metadata?, pace? }
+  // Body: { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints?, route_metadata?, pace?, route_distance_rt_miles? }
   app.post('/api/route-analysis', async (req, res) => {
-    const { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints, route_metadata, pace } = req.body;
+    const { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints, route_metadata, pace, route_distance_rt_miles } = req.body;
     if (!peak || !route || lat == null || lon == null || !date) {
       return res.status(400).json({ error: 'peak, route, lat, lon, and date are required' });
     }
@@ -376,6 +405,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     }
     const routeMetadata = suppliedWaypoints ? sanitizeRouteMetadata(route_metadata) : null;
     const userPace = sanitizeRoutePace(pace);
+    // Round-trip length of a suggested route, used to scale checkpoint distances.
+    const routeDistanceRtMiles = toFiniteOrNull(route_distance_rt_miles);
+    const knownRouteDistanceRtMiles = routeDistanceRtMiles !== null && routeDistanceRtMiles > 0 && routeDistanceRtMiles <= 1000 ? routeDistanceRtMiles : null;
     try {
       ensureRouteAnalysisEnabled();
     } catch (error) {
@@ -403,22 +435,24 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       let routeSource = 'generated';
       let routeSourceDetails = null;
       let waypointsCopy;
+      let routeShape = 'out-and-back';
+      const locatedAtObjectiveByMistake = new Set();
       if (suppliedWaypoints) {
         routeSource = 'gpx';
         waypointsCopy = suppliedWaypoints.map((waypoint) => ({ ...waypoint }));
       } else if (aiFeatureEnabled) {
         // Version the cache key so older generic "checkpoint 2" results are not
         // reused after tightening the waypoint-name contract.
-        const wpCacheKey = `named-v2|${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
+        const wpCacheKey = `named-v3|${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
         const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {
             const waypointText = await withTimeout(askAI(
               `Return 4-5 real, named landmarks along the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
-Use the specific proper name of each trailhead, junction, camp, lake, pass, ridge feature, or summit that a traveler would recognize on a map. The final entry must use the objective's proper name. Never use generic labels such as "Checkpoint 2", "Waypoint 3", "route start", or "route objective". If the route does not have enough reliably named landmarks, return fewer entries rather than inventing names.
-List them in order from trailhead to summit.
+Use the specific proper name of each trailhead, junction, camp, lake, pass, ridge feature, or summit that a traveler would recognize on a map. The objective's entry must use its proper name and have "objective": true. Never use generic labels such as "Checkpoint 2", "Waypoint 3", "route start", or "route objective". If the route does not have enough reliably named landmarks, return fewer entries rather than inventing names.
+List them in travel order, starting at the trailhead. For an out-and-back route, end at the objective. For a loop, continue past the objective around the loop and end with the starting trailhead again. For a traverse that finishes somewhere else, continue past the objective to that finish.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
-[{"name":"Specific Place Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
+[{"name":"Specific Place Name","lat":0.0,"lon":0.0,"elev_ft":0,"objective":false}]`,
               { maxTokens: 1024, tier: 'fast', feature: 'route-waypoints', userId: req.accountUser.id }
             ), 20000, 'Waypoint lookup');
             try {
@@ -430,13 +464,17 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           throw lastError;
         });
         // Clone so summit pinning doesn't mutate the cached array.
-        waypointsCopy = generatedWaypoints.map((wp) => ({ ...wp }));
-        const summit = waypointsCopy[waypointsCopy.length - 1];
+        waypointsCopy = generatedWaypoints.map(({ objective, ...wp }) => ({ ...wp }));
+        const shape = classifyGeneratedRoute(generatedWaypoints);
+        routeShape = shape.routeShape;
+        const summit = waypointsCopy[shape.objectiveIndex];
         summit.lat = safeLat;
         summit.lon = safeLon;
+        // A loop ends where it began, so its last checkpoint takes the trailhead's place.
+        const loopEnd = routeShape === 'loop' ? waypointsCopy[waypointsCopy.length - 1] : null;
 
         await Promise.all(
-          waypointsCopy.slice(0, -1).map(async (wp) => {
+          waypointsCopy.filter((wp) => wp !== summit && wp !== loopEnd).map(async (wp) => {
             const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
             if (geo) {
               wp.lat = geo.lat;
@@ -444,9 +482,26 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
               wp.geocodingVerified = true;
             } else {
               wp.geocodingVerified = false;
+              // Unfound landmarks keep the AI's coordinates, which are sometimes
+              // just the objective's, echoed from the prompt. A terrain lookup
+              // there would give a trailhead the summit's elevation.
+              if (haversineKm(wp.lat, wp.lon, safeLat, safeLon) < COPIED_OBJECTIVE_COORDINATE_KM) {
+                locatedAtObjectiveByMistake.add(wp);
+              }
             }
           })
         );
+        if (loopEnd) {
+          const start = waypointsCopy[0];
+          Object.assign(loopEnd, {
+            name: `Return to ${start.name}`,
+            lat: start.lat,
+            lon: start.lon,
+            geocodingVerified: start.geocodingVerified,
+          });
+          if (knownElevation(start.elev_ft) !== null) loopEnd.elev_ft = start.elev_ft;
+          if (locatedAtObjectiveByMistake.has(start)) locatedAtObjectiveByMistake.add(loopEnd);
+        }
       } else {
         const mappedRoute = await routeDataService.resolveMappedRoute({
           peak: safePeak,
@@ -478,6 +533,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const replaceElevations = routeSource === 'generated';
       if (typeof fetchElevationFt === 'function') {
         await Promise.all(waypointsCopy.map(async (wp) => {
+          if (locatedAtObjectiveByMistake.has(wp)) return;
           if (!replaceElevations && knownElevation(wp.elev_ft) !== null) return;
           try {
             const { elevationFt } = await withTimeout(Promise.resolve(fetchElevationFt(wp.lat, wp.lon)), 10000, 'Checkpoint elevation') || {};
@@ -487,12 +543,21 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           }
         }));
       }
-      // GPX tracks already cover the whole outing. Named and mapped routes stop at
-      // the objective, so add the trip back to the first checkpoint.
-      const roundTrip = routeSource !== 'gpx';
+      // GPX tracks already cover the whole outing, and so do generated loops and
+      // traverses. Other named and mapped routes stop at the objective, so add the
+      // trip back down through the same checkpoints.
+      const roundTrip = routeSource !== 'gpx' && routeShape === 'out-and-back';
       const outboundWaypoints = waypointsCopy;
+      let distanceBasis = null;
       if (roundTrip) {
         waypointsCopy = appendReturnCheckpoint(waypointsCopy);
+        // Return checkpoints share their outbound twin's coordinates, mislocated or not.
+        waypointsCopy.slice(outboundWaypoints.length).forEach((point, index) => {
+          if (locatedAtObjectiveByMistake.has(outboundWaypoints[outboundWaypoints.length - 2 - index])) locatedAtObjectiveByMistake.add(point);
+        });
+      }
+      if (routeSource !== 'gpx') {
+        distanceBasis = assignRouteDistances(waypointsCopy, haversineKm, knownRouteDistanceRtMiles);
         const progress = computeDistanceProgress(waypointsCopy, haversineKm);
         waypointsCopy.forEach((waypoint, index) => {
           if (progress) waypoint.progress_percent = progress[index];
@@ -528,7 +593,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         const rawPayload = dataAvailable ? settled.value.payload : {};
         const p = sanitizeReportForFeatureFlags(rawPayload, featureFlags);
         // An unknown elevation stays null rather than becoming 0 ft.
-        const resolvedElevationFt = knownElevation(wp.elev_ft) ?? (knownElevation(p.weather?.elevation) !== null ? Math.round(knownElevation(p.weather.elevation)) : null);
+        // The forecast there describes the objective, not a mislocated landmark.
+        const forecastElevationFt = locatedAtObjectiveByMistake.has(wp) ? null : knownElevation(p.weather?.elevation);
+        const resolvedElevationFt = knownElevation(wp.elev_ft) ?? (forecastElevationFt !== null ? Math.round(forecastElevationFt) : null);
         wp.elev_ft = resolvedElevationFt;
         const daylight = dataAvailable ? classifyDaylight(wp.eta_time, p.solar) : null;
         const avyRelevant = Boolean(p.avalanche && p.avalanche.relevant !== false);
@@ -560,9 +627,11 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const timing = {
         basis: timingBasis,
         roundTrip,
+        ...(routeSource !== 'gpx' ? { routeShape } : {}),
         travelWindowHours,
         pace: routePace,
         paceSource: userPace ? 'user' : 'default',
+        ...(distanceBasis ? { distanceBasis } : {}),
       };
 
       // Step 4: Synthesize — feed the AI the raw safety report per waypoint (bounded),
@@ -621,12 +690,11 @@ ${disabledDomainInstruction}
 
 Turn the route data into a decision-ready field briefing rather than a compressed recap or raw-data inventory. Reference specific waypoint names, elevations, distances or progress, times, and actual values. Explain how and why conditions change along the route, how hazards may combine, and what the traveler should do with that information. Distinguish observed, forecast, modeled, and missing evidence when the reports provide that context. Do not assume pace or method of travel. Only discuss hazards present in the reports, and clearly note unavailable waypoint data. Never invent a terrain feature, route detail, timing threshold, or condition that is not supported by the supplied route metadata, terrain profile, or waypoint reports.
 
-Return exactly these six labeled sections, each on its own line, with no other introduction or closing:
+Return exactly these five labeled sections, each on its own line, with no other introduction or closing:
 HAZARD ZONES: 3-5 sentences identifying where conditions materially change by named waypoint, elevation, distance, or progress and explaining the practical consequence of each change.
 WEATHER WINDOW: 2-4 sentences explaining how conditions evolve across the selected travel window, the best-supported timing advantage, and the time-based signs that should trigger reassessment.
 OTHER CONCERNS: 2-4 sentences covering only relevant secondary hazards such as ${avalancheEnabled ? 'avalanche conditions, ' : ''}terrain surface, freezing level, heat, fire, air quality, thunderstorms, or missing data, including interactions with the main hazard.
 DECISION POINTS: 2-4 sentences naming specific checkpoints or condition thresholds where the traveler should pause, verify conditions, turn around, or choose lower-exposure terrain. If exact thresholds are unavailable, state what observable change matters instead of inventing a number.
-GEAR CHECK: 4-7 short condition-specific items separated by semicolons, with no bullets; tie each item to a reported condition or a clearly identified verification need.
 BOTTOM LINE: 2-3 sentences stating go, go-with-caution, or no-go, identifying the decisive evidence, and explaining what new observation or forecast change would alter that conclusion. Never soften a NO-GO reported at any relevant waypoint.
 
 Aim for a substantive 300-550 word briefing when the route evidence supports it. Do not pad sparse data, repeat the same point in multiple sections, or give generic backcountry advice that is unrelated to the reports.

@@ -75,7 +75,7 @@ const trendRowsCoveringWindow = (startTime, travelWindowHours) => {
 /**
  * @param {object} report  a /api/safety payload
  * @param {object} context plan context from plan-context.js
- * @returns {{ level: 'GO'|'CAUTION'|'NO-GO', headline: string, blockers: string[], cautions: string[], checks: object[] }}
+ * @returns {{ level: 'GO'|'CAUTION'|'NO-GO', headline: string, blockers: string[], cautions: string[], advisories: string[], checks: object[] }}
  */
 const evaluateDecision = (report, context) => {
   const {
@@ -90,6 +90,9 @@ const evaluateDecision = (report, context) => {
   } = context;
   const blockers = [];
   const cautions = [];
+  // Signals worth acting on that stay inside the limits and barely move the
+  // score: they are listed with the cautions but do not lower the level.
+  const advisories = [];
   const featureEnabled = (key) => report?.featureFlags?.[key] !== false;
   const avalancheEnabled = featureEnabled('avalancheDetails');
   const airQualityEnabled = featureEnabled('airQualityDetails');
@@ -99,6 +102,7 @@ const evaluateDecision = (report, context) => {
   const daylightEnabled = featureEnabled('daylightTimeline');
   const addBlocker = (message) => { if (!blockers.includes(message)) blockers.push(message); };
   const addCaution = (message) => { if (!cautions.includes(message)) cautions.push(message); };
+  const addAdvisory = (message) => { if (!advisories.includes(message)) advisories.push(message); };
 
   const safety = report?.safety || {};
   const weather = report?.weather || {};
@@ -232,7 +236,11 @@ const evaluateDecision = (report, context) => {
   const terrainCode = String(terrainCondition.code || '').toLowerCase();
   const terrainLabel = terrainCondition.label || report?.trail || 'Unknown';
   const terrainConfidence = String(terrainCondition.confidence || '').toLowerCase();
-  const terrainNeedsAttention = ['snow_ice', 'wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode);
+  const terrainImpact = String(terrainCondition.impact || '').toLowerCase();
+  // Only a high-impact surface (icy, wet or fresh snow) sets a caution; drying,
+  // muddy or patchy-ice footing is advice, as in the score.
+  const terrainHazardous = terrainImpact === 'high' || (!terrainImpact && terrainCode === 'snow_ice');
+  const terrainNeedsAttention = terrainHazardous || ['wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode);
   const terrainCriticalGateFail = terrainCode === 'weather_unavailable';
 
   const weatherFreshnessState = freshnessClass(
@@ -324,7 +332,7 @@ const evaluateDecision = (report, context) => {
     } else if (aqi >= 101) {
       addCaution(`Air quality is unhealthy for sensitive groups (AQI ${Math.round(aqi)}). Reduce exertion, shorten the plan, and use a cleaner-air alternative if anyone develops symptoms.`);
     } else if (aqi >= 51) {
-      addCaution(`Air quality is moderate (AQI ${Math.round(aqi)}). Sensitive group members should reduce sustained exertion and monitor symptoms.`);
+      addAdvisory(`Air quality is moderate (AQI ${Math.round(aqi)}). Sensitive group members should reduce sustained exertion and monitor symptoms.`);
     }
   }
 
@@ -334,7 +342,7 @@ const evaluateDecision = (report, context) => {
     } else if (fireRiskLevel >= 3) {
       addCaution(`${fireRiskStatement('high')} Use a short objective with multiple exits, avoid ignition sources, and turn around for increasing smoke or wind.`);
     } else if (fireRiskLevel >= 2) {
-      addCaution(`${fireRiskStatement('elevated')} Check closures and incident updates, avoid ignition sources, and keep a clear exit route.`);
+      addAdvisory(`${fireRiskStatement('elevated')} Check closures and incident updates, avoid ignition sources, and keep a clear exit route.`);
     }
   }
 
@@ -344,13 +352,13 @@ const evaluateDecision = (report, context) => {
     } else if (heatRiskLevel >= 3) {
       addCaution(`Heat risk is high (${heatRiskLabel}). Move in cooler hours, shorten exposed segments, and set a firm turnaround if water or cooling becomes limited.`);
     } else if (heatRiskLevel >= 2) {
-      addCaution(`Heat risk is elevated (${heatRiskLabel}). Schedule shade and hydration breaks, ease the pace, and watch the group for early symptoms.`);
+      addAdvisory(`Heat risk is elevated (${heatRiskLabel}). Schedule shade and hydration breaks, ease the pace, and watch the group for early symptoms.`);
     }
   }
 
   if (terrainNeedsAttention) {
     const terrainAction = String(terrainCondition.recommendedTravel || '').trim();
-    addCaution(`Terrain and trail surfaces need attention (${terrainLabel}).${terrainAction ? ` ${terrainAction}` : ' Test footing at low-consequence transitions before exposed travel.'}`);
+    (terrainHazardous ? addCaution : addAdvisory)(`Terrain and trail surfaces need attention (${terrainLabel}).${terrainAction ? ` ${terrainAction}` : ' Test footing at low-consequence transitions before exposed travel.'}`);
   }
 
   if (freshnessIssues.length > 0) {
@@ -532,6 +540,12 @@ const evaluateDecision = (report, context) => {
     });
   }
   for (const insight of enabledReportInsights(report).filter((item) => item.decisionRelevant)) {
+    // Access closures come from an area-wide search that is not matched to the
+    // route, and most forests always have some closed road nearby.
+    if (insight.id === 'access') {
+      addAdvisory(`${insight.title}. ${insight.action}`);
+      continue;
+    }
     addCaution(`${insight.title}. ${insight.action}`);
     checks.push({ key: `source-${insight.id}`, label: insight.title, ok: false, detail: insight.meaning, action: insight.action });
   }
@@ -556,7 +570,7 @@ const evaluateDecision = (report, context) => {
   for (const check of checks) {
     if (check.action === undefined) delete check.action;
   }
-  return { level, headline, blockers, cautions, checks };
+  return { level, headline, blockers, cautions, advisories, checks };
 };
 
 module.exports = {

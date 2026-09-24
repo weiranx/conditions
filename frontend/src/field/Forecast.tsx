@@ -38,7 +38,7 @@ import { HourChart, type HourChartKind, type HourGuide, type HourTone } from "./
 import { buildSkyHours, shortHour, type PlannedRow } from "./sky/sky-model";
 import { plainReason } from "./sky/status";
 
-function WeatherSymbol({ point, size = 22 }: { point: Pick<WeatherTrendPoint, "condition" | "isDaytime">; size?: number }) {
+export function WeatherSymbol({ point, size = 22 }: { point: Pick<WeatherTrendPoint, "condition" | "isDaytime">; size?: number }) {
   const condition = (point.condition || "").toLowerCase();
   const props = { size, strokeWidth: 1.6, "aria-hidden": true } as const;
   if (/thunder|storm|lightning/.test(condition)) return <CloudLightning {...props} />;

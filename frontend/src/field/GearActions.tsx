@@ -83,7 +83,7 @@ export function GearActions({
   const blockers = [...new Set(decision.blockers.filter(Boolean))];
   const cautions = [
     ...new Set(
-      decision.cautions.filter((item) => item && !blockers.includes(item)),
+      [...decision.cautions, ...(decision.advisories ?? [])].filter((item) => item && !blockers.includes(item)),
     ),
   ];
   const actions = decision.checks.filter(

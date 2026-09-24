@@ -8,6 +8,7 @@ import { Route } from '../src/field/Route';
 import { WorkspacePlan } from '../src/field/WorkspacePlan';
 import { publishAiAvailability } from '../src/hooks/useAiAvailability';
 import { buildCheckpointProfile } from '../src/field/route-planning';
+import { formatClockForStyle } from '../src/app/core';
 import { parseGpxText } from '../src/lib/gpx';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
 import { makeReport } from '../dev/mock-data.mjs';
@@ -87,6 +88,8 @@ const workspace = (overrides = {}) => ({
   formatElevationDisplay: n => `${n} ft`, formatDistanceDisplay: n => `${n} mi`,
   formatElevationDeltaDisplay: n => `+${n} ft`, formatTempDisplay: n => `${n}°F`,
   formatWindDisplay: n => `${n} mph`,
+  // Arrival clocks pass through as sent unless a test checks the user's time style.
+  formatClockForStyle: (value) => value,
   ...overrides,
 });
 
@@ -136,7 +139,7 @@ test('missing checkpoint forecasts never display zero alerts, score, or weather 
   ]) })} />);
   assert.match(html, /0 of 1 forecasts returned/);
   assert.match(html, /Missing forecast/);
-  assert.match(html, /Alerts unavailable/);
+  assert.match(html, /<dt>Alerts<\/dt><dd>—<\/dd>/);
   assert.doesNotMatch(html, /0 alerts|0\/100|0°F|0 mph|>0%/);
   assert.match(html, /Some checkpoints have incomplete source data/);
 });
@@ -229,7 +232,7 @@ test('an out-and-back shows the return time and flags arrivals after dark', () =
   assert.doesNotMatch(stops[1], /After dark/);
   assert.match(stops[2], /After dark/);
   assert.match(html, /your 14-hour plan by distance and climbing\./);
-  assert.match(html, /last checkpoint is your return to the start/);
+  assert.match(html, /checkpoints after the objective retrace it back to the start/);
 });
 
 import { buildProfileTicks, buildRouteLegs, formatEtaDate, formatLegDuration, splitRouteBriefing } from '../src/field/route-planning';
@@ -261,7 +264,7 @@ test('profile gridlines use round elevations inside the drawn range', () => {
   assert.ok(ticks.every((t) => t.y >= 30 && t.y <= 155));
 });
 
-test('six-part briefings split into sections, free text stays as written', () => {
+test('briefings split into sections without a gear check, free text stays as written', () => {
   const sections = splitRouteBriefing('HAZARD ZONES: Wind on the ridge.\nGEAR CHECK: Shell; headlamp.\nBOTTOM LINE: Go early.');
   assert.deepEqual(sections.map((s) => [s.key, s.text]), [
     ['hazard-zones', 'Wind on the ridge.'], ['gear-check', 'Shell; headlamp.'], ['bottom-line', 'Go early.'],
@@ -271,7 +274,24 @@ test('six-part briefings split into sections, free text stays as written', () =>
     analysis: 'HAZARD ZONES: Wind on the ridge. GEAR CHECK: Shell; headlamp. BOTTOM LINE: Go early.' } })} />);
   const doc = new JSDOM(html).window.document;
   assert.equal(doc.querySelector('.sky-route-bottom p').textContent, 'Go early.');
-  assert.deepEqual([...doc.querySelectorAll('.sky-route-gear li')].map((li) => li.textContent), ['Shell', 'headlamp']);
+  // Gear lives in the Gear & actions chapter, so an older analysis's gear check is not repeated here.
+  assert.deepEqual([...doc.querySelectorAll('.sky-route-brief-part h3')].map((h) => h.textContent), ['Hazard zones']);
+  assert.doesNotMatch(html, /Shell; headlamp/);
+});
+
+test('arrival clocks follow the time style, and loops finish back at the start', () => {
+  const html = renderToStaticMarkup(<Route workspace={workspace({
+    preferences: { elevationUnit: 'ft', timeStyle: '12h' },
+    formatClockForStyle: (value, style) => formatClockForStyle(value, style),
+    routeAnalysis: { ...result([point({ etaTime: '06:00' }), point({ name: 'Summit', elev_ft: 9000, etaTime: '11:30' }),
+      point({ name: 'Return to Trailhead', etaTime: '17:15' })]),
+    timing: { basis: 'distance', roundTrip: false, routeShape: 'loop', travelWindowHours: 12, pace: { minutesPerMile: 20, ascentMinutesPer1000Ft: 30 }, paceSource: 'default' } },
+  })} />);
+  assert.match(html, /6:00 AM/);
+  assert.match(html, /5:15 PM/);
+  assert.doesNotMatch(html, />17:15</);
+  assert.match(html, /Back at start/);
+  assert.match(html, /The route is a loop/);
 });
 
 test('no stop is called the high point when every elevation is unknown', () => {
