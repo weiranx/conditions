@@ -36,7 +36,7 @@ import { buildSkyHours } from "./sky/sky-model";
 import { verdictCopy } from "./verdict-copy";
 import { buildPlannedReportWeatherRows } from "./report-weather";
 import { minutesToTwentyFourHourClock } from "../app/core";
-import { ACTIVITY_PROFILES } from "../app/activity-profiles";
+import { activityProfile, reportActivity, type ActivityChapter } from "../app/activity-profiles";
 import "./sky/sky.css";
 import "./sky/parts.css";
 import "./sky/chapters.css";
@@ -134,9 +134,16 @@ export function Report({
     report.plan.alpineStartTime,
     w.objectiveTimezone,
   );
+  // The report reads in the order its activity needs, e.g. snow first for a ski tour.
+  const activity = activityProfile(reportActivity(report));
+  const chapterRank = (id: Chapter) => {
+    const index = activity.report.chapters.indexOf(id as ActivityChapter);
+    return index < 0 ? chapters.findIndex((c) => c.id === id) + activity.report.chapters.length : index;
+  };
   const visibleChapters = chapters
     .filter((c) => c.id !== "route" || flags.routeAnalysis)
-    .filter((c) => c.id !== "gear" || flags.gearRecommendations);
+    .filter((c) => c.id !== "gear" || flags.gearRecommendations)
+    .sort((a, b) => chapterRank(a.id) - chapterRank(b.id));
   const activeView: View = view === "brief" || view === "all" || visibleChapters.some((c) => c.id === view)
     ? view
     : "forecast";
@@ -506,6 +513,7 @@ export function Report({
             routeEnabled={flags.routeAnalysis}
             route={route}
             gearEnabled={flags.gearRecommendations}
+            activity={reportActivity(report)}
           />
         )}
         {fullReport && (
@@ -539,6 +547,7 @@ export function Report({
               routeEnabled={flags.routeAnalysis}
               route={route}
               gearEnabled={flags.gearRecommendations}
+              activity={reportActivity(report)}
               showMore={false}
             />
           </div>
@@ -570,11 +579,7 @@ export function Report({
                 decision={decision}
                 actionLine={w.decisionActionLine}
                 onSources={() => go("sources")}
-                activityLabel={
-                  data.forecast?.activity
-                    ? ACTIVITY_PROFILES[data.forecast.activity]?.label ?? null
-                    : null
-                }
+                activityLabel={data.forecast?.activity ? activity.label : null}
                 localize={w.localizeUnitText}
               />
             )}

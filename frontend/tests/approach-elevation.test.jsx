@@ -21,6 +21,7 @@ import { buildPersistedReport } from '../src/app/report-storage';
 import { approachTimelineKey, buildApproachRequestParams, comfortApproachIsStale, readingMinutesAfterStart, summarizeApproachHours } from '../src/app/approach-elevation';
 import { ComfortScore } from '../src/field/ComfortScore';
 import { parsePersistedReport } from '../src/app/report-storage';
+import { bandsFromTrailhead } from '../src/app/elevation-forecast';
 
 const timing = { paceMinutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 0 };
 const preferences = { ...getDefaultUserPreferences(), maxWindGustMph: 25, minFeelsLikeF: 5, travelWindowHours: 4 };
@@ -388,4 +389,68 @@ test('a comfort score is out of date when route timing changes, not only the tra
   const gpxRoute = { distanceMiles: 8, displayTrack };
   const gpx = buildApproachProfile({ objectiveElevationFt: 11000, gpxRoute, timing });
   assert.equal(approachTimelineKey(gpx), buildApproachRequestParams({ enabled: true, gpxRoute, timing }).approach_route);
+});
+
+test('an analyzed route sets the trailhead and elevation timeline, below a GPX track and above a typed trailhead', () => {
+  const routeCheckpoints = [
+    { elev_ft: 7400, offset_minutes: 0 },
+    { elev_ft: null, offset_minutes: 60 },
+    { elev_ft: 9600, offset_minutes: 120 },
+    { elev_ft: 11000, offset_minutes: 240 },
+    { elev_ft: 7400, offset_minutes: 480 },
+  ];
+  const route = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, routeCheckpoints, elevationBands: bands, timing });
+  assert.equal(route.source, 'route');
+  assert.equal(route.trailheadElevationFt, 7400);
+  // The checkpoint with an unknown elevation is skipped, not read as 0 ft.
+  assert.deepEqual(route.timeline.map((entry) => entry.minute), [0, 120, 240, 480]);
+  assert.equal(elevationAtMinute(route, 60), 8500);
+  assert.equal(elevationAtMinute(route, 480), 7400, 'the descent is modeled');
+
+  const gpxRoute = {
+    distanceMiles: 8,
+    displayTrack: [
+      { lat: 0, lon: 0, elev_ft: 7500, progress_percent: 0 },
+      { lat: 0, lon: 0, elev_ft: 11000, progress_percent: 100 },
+    ],
+  };
+  assert.equal(buildApproachProfile({ objectiveElevationFt: 11000, gpxRoute, routeCheckpoints, timing }).source, 'gpx');
+
+  // A route without a usable start, or that never drops below the objective, falls back.
+  const noStart = routeCheckpoints.map((checkpoint, index) => (index === 0 ? { ...checkpoint, elev_ft: null } : checkpoint));
+  assert.equal(buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, routeCheckpoints: noStart, timing }).source, 'manual');
+  const flat = [{ elev_ft: 10900, offset_minutes: 0 }, { elev_ft: 11000, offset_minutes: 60 }];
+  assert.equal(buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, routeCheckpoints: flat, timing }).source, 'manual');
+});
+
+test('comfort scored before the route was analyzed says so instead of asking to regenerate', () => {
+  const approach = buildApproachProfile({
+    objectiveElevationFt: 11000,
+    routeCheckpoints: [{ elev_ft: 7400, offset_minutes: 0 }, { elev_ft: 11000, offset_minutes: 240 }],
+    timing,
+  });
+  const comfort = { score: 80, label: 'Pleasant', summary: '', scoreVersion: '1.5.0', approach: { source: 'estimated', trailheadElevationFt: 8200, adjustedHours: 2, inversionHours: 0 } };
+  const html = renderToStaticMarkup(<ComfortScore comfort={comfort} approach={approach} elevation={elevation} />);
+  assert.match(html, /scored before your route was analyzed/);
+  assert.doesNotMatch(html, /Generate the report again/);
+});
+
+test('elevation forecast bands span a known trailhead to the objective', () => {
+  const objectiveBand = { label: 'Objective Elevation', elevationFt: 11000, deltaFromObjectiveFt: 0, temp: 20, feelsLike: 8, windSpeed: 15, windGust: 25 };
+  const defaults = [{ ...objectiveBand, label: 'Approach Terrain', elevationFt: 8200, deltaFromObjectiveFt: -2800 }, objectiveBand];
+  const rebuilt = bandsFromTrailhead(defaults, 6950);
+  assert.deepEqual(rebuilt.map((band) => [band.label, band.elevationFt, band.deltaFromObjectiveFt]), [
+    ['Trailhead', 6950, -4050],
+    ['Mid Route', 9000, -2000],
+    ['Near Objective', 10200, -800],
+    ['Objective Elevation', 11000, 0],
+  ]);
+  // 4,050 ft lower: 3.3 °F warmer and 2 mph calmer per 1,000 ft.
+  assert.equal(rebuilt[0].temp, 33);
+  assert.equal(rebuilt[0].windSpeed, 7);
+  assert.equal(rebuilt[3].temp, 20);
+
+  assert.equal(bandsFromTrailhead(defaults, 10900), defaults, 'a trailhead near the objective keeps the defaults');
+  assert.equal(bandsFromTrailhead(defaults, null), defaults);
+  assert.equal(bandsFromTrailhead([defaults[0]], 7000).length, 1, 'no objective band to anchor on');
 });

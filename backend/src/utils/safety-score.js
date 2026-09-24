@@ -7,13 +7,14 @@ const { normalizeAlertSeverity } = require('./alerts');
 const { deriveTerrainCondition } = require('./terrain-condition');
 const { describeOnset } = require('./contingency');
 const { TEMP_LAPSE_F_PER_1000FT } = require('./approach-elevation');
+const { activityHazardWeight, normalizeActivity } = require('./activity-profiles');
 
 // --- Scoring Config: all thresholds, group scales, tier definitions ---
 // scoreVersion is stamped onto every result so logged scores stay comparable
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.12.0',
+  scoreVersion: '2.13.0',
   maxScore: 100,
   scorePrecision: 1,
 
@@ -347,8 +348,11 @@ const calculateSafetyScore = ({
   scoreFeatures = null,
   includeAvalanche = true,
   contingencyData = null,
+  activity = null,
 }) => {
   const T = SCORING_CONFIG.thresholds;
+  // Absent on callers that predate activity-aware scoring; they score as general backcountry.
+  const scoredActivity = activity ? normalizeActivity(activity) : null;
   const explanations = [];
   const factors = [];
   const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
@@ -376,7 +380,18 @@ const calculateSafetyScore = ({
     if (!Number.isFinite(impact) || impact <= 0) {
       return;
     }
-    factors.push({ hazard, impact, source, message, group: mapHazardToGroup(hazard) });
+    // The planned activity can make a hazard weigh more (never less), e.g.
+    // wind for a scramble or heat for a run.
+    const activityWeight = scoredActivity ? activityHazardWeight(scoredActivity, hazard) : 1;
+    const weightedImpact = activityWeight > 1 ? roundTo(impact * activityWeight) : impact;
+    factors.push({
+      hazard,
+      impact: weightedImpact,
+      source,
+      message,
+      group: mapHazardToGroup(hazard),
+      ...(activityWeight > 1 ? { activityWeight } : {}),
+    });
     explanations.push(message);
   };
 
@@ -1364,6 +1379,7 @@ const calculateSafetyScore = ({
 
   return {
     scoreVersion: SCORING_CONFIG.scoreVersion,
+    activity: scoredActivity,
     score,
     confidence,
     assessmentStatus,

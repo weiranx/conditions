@@ -1,5 +1,6 @@
 const { normalizeHttpUrl } = require('./url-utils');
 const { toFiniteOrNull: parseFiniteNumber } = require('./numbers');
+const { activityProfile, isSnowTravelActivity } = require('./activity-profiles');
 
 const AVALANCHE_UNKNOWN_MESSAGE =
   "No official avalanche center forecast covers this objective. Avalanche terrain can still be dangerous. Treat conditions as unknown and use conservative terrain choices.";
@@ -161,7 +162,7 @@ const evaluateSnowpackSignal = (snowpackData) => {
   };
 };
 
-const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheData, snowpackData, rainfallData }) => {
+const evaluateSeasonalAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheData, snowpackData, rainfallData }) => {
   if (avalancheData?.coverageStatus === 'expired_for_selected_start') {
     return {
       relevant: true,
@@ -299,6 +300,18 @@ const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheD
   return {
     relevant: false,
     reason: 'Objective appears typically low-snow for the selected season and forecast.',
+  };
+};
+
+// Snow-travel activities go looking for snow, so a low-snow season or a
+// snow-free station near the objective does not take avalanche terrain off the
+// table. Activity only switches relevance on; it never switches it off.
+const evaluateAvalancheRelevance = ({ activity = null, ...inputs }) => {
+  const seasonal = evaluateSeasonalAvalancheRelevance(inputs);
+  if (seasonal.relevant || !isSnowTravelActivity(activity)) return seasonal;
+  return {
+    relevant: true,
+    reason: `Planned as ${activityProfile(activity).label.toLowerCase()}, which travels on snow, so avalanche conditions stay in scope. Seasonal signals alone would not have flagged them: ${seasonal.reason}`,
   };
 };
 

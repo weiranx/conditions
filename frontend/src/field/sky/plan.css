@@ -77,6 +77,12 @@
   border: solid var(--sky-on-accent, var(--f-primary-ink)); border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 .sky-activity:has(input:focus-visible) { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; }
+.sky-activity-toggle {
+  display: inline-flex; align-items: center; gap: 4px; margin: 10px 0 0; padding: 6px 2px; border: 0; background: none;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--sky-accent, var(--f-primary)); cursor: pointer;
+}
+.sky-activity-toggle:hover { text-decoration: underline; }
+.sky-activity-toggle:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; border-radius: 6px; }
 .field-plan-form.sky-plan .field-form-submit { margin-top: 24px; min-height: 52px; border-radius: 14px; font-size: 17px; }
 
 @media (max-width: 650px) {

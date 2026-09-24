@@ -16,15 +16,20 @@ import {
 import {
   ACTIVITY_LIMIT_KEYS,
   MAX_CUSTOM_ACTIVITIES,
+  ROUTE_TIMING_KEYS,
   activeActivityKey,
   builtInActivityLimits,
+  builtInRouteTiming,
+  defaultRouteTimingForKey,
   isCustomActivityId,
   normalizeCustomActivityLabel,
   pickActivityLimits,
+  pickRouteTiming,
   sameActivityLimits,
+  sameRouteTiming,
 } from './activity-limits';
 import { ACTIVITY_PROFILE_ORDER } from './activity-profiles';
-import type { ActivityLimits, ActivityType, CustomActivity, UserPreferences } from './types';
+import type { ActivityLimits, ActivityRouteTiming, ActivityType, CustomActivity, UserPreferences } from './types';
 
 function normalizeNumberPreference(rawValue: unknown, fallback: number, min: number, max: number): number {
   const numericValue = Number(rawValue);
@@ -62,6 +67,26 @@ function normalizeActivityLimits(value: unknown, fallback: ActivityLimits): Acti
   return limits;
 }
 
+export const ROUTE_TIMING_BOUNDS = {
+  runnerPaceMinutesPerMile: [5, 90],
+  runnerAscentMinutesPer1000Ft: [0, 120],
+  runnerStopBufferMinutes: [0, 240],
+} as const;
+
+function normalizeRouteTiming(value: unknown, fallback: ActivityRouteTiming): ActivityRouteTiming {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value as Partial<ActivityRouteTiming> : {};
+  const timing = { ...fallback };
+  for (const key of ROUTE_TIMING_KEYS) {
+    const [min, max] = ROUTE_TIMING_BOUNDS[key];
+    timing[key] = normalizeNumberPreference(raw[key], fallback[key], min, max);
+  }
+  return timing;
+}
+
+function isKnownActivityKey(key: string, customIds: Set<string>): boolean {
+  return isCustomActivityId(key) ? customIds.has(key) : ACTIVITY_PROFILE_ORDER.includes(key as ActivityType);
+}
+
 function normalizeCustomActivities(value: unknown): CustomActivity[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
@@ -85,6 +110,7 @@ export function getDefaultUserPreferences(): UserPreferences {
     customActivityId: null,
     customActivities: [],
     activityLimits: {},
+    activityRouteTiming: {},
     defaultStartTime: '07:00',
     themeMode: 'system',
     temperatureUnit: 'f',
@@ -135,6 +161,10 @@ export function normalizeUserPreferences(
   const rawActivityLimits = parsed.activityLimits && typeof parsed.activityLimits === 'object' && !Array.isArray(parsed.activityLimits)
     ? parsed.activityLimits as Record<string, unknown>
     : {};
+  const rawActivityRouteTiming = parsed.activityRouteTiming && typeof parsed.activityRouteTiming === 'object'
+    && !Array.isArray(parsed.activityRouteTiming)
+    ? parsed.activityRouteTiming as Record<string, unknown>
+    : {};
   const customIds = new Set(customActivities.map((activity) => activity.id));
 
   const normalized: UserPreferences = {
@@ -144,6 +174,7 @@ export function normalizeUserPreferences(
     customActivityId: customActivity?.id || null,
     customActivities,
     activityLimits: {},
+    activityRouteTiming: {},
     defaultStartTime: normalizedStartTime,
     themeMode: normalizeThemeMode(parsed.themeMode),
     temperatureUnit: normalizeTemperatureUnit(parsed.temperatureUnit),
@@ -160,24 +191,7 @@ export function normalizeUserPreferences(
       MIN_TRAVEL_WINDOW_HOURS,
       MAX_TRAVEL_WINDOW_HOURS,
     ),
-    runnerPaceMinutesPerMile: normalizeNumberPreference(
-      parsed.runnerPaceMinutesPerMile,
-      defaults.runnerPaceMinutesPerMile,
-      5,
-      90,
-    ),
-    runnerAscentMinutesPer1000Ft: normalizeNumberPreference(
-      parsed.runnerAscentMinutesPer1000Ft,
-      defaults.runnerAscentMinutesPer1000Ft,
-      0,
-      120,
-    ),
-    runnerStopBufferMinutes: normalizeNumberPreference(
-      parsed.runnerStopBufferMinutes,
-      defaults.runnerStopBufferMinutes,
-      0,
-      240,
-    ),
+    ...normalizeRouteTiming(parsed, pickRouteTiming(defaults)),
     approachElevationAdjustment: typeof parsed.approachElevationAdjustment === 'boolean'
       ? parsed.approachElevationAdjustment
       : defaults.approachElevationAdjustment,
@@ -193,10 +207,26 @@ export function normalizeUserPreferences(
   }
   const fallbackLimits = pickActivityLimits(normalized);
   for (const [key, limits] of Object.entries(rawActivityLimits)) {
-    const known = isCustomActivityId(key) ? customIds.has(key) : ACTIVITY_PROFILE_ORDER.includes(key as ActivityType);
-    if (known) normalized.activityLimits[key] = normalizeActivityLimits(limits, fallbackLimits);
+    if (isKnownActivityKey(key, customIds)) normalized.activityLimits[key] = normalizeActivityLimits(limits, fallbackLimits);
   }
   normalized.activityLimits[activeActivityKey(normalized)] = fallbackLimits;
+
+  // Route timing works the same way. Before it was saved per activity, picking
+  // an activity in Settings copied that activity's defaults into the one global
+  // pace, so a pace matching any activity's defaults was never tuned by hand.
+  if (
+    adoptActivityDefaults
+    && !parsed.activityRouteTiming
+    && ACTIVITY_PROFILE_ORDER.some((activity) => sameRouteTiming(pickRouteTiming(normalized), builtInRouteTiming(activity)))
+  ) {
+    Object.assign(normalized, defaultRouteTimingForKey(normalized, activeActivityKey(normalized)));
+  }
+  for (const [key, timing] of Object.entries(rawActivityRouteTiming)) {
+    if (isKnownActivityKey(key, customIds)) {
+      normalized.activityRouteTiming[key] = normalizeRouteTiming(timing, defaultRouteTimingForKey(normalized, key));
+    }
+  }
+  normalized.activityRouteTiming[activeActivityKey(normalized)] = pickRouteTiming(normalized);
   return normalized;
 }
 

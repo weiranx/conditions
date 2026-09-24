@@ -1,4 +1,5 @@
 import { type PersistedReport } from "../app/report-storage";
+import { reportActivity } from "../app/activity-profiles";
 import type { UserPreferences } from "../app/types";
 import type { ParsedGpxRoute } from "../lib/gpx";
 
@@ -58,7 +59,7 @@ export function planFromReport(report: PersistedReport): Plan {
     date: report.plan.forecastDate,
     start: report.plan.alpineStartTime,
     hours: report.plan.travelWindowHours,
-    activity: report.preferences?.defaultActivity || "hiking",
+    activity: reportActivity(report),
     route: report.route.gpxRoute,
   };
 }

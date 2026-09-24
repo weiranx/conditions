@@ -3,6 +3,7 @@ const {
   assertAIFeatureEnabled,
   getAIStatus,
 } = require('../utils/ai-client');
+const { describeActivityInstruction } = require('../utils/activity-profiles');
 const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
@@ -306,6 +307,7 @@ const createReportChatStream = async ({
   onFollowUpError,
   userId,
   disabledDomains = [],
+  activity = null,
 }) => {
   const {
     convertToModelMessages,
@@ -326,7 +328,8 @@ const createReportChatStream = async ({
       const disabledInstruction = disabledDomains.length > 0
         ? `\n\nThese product domains were disabled when this report was generated: ${disabledDomains.join(', ')}. Do not mention, infer, recommend checks or gear for, or direct the user to sources for those domains.`
         : '';
-      const systemPrompt = `${baseSystemPrompt}${disabledInstruction}`;
+      const activityInstruction = describeActivityInstruction(activity);
+      const systemPrompt = `${baseSystemPrompt}${disabledInstruction}${activityInstruction ? `\n\n${activityInstruction}` : ''}`;
       const contextTag = contextType === 'trip' ? 'trip_plan_json' : 'report_json';
       const result = streamText({
         model,
@@ -393,6 +396,7 @@ const registerReportChatRoute = ({
     let reportJson;
     let messages;
     let disabledDomains = [];
+    let activity = null;
     const contextType = req.body?.contextType === 'trip' ? 'trip' : 'report';
     try {
       const rawReport = typeof req.body?.report === 'string'
@@ -411,6 +415,8 @@ const registerReportChatRoute = ({
         ? sanitizeReportForFeatureFlags(rawReport, snapshotFlags)
         : removeDisabledFeatureReferences(rawReport, snapshotFlags);
       reportJson = normalizeReport(filteredReport);
+      // A report carries it under forecast; a multi-day trip context at the top level.
+      activity = filteredReport.forecast?.activity || filteredReport.activity || null;
       messages = sanitizeMessages(req.body?.messages);
       if (messages.length === 0 || messages.at(-1)?.role !== 'user') {
         return res.status(400).json({ error: 'A user message is required' });
@@ -445,6 +451,7 @@ const registerReportChatRoute = ({
         reportJson,
         contextType,
         disabledDomains,
+        activity,
         abortSignal: abortController.signal,
         onError(error) {
           logger.error({ err: error, requestId: req.requestId }, 'report-chat stream error');

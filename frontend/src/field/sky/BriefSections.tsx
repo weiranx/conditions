@@ -7,6 +7,8 @@ import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
 import { avalancheBriefCaption } from "../../app/avalanche-display";
 import { describeCheckpointBreach, type PlannedRouteSummary } from "../route-planning";
 import { RouteStrip } from "./RouteStrip";
+import { activityProfile, orderActivityChecks, type ActivityCheck } from "../../app/activity-profiles";
+import type { ActivityType } from "../../app/types";
 
 export type BriefChapter = "forecast" | "timing" | "terrain" | "route" | "sources" | "gear";
 type Status = CheckStatus;
@@ -64,7 +66,7 @@ function routeCheck(route: PlannedRouteSummary, format: { temp: (f: number) => s
   return { status: "ok" as Status, statusText: "Within limits", caption: `All ${stops.length} checkpoint forecasts are within your limits.${back}` };
 }
 
-export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridge, onOpen, onReadAll, routeEnabled, route = null, gearEnabled, showMore = true }: {
+export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridge, onOpen, onReadAll, routeEnabled, route = null, gearEnabled, activity, showMore = true }: {
   w: Workspace;
   hours: SkyHour[];
   clock: (minute: number) => string;
@@ -79,6 +81,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   /** The route chosen in the plan; the checks then lead with it. */
   route?: PlannedRouteSummary | null;
   gearEnabled: boolean;
+  /** The report's activity; it sets the order of the checks. */
+  activity: ActivityType;
 }) {
   const data = w.safetyData!;
   const prefs = w.preferences;
@@ -144,6 +148,110 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     return [px, py] as const;
   };
 
+  // Every check is shown; the activity sets the order and a failing check leads.
+  const checks: { key: ActivityCheck; over: boolean; card: ReactNode }[] = [
+    { key: "weather", over: overCount > 0, card: (
+      <CheckCard key="weather" title="Weather" onOpen={() => onOpen("forecast")}
+        status={overCount ? "over" : missingCount ? "missing" : "ok"}
+        statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` : "Within limits"}
+        caption={firstOver ? (firstOver.failedRules[0] ? plainRule(firstOver.failedRules[0]) : "A planned hour crosses your limits.")
+          : missingCount ? `${missingCount} planned ${missingCount === 1 ? "hour has" : "hours have"} incomplete readings, so ${missingCount === 1 ? "it" : "they"} can't be confirmed within your limits.`
+          : hours.length ? "Every planned hour is within your limits." : "Hourly forecast unavailable."}>
+        {hours.length > 0 && (
+          <svg className="sky-viz" viewBox="0 0 240 64" role="img"
+            aria-label={`Rain chance by hour against your ${precipLimit}% limit: ${hours.map((h) => `${clock(h.minute)} ${measured(h.precipChance) ? `${h.precipChance}%` : "unavailable"}`).join(", ")}.`}>
+            {hours.map((h, i) => {
+              const bw = 240 / hours.length;
+              const v = measured(h.precipChance) ? h.precipChance : 0;
+              const bh = Math.max(3, (v / 100) * 44);
+              return <rect key={i} x={i * bw + 2} y={48 - bh} width={Math.max(1, bw - 4)} height={bh} rx="3"
+                className={isOverHour(h) ? "f-caution" : h.tone === "missing" ? "f-none s-missing" : "f-okfill"} strokeDasharray={h.tone === "missing" ? "2 2" : undefined} />;
+            })}
+            <line x1="0" x2="240" y1={48 - (precipLimit / 100) * 44} y2={48 - (precipLimit / 100) * 44} className="s-secondary" strokeDasharray="3 3" />
+            <text x="0" y={Math.max(9, 48 - (precipLimit / 100) * 44 - 5)} textAnchor="start" className="t-limit">rain limit {precipLimit}%</text>
+            <text x="0" y="62">{clock(hours[0].minute)}</text>
+            <text x="240" y="62" textAnchor="end">{clock(hours[hours.length - 1].minute + 60)}</text>
+          </svg>
+        )}
+      </CheckCard>
+    ) },
+    { key: "alerts", over: alertCount > 0, card: (
+      <CheckCard key="alerts" title="Alerts" onOpen={() => onOpen("sources")}
+        status={alertCount > 0 ? "over" : alertsMissing ? "missing" : "ok"}
+        statusText={alertCount > 0 ? `${alertCount} active` : alertsMissing ? (data.alerts ? "Not confirmed" : "Not loaded") : "None active"}
+        caption={alertCount > 0 ? (w.nwsTopAlerts?.[0]?.event || "Review the active alert before you go.")
+          : alertsMissing ? (data.alerts ? "The alert feed didn't confirm your planned time. Check official alerts before you go." : "The alert feed didn't respond. This brief may be missing an active warning.") : "No active NWS alerts for your planned time."}>
+        {alertsMissing && alertCount === 0 && <span className="sky-empty">{data.alerts ? "Not confirmed for your time" : "No response from NWS"}</span>}
+      </CheckCard>
+    ) },
+    { key: "daylight", over: daylightStatus === "over", card: (
+      <CheckCard key="daylight" title="Daylight" onOpen={() => onOpen("timing")} status={daylightStatus}
+        statusText={!daylightKnown ? "Unavailable" : spare! < 0 ? `Back ${durationLabel(spare!)} after sunset` : start! < sunrise! ? `Starts before sunrise · ${durationLabel(spare!)} spare` : `${durationLabel(spare!)} spare`}
+        caption={daylightKnown ? `Back at ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}.` : "Sunrise and sunset are unavailable for this plan."}>
+        {daylightKnown && (
+          <svg className="sky-viz" viewBox="0 0 240 70" role="img"
+            aria-label={`Sunrise ${w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}. Out ${w.displayStartTime}, back ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}.`}>
+            <line x1="6" y1="58" x2="234" y2="58" className="s-secondary" strokeOpacity=".35" />
+            <path d="M10 58 Q120 -42 230 58" fill="none" className="s-secondary" strokeOpacity=".35" strokeDasharray="2 5" strokeLinecap="round" />
+            <polyline fill="none" className={daylightStatus === "over" ? "s-caution" : "s-accent"} strokeWidth="4" strokeLinecap="round"
+              points={Array.from({ length: 21 }, (_, k) => arcPoint(start! + ((back! - start!) * k) / 20).join(",")).join(" ")} />
+            <circle cx={arcPoint(back!)[0]} cy={arcPoint(back!)[1]} r="5" className={daylightStatus === "over" ? "f-caution" : "f-accent"} />
+            <circle cx="230" cy="58" r="7" fill="#f4b25c" />
+            <text x="10" y="70">{w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}</text>
+            <text x="236" y="70" textAnchor="end">{w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}</text>
+          </svg>
+        )}
+      </CheckCard>
+    ) },
+    { key: "terrain", over: terrain === "over", card: (
+      <CheckCard key="terrain" title="Terrain & snow" onOpen={() => onOpen("terrain")} status={terrain}
+        statusText={surface || "Unavailable"}
+        caption={bands.length > 1 ? "Temperature by elevation at your start." : w.snowpackBestDepthDisplay ? `Best snow depth estimate: ${w.snowpackBestDepthDisplay}.` : "Surface and snow assessment."}>
+        {bands.length > 1 && (
+          <ol className="sky-ladder" aria-label="Temperature by elevation at your planned time">
+            {[...bands].reverse().slice(0, 3).map((b) => (
+              <li key={b.label} className={b.temp <= 32 ? "is-cold" : undefined}>
+                <span>{b.label}<small>{w.formatElevationDisplay(b.elevationFt)}</small></span>
+                <strong>{w.formatTempDisplay(b.temp)}</strong>
+              </li>
+            ))}
+          </ol>
+        )}
+      </CheckCard>
+    ) },
+    { key: "avalanche", over: avalancheLevel !== null && avalancheLevel >= 3, card: (
+      <CheckCard key="avalanche" title="Avalanche" onOpen={() => onOpen("terrain")}
+        status={w.avalancheRelevant && avalancheLevel === null ? "missing" : avalancheLevel !== null && avalancheLevel >= 3 ? "over" : "ok"}
+        statusText={avalancheLevel !== null && avalancheLevel > 0 ? ["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel] || `Level ${avalancheLevel}` : w.avalancheRelevant ? "No rating" : "Not relevant"}
+        caption={avalancheBriefCaption(data.avalanche, w.avalancheDisplay)}>
+        <svg className="sky-viz" viewBox="0 0 240 40" role="img" aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5.` : "No avalanche danger rating."}>
+          {["Low", "Mod", "Consid", "High", "Extreme"].map((label, i) => (
+            <g key={label}>
+              <rect x={i * 49} y="4" width="44" height="16" rx="5" className={avalancheLevel === i + 1 ? (i >= 2 ? "f-caution" : "f-label") : "f-fill"} />
+              <text x={i * 49 + 22} y="36" textAnchor="middle">{label}</text>
+            </g>
+          ))}
+        </svg>
+      </CheckCard>
+    ) },
+    { key: "air", over: fireHigh || (measured(aqi) && aqi > 100), card: (
+      <CheckCard key="air" title="Air & fire" onOpen={() => onOpen("forecast")}
+        status={fireHigh || (measured(aqi) && aqi > 100) ? "over" : !measured(aqi) ? "missing" : "ok"}
+        statusText={fireHigh && !(measured(aqi) && aqi > 100) ? `Fire risk ${String(w.fireRiskLabel || "high").toLowerCase()}` : measured(aqi) ? `AQI ${aqi}` : "AQI unavailable"}
+        caption={`${aqiCategory || "Air quality unavailable"} · fire risk ${String(w.fireRiskLabel || "unavailable").toLowerCase()}${fireCause ? ` (${fireCause})` : ""}.`}>
+        {measured(aqi) && (
+          <svg className="sky-viz" viewBox="0 0 240 70" role="img" aria-label={`Air quality index ${aqi}, ${aqiCategory || "category unavailable"}.`}>
+            <path d="M64 64 A56 56 0 0 1 176 64" fill="none" className="s-okfill" strokeWidth="10" strokeLinecap="round" />
+            {(() => { const t = Math.min(1, aqi / 300), a = Math.PI * (1 - t); return (
+              <path d={`M64 64 A56 56 0 0 1 ${120 + 56 * Math.cos(a)} ${64 - 56 * Math.sin(a)}`} fill="none" className={aqi > 100 ? "s-caution" : "s-accent"} strokeWidth="10" strokeLinecap="round" />); })()}
+            <text x="120" y="60" textAnchor="middle" className="t-ring">{aqi}</text>
+          </svg>
+        )}
+      </CheckCard>
+    ) },
+  ];
+  const leads = activityProfile(activity).report.leads;
+
   return (
     <>
       <section className="sky-section" aria-labelledby="sky-numbers">
@@ -206,7 +314,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
       </section>
 
       <section className="sky-section" aria-labelledby="sky-checks">
-        <div className="sky-sh"><h2 id="sky-checks">Checks</h2><p>Open any card for the full evidence.</p></div>
+        <div className="sky-sh"><h2 id="sky-checks">Checks</h2><p>{leads ? `Ordered for ${activityProfile(activity).label.toLowerCase()}: ${leads} first. ` : ""}Open any card for the full evidence.</p></div>
         <div className="sky-checks">
           {route && (
             <CheckCard title="Route" className="is-route" onOpen={() => onOpen("route")} {...routeCheck(route, routeFormat)}>
@@ -219,98 +327,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
               )}
             </CheckCard>
           )}
-          <CheckCard title="Weather" onOpen={() => onOpen("forecast")}
-            status={overCount ? "over" : missingCount ? "missing" : "ok"}
-            statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` : "Within limits"}
-            caption={firstOver ? (firstOver.failedRules[0] ? plainRule(firstOver.failedRules[0]) : "A planned hour crosses your limits.")
-              : missingCount ? `${missingCount} planned ${missingCount === 1 ? "hour has" : "hours have"} incomplete readings, so ${missingCount === 1 ? "it" : "they"} can't be confirmed within your limits.`
-              : hours.length ? "Every planned hour is within your limits." : "Hourly forecast unavailable."}>
-            {hours.length > 0 && (
-              <svg className="sky-viz" viewBox="0 0 240 64" role="img"
-                aria-label={`Rain chance by hour against your ${precipLimit}% limit: ${hours.map((h) => `${clock(h.minute)} ${measured(h.precipChance) ? `${h.precipChance}%` : "unavailable"}`).join(", ")}.`}>
-                {hours.map((h, i) => {
-                  const bw = 240 / hours.length;
-                  const v = measured(h.precipChance) ? h.precipChance : 0;
-                  const bh = Math.max(3, (v / 100) * 44);
-                  return <rect key={i} x={i * bw + 2} y={48 - bh} width={Math.max(1, bw - 4)} height={bh} rx="3"
-                    className={isOverHour(h) ? "f-caution" : h.tone === "missing" ? "f-none s-missing" : "f-okfill"} strokeDasharray={h.tone === "missing" ? "2 2" : undefined} />;
-                })}
-                <line x1="0" x2="240" y1={48 - (precipLimit / 100) * 44} y2={48 - (precipLimit / 100) * 44} className="s-secondary" strokeDasharray="3 3" />
-                <text x="0" y={Math.max(9, 48 - (precipLimit / 100) * 44 - 5)} textAnchor="start" className="t-limit">rain limit {precipLimit}%</text>
-                <text x="0" y="62">{clock(hours[0].minute)}</text>
-                <text x="240" y="62" textAnchor="end">{clock(hours[hours.length - 1].minute + 60)}</text>
-              </svg>
-            )}
-          </CheckCard>
-
-          <CheckCard title="Alerts" onOpen={() => onOpen("sources")}
-            status={alertCount > 0 ? "over" : alertsMissing ? "missing" : "ok"}
-            statusText={alertCount > 0 ? `${alertCount} active` : alertsMissing ? (data.alerts ? "Not confirmed" : "Not loaded") : "None active"}
-            caption={alertCount > 0 ? (w.nwsTopAlerts?.[0]?.event || "Review the active alert before you go.")
-              : alertsMissing ? (data.alerts ? "The alert feed didn't confirm your planned time. Check official alerts before you go." : "The alert feed didn't respond. This brief may be missing an active warning.") : "No active NWS alerts for your planned time."}>
-            {alertsMissing && alertCount === 0 && <span className="sky-empty">{data.alerts ? "Not confirmed for your time" : "No response from NWS"}</span>}
-          </CheckCard>
-
-          <CheckCard title="Daylight" onOpen={() => onOpen("timing")} status={daylightStatus}
-            statusText={!daylightKnown ? "Unavailable" : spare! < 0 ? `Back ${durationLabel(spare!)} after sunset` : start! < sunrise! ? `Starts before sunrise · ${durationLabel(spare!)} spare` : `${durationLabel(spare!)} spare`}
-            caption={daylightKnown ? `Back at ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}.` : "Sunrise and sunset are unavailable for this plan."}>
-            {daylightKnown && (
-              <svg className="sky-viz" viewBox="0 0 240 70" role="img"
-                aria-label={`Sunrise ${w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}. Out ${w.displayStartTime}, back ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}.`}>
-                <line x1="6" y1="58" x2="234" y2="58" className="s-secondary" strokeOpacity=".35" />
-                <path d="M10 58 Q120 -42 230 58" fill="none" className="s-secondary" strokeOpacity=".35" strokeDasharray="2 5" strokeLinecap="round" />
-                <polyline fill="none" className={daylightStatus === "over" ? "s-caution" : "s-accent"} strokeWidth="4" strokeLinecap="round"
-                  points={Array.from({ length: 21 }, (_, k) => arcPoint(start! + ((back! - start!) * k) / 20).join(",")).join(" ")} />
-                <circle cx={arcPoint(back!)[0]} cy={arcPoint(back!)[1]} r="5" className={daylightStatus === "over" ? "f-caution" : "f-accent"} />
-                <circle cx="230" cy="58" r="7" fill="#f4b25c" />
-                <text x="10" y="70">{w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}</text>
-                <text x="236" y="70" textAnchor="end">{w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}</text>
-              </svg>
-            )}
-          </CheckCard>
-
-          <CheckCard title="Terrain & snow" onOpen={() => onOpen("terrain")} status={terrain}
-            statusText={surface || "Unavailable"}
-            caption={bands.length > 1 ? "Temperature by elevation at your start." : w.snowpackBestDepthDisplay ? `Best snow depth estimate: ${w.snowpackBestDepthDisplay}.` : "Surface and snow assessment."}>
-            {bands.length > 1 && (
-              <ol className="sky-ladder" aria-label="Temperature by elevation at your planned time">
-                {[...bands].reverse().slice(0, 3).map((b) => (
-                  <li key={b.label} className={b.temp <= 32 ? "is-cold" : undefined}>
-                    <span>{b.label}<small>{w.formatElevationDisplay(b.elevationFt)}</small></span>
-                    <strong>{w.formatTempDisplay(b.temp)}</strong>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </CheckCard>
-
-          <CheckCard title="Avalanche" onOpen={() => onOpen("terrain")}
-            status={w.avalancheRelevant && avalancheLevel === null ? "missing" : avalancheLevel !== null && avalancheLevel >= 3 ? "over" : "ok"}
-            statusText={avalancheLevel !== null && avalancheLevel > 0 ? ["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel] || `Level ${avalancheLevel}` : w.avalancheRelevant ? "No rating" : "Not relevant"}
-            caption={avalancheBriefCaption(data.avalanche, w.avalancheDisplay)}>
-            <svg className="sky-viz" viewBox="0 0 240 40" role="img" aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5.` : "No avalanche danger rating."}>
-              {["Low", "Mod", "Consid", "High", "Extreme"].map((label, i) => (
-                <g key={label}>
-                  <rect x={i * 49} y="4" width="44" height="16" rx="5" className={avalancheLevel === i + 1 ? (i >= 2 ? "f-caution" : "f-label") : "f-fill"} />
-                  <text x={i * 49 + 22} y="36" textAnchor="middle">{label}</text>
-                </g>
-              ))}
-            </svg>
-          </CheckCard>
-
-          <CheckCard title="Air & fire" onOpen={() => onOpen("forecast")}
-            status={fireHigh || (measured(aqi) && aqi > 100) ? "over" : !measured(aqi) ? "missing" : "ok"}
-            statusText={fireHigh && !(measured(aqi) && aqi > 100) ? `Fire risk ${String(w.fireRiskLabel || "high").toLowerCase()}` : measured(aqi) ? `AQI ${aqi}` : "AQI unavailable"}
-            caption={`${aqiCategory || "Air quality unavailable"} · fire risk ${String(w.fireRiskLabel || "unavailable").toLowerCase()}${fireCause ? ` (${fireCause})` : ""}.`}>
-            {measured(aqi) && (
-              <svg className="sky-viz" viewBox="0 0 240 70" role="img" aria-label={`Air quality index ${aqi}, ${aqiCategory || "category unavailable"}.`}>
-                <path d="M64 64 A56 56 0 0 1 176 64" fill="none" className="s-okfill" strokeWidth="10" strokeLinecap="round" />
-                {(() => { const t = Math.min(1, aqi / 300), a = Math.PI * (1 - t); return (
-                  <path d={`M64 64 A56 56 0 0 1 ${120 + 56 * Math.cos(a)} ${64 - 56 * Math.sin(a)}`} fill="none" className={aqi > 100 ? "s-caution" : "s-accent"} strokeWidth="10" strokeLinecap="round" />); })()}
-                <text x="120" y="60" textAnchor="middle" className="t-ring">{aqi}</text>
-              </svg>
-            )}
-          </CheckCard>
+          {orderActivityChecks(checks, activity).map((check) => check.card)}
         </div>
       </section>
 
