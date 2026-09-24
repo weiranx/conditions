@@ -288,7 +288,7 @@ const describeTiming = ({ basis, roundTrip, travelWindowHours, pace, paceSource 
     : basis === 'distance'
       ? 'weighted by segment distance only because some checkpoint elevations are unknown'
       : basis === 'progress' ? 'spaced by reported route progress' : 'spaced evenly because route distances are unknown';
-  return `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the window and the final checkpoint (leg "return") is the estimated return to the start by the same route.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
+  return `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the window and the checkpoints after it (leg "return") retrace the same route back to the start, the final one being the estimated return to the start.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
 };
 
 const registerRouteAnalysisRoutes = ({
@@ -499,13 +499,15 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         }));
       }
       // GPX tracks already cover the whole outing. Named and mapped routes stop at
-      // the objective, so add the trip back to the first checkpoint.
+      // the objective, so add the trip back down through the same checkpoints.
       const roundTrip = routeSource !== 'gpx';
       const outboundWaypoints = waypointsCopy;
       if (roundTrip) {
         waypointsCopy = appendReturnCheckpoint(waypointsCopy);
-        // The return shares the start's coordinates, mislocated or not.
-        if (locatedAtObjectiveByMistake.has(waypointsCopy[0])) locatedAtObjectiveByMistake.add(waypointsCopy[waypointsCopy.length - 1]);
+        // Return checkpoints share their outbound twin's coordinates, mislocated or not.
+        waypointsCopy.slice(outboundWaypoints.length).forEach((point, index) => {
+          if (locatedAtObjectiveByMistake.has(outboundWaypoints[outboundWaypoints.length - 2 - index])) locatedAtObjectiveByMistake.add(point);
+        });
         const progress = computeDistanceProgress(waypointsCopy, haversineKm);
         waypointsCopy.forEach((waypoint, index) => {
           if (progress) waypoint.progress_percent = progress[index];

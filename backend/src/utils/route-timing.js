@@ -25,24 +25,21 @@ const hasCoordinates = (point) => knownNumber(point?.lat) !== null && knownNumbe
 
 /**
  * Named, generated and mapped routes run trailhead to objective only, while the
- * planned travel window covers the whole outing. Append the trip back to the
- * first checkpoint so the objective is reached part-way through the window and
- * the descent is checked at its own arrival time.
+ * planned travel window covers the whole outing. Append the trip back down the
+ * same checkpoints, in reverse, so the objective is reached part-way through the
+ * window and each checkpoint on the descent is checked at its own arrival time.
  */
 const appendReturnCheckpoint = (waypoints) => {
   if (!Array.isArray(waypoints) || waypoints.length < 2) return waypoints;
-  const start = waypoints[0];
-  return [
-    ...waypoints,
-    {
-      name: `Return to ${start.name || 'route start'}`,
-      lat: start.lat,
-      lon: start.lon,
-      ...(knownNumber(start.elev_ft) !== null ? { elev_ft: knownNumber(start.elev_ft) } : {}),
-      leg: 'return',
-      source: start.source,
-    },
-  ];
+  const returnLeg = waypoints.slice(0, -1).reverse().map((point) => ({
+    name: `Return to ${point.name || 'route start'}`,
+    lat: point.lat,
+    lon: point.lon,
+    ...(knownNumber(point.elev_ft) !== null ? { elev_ft: knownNumber(point.elev_ft) } : {}),
+    leg: 'return',
+    source: point.source,
+  }));
+  return [...waypoints, ...returnLeg];
 };
 
 const segmentMiles = (previous, current, haversineKm) => {
@@ -57,8 +54,9 @@ const segmentMiles = (previous, current, haversineKm) => {
 /**
  * Cumulative share (0–1) of the travel window at which each checkpoint is
  * reached. Segments are weighted by distance and, when every checkpoint has an
- * elevation, by climbing and descent. A `leg: 'return'` checkpoint retraces the
- * outbound segments in reverse, so their gain becomes descent and vice versa.
+ * elevation, by climbing and descent. Each `leg: 'return'` checkpoint retraces
+ * the latest outbound segment not yet retraced, so its gain becomes descent and
+ * vice versa; the last one retraces all that remain.
  */
 const computeCheckpointFractions = (waypoints, { haversineKm, pace } = {}) => {
   const points = Array.isArray(waypoints) ? waypoints : [];
@@ -80,8 +78,9 @@ const computeCheckpointFractions = (waypoints, { haversineKm, pace } = {}) => {
   for (let index = 1; index < count; index += 1) {
     const current = points[index];
     if (current.leg === 'return') {
-      // Retrace every outbound segment: climbing becomes descent and vice versa.
-      efforts.push(segments.reduce((total, segment) => total
+      // Retrace outbound segments: climbing becomes descent and vice versa.
+      const retraced = index === count - 1 ? segments.splice(0) : segments.splice(-1);
+      efforts.push(retraced.reduce((total, segment) => total
         + segment.miles * minutesPerMile
         + (segment.lossFt / 1000) * ascentMinutesPer1000Ft
         + (segment.gainFt / 1000) * descentMinutesPer1000Ft, 0));
@@ -115,10 +114,13 @@ const computeDistanceProgress = (waypoints, haversineKm) => {
   const outbound = [];
   const cumulative = [0];
   for (let index = 1; index < points.length; index += 1) {
-    const miles = points[index].leg === 'return'
-      ? outbound.reduce((sum, value) => sum + value, 0)
+    // Return checkpoints retrace outbound segments, as in computeCheckpointFractions.
+    const retraced = points[index].leg !== 'return' ? null
+      : index === points.length - 1 ? outbound.splice(0) : outbound.splice(-1);
+    const miles = retraced
+      ? retraced.reduce((sum, value) => sum + value, 0)
       : segmentMiles(points[index - 1], points[index], haversineKm);
-    if (points[index].leg !== 'return') outbound.push(miles);
+    if (!retraced) outbound.push(miles);
     cumulative.push(cumulative[index - 1] + miles);
   }
   const total = cumulative[cumulative.length - 1];

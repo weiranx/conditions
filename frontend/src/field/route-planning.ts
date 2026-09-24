@@ -64,7 +64,7 @@ export function describeRouteTiming(timing: RouteTiming | undefined): string {
       : timing.basis === "progress"
         ? `Arrivals spread ${window} by route progress, not terrain-adjusted pace.`
         : `Arrivals are spaced evenly across ${window} because route distances are unknown.`;
-  return timing.roundTrip ? `${spread} The route is treated as an out-and-back, so the last checkpoint is your return to the start.` : spread;
+  return timing.roundTrip ? `${spread} The route is treated as an out-and-back, so the checkpoints after the objective retrace it back to the start.` : spread;
 }
 
 /** "2026-09-09" → "Wed, Sep 9", read as a calendar date rather than a UTC instant. */

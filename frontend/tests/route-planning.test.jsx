@@ -229,7 +229,7 @@ test('an out-and-back shows the return time and flags arrivals after dark', () =
   assert.doesNotMatch(stops[1], /After dark/);
   assert.match(stops[2], /After dark/);
   assert.match(html, /your 14-hour plan by distance and climbing\./);
-  assert.match(html, /last checkpoint is your return to the start/);
+  assert.match(html, /checkpoints after the objective retrace it back to the start/);
 });
 
 import { buildProfileTicks, buildRouteLegs, formatEtaDate, formatLegDuration, splitRouteBriefing } from '../src/field/route-planning';

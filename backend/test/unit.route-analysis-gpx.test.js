@@ -204,6 +204,7 @@ test('AI named routes use specific landmark names instead of mapped checkpoint l
     'Happy Isles Trailhead',
     'Vernal Fall Footbridge',
     'Half Dome',
+    'Return to Vernal Fall Footbridge',
     'Return to Happy Isles Trailhead',
   ]);
   expect(response.body.waypoints.at(-1)).toMatchObject({ leg: 'return', lat: 37.7329, lon: -119.5587, elev_ft: 4035 });
@@ -487,7 +488,7 @@ test('AI-generated elevations are replaced by terrain lookups before ETAs are we
     .send({ peak: 'Half Dome Terrain Lookup Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
 
   expect(response.status).toBe(200);
-  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([4000, 4400, 8800, 4000]);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([4000, 4400, 8800, 4400, 4000]);
   expect(response.body.timing.basis).toBe('distance-and-vert');
 });
 
@@ -512,7 +513,7 @@ test('an unfound landmark placed at the objective keeps its generated elevation'
     .send({ peak: 'San Gorgonio Copied Coordinates Test', route: 'Vivian Creek Trail', lat: 34.0993, lon: -116.8249, date: '2026-09-26', start: '07:00' });
 
   expect(response.status).toBe(200);
-  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([6080, 9293, 11496, 6080]);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([6080, 9293, 11496, 9293, 6080]);
   expect(fetchElevationFt).toHaveBeenCalledTimes(2);
 });
 
