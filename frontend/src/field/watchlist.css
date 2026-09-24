@@ -23,6 +23,20 @@
 .field-watch-measurements span { display: inline-flex; align-items: baseline; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--sky-surface); font-size: 13px; color: var(--sky-secondary); }
 .field-watch-measurements b { color: var(--sky-label); font-weight: 650; font-variant-numeric: tabular-nums; }
 .sky-watch-detail { margin: 0; font-size: 14px; line-height: 1.45; color: var(--sky-secondary); }
+.field-watch-latest.is-changed.is-better { background: var(--sky-accent-tint); }
+.field-watch-latest.is-changed.is-better strong { color: var(--sky-accent); }
+
+/* Reported changes: risk increases carry the caution mark, improvements the accent. */
+.sky-watch-reasons { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.45; color: var(--sky-label); }
+.sky-watch-reasons li { position: relative; padding-left: 16px; }
+.sky-watch-reasons li::before { content: ""; position: absolute; left: 2px; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: var(--sky-caution); }
+.sky-watch-reasons li.is-better::before { background: var(--sky-accent); }
+
+.field-watch-review { align-items: flex-start; }
+.field-watch-review.is-improved { box-shadow: inset 4px 0 0 var(--sky-accent); }
+.field-watch-review.is-improved > svg { color: var(--sky-accent); }
+.field-watch-review .sky-watch-reasons { margin-top: 6px; }
+.field-watch-review > .field-button { flex: none; grid-column: 2; justify-self: start; }
 .field-watch-card > .sky-notice { margin: 0; }
 
 .sky-watch-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -35,6 +49,8 @@
 .sky-watch-check h3 { margin: 2px 0; font-size: 15px; font-weight: 650; }
 .sky-watch-check p { margin: 0; font-size: 13px; color: var(--sky-secondary); }
 .sky-watch-check.is-changed .sky-muted, .sky-watch-check.is-failed .sky-muted { color: var(--sky-caution); }
+.sky-watch-check.is-changed.is-better .sky-muted { color: var(--sky-accent); }
+.sky-watch-check .sky-watch-reasons { margin: 2px 0 0; font-size: 13px; color: var(--sky-secondary); }
 
 @media (max-width: 650px) {
   .sky-watch-actions .field-button { flex: 1 1 auto; justify-content: center; }

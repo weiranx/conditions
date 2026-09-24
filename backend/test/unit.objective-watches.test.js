@@ -181,7 +181,7 @@ test('creates or explicitly updates a watch baseline for the signed-in account',
       updated_at: CREATED_AT,
     }],
   });
-  const response = await request(makeApp({ query }))
+  const response = await request(makeApp({ query, now: () => CREATED_AT.getTime() }))
     .post('/api/account/objective-watches')
     .set('Cookie', 'bc_session=test-session')
     .send({ report: SNAPSHOT });
@@ -196,6 +196,8 @@ test('creates or explicitly updates a watch baseline for the signed-in account',
   expect(JSON.parse(params[3])).toEqual(SNAPSHOT.plan);
   expect(JSON.parse(params[4]).savedAt).toBe(SNAPSHOT.savedAt);
   expect(params[5]).toBe(false);
+  expect(sql).toContain('reference_signals = NULL');
+  expect(sql).toContain('reviewed_at = NOW()');
   expect(query.mock.calls.some(([statement]) => statement.includes('COUNT(*)'))).toBe(false);
 });
 
@@ -253,7 +255,7 @@ test('enforces one active watch for Free accounts', async () => {
     if (sql.includes('COUNT(*)')) return { rows: [{ active_count: 1 }] };
     return { rows: [] };
   });
-  const response = await request(makeApp({ query }))
+  const response = await request(makeApp({ query, now: () => CREATED_AT.getTime() }))
     .post('/api/account/objective-watches')
     .set('Cookie', 'bc_session=test-session')
     .send({ report: SNAPSHOT });
@@ -314,7 +316,7 @@ test('allows Premium accounts to create up to ten active watches and queues auto
     if (sql.includes('INSERT INTO objective_watches')) return { rows: [createdRow] };
     return { rows: [] };
   });
-  const response = await request(makeApp({ query, tierKey: 'premium' }))
+  const response = await request(makeApp({ query, tierKey: 'premium', now: () => CREATED_AT.getTime() }))
     .post('/api/account/objective-watches')
     .set('Cookie', 'bc_session=test-session')
     .send({ report: SNAPSHOT });
@@ -752,4 +754,101 @@ test('includes the latest check without exposing internal errors or private chec
   });
   expect(response.body.watches[1].latestCheck).toBeNull();
   expect(query.mock.calls[0][1]).toEqual([USER_ID, 90]);
+});
+
+test.each([
+  ['2026-07-16T15:00:00.000Z', undefined],
+  ['2026-07-16T07:00:00.000Z', 'America/Los_Angeles'],
+])('rejects watching a plan whose date has ended (%s, %s)', async (at, timezone) => {
+  const query = jest.fn();
+  const report = { ...SNAPSHOT, safetyData: { ...SNAPSHOT.safetyData, weather: { temp: 35, timezone } } };
+  const response = await request(makeApp({ query, now: () => Date.parse(at) }))
+    .post('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report });
+
+  expect(response.status).toBe(400);
+  expect(response.body.error).toBe('This plan date has ended. Choose an upcoming date to watch.');
+  expect(query).not.toHaveBeenCalled();
+});
+
+test('still accepts a plan on its date in the objective timezone', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [{
+    id: WATCH_ID, title: 'Mount Rainier', plan: SNAPSHOT.plan, baseline_report: SNAPSHOT,
+    created_at: CREATED_AT, updated_at: CREATED_AT,
+  }] });
+  const report = { ...SNAPSHOT, safetyData: { ...SNAPSHOT.safetyData, weather: { timezone: 'America/Los_Angeles' } } };
+  const response = await request(makeApp({ query, now: () => Date.parse('2026-07-16T06:59:00.000Z') }))
+    .post('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report });
+
+  expect(response.status).toBe(201);
+});
+
+test('marks an account-owned watch reviewed', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [{
+    id: WATCH_ID, title: 'Mount Rainier', plan: SNAPSHOT.plan, baseline_report: SNAPSHOT,
+    reviewed_at: CREATED_AT, created_at: CREATED_AT, updated_at: CREATED_AT,
+  }] });
+  const response = await request(makeApp({ query }))
+    .post(`/api/account/objective-watches/${WATCH_ID}/review`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(200);
+  expect(response.body.watch).toMatchObject({
+    id: WATCH_ID,
+    reviewedAt: CREATED_AT.toISOString(),
+    unreviewedChanges: { count: 0, worsened: false, latest: null, latestWorse: null },
+  });
+  expect(query.mock.calls[0][0]).toContain('SET reviewed_at = NOW()');
+  expect(query.mock.calls[0][1]).toEqual([WATCH_ID, USER_ID]);
+});
+
+test('reviewing rejects invalid IDs and watches owned by another account', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [] });
+  const app = makeApp({ query });
+  const invalid = await request(app)
+    .post('/api/account/objective-watches/not-a-watch/review')
+    .set('Cookie', 'bc_session=test-session');
+  const missing = await request(app)
+    .post(`/api/account/objective-watches/${WATCH_ID}/review`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(invalid.status).toBe(400);
+  expect(missing.status).toBe(404);
+  expect(query).toHaveBeenCalledTimes(1);
+});
+
+test('lists changes made since the last review with the direction of older events inferred', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [{
+    id: WATCH_ID, title: 'Mount Rainier', plan: SNAPSHOT.plan,
+    created_at: CREATED_AT, updated_at: CREATED_AT, reviewed_at: CREATED_AT,
+    last_change: { reasons: [{ key: 'score_improvement', label: 'Conditions score improved from 55 to 80.' }] },
+    unreviewed_changes: {
+      count: 2,
+      worsened: true,
+      latest: { direction: 'better', reasons: [{ key: 'score_improvement', direction: 'better', label: 'Conditions score improved from 55 to 80.' }] },
+      latestWorse: { reasons: [{ key: 'wind_gust', label: 'Peak gusts increased from 20 mph to 40 mph.' }] },
+    },
+  }] });
+  const response = await request(makeApp({ query, tierKey: 'premium' }))
+    .get('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(200);
+  expect(response.body.watches[0]).toMatchObject({
+    reviewedAt: CREATED_AT.toISOString(),
+    lastChange: { direction: 'better', reasons: [{ key: 'score_improvement', direction: 'better' }] },
+    unreviewedChanges: {
+      count: 2,
+      worsened: true,
+      latest: { direction: 'better' },
+      latestWorse: { direction: 'worse', reasons: [{ key: 'wind_gust', direction: 'worse' }] },
+    },
+  });
+  const [sql, params] = query.mock.calls[0];
+  expect(sql).toContain('events.created_at > objective_watches.reviewed_at');
+  expect(sql).toContain("COALESCE(events.change->>'direction', 'worse') <> 'better'");
+  expect(params).toEqual([USER_ID, 90]);
 });

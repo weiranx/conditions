@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Bell,
+  BellRing,
   BookOpen,
   Check,
   Clock3,
@@ -93,6 +94,8 @@ export function Report({
   onEdit,
   onSave,
   onWatch,
+  watching = false,
+  onOpenWatchlist,
   onShare,
   onEmail,
   actionBusy,
@@ -103,6 +106,9 @@ export function Report({
   onEdit: () => void;
   onSave: () => void;
   onWatch: () => void;
+  /** The signed-in account already watches this exact plan. */
+  watching?: boolean;
+  onOpenWatchlist?: () => void;
   onShare: () => void;
   onEmail: () => void;
   actionBusy: boolean;
@@ -232,12 +238,17 @@ export function Report({
           <span className="sky-action-label">{w.copiedLink ? "Copied" : "Share"}</span>
         </button>
       )}
-      {flags.objectiveWatch && (
+      {flags.objectiveWatch && (watching && onOpenWatchlist ? (
+        <button onClick={onOpenWatchlist} title="Open this plan in your watchlist">
+          <BellRing size={14} />
+          <span className="sky-action-label">Watching</span>
+        </button>
+      ) : (
         <button disabled={actionBusy} onClick={onWatch}>
           <Bell size={14} />
           <span className="sky-action-label">Watch</span>
         </button>
-      )}
+      ))}
       <details
         className="report-actions-menu"
         onKeyDown={(event) => {

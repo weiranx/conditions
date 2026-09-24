@@ -2,26 +2,40 @@ import { useEffect, useId, useState } from "react";
 import {
   ArrowUpRight,
   Bell,
+  Check,
+  Info,
   RefreshCw,
   Search,
   Trash2,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import {
   listObjectiveWatches,
   refreshObjectiveWatch,
+  reviewObjectiveWatch,
   deleteObjectiveWatch,
   setObjectiveWatchNotifications,
   getObjectiveWatchChecks,
   getObjectiveWatchEvents,
   formatObjectiveWatchCadence,
   isObjectiveWatchCheckOverdue,
+  objectiveWatchChangeDirection,
   type ObjectiveWatch,
+  type ObjectiveWatchChange,
   type ObjectiveWatchPolicy,
   type ObjectiveWatchCheck,
   type ObjectiveWatchEvent,
 } from "../lib/objective-watches";
-import { watchHasEnded, watchNeedsAttention, watchRefreshWait, watchCheckLabel, watchCheckDetail } from "./watch-status";
+import {
+  watchHasEnded,
+  watchNeedsAttention,
+  watchRefreshWait,
+  watchCheckLabel,
+  watchCheckDetail,
+  watchChangeReasons,
+  watchReasonText,
+} from "./watch-status";
 import { useVisibleRevalidation } from "../hooks/useVisibleRevalidation";
 import "./watchlist.css";
 import { ReportHistory } from "./ReportHistory";
@@ -32,7 +46,23 @@ import { ageLabel, dateLabel, sentenceCase, type Page } from "./data";
 import { Dialog } from "./Dialog";
 import { Details } from "./Details";
 
-function WatchHistory({ id }: { id: string }) {
+const AVALANCHE_DANGER_NAMES = ["", "Low", "Moderate", "Considerable", "High", "Extreme"];
+
+function WatchReasons({ change, localize }: { change: ObjectiveWatchChange | null | undefined; localize: (text: string) => string }) {
+  const reasons = watchChangeReasons(change);
+  if (!reasons.length) return null;
+  return (
+    <ul className="sky-watch-reasons">
+      {reasons.map((reason, index) => (
+        <li key={`${reason.key}-${index}`} className={`is-${reason.direction}`}>
+          {watchReasonText(reason.label, localize)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function WatchHistory({ id, localize }: { id: string; localize: (text: string) => string }) {
   const [checks, setChecks] = useState<ObjectiveWatchCheck[]>([]);
   const [events, setEvents] = useState<ObjectiveWatchEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,12 +112,14 @@ function WatchHistory({ id }: { id: string }) {
         </div>
       )}
       {checks.map((check) => (
-        <article key={check.id} className={`sky-watch-check is-${check.status}`}>
+        <article key={check.id} className={`sky-watch-check is-${check.status}${objectiveWatchChangeDirection(check.change) === "better" ? " is-better" : ""}`}>
           <span className="sky-muted">
-            {check.checkType === "manual" ? "Manual check" : "Automatic check"} · {watchCheckLabel(check.status)}
+            {check.checkType === "manual" ? "Manual check" : "Automatic check"} · {watchCheckLabel(check)}
           </span>
           <h3>{sentenceCase(ageLabel(check.checkedAt))}</h3>
-          <p>{watchCheckDetail(check)}</p>
+          {check.status === "changed"
+            ? <WatchReasons change={check.change} localize={localize} />
+            : <p>{watchCheckDetail(check)}</p>}
           {check.error && <p className="sky-notice is-caution">{check.error}</p>}
           <Details title="Check measurements" value={check.summary} />
         </article>
@@ -130,6 +162,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
   const [pending, setPending] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ObjectiveWatch | null>(null);
+  const localize = w.localizeUnitText;
   const matches = (title: string, date: string | null) =>
     `${title} ${date || ""} ${date ? dateLabel(date) : ""}`.toLocaleLowerCase().includes(query);
   const activeCount = items.filter((item) => !watchHasEnded(item, now)).length;
@@ -301,6 +334,13 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
           const ended = watchHasEnded(item, now);
           const wait = watchRefreshWait(item, policy, now);
           const latest = item.latestCheck;
+          const latestImproved = objectiveWatchChangeDirection(latest?.change) === "better";
+          const avalancheDanger = latest?.summary?.avalancheDanger;
+          const unreviewed = item.unreviewedChanges;
+          const reviewFocus = unreviewed?.worsened ? unreviewed.latestWorse : unreviewed?.latest;
+          // The latest check already lists its reasons; do not repeat them.
+          const reviewFocusShown = latest?.status === "changed" && Boolean(reviewFocus?.checkedAt)
+            && latest.change?.checkedAt === reviewFocus?.checkedAt;
           const attention = watchNeedsAttention(item, policy, now);
           const state = ended ? 'Completed' : policy?.automaticChecks ? policy.schedulerEnabled ? 'Monitoring' : 'Checks paused' : 'Manual checks';
           return (
@@ -321,23 +361,44 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                 ? ` · Next check ${new Date(item.nextCheckAt).toLocaleString()}` : ''}
             </p>
             {latest && (
-              <section className={`field-watch-latest is-${latest.status}`} aria-label={`${item.title} latest check`}>
-                <div className="sky-watch-latest-head"><strong>{watchCheckLabel(latest.status)}</strong>
+              <section className={`field-watch-latest is-${latest.status}${latestImproved ? " is-better" : ""}`} aria-label={`${item.title} latest check`}>
+                <div className="sky-watch-latest-head"><strong>{watchCheckLabel(latest)}</strong>
                   {latest.checkedAt && <time dateTime={latest.checkedAt}>{new Date(latest.checkedAt).toLocaleString()}</time>}
                 </div>
                 {latest.status !== 'failed' && latest.summary && (
                   <p className="field-watch-measurements">
                     {typeof latest.summary.score === 'number' && <span>Score <b>{Math.round(latest.summary.score)}/100</b></span>}
                     {latest.summary.tier && <span>{latest.summary.tier} risk</span>}
-                    {typeof latest.summary.maxWindGust === 'number' && <span>Peak gust <b>{Math.round(latest.summary.maxWindGust)} mph</b></span>}
+                    {typeof avalancheDanger === 'number' && AVALANCHE_DANGER_NAMES[avalancheDanger] && <span>Avalanche <b>{AVALANCHE_DANGER_NAMES[avalancheDanger]}</b></span>}
+                    {typeof latest.summary.maxWindGust === 'number' && <span>Peak gust <b>{w.formatWindDisplay(latest.summary.maxWindGust)}</b></span>}
                     {typeof latest.summary.maxPrecipChance === 'number' && <span>Precipitation <b>{Math.round(latest.summary.maxPrecipChance)}%</b></span>}
                   </p>
                 )}
-                <p className="sky-watch-detail">{watchCheckDetail(latest)}</p>
+                {latest.status === 'changed'
+                  ? <WatchReasons change={latest.change} localize={localize} />
+                  : <p className="sky-watch-detail">{watchCheckDetail(latest)}</p>}
               </section>
             )}
-            {!!item.lastChange?.reasons?.length && latest?.status !== 'changed' && (
-              <p className="sky-notice is-caution">Previous risk increase{item.lastChange.checkedAt ? ` · ${new Date(item.lastChange.checkedAt).toLocaleString()}` : ''}: {item.lastChange.reasons.map((r) => r.label).join(' · ')}</p>
+            {!ended && unreviewed && unreviewed.count > 0 && (
+              <div className={`sky-notice field-watch-review ${unreviewed.worsened ? "is-caution" : "is-improved"}`}>
+                {unreviewed.worsened ? <TriangleAlert size={20} aria-hidden="true" /> : <Info size={20} aria-hidden="true" />}
+                <div>
+                  <strong>{unreviewed.worsened ? "Risk increased since your last review" : "Conditions improved since your last review"}</strong>
+                  {unreviewed.count > 1 && <span className="sky-muted"> · {unreviewed.count} changes in check history</span>}
+                  {!reviewFocusShown && <WatchReasons change={reviewFocus} localize={localize} />}
+                </div>
+                <button
+                  className="field-button"
+                  disabled={!!pending}
+                  onClick={() => void run(item.id, async () => {
+                    await reviewObjectiveWatch(item.id);
+                    setRevision((n) => n + 1);
+                  })}
+                >
+                  <Check size={15} aria-hidden="true" />
+                  Mark reviewed
+                </button>
+              </div>
             )}
             {!ended && isObjectiveWatchCheckOverdue(item, policy, now) && (
               <p className="sky-notice is-caution">
@@ -432,7 +493,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
             )}
             {expanded === item.id && (
               <div id={`watch-history-${item.id}`}>
-                <WatchHistory key={`${item.id}-${revision}-${item.latestCheck?.id || item.lastAttemptedAt || ''}`} id={item.id} />
+                <WatchHistory key={`${item.id}-${revision}-${item.latestCheck?.id || item.lastAttemptedAt || ''}`} id={item.id} localize={localize} />
               </div>
             )}
           </article>

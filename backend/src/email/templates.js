@@ -748,19 +748,43 @@ const buildReportEmail = ({ displayName, report, actionUrl }) => {
   };
 };
 
-const buildObjectiveWatchChangeEmail = ({ displayName, title, reasons, actionUrl }) => {
+const formatWatchPlan = ({ forecastDate, alpineStartTime } = {}) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/u.test(String(forecastDate || ''))
+    ? new Date(`${forecastDate}T12:00:00Z`)
+    : null;
+  const dateLabel = date && Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date)
+    : '';
+  const start = /^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(String(alpineStartTime || '')) ? `${alpineStartTime} start` : '';
+  return { dateLabel, planLabel: [dateLabel, start].filter(Boolean).join(' · ') };
+};
+
+// Alerts are sent for risk increases; improvements found by the same check
+// follow under "Also changed".
+const buildObjectiveWatchChangeEmail = ({ displayName, title, plan, reasons, actionUrl }) => {
   const safeTitle = String(title || 'Watched objective').replace(/[\r\n]+/gu, ' ').trim().slice(0, 160) || 'Watched objective';
-  const safeReasons = Array.isArray(reasons) ? reasons.map((reason) => String(reason || '').trim()).filter(Boolean) : [];
+  const safeReasons = (Array.isArray(reasons) ? reasons : [])
+    .map((reason) => (typeof reason === 'string' ? { label: reason } : reason || {}))
+    .map((reason) => ({
+      label: String(reason.label || '').replace(/[\r\n]+/gu, ' ').trim(),
+      better: reason.direction === 'better',
+    }))
+    .filter((reason) => reason.label);
+  const worse = safeReasons.filter((reason) => !reason.better).map((reason) => reason.label);
+  const better = safeReasons.filter((reason) => reason.better).map((reason) => reason.label);
+  const { dateLabel, planLabel } = formatWatchPlan(plan);
+  const subject = `Risk increased for ${safeTitle}${dateLabel ? ` · ${dateLabel}` : ''}`;
   const greeting = displayName ? `Hi ${escapeHtml(displayName)},` : 'Hello,';
-  const textReasons = safeReasons.map((reason) => `- ${reason}`).join('\n');
-  const htmlReasons = safeReasons.map((reason) => `<li style="margin:0 0 8px;">${escapeHtml(reason)}</li>`).join('');
+  const intro = `Objective Watch found a meaningful risk increase for ${safeTitle}${planLabel ? ` (${planLabel})` : ''}:`;
+  const htmlList = (items) => `<ul style="margin:0;padding-left:20px;">${items.map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`).join('')}</ul>`;
+  const textList = (items) => items.map((item) => `- ${item}`).join('\n');
   return {
-    subject: `Conditions changed for ${safeTitle}`,
-    text: `${displayName ? `Hi ${displayName},\n\n` : ''}Important conditions changed for ${safeTitle}:\n\n${textReasons}\n\nReview the latest watch before relying on the plan.\n\n${actionUrl}`,
+    subject,
+    text: `${displayName ? `Hi ${displayName},\n\n` : ''}${intro}\n\n${textList(worse)}${better.length ? `\n\nAlso changed:\n${textList(better)}` : ''}\n\nReview the latest conditions before relying on the plan.\n\n${actionUrl}`,
     html: emailShell({
-      preview: `Conditions changed for ${safeTitle}`,
-      heading: `Conditions changed for ${safeTitle}`,
-      body: `<p style="margin:0 0 14px;">${greeting}</p><p style="margin:0 0 14px;">Objective Watch detected a meaningful risk increase:</p><ul style="margin:0;padding-left:20px;">${htmlReasons}</ul><p style="margin:16px 0 0;">Review fresh source data and use your own judgment before relying on the plan.</p>`,
+      preview: subject,
+      heading: subject,
+      body: `<p style="margin:0 0 14px;">${greeting}</p><p style="margin:0 0 14px;">${escapeHtml(intro)}</p>${htmlList(worse)}${better.length ? `<p style="margin:16px 0 8px;">Also changed:</p>${htmlList(better)}` : ''}<p style="margin:16px 0 0;">Review fresh source data and use your own judgment before relying on the plan.</p>`,
       actionLabel: 'Review objective watches',
       actionUrl,
       footer: 'Automated checks can miss changes or receive incomplete source data. This is planning support, not a safety guarantee.',

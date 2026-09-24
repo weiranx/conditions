@@ -1,9 +1,12 @@
 const {
   OBJECTIVE_WATCH_CLAIM_LEASE_MS,
+  advanceReferenceSignals,
   buildMeaningfulChange,
+  buildSignalChange,
   calculateNextCheckAt,
   createObjectiveWatchChecker,
   extractWatchSignals,
+  normalizeWatchChange,
 } = require('../src/services/objective-watch-checker');
 const fs = require('fs');
 const path = require('path');
@@ -22,7 +25,7 @@ const safetyPayload = ({ score = 80, danger = 1, gust = 15, precip = 20, closure
   avalanche: { dangerLevel: danger },
   alerts: { alerts },
   terrainCondition: { impact: 'low' },
-  localConditions: { closures: { alerts: closures } },
+  localConditions: { closures: { available: true, alerts: closures } },
   safety: { score, tier: score < 60 ? 'High' : 'Low' },
 });
 
@@ -382,4 +385,224 @@ test.each([
     expect(query.mock.calls.some(([sql]) => sql.includes('last_snapshot ='))).toBe(false);
     expect(query.mock.calls.some(([sql]) => sql.includes('check_claim_token = NULL'))).toBe(true);
   }
+});
+
+describe('change direction and missing sources', () => {
+  const at = new Date('2026-07-14T00:00:00.000Z');
+  const keys = (change) => change?.reasons.map((reason) => reason.key) || [];
+
+  test('tags every reason and the change with a direction, listing risk increases first', () => {
+    const worse = buildMeaningfulChange(safetyPayload(), safetyPayload({ score: 55 }), at);
+    expect(worse.direction).toBe('worse');
+    expect(worse.reasons.every((reason) => reason.direction === 'worse')).toBe(true);
+
+    const better = buildMeaningfulChange(safetyPayload({ score: 55 }), safetyPayload({ score: 80 }), at);
+    expect(better.direction).toBe('better');
+    expect(better.reasons.every((reason) => reason.direction === 'better')).toBe(true);
+
+    const mixed = buildMeaningfulChange(
+      safetyPayload({ gust: 45 }),
+      safetyPayload({ gust: 15, alerts: [{ event: 'Winter Storm Warning', severity: 'Severe' }] }),
+      at,
+    );
+    expect(mixed.direction).toBe('mixed');
+    expect(keys(mixed)).toEqual(['new_weather_alert', 'wind_gust_improvement']);
+  });
+
+  test('labels readings with their units and avalanche danger with its name', () => {
+    const change = buildMeaningfulChange(
+      safetyPayload(),
+      safetyPayload({ danger: 3, gust: 40, alerts: [{ event: 'Winter Storm Warning', severity: 'Severe' }] }),
+      at,
+    );
+    const labels = change.reasons.map((reason) => reason.label);
+    expect(labels).toContain('Peak gusts increased from 15 mph to 40 mph.');
+    expect(labels).toContain('Avalanche danger increased from Low (1) to Considerable (3).');
+    expect(labels).toContain('New weather alert: Winter Storm Warning (Severe).');
+  });
+
+  test('never reads an unavailable source as a cleared alert, lifted closure or lower danger', () => {
+    const previous = safetyPayload({
+      danger: 3,
+      closures: [{ title: 'Road closed' }],
+      alerts: [{ event: 'Winter Storm Warning', severity: 'Severe' }],
+    });
+    const outage = {
+      ...safetyPayload(),
+      avalanche: { dangerLevel: 0, dangerUnknown: true, coverageStatus: 'temporarily_unavailable' },
+      alerts: { status: 'unavailable', alerts: [] },
+      localConditions: { closures: { available: false } },
+    };
+    expect(buildMeaningfulChange(previous, outage, at)).toBeNull();
+    expect(extractWatchSignals(outage)).toMatchObject({ avalancheDanger: null, alertKeys: null, closureTitles: null });
+
+    // A center's "no rating" is not a lower danger either.
+    expect(buildMeaningfulChange(previous, { ...previous, avalanche: { dangerLevel: 0 } }, at)).toBeNull();
+    // Answered feeds with nothing active do clear what was there.
+    const answered = {
+      ...previous,
+      alerts: { status: 'none', alerts: [] },
+      localConditions: { closures: { available: true, alerts: [] } },
+    };
+    expect(keys(buildMeaningfulChange(previous, answered, at))).toEqual(['closure_lifted', 'weather_alert_cleared']);
+  });
+
+  test('does not call a reading that was unknown before an increase', () => {
+    const unknown = { ...safetyPayload(), safety: { score: 80 }, terrainCondition: {} };
+    const known = { ...safetyPayload(), terrainCondition: { impact: 'high' } };
+    expect(buildMeaningfulChange(unknown, known, at)).toBeNull();
+  });
+
+  test('requires gust and precipitation threshold crossings to clear a margin', () => {
+    expect(buildMeaningfulChange(safetyPayload({ gust: 33 }), safetyPayload({ gust: 36 }), at)).toBeNull();
+    expect(keys(buildMeaningfulChange(safetyPayload({ gust: 30 }), safetyPayload({ gust: 36 }), at))).toEqual(['wind_gust']);
+    expect(buildMeaningfulChange(safetyPayload({ gust: 36 }), safetyPayload({ gust: 34 }), at)).toBeNull();
+    expect(buildMeaningfulChange(safetyPayload({ precip: 55 }), safetyPayload({ precip: 62 }), at)).toBeNull();
+    expect(keys(buildMeaningfulChange(safetyPayload({ precip: 50 }), safetyPayload({ precip: 62 }), at))).toEqual(['precipitation']);
+  });
+
+  test('advances only reported signals and fills signals the reference lacked', () => {
+    const reference = { ...extractWatchSignals(safetyPayload({ score: 80, gust: 20 })), alertKeys: null };
+    const current = extractWatchSignals(safetyPayload({ score: 66, gust: 28 }));
+    const change = buildSignalChange(reference, current, at);
+    expect(keys(change)).toEqual(['score_drop']);
+    const next = advanceReferenceSignals(reference, current, change.reasons);
+    expect(next).toMatchObject({ score: 66, tier: 'Low', maxWindGust: 20, alertKeys: [] });
+    expect(next).not.toHaveProperty('partial');
+  });
+
+  test('infers the direction of changes stored before directions were recorded', () => {
+    expect(normalizeWatchChange({ reasons: [{ key: 'score_improvement', label: 'Better.' }] })).toMatchObject({
+      direction: 'better',
+      reasons: [{ key: 'score_improvement', direction: 'better' }],
+    });
+    expect(normalizeWatchChange({ reasons: [{ key: 'wind_gust' }, { key: 'closure_lifted' }] }).direction).toBe('mixed');
+    expect(normalizeWatchChange(null)).toBeNull();
+  });
+});
+
+describe('reference signals across checks', () => {
+  const premiumRow = (overrides = {}) => ({
+    id: 'watch-1',
+    user_id: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
+    title: 'Mount Rainier',
+    plan: PLAN,
+    baseline_report: { safetyData: safetyPayload({ score: 80 }) },
+    last_snapshot: null,
+    reference_signals: null,
+    consecutive_failures: 0,
+    notifications_enabled: true,
+    email: 'climber@example.com',
+    email_verified_at: new Date(),
+    tier_key: 'premium',
+    ...overrides,
+  });
+  const createHarness = (row) => {
+    const state = { reference: row.reference_signals, snapshot: row.last_snapshot };
+    const query = jest.fn(async (sql, params) => {
+      if (sql.includes('WITH candidate_watches AS')) {
+        return { rows: [{ ...row, reference_signals: state.reference, last_snapshot: state.snapshot }] };
+      }
+      if (sql.includes('last_checked_at = $2')) {
+        if (params[6]) state.reference = JSON.parse(params[6]);
+        if (params[3]) state.snapshot = JSON.parse(params[3]);
+        return { rows: [{ id: row.id }], rowCount: 1 };
+      }
+      return { rows: [] };
+    });
+    let payload = null;
+    const checker = createObjectiveWatchChecker({
+      database: { configured: true, query },
+      invokeSafetyHandler: jest.fn(async () => ({ statusCode: 200, payload })),
+      emailService: { available: false },
+      log: { warn: jest.fn() },
+      now: () => new Date('2026-07-14T00:00:00.000Z'),
+    });
+    return {
+      state,
+      query,
+      check: async (next) => {
+        payload = next;
+        query.mockClear();
+        return checker.run();
+      },
+      events: () => query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO objective_watch_events')),
+    };
+  };
+
+  test('reports gradual drift that no single check crosses', async () => {
+    const harness = createHarness(premiumRow());
+    expect(await harness.check(safetyPayload({ score: 74 }))).toMatchObject({ checked: 1, changed: 0 });
+    expect(harness.state.reference.score).toBe(80);
+    expect(await harness.check(safetyPayload({ score: 69 }))).toMatchObject({ checked: 1, changed: 1 });
+    const change = JSON.parse(harness.events()[0][1][2]);
+    expect(change.reasons.map((reason) => reason.label)).toContain('Conditions score dropped from 80 to 69.');
+    expect(harness.state.reference.score).toBe(69);
+    expect(await harness.check(safetyPayload({ score: 66 }))).toMatchObject({ changed: 0 });
+  });
+
+  test('compares with the latest snapshot when a watch has no stored reference', async () => {
+    const harness = createHarness(premiumRow({ last_snapshot: safetyPayload({ score: 70 }) }));
+    expect(await harness.check(safetyPayload({ score: 65 }))).toMatchObject({ changed: 0 });
+    expect(harness.state.reference.score).toBe(70);
+  });
+
+  test('fills a source that was unavailable in the baseline from the first check that has it', async () => {
+    const baseline = { ...safetyPayload(), alerts: { status: 'unavailable', alerts: [] } };
+    const harness = createHarness(premiumRow({ baseline_report: { safetyData: baseline } }));
+    expect(await harness.check({ ...safetyPayload(), alerts: { status: 'none', alerts: [] } })).toMatchObject({ changed: 0 });
+    expect(harness.state.reference.alertKeys).toEqual([]);
+    const warning = safetyPayload({ alerts: [{ event: 'Winter Storm Warning', severity: 'Severe' }] });
+    expect(await harness.check(warning)).toMatchObject({ changed: 1 });
+  });
+
+  test('keeps the reference when a check returns partial data', async () => {
+    const harness = createHarness(premiumRow({ reference_signals: extractWatchSignals(safetyPayload({ score: 80 })) }));
+    expect(await harness.check({ ...safetyPayload({ score: 40 }), partialData: true })).toMatchObject({ checked: 1, changed: 0 });
+    const update = harness.query.mock.calls.find(([sql]) => sql.includes('last_checked_at = $2'));
+    expect(update[0]).toContain('reference_signals = COALESCE($7::jsonb, reference_signals)');
+    expect(update[1][6]).toBeNull();
+    expect(harness.state.reference.score).toBe(80);
+  });
+
+  test('queues email for risk increases but keeps improvements in the app', async () => {
+    const worse = createHarness(premiumRow());
+    await worse.check(safetyPayload({ score: 55 }));
+    expect(worse.events()[0][1][3]).toBe('pending');
+
+    const better = createHarness(premiumRow({ baseline_report: { safetyData: safetyPayload({ score: 55 }) } }));
+    await better.check(safetyPayload({ score: 80 }));
+    expect(better.events()).toHaveLength(1);
+    expect(better.events()[0][1][3]).toBe('not_requested');
+  });
+});
+
+test('delivers risk-increase emails with the plan and skips queued improvement-only events', async () => {
+  const worseChange = { reasons: [{ key: 'wind_gust', label: 'Peak gusts increased from 20 mph to 40 mph.' }] };
+  const betterChange = { reasons: [{ key: 'score_improvement', label: 'Conditions score improved from 55 to 80.' }] };
+  const query = jest.fn(async (sql) => {
+    if (sql.includes('FROM objective_watch_events events')) {
+      return { rows: [
+        { id: 1, change_key: 'a', change: betterChange, watch_id: 'watch-1', title: 'Mount Rainier', plan: PLAN, email: 'climber@example.com' },
+        { id: 2, change_key: 'b', change: worseChange, watch_id: 'watch-1', title: 'Mount Rainier', plan: PLAN, email: 'climber@example.com' },
+      ] };
+    }
+    return { rows: [] };
+  });
+  const sendObjectiveWatchChangeEmail = jest.fn().mockResolvedValue({});
+  const checker = createObjectiveWatchChecker({
+    database: { configured: true, query },
+    invokeSafetyHandler: jest.fn(),
+    emailService: { available: true, sendObjectiveWatchChangeEmail },
+  });
+
+  expect(await checker.deliverPendingNotifications()).toBe(1);
+  expect(sendObjectiveWatchChangeEmail).toHaveBeenCalledTimes(1);
+  expect(sendObjectiveWatchChangeEmail.mock.calls[0][0]).toMatchObject({
+    eventId: '2',
+    plan: PLAN,
+    change: { direction: 'worse', reasons: [{ key: 'wind_gust', direction: 'worse' }] },
+  });
+  const skipped = query.mock.calls.find(([sql]) => sql.includes("SET notification_status = 'not_requested'"));
+  expect(skipped[1]).toEqual([1]);
 });

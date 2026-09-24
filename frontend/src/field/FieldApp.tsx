@@ -17,6 +17,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useWorkspace } from "./model/useWorkspace";
+import { useObjectiveWatchStatus } from "./model/useObjectiveWatchStatus";
 import { useAccount } from "../hooks/useAccount";
 import { AiAccessContext } from "../contexts/ai-access";
 import {
@@ -70,6 +71,11 @@ export default function FieldApp() {
   const account = useAccount();
   const [feedback, setFeedback] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const watchStatus = useObjectiveWatchStatus(
+    w.reportSnapshot?.plan ?? null,
+    account.user?.id ?? null,
+    w.view === "planner" && w.featureFlags.objectiveWatch,
+  );
   const [touch] = useState(hasCoarsePointer);
   const mapRef = useRef<HTMLDivElement>(null);
   // Anyone who has opened the planner goes straight back to it from `/`.
@@ -154,8 +160,11 @@ export default function FieldApp() {
     setFeedback("");
     try {
       if (kind === "watch") {
-        await saveObjectiveWatch(report);
-        setFeedback("This objective is on your watchlist.");
+        const { policy } = await saveObjectiveWatch(report);
+        watchStatus.markWatched();
+        setFeedback(policy.automaticChecks
+          ? "Added to your watchlist. Automatic checks will flag meaningful changes from this report."
+          : "Added to your watchlist. Run checks from the watchlist to compare with this report.");
       } else {
         let token = kind === "save"
           ? w.activeSavedReportShareToken
@@ -470,6 +479,8 @@ export default function FieldApp() {
                     onSave={() => void action("save")}
                     onShare={() => void action("share")}
                     onWatch={() => void action("watch")}
+                    watching={watchStatus.watching}
+                    onOpenWatchlist={() => navigate("watches")}
                     onEmail={() => void action("email")}
                     actionBusy={
                       actionBusy || w.reportSaveIntentRef.current === "saving"

@@ -9,7 +9,11 @@ const {
   resolveObjectiveWatchPolicy,
 } = require('../auth/objective-watch-entitlements');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
-const { OBJECTIVE_WATCH_CLAIM_LEASE_MS } = require('../services/objective-watch-checker');
+const {
+  OBJECTIVE_WATCH_CLAIM_LEASE_MS,
+  normalizeWatchChange,
+  planDateHasEnded,
+} = require('../services/objective-watch-checker');
 const { normalizeSavedReport } = require('./saved-reports');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -99,6 +103,39 @@ const normalizeTimestamp = (value) => {
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
 };
 
+// Change events created after the watch was last reviewed, newest first. An
+// event without a recorded direction counts as a risk increase.
+const UNREVIEWED_CHANGES_SQL = `
+  (
+    SELECT json_build_object(
+      'count', COUNT(*),
+      'worsened', COALESCE(BOOL_OR(pending.worse), FALSE),
+      'latest', (ARRAY_AGG(pending.change ORDER BY pending.checked_at DESC, pending.id DESC))[1],
+      'latestWorse', (ARRAY_AGG(pending.change ORDER BY pending.checked_at DESC, pending.id DESC)
+        FILTER (WHERE pending.worse))[1]
+    )
+    FROM (
+      SELECT events.id, events.change, events.checked_at,
+             COALESCE(events.change->>'direction', 'worse') <> 'better' AS worse
+      FROM objective_watch_events events
+      WHERE events.watch_id = objective_watches.id
+        AND events.checked_at >= NOW() - ($2::integer * INTERVAL '1 day')
+        AND (objective_watches.reviewed_at IS NULL OR events.created_at > objective_watches.reviewed_at)
+    ) pending
+  ) AS unreviewed_changes
+`;
+
+const mapUnreviewedChanges = (value) => {
+  const count = Math.max(0, Math.round(Number(value?.count) || 0));
+  if (count === 0) return { count: 0, worsened: false, latest: null, latestWorse: null };
+  return {
+    count,
+    worsened: value.worsened === true,
+    latest: normalizeWatchChange(value.latest),
+    latestWorse: normalizeWatchChange(value.latestWorse),
+  };
+};
+
 const mapObjectiveWatch = (row, { includeBaseline = false, policy = null } = {}) => ({
   id: row.id,
   title: row.title,
@@ -107,8 +144,10 @@ const mapObjectiveWatch = (row, { includeBaseline = false, policy = null } = {})
   lastAttemptedAt: normalizeTimestamp(row.last_attempted_at),
   lastCheckedAt: normalizeTimestamp(row.last_checked_at),
   nextCheckAt: policy?.automaticChecks === false ? null : normalizeTimestamp(row.next_check_at),
-  lastChange: row.last_change || null,
+  lastChange: normalizeWatchChange(row.last_change),
   ...(Object.hasOwn(row, 'latest_check') ? { latestCheck: row.latest_check ? mapObjectiveWatchCheck(row.latest_check) : null } : {}),
+  reviewedAt: normalizeTimestamp(row.reviewed_at),
+  ...(Object.hasOwn(row, 'unreviewed_changes') ? { unreviewedChanges: mapUnreviewedChanges(row.unreviewed_changes) } : {}),
   consecutiveFailures: Math.max(0, Number(row.consecutive_failures) || 0),
   notificationsEnabled: policy?.emailAlerts === false ? false : row.notifications_enabled === true,
   createdAt: normalizeTimestamp(row.created_at),
@@ -117,7 +156,7 @@ const mapObjectiveWatch = (row, { includeBaseline = false, policy = null } = {})
 
 const mapObjectiveWatchEvent = (row) => ({
   id: String(row.id),
-  change: row.change || null,
+  change: normalizeWatchChange(row.change),
   checkedAt: normalizeTimestamp(row.checked_at),
 });
 
@@ -126,7 +165,7 @@ const mapObjectiveWatchCheck = (row) => ({
   checkType: row.check_type,
   status: row.status,
   summary: row.summary || null,
-  change: row.change || null,
+  change: normalizeWatchChange(row.change),
   error: row.error ? 'Conditions data was unavailable for this check.' : null,
   checkedAt: normalizeTimestamp(row.checked_at),
 });
@@ -249,7 +288,7 @@ const registerObjectiveWatchRoutes = ({
         const plan = normalizeWatchPlan(req.query);
         const result = await database.query(`
           SELECT id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
-                 last_change, consecutive_failures, notifications_enabled, created_at, updated_at
+                 last_change, reviewed_at, consecutive_failures, notifications_enabled, created_at, updated_at
           FROM objective_watches
           WHERE user_id = $1 AND fingerprint = $2
           LIMIT 1
@@ -261,7 +300,8 @@ const registerObjectiveWatchRoutes = ({
       }
       const result = await database.query(`
         SELECT id, title, plan, last_attempted_at, last_checked_at, next_check_at, last_change,
-               consecutive_failures, notifications_enabled, created_at, updated_at,
+               reviewed_at, consecutive_failures, notifications_enabled, created_at, updated_at,
+               ${UNREVIEWED_CHANGES_SQL},
                (
                  SELECT row_to_json(latest)
                  FROM (
@@ -295,6 +335,10 @@ const registerObjectiveWatchRoutes = ({
       }
       const policy = await getPolicy(req, user, { allowFallback: false });
       const watch = normalizeObjectiveWatch(req.body?.report);
+      const timeZone = watch.baselineReport.safetyData?.weather?.timezone;
+      if (planDateHasEnded(watch.plan, new Date(now()), typeof timeZone === 'string' ? timeZone : null)) {
+        throw new ObjectiveWatchValidationError('This plan date has ended. Choose an upcoming date to watch.');
+      }
       const result = await database.transaction(async (query) => {
         await query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [user.id]);
         const existing = await query(`
@@ -318,9 +362,11 @@ const registerObjectiveWatchRoutes = ({
             throw new ObjectiveWatchLimitError(policy);
           }
         }
+        // A new baseline is what the account holder just reviewed; later checks
+        // compare with it rather than with the replaced baseline's history.
         return query(`
-          INSERT INTO objective_watches (user_id, fingerprint, title, plan, baseline_report, next_check_at)
-          VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, CASE WHEN $6 THEN NOW() ELSE NULL END)
+          INSERT INTO objective_watches (user_id, fingerprint, title, plan, baseline_report, next_check_at, reviewed_at)
+          VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, CASE WHEN $6 THEN NOW() ELSE NULL END, NOW())
           ON CONFLICT (user_id, fingerprint) DO UPDATE
           SET title = EXCLUDED.title,
               plan = EXCLUDED.plan,
@@ -329,11 +375,13 @@ const registerObjectiveWatchRoutes = ({
               next_check_at = EXCLUDED.next_check_at,
               last_snapshot = NULL,
               last_change = NULL,
+              reference_signals = NULL,
+              reviewed_at = NOW(),
               consecutive_failures = 0,
               notifications_enabled = CASE WHEN $6 THEN objective_watches.notifications_enabled ELSE FALSE END,
               updated_at = NOW()
           RETURNING id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
-                    last_change, consecutive_failures, notifications_enabled, created_at, updated_at
+                    last_change, reviewed_at, consecutive_failures, notifications_enabled, created_at, updated_at
         `, [user.id, watch.fingerprint, watch.title, watch.serializedPlan, watch.serializedReport, policy.automaticChecks]);
       });
       return res.status(201).json({
@@ -365,10 +413,37 @@ const registerObjectiveWatchRoutes = ({
         SET notifications_enabled = $3, updated_at = NOW()
         WHERE id = $1 AND user_id = $2
         RETURNING id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
-                  last_change, consecutive_failures, notifications_enabled, created_at, updated_at
+                  last_change, reviewed_at, consecutive_failures, notifications_enabled, created_at, updated_at
       `, [req.params.watchId, user.id, req.body.notificationsEnabled]);
       if (!result.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
       return res.json({ watch: mapObjectiveWatch(result.rows[0], { includeBaseline: true, policy }), policy });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  // Marks every change recorded so far as seen; later changes need review again.
+  app.post('/api/account/objective-watches/:watchId/review', async (req, res) => {
+    if (!requireFeature(res)) return;
+    const user = await requireUser(req, res);
+    if (!user || !ensureDatabase(res)) return;
+    if (!UUID_PATTERN.test(String(req.params.watchId || ''))) {
+      return res.status(400).json({ error: 'Invalid objective watch ID.' });
+    }
+    try {
+      const policy = await getPolicy(req, user);
+      const result = await database.query(`
+        UPDATE objective_watches
+        SET reviewed_at = NOW()
+        WHERE id = $1 AND user_id = $2
+        RETURNING id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
+                  last_change, reviewed_at, consecutive_failures, notifications_enabled, created_at, updated_at
+      `, [req.params.watchId, user.id]);
+      if (!result.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
+      return res.json({
+        watch: mapObjectiveWatch({ ...result.rows[0], unreviewed_changes: null }, { includeBaseline: true, policy }),
+        policy,
+      });
     } catch (error) {
       return handleError(req, res, error);
     }
@@ -530,7 +605,7 @@ const registerObjectiveWatchRoutes = ({
       }
       const refreshed = await database.query(`
         SELECT id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
-               last_change, consecutive_failures, notifications_enabled, created_at, updated_at
+               last_change, reviewed_at, consecutive_failures, notifications_enabled, created_at, updated_at
         FROM objective_watches
         WHERE id = $1 AND user_id = $2
         LIMIT 1

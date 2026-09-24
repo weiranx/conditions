@@ -108,17 +108,17 @@ const createEmailService = ({
     });
   };
 
-  const sendObjectiveWatchChangeEmail = ({ eventId, changeKey, watchId, title, change, to, displayName }) => {
+  const sendObjectiveWatchChangeEmail = ({ eventId, changeKey, watchId, title, plan, change, to, displayName }) => {
     if (!normalizedBaseUrl) {
       const error = new Error('Email links are not configured.');
       error.code = 'EMAIL_SERVICE_UNAVAILABLE';
       throw error;
     }
     const actionUrl = new URL('/watches', normalizedBaseUrl).toString();
-    const reasons = Array.isArray(change?.reasons) ? change.reasons.map((reason) => reason?.label) : [];
+    const reasons = Array.isArray(change?.reasons) ? change.reasons : [];
     return send({
       to,
-      template: buildObjectiveWatchChangeEmail({ displayName, title, reasons, actionUrl }),
+      template: buildObjectiveWatchChangeEmail({ displayName, title, plan, reasons, actionUrl }),
       idempotencyKey: `objective-watch/${watchId}/${eventId}/${changeKey}`,
     });
   };

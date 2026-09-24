@@ -117,8 +117,11 @@ health URL to include nginx, DNS, and TLS in the same check.
 - Each attempted run is recorded as unchanged, changed, partial, or failed. Check records are retained for at most 90 days; the account tier controls how much of that window the API returns.
 - Identical coordinate/date/start/window plans share one upstream safety refresh.
 - `OBJECTIVE_WATCH_CONCURRENCY` defaults to `4` and `OBJECTIVE_WATCH_BATCH_SIZE` defaults to `100`.
-- Full snapshots overwrite the previous snapshot; meaningful risk-increase events are retained for up to 90 days, with only the most recent 14 days exposed to Free accounts.
-- Email alerts are Premium-only, opt-in, and only deliver to verified account email addresses.
+- Each check compares with the value last reported for each signal (the baseline report until a change is reported), stored in `objective_watches.reference_signals`, so gradual drift still adds up to a change. Gust and precipitation threshold crossings must also move by a margin (5 mph, 10 points) so a forecast hovering at a threshold does not report every check.
+- Readings from a source that failed to load are unknown: an unavailable alert feed, closure feed, or avalanche rating never reads as a cleared alert, lifted closure, or lower danger.
+- Full snapshots overwrite the previous snapshot; change events (risk increases and improvements, each marked with its direction) are retained for up to 90 days, with only the most recent 14 days exposed to Free accounts.
+- A watch needs attention while it has risk-increase events created after `reviewed_at`; Mark reviewed in the Watchlist, or re-saving the plan's baseline, sets it.
+- Email alerts are Premium-only, opt-in, sent only for risk increases, and only deliver to verified account email addresses.
 - Scheduler state, the configurable standard check interval, and the latest run summary live in `objective_watch_scheduler_state`; the secret itself is never stored there or returned to the browser. Admin's Run now action executes one cycle without changing scheduler Start or Stop state and does not count as a host heartbeat.
 
 ---
