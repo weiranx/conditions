@@ -753,6 +753,10 @@
 .field-markdown p {
   margin: 10px 0;
 }
+/* Raw text shown while the markdown renderer loads. */
+.field-markdown-plain {
+  white-space: pre-line;
+}
 .field-markdown :is(h1, h2, h3) {
   font-size: 18px;
   margin: 20px 0 10px;
