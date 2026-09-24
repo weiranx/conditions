@@ -36,6 +36,9 @@ const withTimeout = (promise, ms, label) => {
 };
 
 const MAX_SUPPLIED_WAYPOINTS = 8;
+// A generated landmark this close to the objective, and not the objective itself,
+// has the objective's coordinates rather than its own.
+const COPIED_OBJECTIVE_COORDINATE_KM = 0.25;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 
@@ -403,6 +406,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       let routeSource = 'generated';
       let routeSourceDetails = null;
       let waypointsCopy;
+      const locatedAtObjectiveByMistake = new Set();
       if (suppliedWaypoints) {
         routeSource = 'gpx';
         waypointsCopy = suppliedWaypoints.map((waypoint) => ({ ...waypoint }));
@@ -444,6 +448,12 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
               wp.geocodingVerified = true;
             } else {
               wp.geocodingVerified = false;
+              // Unfound landmarks keep the AI's coordinates, which are sometimes
+              // just the objective's, echoed from the prompt. A terrain lookup
+              // there would give a trailhead the summit's elevation.
+              if (haversineKm(wp.lat, wp.lon, safeLat, safeLon) < COPIED_OBJECTIVE_COORDINATE_KM) {
+                locatedAtObjectiveByMistake.add(wp);
+              }
             }
           })
         );
@@ -478,6 +488,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const replaceElevations = routeSource === 'generated';
       if (typeof fetchElevationFt === 'function') {
         await Promise.all(waypointsCopy.map(async (wp) => {
+          if (locatedAtObjectiveByMistake.has(wp)) return;
           if (!replaceElevations && knownElevation(wp.elev_ft) !== null) return;
           try {
             const { elevationFt } = await withTimeout(Promise.resolve(fetchElevationFt(wp.lat, wp.lon)), 10000, 'Checkpoint elevation') || {};
@@ -493,6 +504,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const outboundWaypoints = waypointsCopy;
       if (roundTrip) {
         waypointsCopy = appendReturnCheckpoint(waypointsCopy);
+        // The return shares the start's coordinates, mislocated or not.
+        if (locatedAtObjectiveByMistake.has(waypointsCopy[0])) locatedAtObjectiveByMistake.add(waypointsCopy[waypointsCopy.length - 1]);
         const progress = computeDistanceProgress(waypointsCopy, haversineKm);
         waypointsCopy.forEach((waypoint, index) => {
           if (progress) waypoint.progress_percent = progress[index];
@@ -528,7 +541,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         const rawPayload = dataAvailable ? settled.value.payload : {};
         const p = sanitizeReportForFeatureFlags(rawPayload, featureFlags);
         // An unknown elevation stays null rather than becoming 0 ft.
-        const resolvedElevationFt = knownElevation(wp.elev_ft) ?? (knownElevation(p.weather?.elevation) !== null ? Math.round(knownElevation(p.weather.elevation)) : null);
+        // The forecast there describes the objective, not a mislocated landmark.
+        const forecastElevationFt = locatedAtObjectiveByMistake.has(wp) ? null : knownElevation(p.weather?.elevation);
+        const resolvedElevationFt = knownElevation(wp.elev_ft) ?? (forecastElevationFt !== null ? Math.round(forecastElevationFt) : null);
         wp.elev_ft = resolvedElevationFt;
         const daylight = dataAvailable ? classifyDaylight(wp.eta_time, p.solar) : null;
         const avyRelevant = Boolean(p.avalanche && p.avalanche.relevant !== false);

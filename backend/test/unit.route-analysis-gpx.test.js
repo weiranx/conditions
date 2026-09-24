@@ -491,6 +491,31 @@ test('AI-generated elevations are replaced by terrain lookups before ETAs are we
   expect(response.body.timing.basis).toBe('distance-and-vert');
 });
 
+test('an unfound landmark placed at the objective keeps its generated elevation', async () => {
+  const app = express();
+  app.use(express.json());
+  const fetchElevationFt = jest.fn(async (lat) => ({ elevationFt: lat === 34.0993 ? 11496 : 9293 }));
+  registerRouteAnalysisRoutes({
+    app,
+    // The trailhead echoes the objective's coordinates from the prompt.
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints'
+      ? '[{"name":"Vivian Creek Trailhead","lat":34.0993,"lon":-116.8249,"elev_ft":6080},{"name":"Vivian Creek Camp","lat":34.0786,"lon":-116.8710,"elev_ft":7100},{"name":"San Gorgonio Mountain","lat":34.0993,"lon":-116.8249,"elev_ft":11503}]'
+      : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45, elevation: 11400 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+    fetchElevationFt,
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'San Gorgonio Copied Coordinates Test', route: 'Vivian Creek Trail', lat: 34.0993, lon: -116.8249, date: '2026-09-26', start: '07:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([6080, 9293, 11496, 6080]);
+  expect(fetchElevationFt).toHaveBeenCalledTimes(2);
+});
+
 test('GPX elevations are kept rather than replaced by terrain lookups', async () => {
   const app = express();
   app.use(express.json());
