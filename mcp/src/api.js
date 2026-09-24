@@ -4,6 +4,25 @@ export class ApiError extends Error {
 
 const DEFAULT_MAX_BYTES = 2_000_000;
 
+/**
+ * The answer in an AI SDK UI message stream (server-sent events): its text,
+ * follow-up suggestions, and the error the stream reported, if any.
+ */
+export function readUiMessageStream(body) {
+  let text = '', error = null, followUpSuggestions = [];
+  for (const line of body.split(/\r?\n/u)) {
+    if (!line.startsWith('data:')) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') continue;
+    let event;
+    try { event = JSON.parse(payload); } catch { continue; }
+    if (event?.type === 'text-delta' && typeof event.delta === 'string') text += event.delta;
+    else if (event?.type === 'error') error = typeof event.errorText === 'string' ? event.errorText : 'The assistant stream failed.';
+    else if (event?.type === 'data-followUpSuggestions' && Array.isArray(event.data?.suggestions)) followUpSuggestions = event.data.suggestions.filter(item => typeof item === 'string');
+  }
+  return { text: text.trim(), error, followUpSuggestions };
+}
+
 export function createApi({ baseUrl, session = '', accessToken = '', fetchImpl = fetch, timeoutMs = 30000 }) {
   const base = new URL(baseUrl);
   if (base.username || base.password || base.search || base.hash || base.pathname !== '/' ||
@@ -13,7 +32,7 @@ export function createApi({ baseUrl, session = '', accessToken = '', fetchImpl =
   if (/[\s;,\r\n]/u.test(session)) throw new Error('Invalid Conditions session format.');
   const hasAccount = Boolean(session || accessToken);
 
-  async function request(method, path, { query = {}, body, account = false, headers = {}, maxBytes = DEFAULT_MAX_BYTES, timeout = timeoutMs } = {}) {
+  async function request(method, path, { query = {}, body, account = false, headers = {}, maxBytes = DEFAULT_MAX_BYTES, timeout = timeoutMs, uiMessageStream = false } = {}) {
     if (account && !hasAccount) throw new ApiError('ACCOUNT_NOT_CONFIGURED', 'Connect your Conditions account to use this tool.');
     const url = new URL(path, base);
     if (url.origin !== base.origin || !path.startsWith('/api/')) throw new Error('Invalid API path');
@@ -22,7 +41,7 @@ export function createApi({ baseUrl, session = '', accessToken = '', fetchImpl =
       const response = await fetchImpl(url, {
         method,
         headers: {
-          Accept: 'application/json',
+          Accept: uiMessageStream ? 'text/event-stream, application/json' : 'application/json',
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
           ...headers,
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : session ? { Cookie: `bc_session=${session}` } : {}),
@@ -41,8 +60,11 @@ export function createApi({ baseUrl, session = '', accessToken = '', fetchImpl =
           chunks.push(Buffer.from(value));
         }
       } finally { reader.releaseLock(); }
+      const text = Buffer.concat(chunks).toString();
+      // A successful stream is events; failures before it starts are JSON.
+      if (uiMessageStream && response.ok) return readUiMessageStream(text);
       let data;
-      try { data = JSON.parse(Buffer.concat(chunks).toString()); }
+      try { data = JSON.parse(text); }
       catch { throw new ApiError('INVALID_RESPONSE', 'Conditions returned a non-JSON response.'); }
       if (!response.ok) {
         const messages = { 401: 'Conditions session expired or is invalid. Sign in again.', 403: 'Your Conditions account cannot access this feature.', 429: 'Conditions rate or account usage limit reached; try later.' };

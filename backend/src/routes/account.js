@@ -19,51 +19,11 @@ const { createEmailService } = require('../email/email-service');
 const GOOGLE_NONCE_COOKIE_NAME = 'bc_google_nonce';
 const GOOGLE_NONCE_TTL_MS = 10 * 60 * 1000;
 
-const registerAccountRoutes = ({
-  app,
-  database,
-  isProduction = process.env.NODE_ENV === 'production',
-  service = createAccountService({ database }),
-  tierService,
-  usageService,
-  reportUsageService,
-  multiDayUsageService,
-  googleVerifier = createGoogleIdentityVerifier(),
-  emailService = createEmailService(),
-} = {}) => {
-  const cookieOptions = {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: isProduction,
-    path: '/',
-  };
-  const accountLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 120,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.method === 'OPTIONS',
-    message: { error: 'Too many account requests. Please wait and try again.' },
-  });
-  const authAttemptLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.method === 'OPTIONS',
-    message: { error: 'Too many account attempts. Please wait and try again.' },
-  });
-
-  const setSessionCookie = (res, session) => {
-    res.cookie(ACCOUNT_COOKIE_NAME, session.token, {
-      ...cookieOptions,
-      maxAge: Math.max(0, session.expiresAt.getTime() - Date.now()),
-    });
-  };
-
-  const clearSessionCookie = (res) => res.clearCookie(ACCOUNT_COOKIE_NAME, cookieOptions);
-  const clearGoogleNonceCookie = (res) => res.clearCookie(GOOGLE_NONCE_COOKIE_NAME, cookieOptions);
-  const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
+/**
+ * A signed-in user's tier, saved-report count and report, multi-day and AI
+ * usage. Each part is null when it cannot be loaded.
+ */
+const createAccountSummary = ({ database, tierService, usageService, reportUsageService, multiDayUsageService } = {}) => {
   const getAccountTier = async (req, user) => {
     if (!user) return null;
     if (typeof tierService?.getAccountTier !== 'function') return { ...FREE_ACCOUNT_TIER };
@@ -116,7 +76,7 @@ const registerAccountRoutes = ({
       return null;
     }
   };
-  const accountResponse = async (req, user, available = true) => {
+  return async (req, user) => {
     const accountTier = await getAccountTier(req, user);
     const [reportCount, reportUsage, multiDayUsage, aiUsage] = await Promise.all([
       getReportCount(req, user),
@@ -124,17 +84,85 @@ const registerAccountRoutes = ({
       getMultiDayUsage(req, user, accountTier),
       getAIUsage(req, user, accountTier),
     ]);
-    return {
-      available,
-      authenticated: Boolean(user),
-      user,
-      accountTier,
-      reportCount,
-      reportUsage,
-      multiDayUsage,
-      aiUsage,
-    };
+    return { accountTier, reportCount, reportUsage, multiDayUsage, aiUsage };
   };
+};
+
+/**
+ * GET /api/account/usage: the account summary without the session and identity
+ * details. Registered after the MCP bearer middleware so an MCP connection can
+ * read its own account's limits.
+ */
+const registerAccountUsageRoute = ({ app, accountService, describeAccount }) => {
+  app.get('/api/account/usage', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (!accountService?.available || typeof accountService.getUserForSession !== 'function') {
+      return res.status(503).json({ error: 'Accounts are temporarily unavailable. Please try again later.' });
+    }
+    let user;
+    try {
+      user = req.mcpUser || await accountService.getUserForSession(readSessionToken(req));
+    } catch (error) {
+      req.log?.warn({ err: error }, 'Account usage session could not be loaded');
+      return res.status(503).json({ error: 'Account verification is temporarily unavailable. Please try again.' });
+    }
+    if (!user) return res.status(401).json({ error: 'Sign in to view account usage.' });
+    return res.json(await describeAccount(req, user));
+  });
+};
+
+const registerAccountRoutes = ({
+  app,
+  database,
+  isProduction = process.env.NODE_ENV === 'production',
+  service = createAccountService({ database }),
+  tierService,
+  usageService,
+  reportUsageService,
+  multiDayUsageService,
+  googleVerifier = createGoogleIdentityVerifier(),
+  emailService = createEmailService(),
+} = {}) => {
+  const cookieOptions = {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProduction,
+    path: '/',
+  };
+  const accountLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS',
+    message: { error: 'Too many account requests. Please wait and try again.' },
+  });
+  const authAttemptLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS',
+    message: { error: 'Too many account attempts. Please wait and try again.' },
+  });
+
+  const setSessionCookie = (res, session) => {
+    res.cookie(ACCOUNT_COOKIE_NAME, session.token, {
+      ...cookieOptions,
+      maxAge: Math.max(0, session.expiresAt.getTime() - Date.now()),
+    });
+  };
+
+  const clearSessionCookie = (res) => res.clearCookie(ACCOUNT_COOKIE_NAME, cookieOptions);
+  const clearGoogleNonceCookie = (res) => res.clearCookie(GOOGLE_NONCE_COOKIE_NAME, cookieOptions);
+  const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
+  const describeAccount = createAccountSummary({ database, tierService, usageService, reportUsageService, multiDayUsageService });
+  const accountResponse = async (req, user, available = true) => ({
+    available,
+    authenticated: Boolean(user),
+    user,
+    ...await describeAccount(req, user),
+  });
 
   const handleError = (req, res, error) => {
     if (error instanceof AccountValidationError) {
@@ -377,5 +405,7 @@ module.exports = {
   GOOGLE_NONCE_COOKIE_NAME,
   parseCookies,
   readSessionToken,
+  createAccountSummary,
   registerAccountRoutes,
+  registerAccountUsageRoute,
 };
