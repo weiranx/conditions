@@ -12,6 +12,7 @@ import {
   formatTemperatureForUnit,
   formatWindForUnit,
   freshnessClass,
+  isFiniteNumber,
   isTravelWindowCoveredByAlertWindow,
   parseSolarClockMinutes,
   parseTimeInputMinutes,
@@ -109,10 +110,13 @@ export function evaluateBackcountryDecision(
     isDaytime: data.weather.isDaytime ?? null,
     condition: description,
   }, 0);
-  let gust = (approach ? startPoint.gust : data.weather.windGust) ?? 0;
-  let precip = data.weather.precipChance ?? 0;
-  let feelsLike: number | null = approach && Number.isFinite(startPoint.temp)
-    ? computeFeelsLikeF(startPoint.temp, Number.isFinite(startPoint.wind) ? startPoint.wind : 0)
+  // A missing reading stays null: reading it as 0 would pass the gust and
+  // precipitation limits and invent a 0 °F feels-like.
+  const startGust = approach ? startPoint.gust : data.weather.windGust;
+  let gust: number | null = isFiniteNumber(startGust) ? startGust : null;
+  let precip: number | null = isFiniteNumber(data.weather.precipChance) ? data.weather.precipChance : null;
+  let feelsLike: number | null = approach && isFiniteNumber(startPoint.temp)
+    ? computeFeelsLikeF(startPoint.temp, isFiniteNumber(startPoint.wind) ? startPoint.wind : 0)
     : data.weather.feelsLike ?? data.weather.temp ?? null;
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const weatherUnavailable = /weather data unavailable/i.test(description);
@@ -134,14 +138,12 @@ export function evaluateBackcountryDecision(
     .slice(0, preferences.travelWindowHours)
     .map((point, index) => atPartyElevation(point, index));
   for (const wpt of windowTrend) {
-    const wg = Number.isFinite(Number(wpt.gust)) ? Number(wpt.gust) : 0;
-    if (wg > gust) { gust = wg; peakGustHour = wpt.time || ''; }
-    const wp = Number.isFinite(Number(wpt.precipChance)) ? Number(wpt.precipChance) : 0;
-    if (wp > precip) { precip = wp; peakPrecipHour = wpt.time || ''; }
-    const wt = Number.isFinite(Number(wpt.temp)) ? Number(wpt.temp) : 0;
-    const ww = Number.isFinite(Number(wpt.wind)) ? Number(wpt.wind) : 0;
-    const wfl = computeFeelsLikeF(wt, ww);
-    if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; coldestIsInversion = hasInversion(wpt); }
+    if (isFiniteNumber(wpt.gust) && (gust === null || wpt.gust > gust)) { gust = wpt.gust; peakGustHour = wpt.time || ''; }
+    if (isFiniteNumber(wpt.precipChance) && (precip === null || wpt.precipChance > precip)) { precip = wpt.precipChance; peakPrecipHour = wpt.time || ''; }
+    if (isFiniteNumber(wpt.temp)) {
+      const wfl = computeFeelsLikeF(wpt.temp, isFiniteNumber(wpt.wind) ? wpt.wind : 0);
+      if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; coldestIsInversion = hasInversion(wpt); }
+    }
     if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
       hasStormSignal = true;
       stormSignalHour = wpt.time || '';
@@ -265,14 +267,14 @@ export function evaluateBackcountryDecision(
   if (hasStormSignal) {
     addCaution('A storm or thunder signal appears in the travel window. Stay off exposed ridges, identify a fast descent route, and turn around at the first thunder, lightning, or rapid cloud growth.');
   }
-  if (precip >= Math.max(85, maxPrecipThreshold + 25)) {
+  if (precip !== null && precip >= Math.max(85, maxPrecipThreshold + 25)) {
     addBlocker(`Precipitation chance reaches ${precip}%. Delay or choose a lower-consequence route where slick surfaces, poor visibility, and slower travel do not create a trap.`);
-  } else if (precip >= Math.max(55, maxPrecipThreshold)) {
+  } else if (precip !== null && precip >= Math.max(55, maxPrecipThreshold)) {
     addCaution(`Precipitation chance reaches ${precip}%. Allow extra travel time, carry traction and weather protection, and turn around if footing or visibility deteriorates.`);
   }
-  if (gust >= Math.max(35, maxGustThreshold + 10)) {
+  if (gust !== null && gust >= Math.max(35, maxGustThreshold + 10)) {
     addBlocker(`Wind gusts reach about ${formatWind(gust)}. Choose a sheltered, lower objective or delay; avoid exposed ridges and terrain where a stumble would be consequential.`);
-  } else if (gust >= maxGustThreshold) {
+  } else if (gust !== null && gust >= maxGustThreshold) {
     addCaution(`Wind gusts reach about ${formatWind(gust)}. Shorten ridge exposure, secure loose gear, and use a firm turnaround if balance or communication becomes difficult.`);
   }
 
@@ -393,16 +395,16 @@ export function evaluateBackcountryDecision(
     {
       key: 'precipitation',
       label: `Precipitation chance is at or below ${maxPrecipThreshold}%`,
-      ok: precip <= maxPrecipThreshold,
-      detail: peakPrecipHour ? `Peak ${precip}% at ${peakPrecipHour} in window (limit ${maxPrecipThreshold}%).` : `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
-      action: precip > maxPrecipThreshold ? 'Allow extra time, carry traction and weather protection, and turn around if footing or visibility deteriorates.' : undefined,
+      ok: precip !== null && precip <= maxPrecipThreshold,
+      detail: precip === null ? 'Precipitation chance unavailable.' : peakPrecipHour ? `Peak ${precip}% at ${peakPrecipHour} in window (limit ${maxPrecipThreshold}%).` : `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
+      action: precip !== null && precip > maxPrecipThreshold ? 'Allow extra time, carry traction and weather protection, and turn around if footing or visibility deteriorates.' : undefined,
     },
     {
       key: 'wind-gust',
       label: `Wind gusts are at or below ${displayMaxGustThreshold}`,
-      ok: gust <= maxGustThreshold,
-      detail: peakGustHour ? `Peak ${formatWind(gust)} at ${peakGustHour} in window (limit ${displayMaxGustThreshold}).` : `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
-      action: gust > maxGustThreshold ? 'Use sheltered terrain, secure loose gear, and turn around if balance or communication becomes difficult.' : undefined,
+      ok: gust !== null && gust <= maxGustThreshold,
+      detail: gust === null ? 'Wind gust data unavailable.' : peakGustHour ? `Peak ${formatWind(gust)} at ${peakGustHour} in window (limit ${displayMaxGustThreshold}).` : `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
+      action: gust !== null && gust > maxGustThreshold ? 'Use sheltered terrain, secure loose gear, and turn around if balance or communication becomes difficult.' : undefined,
     },
     ...(daylightEnabled ? [{
       key: 'daylight',

@@ -31,7 +31,7 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
     const point = trend[index];
     const complete = [point.temp, point.wind, point.gust, point.precipChance]
       .every((value) => typeof value === "number" && Number.isFinite(value));
-    const measured = (value: unknown) => typeof value === "number" && Number.isFinite(value);
+    const measured = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
     const knownFailures = row.failedRuleLabels.flatMap((label, index) => {
       const known = label === "Gust above limit" ? measured(point.gust)
         : label === "Precip above limit" ? measured(point.precipChance)
@@ -47,8 +47,13 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
         approachAdjusted: adjusted.elevationFt < approach.profile.objectiveElevationFt,
         inversionRisk: adjusted.inversionRisk,
       } : {}),
-      // Do not let the legacy row's zero fallback become a measured calm gust.
+      // The legacy row reads a gap as zero. Keep gaps as NaN so no view shows a
+      // missing reading as 0 °F, calm air or a 0% chance.
+      temp: measured(point.temp) ? row.temp : NaN,
+      feelsLike: measured(point.temp) ? row.feelsLike : NaN,
+      wind: measured(point.wind) ? row.wind : NaN,
       gust: measured(point.gust) ? point.gust : NaN,
+      precipChance: measured(point.precipChance) ? row.precipChance : NaN,
       complete,
       // Temperature and wind were measured (the legacy row reads a gap as zero).
       thermalComplete: measured(point.temp) && measured(point.wind),
@@ -67,14 +72,20 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
 
 // Keep both cold and heat hazards in the reasons; display the breached
 // temperature extreme alongside the largest wind/precipitation readings.
+// Missing readings are NaN and never win an extreme.
+const largestKnown = (values: number[]) => {
+  const known = values.filter(Number.isFinite);
+  return known.length ? Math.max(...known) : NaN;
+};
 function hourReading<T extends { feelsLike: number; wind: number; gust: number }>(rows: T[], preferences: UserPreferences) {
-  const coldest = rows.reduce((a, b) => a.feelsLike < b.feelsLike ? a : b);
-  const hottest = rows.reduce((a, b) => a.feelsLike > b.feelsLike ? a : b);
-  const knownGusts = rows.map(row => row.gust).filter(Number.isFinite);
+  const thermalRows = rows.filter(row => Number.isFinite(row.feelsLike));
+  const candidates = thermalRows.length ? thermalRows : rows;
+  const coldest = candidates.reduce((a, b) => a.feelsLike < b.feelsLike ? a : b);
+  const hottest = candidates.reduce((a, b) => a.feelsLike > b.feelsLike ? a : b);
   return {
     thermal: coldest.feelsLike < preferences.minFeelsLikeF ? coldest : hottest,
-    wind: Math.max(...rows.map(row => row.wind)),
-    gust: knownGusts.length ? Math.max(...knownGusts) : NaN,
+    wind: largestKnown(rows.map(row => row.wind)),
+    gust: largestKnown(rows.map(row => row.gust)),
   };
 }
 
@@ -167,7 +178,7 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
       ...(summit ? { objectiveReading: { temp: summit.thermal.temp, wind: summit.wind, gust: summit.gust } } : {}),
       wind,
       gust,
-      precipChance: Math.max(...contributing.map(row => row.precipChance)),
+      precipChance: largestKnown(contributing.map(row => row.precipChance)),
       lightningRisk: contributing.some(row => row.lightningRisk),
       condition: [...new Set(contributing.map(row => row.condition))].join(" / "),
       reasonSummary: pass ? "Meets thresholds" : [

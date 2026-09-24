@@ -13,6 +13,7 @@ import {
   formatSweForElevationUnit,
   parseIsoDateToUtcMs,
   parseIsoToMs,
+  parseOptionalFiniteNumber,
 } from './core';
 
 export function buildSnowpackInterpretation(
@@ -24,14 +25,14 @@ export function buildSnowpackInterpretation(
   const nohrsc = snowpack?.nohrsc || null;
   const cdec = snowpack?.cdec || null;
 
-  const snotelDepth = Number(snotel?.snowDepthIn);
-  const nohrscDepth = Number(nohrsc?.snowDepthIn);
-  const cdecDepth = Number(cdec?.snowDepthIn);
-  const snotelSwe = Number(snotel?.sweIn);
-  const nohrscSwe = Number(nohrsc?.sweIn);
-  const cdecSwe = Number(cdec?.sweIn);
-  const stationDistanceKm = Number(snotel?.distanceKm);
-  const stationElevationFt = Number(snotel?.elevationFt);
+  const snotelDepth = parseOptionalFiniteNumber(snotel?.snowDepthIn);
+  const nohrscDepth = parseOptionalFiniteNumber(nohrsc?.snowDepthIn);
+  const cdecDepth = parseOptionalFiniteNumber(cdec?.snowDepthIn);
+  const snotelSwe = parseOptionalFiniteNumber(snotel?.sweIn);
+  const nohrscSwe = parseOptionalFiniteNumber(nohrsc?.sweIn);
+  const cdecSwe = parseOptionalFiniteNumber(cdec?.sweIn);
+  const stationDistanceKm = parseOptionalFiniteNumber(snotel?.distanceKm);
+  const stationElevationFt = parseOptionalFiniteNumber(snotel?.elevationFt);
 
   const hasSnotelDepth = Number.isFinite(snotelDepth);
   const hasNohrscDepth = Number.isFinite(nohrscDepth);
@@ -96,8 +97,9 @@ export function buildSnowpackInterpretation(
     }
   }
 
-  if (Number.isFinite(stationElevationFt) && Number.isFinite(Number(objectiveElevationFt)) && !lowBroadSnowSignal) {
-    const elevDelta = Math.abs(stationElevationFt - Number(objectiveElevationFt));
+  const objectiveFt = parseOptionalFiniteNumber(objectiveElevationFt);
+  if (Number.isFinite(stationElevationFt) && Number.isFinite(objectiveFt) && !lowBroadSnowSignal) {
+    const elevDelta = Math.abs(stationElevationFt - objectiveFt);
     if (elevDelta >= 2000) {
       confidence = confidence === 'solid' ? 'watch' : confidence;
       const displayDelta = convertElevationFeetToDisplayValue(elevDelta, elevationUnit);
@@ -126,7 +128,7 @@ export function buildSnowpackInterpretation(
   const nohrscIsZeroOrMissing = !hasNohrscDepth || nohrscDepth <= 0;
   const cdecIsZeroOrMissing = !hasCdecDepth || cdecDepth <= 0;
   const snotelIsZeroOrMissing = !hasSnotelDepth || snotelDepth <= 0;
-  const highElevation = Number.isFinite(Number(objectiveElevationFt)) && Number(objectiveElevationFt) >= 7500;
+  const highElevation = Number.isFinite(objectiveFt) && objectiveFt >= 7500;
 
   if (
     highElevation &&
@@ -169,12 +171,12 @@ export function buildSnowpackInsights(
   const nohrsc = snowpack?.nohrsc || null;
   const cdec = snowpack?.cdec || null;
 
-  const snotelDepth = Number(snotel?.snowDepthIn);
-  const nohrscDepth = Number(nohrsc?.snowDepthIn);
-  const cdecDepth = Number(cdec?.snowDepthIn);
-  const snotelSwe = Number(snotel?.sweIn);
-  const nohrscSwe = Number(nohrsc?.sweIn);
-  const cdecSwe = Number(cdec?.sweIn);
+  const snotelDepth = parseOptionalFiniteNumber(snotel?.snowDepthIn);
+  const nohrscDepth = parseOptionalFiniteNumber(nohrsc?.snowDepthIn);
+  const cdecDepth = parseOptionalFiniteNumber(cdec?.snowDepthIn);
+  const snotelSwe = parseOptionalFiniteNumber(snotel?.sweIn);
+  const nohrscSwe = parseOptionalFiniteNumber(nohrsc?.sweIn);
+  const cdecSwe = parseOptionalFiniteNumber(cdec?.sweIn);
   const maxDepth = Math.max(
     Number.isFinite(snotelDepth) ? snotelDepth : 0,
     Number.isFinite(nohrscDepth) ? nohrscDepth : 0,
@@ -221,9 +223,9 @@ export function buildSnowpackInsights(
     };
   }
 
-  const snotelDistanceKm = Number(snotel?.distanceKm);
-  const snotelElevationFt = Number(snotel?.elevationFt);
-  const objectiveElevation = Number(objectiveElevationFt);
+  const snotelDistanceKm = parseOptionalFiniteNumber(snotel?.distanceKm);
+  const snotelElevationFt = parseOptionalFiniteNumber(snotel?.elevationFt);
+  const objectiveElevation = parseOptionalFiniteNumber(objectiveElevationFt);
   const hasDistance = Number.isFinite(snotelDistanceKm);
   const hasElevDelta = Number.isFinite(snotelElevationFt) && Number.isFinite(objectiveElevation);
   const elevDeltaFt = hasElevDelta ? Math.abs(snotelElevationFt - objectiveElevation) : null;

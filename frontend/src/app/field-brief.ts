@@ -3,6 +3,7 @@ import type { ActivityType, SafetyData, SummitDecision } from './types';
 import type { ParsedGpxRoute } from '../lib/gpx';
 import { ACTIVITY_PROFILES } from './activity-profiles';
 import { resolveReportFeatureFlags } from '../contexts/feature-flags';
+import { isFiniteNumber } from './core';
 
 export interface FieldBriefInput {
   objectiveName: string;
@@ -117,10 +118,10 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
   const activityLabel = ACTIVITY_PROFILES[input.activity].label;
   const weatherFacts = [
     ['Conditions', compact(safetyData.weather.description) || 'Not available'],
-    ['Temperature', Number.isFinite(safetyData.weather.temp) ? `${Math.round(safetyData.weather.temp)}°F` : 'Not available'],
-    ['Feels like', Number.isFinite(safetyData.weather.feelsLike) ? `${Math.round(Number(safetyData.weather.feelsLike))}°F` : 'Not available'],
-    ['Wind', `${Math.round(Number(safetyData.weather.windSpeed) || 0)} mph · gusts ${Math.round(Number(safetyData.weather.windGust) || 0)} mph`],
-    ['Precipitation', `${Math.round(Number(safetyData.weather.precipChance) || 0)}%`],
+    ['Temperature', isFiniteNumber(safetyData.weather.temp) ? `${Math.round(safetyData.weather.temp)}°F` : 'Not available'],
+    ['Feels like', isFiniteNumber(safetyData.weather.feelsLike) ? `${Math.round(safetyData.weather.feelsLike)}°F` : 'Not available'],
+    ['Wind', `${isFiniteNumber(safetyData.weather.windSpeed) ? `${Math.round(safetyData.weather.windSpeed)} mph` : 'Not available'} · gusts ${isFiniteNumber(safetyData.weather.windGust) ? `${Math.round(safetyData.weather.windGust)} mph` : 'not available'}`],
+    ['Precipitation', isFiniteNumber(safetyData.weather.precipChance) ? `${Math.round(safetyData.weather.precipChance)}%` : 'Not available'],
     ...(featureFlags.daylightTimeline && safetyData.solar
       ? [['Daylight', `${safetyData.solar.sunrise || '—'} sunrise · ${safetyData.solar.sunset || '—'} sunset`]]
       : []),

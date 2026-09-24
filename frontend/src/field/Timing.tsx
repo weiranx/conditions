@@ -172,7 +172,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
                             <td>{LEVEL[scenario.decision.level] || scenario.decision.level} <small>{Math.round(scenario.score)}/100</small></td>
                             <td className="is-num">{w.formatWindDisplay(scenario.peakGustMph)}</td>
                             <td className="is-num">{w.formatTempDisplay(scenario.peakFeelsLikeF)}</td>
-                            <td className="is-num">{scenario.peakPrecipChance}%<small> · {scenario.stormHours} storm h{scenario.avalancheLabel ? ` · ${scenario.avalancheLabel}` : ""}</small></td>
+                            <td className="is-num">{scenario.peakPrecipChance === null ? "N/A" : `${scenario.peakPrecipChance}%`}<small> · {scenario.stormHours} storm h{scenario.avalancheLabel ? ` · ${scenario.avalancheLabel}` : ""}</small></td>
                             <td>
                               {clockText(scenario.summitTime)} / {clockText(scenario.returnTime)}
                               {scenario.returnDayOffset > 0 && " +1 day"}

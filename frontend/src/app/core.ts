@@ -529,6 +529,11 @@ export function formatSnowfallAmountForElevationUnit(
   return 'N/A';
 }
 
+/** A measured reading. null, undefined and NaN are missing data, never 0. */
+export function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function parseOptionalFiniteNumber(value: unknown): number {
   if (value === null || value === undefined) {
     return Number.NaN;
