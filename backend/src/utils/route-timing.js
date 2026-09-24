@@ -107,6 +107,38 @@ const computeCheckpointFractions = (waypoints, { haversineKm, pace } = {}) => {
   };
 };
 
+/**
+ * Give an out-and-back route without GPX distances a running distance at each
+ * checkpoint, return leg included. Straight lines between checkpoints undercount
+ * a winding trail, so when the route's round-trip length is known they are
+ * scaled to it. Returns how the distances were found, or null when they could
+ * not be.
+ */
+const assignRouteDistances = (waypoints, haversineKm, roundTripMiles = null) => {
+  const points = Array.isArray(waypoints) ? waypoints : [];
+  if (points.length < 2 || typeof haversineKm !== 'function' || !points.every(hasCoordinates)) return null;
+  const outbound = [];
+  const legs = points.slice(1).map((point, index) => {
+    // Return checkpoints retrace outbound segments, as in computeCheckpointFractions.
+    if (point.leg === 'return') return index === points.length - 2 ? outbound.splice(0) : outbound.splice(-1);
+    const miles = haversineKm(points[index].lat, points[index].lon, point.lat, point.lon) / KM_PER_MILE;
+    outbound.push(miles);
+    return [miles];
+  });
+  const straightMiles = legs.reduce((sum, retraced) => sum + retraced.reduce((total, miles) => total + miles, 0), 0);
+  if (!(straightMiles > 0)) return null;
+  // A trail is never shorter than the straight line, so a smaller length is wrong.
+  const known = knownNumber(roundTripMiles);
+  const scale = known !== null && known >= straightMiles ? known / straightMiles : 1;
+  let cumulative = 0;
+  points[0].distance_miles = 0;
+  legs.forEach((retraced, index) => {
+    cumulative += retraced.reduce((total, miles) => total + miles, 0) * scale;
+    points[index + 1].distance_miles = Math.round(cumulative * 10) / 10;
+  });
+  return scale > 1 ? 'route-length' : 'straight-line';
+};
+
 /** Progress along the whole outing by distance, for routes without GPX distances. */
 const computeDistanceProgress = (waypoints, haversineKm) => {
   const points = Array.isArray(waypoints) ? waypoints : [];
@@ -140,6 +172,7 @@ const classifyDaylight = (etaTime, solar) => {
 module.exports = {
   DEFAULT_ROUTE_PACE,
   appendReturnCheckpoint,
+  assignRouteDistances,
   classifyDaylight,
   computeCheckpointFractions,
   computeDistanceProgress,

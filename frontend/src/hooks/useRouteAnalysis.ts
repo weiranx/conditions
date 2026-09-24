@@ -84,9 +84,13 @@ export interface RoutePace {
 export interface RouteTiming {
   basis: 'distance-and-vert' | 'distance' | 'progress' | 'even';
   roundTrip: boolean;
+  /** How a named route runs past its objective: back the same way, around a loop, or on to another finish. */
+  routeShape?: 'out-and-back' | 'loop' | 'point-to-point';
   travelWindowHours: number;
   pace: RoutePace;
   paceSource: 'user' | 'default';
+  /** How named-route checkpoint distances were found: scaled to the route's length, or straight lines. */
+  distanceBasis?: 'route-length' | 'straight-line';
 }
 
 export interface GpxRouteMetadata {
@@ -104,6 +108,8 @@ export interface RouteAnalysisOptions {
   routeMetadata?: GpxRouteMetadata;
   /** Ratio of distance to climbing used to weight checkpoint arrival times. */
   pace?: RoutePace;
+  /** Round-trip length of the chosen suggested route, to scale checkpoint distances. */
+  routeDistanceRtMiles?: number;
 }
 
 export interface RouteLoadingState {
@@ -230,6 +236,7 @@ export function useRouteAnalysis(initialState?: {
           ...(options?.waypoints ? { waypoints: options.waypoints } : {}),
           ...(options?.routeMetadata ? { route_metadata: options.routeMetadata } : {}),
           ...(options?.pace ? { pace: options.pace } : {}),
+          ...(options?.routeDistanceRtMiles ? { route_distance_rt_miles: options.routeDistanceRtMiles } : {}),
         }),
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));

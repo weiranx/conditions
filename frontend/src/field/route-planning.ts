@@ -26,6 +26,8 @@ export function buildCheckpointProfile(summaries: RouteWaypointSummary[]) {
     axis,
     low,
     high,
+    /** Route length the x axis spans, in miles, when spaced by distance. */
+    spanMiles: axis === "distance" ? span : null,
     points: elevations.map((_, i) => ({
       x: 20 + ((positions[i] - first) / span) * 960,
       y: 155 - ((elevations[i] - low) / Math.max(100, high - low)) * 125,
@@ -43,14 +45,45 @@ type Limits = { maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: 
  */
 export function checkpointTone(point: RouteWaypointSummary, limits: Limits): "within" | "over" | "missing" {
   if (!point.dataAvailable) return "missing";
-  const { windGust, precipChance, temp, windSpeed } = point.weather;
-  const feelsLike = hasRouteNumber(point.weather.feelsLike) ? point.weather.feelsLike
+  const flags = checkpointLimitFlags(point, limits);
+  if (flags.feelsLike || flags.gust || flags.precip) return "over";
+  const { windGust, precipChance } = point.weather;
+  return hasRouteNumber(windGust) && hasRouteNumber(precipChance) && checkpointFeelsLike(point) !== null ? "within" : "missing";
+}
+
+/** Feels-like at a checkpoint, given or derived from temperature and wind; null when unknown. */
+export function checkpointFeelsLike(point: RouteWaypointSummary): number | null {
+  const { feelsLike, temp, windSpeed } = point.weather;
+  return hasRouteNumber(feelsLike) ? feelsLike
     : hasRouteNumber(temp) && hasRouteNumber(windSpeed) ? computeFeelsLikeF(temp, windSpeed) : null;
-  const over = (hasRouteNumber(windGust) && windGust > limits.maxWindGustMph)
-    || (hasRouteNumber(precipChance) && precipChance > limits.maxPrecipChance)
-    || (feelsLike !== null && (feelsLike < limits.minFeelsLikeF || feelsLike > limits.maxFeelsLikeF));
-  if (over) return "over";
-  return hasRouteNumber(windGust) && hasRouteNumber(precipChance) && feelsLike !== null ? "within" : "missing";
+}
+
+/** Which of a checkpoint's readings cross the user's limits; unknown readings never do. */
+export function checkpointLimitFlags(point: RouteWaypointSummary, limits: Limits) {
+  if (!point.dataAvailable) return { feelsLike: false, gust: false, precip: false };
+  const { windGust, precipChance } = point.weather;
+  const feelsLike = checkpointFeelsLike(point);
+  return {
+    feelsLike: feelsLike !== null && (feelsLike < limits.minFeelsLikeF || feelsLike > limits.maxFeelsLikeF),
+    gust: hasRouteNumber(windGust) && windGust > limits.maxWindGustMph,
+    precip: hasRouteNumber(precipChance) && precipChance > limits.maxPrecipChance,
+  };
+}
+
+/**
+ * Round distance gridlines along the profile's x axis, in its 20–980 frame
+ * units. `unitsPerMile` picks the display unit (1 for miles, 1.609344 for km)
+ * so the ticks land on round numbers in that unit.
+ */
+export function buildDistanceTicks(spanMiles: number | null, unitsPerMile = 1): { x: number; value: number }[] {
+  if (!hasRouteNumber(spanMiles) || spanMiles <= 0) return [];
+  const span = spanMiles * unitsPerMile;
+  const step = [0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100].find((s) => span / s <= 6) ?? 100;
+  const ticks: { x: number; value: number }[] = [];
+  for (let value = 0; value <= span + 1e-9; value += step) {
+    ticks.push({ value: Math.round(value * 10) / 10, x: 20 + (value / span) * 960 });
+  }
+  return ticks;
 }
 
 /** Explain how checkpoint arrival times were estimated; older saved analyses have no timing. */
@@ -64,7 +97,19 @@ export function describeRouteTiming(timing: RouteTiming | undefined): string {
       : timing.basis === "progress"
         ? `Arrivals spread ${window} by route progress, not terrain-adjusted pace.`
         : `Arrivals are spaced evenly across ${window} because route distances are unknown.`;
-  return timing.roundTrip ? `${spread} The route is treated as an out-and-back, so the checkpoints after the objective retrace it back to the start.` : spread;
+  const distance = timing.distanceBasis === "straight-line"
+    ? " Distances are straight lines between checkpoints, so the trail is longer."
+    : timing.distanceBasis === "route-length"
+      ? " Distances are scaled to the route's listed length."
+      : "";
+  const shape = timing.roundTrip
+    ? " The route is treated as an out-and-back, so the checkpoints after the objective retrace it back to the start."
+    : timing.routeShape === "loop"
+      ? " The route is a loop, so the checkpoints after the objective continue around it back to the start."
+      : timing.routeShape === "point-to-point"
+        ? " The route is a traverse, so it finishes somewhere other than where it starts."
+        : "";
+  return `${spread}${shape}${distance}`;
 }
 
 /** "2026-09-09" → "Wed, Sep 9", read as a calendar date rather than a UTC instant. */
@@ -97,7 +142,7 @@ export function buildRouteLegs(summaries: RouteWaypointSummary[]): RouteLegSumma
       ? next.offsetMinutes - previous.offsetMinutes : null;
     const elevationDeltaFt = hasRouteNumber(next.elev_ft) && hasRouteNumber(previous.elev_ft)
       ? next.elev_ft - previous.elev_ft : null;
-    const distanceMiles = next.leg !== "return" && hasRouteNumber(next.distance_miles) && hasRouteNumber(previous.distance_miles)
+    const distanceMiles = hasRouteNumber(next.distance_miles) && hasRouteNumber(previous.distance_miles)
       && next.distance_miles >= previous.distance_miles ? next.distance_miles - previous.distance_miles : null;
     return { minutes: minutes !== null && minutes >= 0 ? minutes : null, elevationDeltaFt, distanceMiles };
   });

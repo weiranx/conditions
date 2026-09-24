@@ -90,6 +90,14 @@ export function smoothSky(hours: SkyHour[], passes = 2): SkyHour[] {
   return out;
 }
 
+/** Sky colours for a single moment, e.g. a route checkpoint's arrival; the hour strip's palette. */
+export function skyAt(minuteOfDay: number, sunriseMinutes: number | null, sunsetMinutes: number | null,
+  condition: string | undefined, precipChance: number | null | undefined) {
+  const kind = weatherAppearance({ condition: condition || "", isDaytime: null }).condition;
+  const { colors, night } = paletteFor(minuteOfDay, sunriseMinutes, sunsetMinutes, kind, measured(precipChance) ? precipChance : 0);
+  return { zenith: colors[0] as string, horizon: colors[1] as string, night, kind };
+}
+
 export function buildSkyHours(rows: PlannedRow[], plan: {
   start: string;
   sunriseMinutes: number | null;

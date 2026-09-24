@@ -624,6 +624,7 @@ export function createMockApi({ databasePath } = {}) {
           lat: body.lat,
           lon: body.lon,
           elev_ft: 6500,
+          distance_miles: 0,
           progress_percent: 0,
         },
         {
@@ -631,20 +632,32 @@ export function createMockApi({ databasePath } = {}) {
           lat: Number(body.lat) + 0.005,
           lon: Number(body.lon) + 0.004,
           elev_ft: 8200,
-          progress_percent: 22,
+          distance_miles: 3.2,
+          progress_percent: 30,
         },
         {
           name: "Demo summit",
           lat: Number(body.lat) + 0.01,
           lon: Number(body.lon) + 0.01,
           elev_ft: 10000,
+          distance_miles: 5.4,
           progress_percent: 50,
+        },
+        {
+          name: "Return to Demo saddle",
+          lat: Number(body.lat) + 0.005,
+          lon: Number(body.lon) + 0.004,
+          elev_ft: 8200,
+          distance_miles: 7.6,
+          progress_percent: 70,
+          leg: "return",
         },
         {
           name: "Return to Demo trailhead",
           lat: body.lat,
           lon: body.lon,
           elev_ft: 6500,
+          distance_miles: 10.8,
           progress_percent: 100,
           leg: "return",
         },
@@ -655,7 +668,7 @@ export function createMockApi({ databasePath } = {}) {
         const total = (startHour * 60 + startMinute + offset) % (24 * 60);
         return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
       };
-      const offsets = [0, Math.round(windowMinutes * 0.3), Math.round(windowMinutes * 0.6), windowMinutes];
+      const offsets = [0, 0.3, 0.6, 0.85, 1].map((share) => Math.round(windowMinutes * share));
       return ok({
         waypoints: waypoints.map((w, i) => ({ ...w, offset_minutes: offsets[i] })),
         timing: {
@@ -664,6 +677,7 @@ export function createMockApi({ databasePath } = {}) {
           travelWindowHours: windowMinutes / 60,
           pace: body.pace || { minutesPerMile: 20, ascentMinutesPer1000Ft: 30 },
           paceSource: body.pace ? "user" : "default",
+          distanceBasis: body.route_distance_rt_miles ? "route-length" : "straight-line",
         },
         summaries: waypoints.map((w, i) => ({
           ...w,
@@ -673,7 +687,15 @@ export function createMockApi({ databasePath } = {}) {
           daylight: startHour * 60 + startMinute + offsets[i] >= 19 * 60 ? "dark" : "day",
           dataAvailable: true,
           score: report.safety.score,
-          weather: i === 2 ? { ...report.weather, windGust: 38 } : report.weather,
+          // Colder and windier with height, wetter into the afternoon.
+          weather: {
+            ...report.weather,
+            temp: Math.round(Number(report.weather.temp ?? 55) - ((w.elev_ft - 6500) / 1000) * 3.5 + [0, 4, 7, 5, -2][i]),
+            feelsLike: undefined,
+            windSpeed: [6, 11, 22, 13, 5][i],
+            windGust: [12, 19, 38, 24, 10][i],
+            precipChance: [5, 10, 25, 40, 20][i],
+          },
           activeAlerts: i === 2 ? 1 : 0,
         })),
         analysis: [

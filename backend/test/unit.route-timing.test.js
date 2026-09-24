@@ -1,6 +1,7 @@
 jest.mock('../src/utils/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() } }));
 const {
   appendReturnCheckpoint,
+  assignRouteDistances,
   classifyDaylight,
   computeCheckpointFractions,
   computeDistanceProgress,
@@ -46,6 +47,21 @@ test('a return checkpoint retraces the outbound route with climbing as descent',
   expect(fractions[1]).toBeCloseTo(100 / 160, 2);
   expect(fractions[2]).toBe(1);
   expect(computeDistanceProgress(route, haversineKm)).toEqual([0, 50, 100]);
+});
+
+test('out-and-back checkpoints get running distances, return included', () => {
+  const route = appendReturnCheckpoint([at(0, 8000), at(1, 8000), at(3, 10000)]);
+  expect(assignRouteDistances(route, haversineKm)).toBe('straight-line');
+  expect(route.map((point) => point.distance_miles)).toEqual([0, 1, 3, 5, 6]);
+});
+
+test('checkpoint distances scale to a known route length, never below the straight line', () => {
+  const scaled = appendReturnCheckpoint([at(0, 8000), at(1, 8000), at(3, 10000)]);
+  expect(assignRouteDistances(scaled, haversineKm, 12)).toBe('route-length');
+  expect(scaled.map((point) => point.distance_miles)).toEqual([0, 2, 6, 10, 12]);
+  const tooShort = appendReturnCheckpoint([at(0, 8000), at(3, 10000)]);
+  expect(assignRouteDistances(tooShort, haversineKm, 2)).toBe('straight-line');
+  expect(tooShort.map((point) => point.distance_miles)).toEqual([0, 3, 6]);
 });
 
 test('the return passes back through each outbound checkpoint in reverse', () => {
