@@ -10,9 +10,6 @@ import {
 import type {
   ActivityType,
   ElevationUnit,
-  FreshnessState,
-  NwsAlertItem,
-  SafetyData,
   TemperatureUnit,
   ThemeMode,
   TimeStyle,
@@ -70,55 +67,6 @@ export function parseIsoToMs(value: string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-export function formatCompactAge(value: string | null | undefined): string | null {
-  const ms = parseIsoToMs(value);
-  if (ms === null) {
-    return null;
-  }
-  const ageMinutes = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  if (ageMinutes < 60) {
-    return `${ageMinutes}m old`;
-  }
-  const ageHours = Math.floor(ageMinutes / 60);
-  if (ageHours < 24) {
-    return `${ageHours}h old`;
-  }
-  const ageDays = Math.floor(ageHours / 24);
-  return `${ageDays}d old`;
-}
-
-export function pickOldestIsoTimestamp(values: Array<string | null | undefined>): string | null {
-  let pickedValue: string | null = null;
-  let pickedMs = Number.POSITIVE_INFINITY;
-  values.forEach((value) => {
-    const ms = parseIsoToMs(value);
-    if (ms === null) {
-      return;
-    }
-    if (ms < pickedMs) {
-      pickedMs = ms;
-      pickedValue = value || null;
-    }
-  });
-  return pickedValue;
-}
-
-export function pickNewestIsoTimestamp(values: Array<string | null | undefined>): string | null {
-  let pickedValue: string | null = null;
-  let pickedMs = Number.NEGATIVE_INFINITY;
-  values.forEach((value) => {
-    const ms = parseIsoToMs(value);
-    if (ms === null) {
-      return;
-    }
-    if (ms > pickedMs) {
-      pickedMs = ms;
-      pickedValue = value || null;
-    }
-  });
-  return pickedValue;
-}
-
 export function formatAgeFromNow(value: string | null | undefined): string {
   const ms = parseIsoToMs(value);
   if (ms === null) {
@@ -137,99 +85,6 @@ export function formatAgeFromNow(value: string | null | undefined): string {
     return `valid in ${span(-offsetMinutes)}`;
   }
   return `${span(Math.max(0, offsetMinutes))} ago`;
-}
-
-export function freshnessClass(value: string | null | undefined, staleHours: number): FreshnessState {
-  const ms = parseIsoToMs(value);
-  if (ms === null) {
-    return 'missing';
-  }
-  const ageHours = (Date.now() - ms) / 3600000;
-  if (ageHours <= staleHours * 0.5) {
-    return 'fresh';
-  }
-  if (ageHours <= staleHours) {
-    return 'aging';
-  }
-  return 'stale';
-}
-
-export function classifySnowpackFreshness(
-  snotelObservedDate: string | null | undefined,
-  nohrscSampledTime: string | null | undefined,
-): {
-  state: FreshnessState;
-  referenceTimestamp: string | null;
-  displayValue: string;
-} {
-  const snotelMs = parseIsoToMs(snotelObservedDate);
-  const nohrscMs = parseIsoToMs(nohrscSampledTime);
-  const snotelAgeHours = snotelMs === null ? null : (Date.now() - snotelMs) / 3600000;
-  const nohrscAgeHours = nohrscMs === null ? null : (Date.now() - nohrscMs) / 3600000;
-
-  const classifyByAge = (ageHours: number | null, freshHours: number, agingHours: number): FreshnessState => {
-    if (ageHours === null) return 'missing';
-    if (ageHours <= freshHours) return 'fresh';
-    if (ageHours <= agingHours) return 'aging';
-    return 'stale';
-  };
-
-  const snotelState = classifyByAge(snotelAgeHours, 60, 120);
-  const nohrscState = classifyByAge(nohrscAgeHours, 8, 24);
-  const states = [snotelState, nohrscState].filter((state) => state !== 'missing');
-
-  const state: FreshnessState = (() => {
-    if (states.length === 0) return 'missing';
-    if (!states.includes('stale')) {
-      if (states.includes('aging')) return 'aging';
-      return 'fresh';
-    }
-    if (states.includes('fresh') || states.includes('aging')) {
-      return 'aging';
-    }
-    return 'stale';
-  })();
-
-  const snotelAgeLabel = formatCompactAge(snotelObservedDate);
-  const nohrscAgeLabel = formatCompactAge(nohrscSampledTime);
-  const detailParts = [nohrscAgeLabel ? `NOHRSC ${nohrscAgeLabel}` : null, snotelAgeLabel ? `SNOTEL ${snotelAgeLabel}` : null].filter(Boolean);
-  const displayValue = detailParts.length > 0 ? detailParts.join(' • ') : 'Unavailable';
-  const referenceTimestamp = pickNewestIsoTimestamp([nohrscSampledTime || null, snotelObservedDate || null]);
-
-  return { state, referenceTimestamp, displayValue };
-}
-
-export function resolveSelectedTravelWindowMs(data: SafetyData | null | undefined, fallbackTravelWindowHours: number): { startMs: number; endMs: number } | null {
-  if (!data) {
-    return null;
-  }
-  const startMs = parseIsoToMs(data.weather?.forecastStartTime || data.forecast?.selectedStartTime || null);
-  if (startMs === null) {
-    return null;
-  }
-  const fallbackDurationMs = Math.max(1, Math.round(Number(fallbackTravelWindowHours) || 12)) * 3600000;
-  const explicitEndMs = parseIsoToMs(data.forecast?.selectedEndTime || data.weather?.forecastEndTime || null);
-  const endMs = explicitEndMs !== null && explicitEndMs > startMs ? explicitEndMs : startMs + fallbackDurationMs;
-  return { startMs, endMs };
-}
-
-export function isTravelWindowCoveredByAlertWindow(window: { startMs: number; endMs: number } | null, alerts: NwsAlertItem[] | null | undefined): boolean {
-  if (!window || !Array.isArray(alerts) || alerts.length === 0) {
-    return false;
-  }
-  return alerts.some((alert) => {
-    const alertStartMs = parseIsoToMs(alert.onset || alert.effective || alert.sent || null);
-    const alertEndMs = parseIsoToMs(alert.ends || alert.expires || null);
-    if (alertStartMs === null && alertEndMs === null) {
-      return false;
-    }
-    const normalizedStartMs = alertStartMs ?? Number.NEGATIVE_INFINITY;
-    const normalizedEndMs = alertEndMs ?? Number.POSITIVE_INFINITY;
-    if (normalizedEndMs <= normalizedStartMs) {
-      return false;
-    }
-    return window.startMs >= normalizedStartMs && window.endMs <= normalizedEndMs;
-  });
 }
 
 export function parseCoordinates(input: string): { lat: number; lon: number } | null {
@@ -795,10 +650,3 @@ export function normalizeTimeStyle(rawStyle: string | null | undefined): TimeSty
   return rawStyle === '24h' ? '24h' : 'ampm';
 }
 
-export function parseIsoDateToUtcMs(value: string | null | undefined): number | null {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-    return null;
-  }
-  const parsed = Date.parse(`${value.trim()}T00:00:00Z`);
-  return Number.isFinite(parsed) ? parsed : null;
-}

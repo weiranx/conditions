@@ -1,8 +1,10 @@
-// Backend twin of frontend/src/app/approach-elevation.ts. The hourly forecast
-// describes the objective, but the first hours of a trip are spent on the
-// approach, often thousands of feet lower. This estimates where the party is
-// at each planned hour and shifts that hour's temperature and wind to it.
-// Keep the constants and rules here in step with the frontend module.
+// The hourly forecast describes the objective, but the first hours of a trip
+// are spent on the approach, often thousands of feet lower. This estimates
+// where the party is at each planned hour and shifts that hour's temperature
+// and wind to it. Precipitation and storm signals are never adjusted: a storm
+// cell does not care how high you are.
+
+const { clockMinutes } = require('./display-format');
 
 const TEMP_LAPSE_F_PER_1000FT = 3.3;
 const WIND_INCREASE_MPH_PER_1000FT = 2;
@@ -42,39 +44,62 @@ const numberParam = (value, min, max) => {
  * Invalid values are ignored rather than rejected, so a bad optional input
  * never costs the user their report.
  */
+// "minute:feet,…" pairs; null when any pair is unreadable or out of range.
+const parseTimelineParam = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const pairs = value.split(',');
+  if (pairs.length > MAX_ROUTE_POINTS) return null;
+  const points = pairs.map((pair) => {
+    const [minute, elevationFt] = pair.split(':');
+    return {
+      minute: numberParam(minute, 0, MAX_ROUTE_MINUTES),
+      elevationFt: numberParam(elevationFt, MIN_ELEVATION_FT, MAX_ELEVATION_FT),
+    };
+  });
+  const valid = points.length >= 2
+    && points.every((point, index) => point.minute !== null && point.elevationFt !== null
+      && (index === 0 || point.minute >= points[index - 1].minute));
+  return valid ? points : null;
+};
+
 const parseApproachQuery = (query = {}) => {
   if (String(query.approach || '').toLowerCase() === 'off') return { enabled: false };
   const trailheadElevationFt = numberParam(query.trailhead_ft, MIN_ELEVATION_FT, MAX_ELEVATION_FT);
   const ascentMinutesPer1000Ft = numberParam(query.ascent_min_per_kft, 1, 120);
-  let timeline = null;
-  if (typeof query.approach_route === 'string' && query.approach_route.trim()) {
-    const points = query.approach_route.split(',').slice(0, MAX_ROUTE_POINTS + 1).map((pair) => {
-      const [minute, elevationFt] = pair.split(':');
-      return {
-        minute: numberParam(minute, 0, MAX_ROUTE_MINUTES),
-        elevationFt: numberParam(elevationFt, MIN_ELEVATION_FT, MAX_ELEVATION_FT),
-      };
-    });
-    const valid = points.length >= 2 && points.length <= MAX_ROUTE_POINTS
-      && points.every((point, index) => point.minute !== null && point.elevationFt !== null
-        && (index === 0 || point.minute >= points[index - 1].minute));
-    if (valid) timeline = points;
-  }
-  return { enabled: true, trailheadElevationFt, ascentMinutesPer1000Ft, timeline };
+  // A GPX track's timeline, from the start of the track.
+  const timeline = parseTimelineParam(query.approach_route);
+  // An analyzed route's checkpoints; the first must be the start.
+  const checkpoints = parseTimelineParam(query.approach_checkpoints);
+  const routeTimeline = checkpoints && checkpoints[0].minute === 0 ? checkpoints : null;
+  return { enabled: true, trailheadElevationFt, ascentMinutesPer1000Ft, timeline, routeTimeline };
 };
 
 /**
- * Elevation over time. A route timeline (from GPX) wins, then a typed
+ * Elevation over time. A GPX track wins, then an analyzed route's checkpoints
+ * (both give the full route: approach, summit and descent), then a typed
  * trailhead, then the lowest forecast band. Without a route, the party climbs
  * at the ascent rate and then stays at the objective; descent is not modeled.
  */
-const buildApproachProfile = ({ objectiveElevationFt, trailheadElevationFt = null, timeline = null, elevationBands = [], ascentMinutesPer1000Ft = null }) => {
+const buildApproachProfile = ({
+  objectiveElevationFt,
+  trailheadElevationFt = null,
+  timeline = null,
+  routeTimeline = null,
+  elevationBands = [],
+  ascentMinutesPer1000Ft = null,
+}) => {
   const objective = Number(objectiveElevationFt);
   if (!finite(objective) || objective <= 0) return null;
 
   if (Array.isArray(timeline) && timeline.length >= 2) {
     if (objective - Math.min(...timeline.map((entry) => entry.elevationFt)) < MIN_APPROACH_DROP_FT) return null;
     return { source: 'gpx', trailheadElevationFt: timeline[0].elevationFt, objectiveElevationFt: objective, timeline };
+  }
+
+  // A route that stays near the objective falls through to the trailhead.
+  if (Array.isArray(routeTimeline) && routeTimeline.length >= 2
+    && objective - Math.min(...routeTimeline.map((entry) => entry.elevationFt)) >= MIN_APPROACH_DROP_FT) {
+    return { source: 'route', trailheadElevationFt: routeTimeline[0].elevationFt, objectiveElevationFt: objective, timeline: routeTimeline };
   }
 
   const lowestBand = (Array.isArray(elevationBands) ? elevationBands : [])
@@ -183,6 +208,7 @@ const resolveApproach = ({ approachRequest, weatherData, solarData }) => {
     objectiveElevationFt: weatherData?.elevation,
     trailheadElevationFt: approachRequest.trailheadElevationFt,
     timeline: approachRequest.timeline,
+    routeTimeline: approachRequest.routeTimeline,
     elevationBands: weatherData?.elevationForecast,
     ascentMinutesPer1000Ft: approachRequest.ascentMinutesPer1000Ft,
   });
@@ -193,8 +219,65 @@ const resolveApproach = ({ approachRequest, weatherData, solarData }) => {
   } : null;
 };
 
+/**
+ * Minutes after the planned start that an hourly reading covers, clipped to
+ * the trip. A 05:30 start makes the 05:00 reading cover minutes 0–30 and the
+ * 06:00 reading 30–90; the reading's own clock time decides, not its position
+ * in the trend. Falls back to the position when either time is unreadable.
+ */
+const readingMinutesAfterStart = (pointTime, startTime, index) => {
+  const startMinute = clockMinutes(startTime);
+  const pointMinute = clockMinutes(pointTime);
+  if (startMinute === null || pointMinute === null) return { from: index * 60, to: index * 60 + 60 };
+  let diff = pointMinute - startMinute;
+  // Past midnight on an overnight trip. A whole hour before the start is the
+  // next-day reading of a 24-hour plan: the trend opens with the start's hour.
+  if (diff <= -60) diff += 1440;
+  const from = Math.max(0, diff);
+  return { from, to: Math.max(from, diff + 60) };
+};
+
+/** Shift a trend reading to where the party is during the part of the trip it covers. */
+const adjustReadingForApproach = (point, index, profile, plan) => {
+  const { from, to } = readingMinutesAfterStart(point?.time, plan.start, index);
+  const startMinute = clockMinutes(plan.start);
+  return adjustPointToElevation(point, profile.objectiveElevationFt, highestElevationBetween(profile, from, to), {
+    minuteOfDay: startMinute !== null ? startMinute + from : clockMinutes(point?.time) ?? from,
+    sunriseMinutes: plan.sunriseMinutes,
+    sunsetMinutes: plan.sunsetMinutes,
+  });
+};
+
+const indexRuns = (flags) => {
+  const runs = [];
+  flags.forEach((flag, index) => {
+    if (!flag) return;
+    const last = runs[runs.length - 1];
+    if (last && last.end === index - 1) last.end = index;
+    else runs.push({ start: index, end: index });
+  });
+  return runs;
+};
+
+/** What the approach adjustment changed, for plain-language notes; null when nothing was adjusted. */
+const summarizeApproachHours = (hours) => {
+  const adjusted = hours.map((hour) => Boolean(hour?.approachAdjusted && finite(hour.elevationFt)));
+  const elevations = hours.filter((_, index) => adjusted[index]).map((hour) => hour.elevationFt);
+  if (!elevations.length) return null;
+  return {
+    adjustedHours: elevations.length,
+    lowFt: Math.min(...elevations),
+    highFt: Math.max(...elevations),
+    adjustedRuns: indexRuns(adjusted),
+    inversionRuns: indexRuns(hours.map((hour, index) => adjusted[index] && Boolean(hour.inversionRisk))),
+  };
+};
+
 module.exports = {
   resolveApproach,
+  readingMinutesAfterStart,
+  adjustReadingForApproach,
+  summarizeApproachHours,
   TEMP_LAPSE_F_PER_1000FT,
   MAX_APPROACH_WARMING_F,
   INVERSION_COOLING_F_PER_1000FT,

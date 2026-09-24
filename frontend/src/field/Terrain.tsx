@@ -1,8 +1,7 @@
 import { SurfacePrediction } from "./SurfacePrediction";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
-import { buildTerrainWindow, buildTerrainWindowByAspect } from "../app/terrain-window";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { planFromReport } from "./data";
@@ -13,60 +12,24 @@ import { MountainSection } from "./sky/MountainSection";
 import { AvalancheMountain, type AvalancheBandKey } from "./sky/AvalancheMountain";
 import { AspectRose, type RoseAspect } from "./sky/AspectRose";
 import { SnowColumns } from "./sky/SnowColumns";
-import { parseTerrainFromLocation } from "../utils/avalanche";
 import { formatSnowDepthForElevationUnit, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
 
 const parseClock = (time: string) => parseTimeInputMinutes(time) ?? parseHourLabelToMinutes(time) ?? NaN;
 import { StatusTag } from "./sky/BriefSections";
-import { knownFeet, surfaceLabel, terrainStatus } from "./sky/status";
+import { knownFeet } from "./sky/status";
 import { shortHour, type SkyHour } from "./sky/sky-model";
-import { estimateAtElevation, rebaseElevationBands } from "../app/elevation-forecast";
 const FieldMap = lazy(() => import("./FieldMap"));
 
 function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
-  const flags = resolveReportFeatureFlags(w.safetyData?.featureFlags);
   const [selection, setSelection] = useState<{ lane: number; hour: number; aspect: RoseAspect | null }>({ lane: 0, hour: 0, aspect: null });
-  // Without snow to move, lee aspects are no more hazardous than any other.
-  const showWindLoading = flags.windLoadingDetails && w.windLoadingApplies;
-  const { model, byAspect } = useMemo(
-    () => {
-      const input = {
-        travelRows: w.travelWindowRows,
-        elevationBands: w.elevationForecastBands,
-        avalancheProblems: flags.avalancheDetails
-          ? w.safetyData?.avalanche?.problems || []
-          : [],
-        avalancheRelevant: flags.avalancheDetails && w.avalancheRelevant,
-        avalancheUnknown: flags.avalancheDetails && w.avalancheUnknown,
-        avalancheDanger: flags.avalancheDetails
-          ? w.overallAvalancheLevel
-          : null,
-        leewardAspects: showWindLoading ? w.leewardAspectHints : [],
-        secondaryAspects: showWindLoading ? w.secondaryWindAspects : [],
-        preferences: w.preferences,
-      };
-      // The rose draws each aspect on its own; the table keeps the grouped lanes.
-      return { model: buildTerrainWindow(input), byAspect: buildTerrainWindowByAspect(input) };
-    },
-    [
-      w.travelWindowRows,
-      w.elevationForecastBands,
-      w.safetyData,
-      w.avalancheRelevant,
-      w.avalancheUnknown,
-      w.overallAvalancheLevel,
-      w.leewardAspectHints,
-      w.secondaryWindAspects,
-      w.preferences,
-      flags.avalancheDetails,
-      showWindLoading,
-    ],
-  );
+  // The table keeps the grouped lanes; the rose draws each aspect on its own.
+  const { grouped: model, byAspect } = w.evaluation!.terrain;
+  const hours = w.travelWindowRows;
   // Rings of the rose, highest elevation innermost.
   const rings = Array.from(new Map(model.lanes.map((l) => [l.elevationFt, l.elevationLabel])).entries())
     .sort((a, b) => b[0] - a[0]);
   const aspectLane = (aspect: RoseAspect, ring: number) =>
-    byAspect.get(aspect)?.lanes.find((l) => l.elevationFt === rings[ring]?.[0] && l.aspects.includes(aspect));
+    byAspect[aspect]?.find((l) => l.elevationFt === rings[ring]?.[0]);
   const laneAt = (aspect: RoseAspect, ring: number) =>
     model.lanes.findIndex((l) => l.elevationFt === rings[ring]?.[0] && l.aspects.includes(aspect));
   // A slope picked on the rose reads its own aspect's cell; a table cell reads the grouped lane.
@@ -77,7 +40,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
     : lane?.cells[selection.hour];
   const levelWord = (level: string) =>
     level === "lower" ? "Lower" : level === "avoid" ? "Avoid" : level === "unknown" ? "Unknown" : "Caution";
-  const hourText = (i: number) => w.formatClockForStyle(model.hours[i]?.time, w.preferences.timeStyle);
+  const hourText = (i: number) => w.formatClockForStyle(hours[i]?.time, w.preferences.timeStyle);
   const roseSelected = selection.aspect && roseRing >= 0 ? { aspect: selection.aspect, ring: roseRing } : null;
   return (
     <section className="sky-section" aria-labelledby="sky-terrain-day">
@@ -93,7 +56,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
       {model.lanes.length ? (
         <>
           <div className="sky-segmented sky-mountain-hours" role="group" aria-label="Terrain time">
-            {model.hours.map((hour, i) => (
+            {hours.map((hour, i) => (
               <button key={i} type="button" aria-pressed={i === selection.hour}
                 aria-label={hourText(i)} onClick={() => setSelection({ ...selection, hour: i })}>
                 {shortHour(parseClock(hour.time), w.preferences.timeStyle)}
@@ -149,7 +112,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
               <thead>
                 <tr>
                   <th scope="col">Elevation / aspect</th>
-                  {model.hours.map((hour, i) => (
+                  {hours.map((hour, i) => (
                     <th scope="col" key={i}>
                       {w.formatClockForStyle(
                         hour.time,
@@ -176,7 +139,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
                           aria-pressed={
                             selection.lane === i && selection.hour === j
                           }
-                          aria-label={`${lane.elevationLabel}, ${lane.aspectLabel}, ${w.formatClockForStyle(model.hours[j].time, w.preferences.timeStyle)}: ${cell.level}`}
+                          aria-label={`${lane.elevationLabel}, ${lane.aspectLabel}, ${w.formatClockForStyle(hours[j]?.time, w.preferences.timeStyle)}: ${cell.level}`}
                           onClick={() => setSelection({ lane: i, hour: j, aspect: null })}
                         >
                           {cell.level === "lower"
@@ -216,28 +179,18 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
   const [forecastHour, setForecastHour] = useState(0);
   const hourIndex = forecastHour < hours.length ? forecastHour : 0;
   const selectedHour = hourIndex > 0 ? hours[hourIndex] : null;
-  // Bands start from the objective; approach hours carry their summit reading separately.
-  const selectedBase = useMemo(
-    () => selectedHour
-      ? selectedHour.objectiveReading ?? { temp: selectedHour.temp, wind: selectedHour.wind, gust: selectedHour.gust }
-      : null,
-    [selectedHour],
-  );
-  const bands = useMemo(
-    () => selectedBase
-      ? rebaseElevationBands(w.elevationForecastBands, selectedBase)
-      : w.elevationForecastBands,
-    [selectedBase, w.elevationForecastBands],
-  );
-  const target = selectedBase && w.targetElevationForecast
-    ? estimateAtElevation(selectedBase, w.targetElevationForecast.deltaFt)
-    : w.targetElevationForecast;
+  // The backend's elevation bands and target estimate for each planned hour.
+  const { interpretation, elevation } = w.evaluation!;
+  const bands = elevation.bandsByHour[hourIndex] ?? w.elevationForecastBands;
+  const target = elevation.target?.byHour[hourIndex] ?? null;
+  const targetFt = elevation.target?.elevationFt ?? null;
+  const { avalanche, snowpack, terrainCondition } = interpretation;
   const hourLabel = (hour: SkyHour) => w.formatClockForStyle(hour.time, w.preferences.timeStyle);
-  const approach = w.approachProfile;
+  const approach = w.planApproach;
   const approachHours = hours.filter((h) => h.approachAdjusted).length;
   const inversionHours = hours.filter((h) => h.inversionRisk).length;
-  const surface = surfaceLabel(data);
-  const status = terrainStatus(data);
+  const surface = terrainCondition.surfaceLabel;
+  const status = terrainCondition.status;
   const objectiveFt = knownFeet(data.weather.elevation);
   const freezing = knownFeet(data.atmosphere?.freezingLevelFt) ?? NaN;
   const snowLevel = knownFeet(data.atmosphere?.snowLevelFt) ?? NaN;
@@ -246,30 +199,19 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
     ...(Number.isFinite(snowLevel) && snowLevel > 0 ? [{ label: "Snow level", ft: snowLevel, tone: "snow" as const }] : []),
   ];
   const objectiveBand = bands.find((b) => objectiveFt !== null && Math.abs(b.elevationFt - objectiveFt) < 150);
-  const avalancheLevel = w.overallAvalancheLevel as number | null;
-  const problemTerrain = (data.avalanche?.problems ?? []).map((problem) => {
-    const { aspects, elevations } = parseTerrainFromLocation(problem.location);
-    // Rose rings, inside out: above, near and below treeline. An empty set means the bulletin didn't say.
-    const ringBands = ["upper", "middle", "lower"] as const;
-    const bands: AvalancheBandKey[] = elevations.size
-      ? (["above", "at", "below"] as const).filter((_, r) => elevations.has(ringBands[r]))
-      : [];
-    const aspectText = aspects.size === 8 ? "All aspects" : aspects.size ? [...aspects].join(", ") : "Aspects not stated";
-    const bandText = elevations.size === 3 ? "all elevations"
-      : elevations.size ? bands.map((b) => ({ above: "above", at: "near", below: "below" })[b]).join(", ") + " treeline"
-      : "elevations not stated";
-    return {
-      name: problem.name || "Avalanche problem",
-      bands,
-      describe: `${aspectText} · ${bandText}`,
-      // "maybe" where the bulletin leaves aspect or elevation unstated, so an unknown is never drawn as affected.
-      covers: (aspect: RoseAspect, ring: number) => {
-        const aspectHit = aspects.size === 0 ? "maybe" : aspects.has(aspect) ? "yes" : "no";
-        const bandHit = elevations.size === 0 ? "maybe" : elevations.has(ringBands[ring]) ? "yes" : "no";
-        return aspectHit === "no" || bandHit === "no" ? "no" : aspectHit === "yes" && bandHit === "yes" ? "yes" : "maybe";
-      },
-    };
-  });
+  const avalancheLevel = avalanche.overallLevel;
+  // Rose rings, inside out: above, near and below treeline.
+  const ringBands = ["upper", "middle", "lower"] as const;
+  const problemTerrain = avalanche.problemTerrain.map((problem) => ({
+    ...problem,
+    bands: (["above", "at", "below"] as const).filter((_, r) => problem.elevations.includes(ringBands[r])) as AvalancheBandKey[],
+    // "maybe" where the bulletin leaves aspect or elevation unstated, so an unknown is never drawn as affected.
+    covers: (aspect: RoseAspect, ring: number) => {
+      const aspectHit = problem.aspects.length === 0 ? "maybe" : problem.aspects.includes(aspect) ? "yes" : "no";
+      const bandHit = problem.elevations.length === 0 ? "maybe" : problem.elevations.includes(ringBands[ring]) ? "yes" : "no";
+      return aspectHit === "no" || bandHit === "no" ? "no" : aspectHit === "yes" && bandHit === "yes" ? "yes" : "maybe";
+    },
+  }));
   const snowDepth = data.snowpack?.snotel?.snowDepthIn == null
     ? "Unavailable"
     : formatSnowDepthForElevationUnit(data.snowpack.snotel.snowDepthIn, w.preferences.elevationUnit);
@@ -287,7 +229,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
             </span>
           ))}{levels.some((l) => l.tone === "cold" && objectiveFt !== null && l.ft <= objectiveFt) ? ", below your objective" : ""}.</>
         )}{" "}
-        <span className="sky-lead-note">{w.localizeUnitText(w.terrainConditionDetails.summary)}</span>
+        <span className="sky-lead-note">{terrainCondition.summary}</span>
       </p>
 
       {flags.elevationForecast && (
@@ -318,8 +260,8 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 bands={bands}
                 objectiveFt={objectiveFt}
                 objectiveLabel={objectiveBand ? `Objective · ${w.formatTempDisplay(objectiveBand.temp)}` : "Objective"}
-                target={w.hasTargetElevation && target && Number.isFinite(w.targetElevationFt) && Math.abs(w.targetElevationFt - (objectiveFt ?? -1e9)) > 100
-                  ? { ft: w.targetElevationFt, label: `${w.formatElevationDisplay(w.targetElevationFt)} · ${w.formatTempDisplay(target.temp)}` }
+                target={target && targetFt !== null && Math.abs(targetFt - (objectiveFt ?? -1e9)) > 100
+                  ? { ft: targetFt, label: `${w.formatElevationDisplay(targetFt)} · ${w.formatTempDisplay(target.temp)}` }
                   : null}
                 levels={levels}
                 sky={hours[hourIndex] ? { zenith: hours[hourIndex].zenith, horizon: hours[hourIndex].horizon } : null}
@@ -451,7 +393,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
             <p>Regional bulletin{data.avalanche?.center ? ` · ${data.avalanche.center}` : ""}</p>
           </div>
           <div className="sky-card">
-            {w.avalancheRelevant ? (
+            {avalanche.relevant ? (
               <>
                 <div className="sky-danger" role="img"
                   aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5, ${AVALANCHE_SCALE[avalancheLevel - 1] || ""}.` : "No avalanche danger rating."}>
@@ -462,9 +404,9 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                   ))}
                 </div>
                 <span className="sky-card-head">
-                  <span>{w.avalancheUnknown ? "Unknown danger" : data.avalanche?.risk || "Unavailable"}</span>
+                  <span>{avalanche.unknown ? "Unknown danger" : data.avalanche?.risk || "Unavailable"}</span>
                 </span>
-                {w.avalancheExpiredForSelectedStart && (
+                {avalanche.expiredForSelectedStart && (
                   <p className="sky-notice is-caution">
                     This bulletin expires before the selected departure. Check for a current forecast.
                   </p>
@@ -472,9 +414,9 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 <p className="sky-cap is-body">
                   {data.avalanche?.bottomLine || data.avalanche?.relevanceReason}
                 </p>
-                {w.avalancheElevationRows.length > 0 && (
+                {avalanche.elevationRows.length > 0 && (
                   <AvalancheMountain
-                    rows={w.avalancheElevationRows}
+                    rows={avalanche.elevationRows}
                     problems={problemTerrain.map((p) => ({ name: p.name, bands: p.bands }))}
                     dangerText={w.getDangerText}
                   />
@@ -485,13 +427,13 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                       compact
                       size={76}
                       rings={["Above treeline", "Near treeline", "Below treeline"]}
-                      label={problemTerrain[i].describe}
+                      label={problemTerrain[i].description}
                       cellClass={(aspect, ring) => ({ yes: "is-affected", maybe: "is-unstated", no: "" })[problemTerrain[i].covers(aspect, ring)]}
                       cellLabel={(aspect, ring) => `${aspect} ${ring}`}
                     />
                     <div>
                     <h3><span className="sky-problem-num" aria-hidden="true">{i + 1}</span>{problem.name}</h3>
-                    <p className="sky-problem-where">{problemTerrain[i].describe}</p>
+                    <p className="sky-problem-where">{problemTerrain[i].description}</p>
                     <p>{problem.discussion || problem.problem_description}</p>
                     <Details
                       title="Affected aspects, elevations, size, and likelihood"
@@ -503,7 +445,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 {data.avalanche?.advice && <p className="sky-cap is-body">{data.avalanche.advice}</p>}
               </>
             ) : (
-              <p className="sky-cap is-body">{w.avalancheNotApplicableReason || "No avalanche forecast applies to this plan."}</p>
+              <p className="sky-cap is-body">{avalanche.notApplicableReason || "No avalanche forecast applies to this plan."}</p>
             )}
             <SourceLink url={w.safeAvalancheLink}>Read the complete bulletin</SourceLink>
             <Details title="Avalanche forecast coverage and validity" value={data.avalanche} />
@@ -515,25 +457,25 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
         <section className="sky-section" aria-labelledby="sky-terrain-snow">
           <div className="sky-sh">
             <h2 id="sky-terrain-snow">Snow observations</h2>
-            <p>{w.snowpackStatusLabel}</p>
+            <p>{snowpack.statusLabel}</p>
           </div>
           <div className="sky-card">
-            <span className="sky-card-head"><span>{w.snowpackInterpretation?.headline || "Snowpack assessment"}</span></span>
-            {w.snowpackDepthConflict && (
+            <span className="sky-card-head"><span>{snowpack.interpretation?.headline || "Snowpack assessment"}</span></span>
+            {snowpack.depthConflict && (
               <p className="sky-notice is-caution">
-                {w.snowpackDepthConflictCaption} · {w.snowpackDepthRangeDisplay}
+                {snowpack.depthConflictCaption} · {snowpack.depthRangeDisplay}
               </p>
             )}
             <div className="sky-stat-row">
-              <div><span className="sky-muted">Best depth estimate</span><span className="sky-big">{w.snowpackBestDepthDisplay}</span><small>{w.snowpackBestDepthSource}</small></div>
-              <div><span className="sky-muted">Snow water equivalent</span><span className="sky-big">{w.snowpackBestSweDisplay}</span><small>{w.snowpackBestSweSource}</small></div>
+              <div><span className="sky-muted">Best depth estimate</span><span className="sky-big">{snowpack.bestDepthDisplay}</span><small>{snowpack.bestDepthSource}</small></div>
+              <div><span className="sky-muted">Snow water equivalent</span><span className="sky-big">{snowpack.bestSweDisplay}</span><small>{snowpack.bestSweSource}</small></div>
             </div>
             <SnowColumns
               metric={w.preferences.elevationUnit === "m"}
               columns={[
                 {
                   label: "SNOTEL station",
-                  sub: [data.snowpack?.snotel?.stationName, knownFeet(data.snowpack?.snotel?.elevationFt) !== null ? w.formatElevationDisplay(data.snowpack!.snotel!.elevationFt!) : null, w.snotelDistanceDisplay]
+                  sub: [data.snowpack?.snotel?.stationName, knownFeet(data.snowpack?.snotel?.elevationFt) !== null ? w.formatElevationDisplay(data.snowpack!.snotel!.elevationFt!) : null, snowpack.sources.snotel.distanceDisplay]
                     .filter((part) => part && part !== "N/A" && part !== "Unavailable").join(" · ") || "No station",
                   depthIn: knownFeet(data.snowpack?.snotel?.snowDepthIn),
                   sweIn: knownFeet(data.snowpack?.snotel?.sweIn),
@@ -546,7 +488,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 },
                 ...(data.snowpack?.cdec ? [{
                   label: "CDEC station",
-                  sub: [data.snowpack.cdec.stationName, knownFeet(data.snowpack.cdec.elevationFt) !== null ? w.formatElevationDisplay(data.snowpack.cdec.elevationFt!) : null, w.cdecDistanceDisplay]
+                  sub: [data.snowpack.cdec.stationName, knownFeet(data.snowpack.cdec.elevationFt) !== null ? w.formatElevationDisplay(data.snowpack.cdec.elevationFt!) : null, snowpack.sources.cdec.distanceDisplay]
                     .filter((part) => part && part !== "N/A" && part !== "Unavailable").join(" · ") || "No station",
                   depthIn: knownFeet(data.snowpack.cdec.snowDepthIn),
                   sweIn: knownFeet(data.snowpack.cdec.sweIn),
@@ -566,30 +508,30 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 <tbody>
                   <tr>
                     <th scope="row">SNOTEL station</th>
-                    <td className="is-num">{w.snotelDepthDisplay}</td>
-                    <td className="is-num">{w.snotelSweDisplay}</td>
-                    <td className="is-end">{w.snotelDistanceDisplay} <SourceLink url={w.safeSnotelLink} /></td>
+                    <td className="is-num">{snowpack.sources.snotel.depthDisplay}</td>
+                    <td className="is-num">{snowpack.sources.snotel.sweDisplay}</td>
+                    <td className="is-end">{snowpack.sources.snotel.distanceDisplay} <SourceLink url={w.safeSnotelLink} /></td>
                   </tr>
                   <tr>
                     <th scope="row">NOHRSC model</th>
-                    <td className="is-num">{w.nohrscDepthDisplay}</td>
-                    <td className="is-num">{w.nohrscSweDisplay}</td>
+                    <td className="is-num">{snowpack.sources.nohrsc.depthDisplay}</td>
+                    <td className="is-num">{snowpack.sources.nohrsc.sweDisplay}</td>
                     <td className="is-end"><SourceLink url={w.safeNohrscLink} /></td>
                   </tr>
                   <tr>
                     <th scope="row">CDEC station</th>
-                    <td className="is-num">{w.cdecDepthDisplay}</td>
-                    <td className="is-num">{w.cdecSweDisplay}</td>
-                    <td className="is-end">{w.cdecDistanceDisplay} <SourceLink url={w.safeCdecLink} /></td>
+                    <td className="is-num">{snowpack.sources.cdec.depthDisplay}</td>
+                    <td className="is-num">{snowpack.sources.cdec.sweDisplay}</td>
+                    <td className="is-end">{snowpack.sources.cdec.distanceDisplay} <SourceLink url={w.safeCdecLink} /></td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <p className="sky-cap">{w.snowpackObservationContext}</p>
-            {w.snowpackHistoricalComparisonLine && <p className="sky-cap is-body">{w.snowpackHistoricalComparisonLine}</p>}
-            {Boolean(w.snowpackInterpretation?.bullets.length) && (
+            <p className="sky-cap">{snowpack.observationContext}</p>
+            {snowpack.historicalComparisonLine && <p className="sky-cap is-body">{snowpack.historicalComparisonLine}</p>}
+            {Boolean(snowpack.interpretation?.bullets.length) && (
               <ul className="sky-bullets">
-                {w.snowpackInterpretation?.bullets.map((text, i) => <li key={i}>{text}</li>)}
+                {snowpack.interpretation?.bullets.map((text, i) => <li key={i}>{text}</li>)}
               </ul>
             )}
             <Details title="Snowpack quality, history, and observation details" value={data.snowpack} />

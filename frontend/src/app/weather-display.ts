@@ -18,18 +18,6 @@ export function getTemperatureBand(tempF: number | null | undefined): Temperatur
   return { key: 'hot', label: 'Hot' };
 }
 
-export function weatherConditionEmoji(description: string | undefined, isDaytime?: boolean | null): string {
-  const text = String(description || '').toLowerCase();
-  if (/thunder|lightning|storm|hail/.test(text)) return '\u26C8\uFE0F';
-  if (/snow|blizzard|sleet|wintry|freezing/.test(text)) return '\u2744\uFE0F';
-  if (/rain|shower|drizzle/.test(text)) return '\uD83C\uDF27\uFE0F';
-  if (/fog|smoke|haze|mist/.test(text)) return '\uD83C\uDF2B\uFE0F';
-  if (/wind|breezy|gust/.test(text)) return '\uD83D\uDCA8';
-  if (/overcast|cloud/.test(text)) return '\u2601\uFE0F';
-  if (/clear|sunny/.test(text)) return isDaytime ? '\u2600\uFE0F' : '\uD83C\uDF19';
-  return '\uD83C\uDF24\uFE0F';
-}
-
 export function inferWeatherSourceLabel(weather: SafetyData['weather'] | null | undefined): string {
   const primary = String(weather?.sourceDetails?.primary || '').trim();
   if (primary === 'NOAA') return 'NOAA / Weather.gov';
@@ -65,16 +53,3 @@ export function formatClockShort(value: string | undefined | null, style: TimeSt
   return `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`;
 }
 
-export function formatDurationMinutes(value: number | null | undefined): string {
-  const total = Number(value);
-  if (!Number.isFinite(total)) {
-    return 'N/A';
-  }
-  const rounded = Math.max(0, Math.round(total));
-  const hours = Math.floor(rounded / 60);
-  const minutes = rounded % 60;
-  if (hours <= 0) {
-    return `${minutes}m`;
-  }
-  return `${hours}h ${minutes}m`;
-}

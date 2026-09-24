@@ -1,6 +1,6 @@
 import { Smile } from "lucide-react";
 import type { SafetyData } from "../app/types";
-import { APPROACH_SOURCE_LABEL, comfortApproachIsStale, type ApproachProfile } from "../app/approach-elevation";
+import { APPROACH_SOURCE_LABEL } from "./sky/sky-model";
 import { ConditionScale } from "./ConditionCharts";
 import "./comfort-score.css";
 
@@ -16,15 +16,12 @@ const COMFORT_BANDS = [
 const validScore = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 
-export function ComfortScore({ comfort, localize = (text) => text, approach, elevation = (ft) => `${ft} ft` }: {
+export function ComfortScore({ comfort, localize = (text) => text, elevation = (ft) => `${ft} ft` }: {
   comfort: NonNullable<SafetyData["pleasantness"]>;
   localize?: (text: string) => string;
-  /** The plan's current approach, to flag a comfort score computed for a different one. */
-  approach?: ApproachProfile | null;
   elevation?: (ft: number) => string;
 }) {
   const scoredApproach = comfort.approach;
-  const stale = approach !== undefined && comfortApproachIsStale(comfort, approach);
   const score = validScore(comfort.score) ? comfort.score : null;
   const factors = (comfort.factors || []).filter((factor) => validScore(factor.score));
   const coverage = comfort.coverage;
@@ -41,14 +38,6 @@ export function ComfortScore({ comfort, localize = (text) => text, approach, ele
           {scoredApproach.adjustedHours} h scored at your estimated elevation on the approach, from{" "}
           {elevation(Math.round(scoredApproach.trailheadElevationFt / 100) * 100)} ({APPROACH_SOURCE_LABEL[scoredApproach.source]})
           {scoredApproach.inversionHours > 0 ? `; ${scoredApproach.inversionHours} h scored colder for a likely valley inversion` : ""}.
-        </p>
-      )}
-      {stale && (
-        <p className="sky-cap comfort-approach is-stale" role="status">
-          {approach?.source === "route"
-            // The route is analyzed after the report, so regenerating would not help.
-            ? "Comfort was scored before your route was analyzed, so it does not follow the route's elevations. The brief and forecast do."
-            : "Comfort was scored for a different approach than your current plan. Generate the report again to update it."}
         </p>
       )}
       <div className="comfort-evidence">

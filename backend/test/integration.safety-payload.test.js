@@ -229,6 +229,24 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.body.pleasantness.score).toBeGreaterThanOrEqual(0);
     expect(res.body.pleasantness.score).toBeLessThanOrEqual(100);
     expect(Array.isArray(res.body.pleasantness.factors)).toBe(true);
+    // The plan evaluation: decision and hour checks for the requested plan.
+    expect(res.body.evaluation).toMatchObject({
+      version: 1,
+      params: { date: FORECAST_DATE, start: '08:00' },
+      plan: { start: '08:00', travelWindowHours: 12, limits: { maxWindGustMph: 25 } },
+      decision: { level: expect.stringMatching(/^(GO|CAUTION|NO-GO)$/), checks: expect.any(Array) },
+    });
+    expect(res.body.evaluation.travelWindow.planned.rows).toHaveLength(12);
+    expect(res.body.evaluation.pleasantness.score).toBe(res.body.pleasantness.score);
+  }, 20000);
+
+  test('GET /api/safety evaluates the plan against the requested limits and units', async () => {
+    const res = await request(app)
+      .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00&max_gust_mph=12&wind_unit=kph`);
+    expect(res.status).toBe(200);
+    expect(res.body.evaluation.plan.limits.maxWindGustMph).toBe(12);
+    const gust = res.body.evaluation.decision.checks.find((check) => check.key === 'wind-gust');
+    expect(gust.label).toBe('Wind gusts are at or below 19 km/h');
   }, 20000);
 
   test('GET /api/safety uses the documented 12-hour travel window when none is requested', async () => {
@@ -279,5 +297,6 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(typeof res.body.safety.score).toBe('number');
     expect(res.body.pleasantness).toBeTruthy();
     expect(typeof res.body.pleasantness.score).toBe('number');
+    expect(res.body.evaluation.decision.level).toMatch(/^(GO|CAUTION|NO-GO)$/);
   }, 20000);
 });

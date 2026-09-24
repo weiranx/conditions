@@ -467,6 +467,28 @@ export default function FieldApp() {
                   <h1>Generating report</h1>
                   <p>Checking weather, snow, terrain, and source freshness.</p>
                 </div>
+              ) : w.reportSnapshot && !w.evaluation ? (
+                w.evaluationError ? (
+                  <div className="sky-card sky-empty-card sky-lost" role="alert">
+                    <span className="sky-lost-icon" aria-hidden="true">
+                      <CloudOff size={34} strokeWidth={1.6} />
+                    </span>
+                    <h1>Plan check unavailable</h1>
+                    <p>{w.evaluationError} The forecast is kept; try the check again.</p>
+                    <div className="sky-toolbar-actions">
+                      <button className="field-button field-button-primary" onClick={w.retryEvaluation}>
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="field-loading" role="status">
+                    <LoaderCircle className="field-spin" size={35} />
+                    <span className="field-kicker">Conditions report</span>
+                    <h1>Checking your plan</h1>
+                    <p>Comparing the forecast with your limits and timing.</p>
+                  </div>
+                )
               ) : w.reportSnapshot ? (
                 <Suspense
                   fallback={<p role="status">Opening conditions report…</p>}

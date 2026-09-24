@@ -230,3 +230,17 @@ export function readApiErrorMessage(payload: unknown, fallback: string): string 
   }
   return fallback;
 }
+
+/** Re-check a loaded report against the current plan; no upstream requests or report usage. */
+export async function fetchPlanEvaluation(report: unknown, plan: Record<string, string>, signal?: AbortSignal): Promise<unknown> {
+  const { response, payload } = await fetchApi('/api/evaluate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report, plan }),
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(readApiErrorMessage(payload, `Plan evaluation failed (${response.status})`));
+  }
+  return (payload as { evaluation?: unknown } | null)?.evaluation ?? null;
+}

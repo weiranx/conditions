@@ -20,7 +20,7 @@ const hour = { temp: 20, wind: 12, gust: 28, precipChance: 10, cloudCover: 90, c
 
 describe('approach query', () => {
   test('reads a typed trailhead, ascent rate and GPX route, ignoring invalid values', () => {
-    expect(parseApproachQuery({})).toEqual({ enabled: true, trailheadElevationFt: null, ascentMinutesPer1000Ft: null, timeline: null });
+    expect(parseApproachQuery({})).toEqual({ enabled: true, trailheadElevationFt: null, ascentMinutesPer1000Ft: null, timeline: null, routeTimeline: null });
     expect(parseApproachQuery({ approach: 'off', trailhead_ft: '7000' })).toEqual({ enabled: false });
     expect(parseApproachQuery({ trailhead_ft: '7200', ascent_min_per_kft: '50' })).toMatchObject({ trailheadElevationFt: 7200, ascentMinutesPer1000Ft: 50 });
     expect(parseApproachQuery({ trailhead_ft: 'high', ascent_min_per_kft: '999' })).toMatchObject({ trailheadElevationFt: null, ascentMinutesPer1000Ft: null });
@@ -30,6 +30,36 @@ describe('approach query', () => {
     expect(parseApproachQuery({ approach_route: '0:7500,10:x' }).timeline).toBeNull();
     expect(parseApproachQuery({ approach_route: '60:7500,0:11000' }).timeline).toBeNull();
     expect(parseApproachQuery({ approach_route: Array.from({ length: 65 }, (_, i) => `${i}:8000`).join(',') }).timeline).toBeNull();
+  });
+});
+
+describe('analyzed route', () => {
+  test('route checkpoints must start at the trip start', () => {
+    expect(parseApproachQuery({ approach_checkpoints: '0:7400,120:9600,240:11000,480:7400' }).routeTimeline).toEqual([
+      { minute: 0, elevationFt: 7400 }, { minute: 120, elevationFt: 9600 }, { minute: 240, elevationFt: 11000 }, { minute: 480, elevationFt: 7400 },
+    ]);
+    // Without the start (its elevation was unknown) the route cannot anchor the approach.
+    expect(parseApproachQuery({ approach_checkpoints: '120:9600,240:11000' }).routeTimeline).toBeNull();
+  });
+
+  test('a route sets the trailhead and timeline, below a GPX track and above a typed trailhead', () => {
+    const routeTimeline = [
+      { minute: 0, elevationFt: 7400 }, { minute: 120, elevationFt: 9600 }, { minute: 240, elevationFt: 11000 }, { minute: 480, elevationFt: 7400 },
+    ];
+    const route = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, routeTimeline, elevationBands: bands });
+    expect(route).toMatchObject({ source: 'route', trailheadElevationFt: 7400 });
+    expect(highestElevationBetween(route, 420, 480)).toBeLessThan(11000);
+    const gpx = [{ minute: 0, elevationFt: 7500 }, { minute: 278, elevationFt: 11000 }];
+    expect(buildApproachProfile({ objectiveElevationFt: 11000, timeline: gpx, routeTimeline }).source).toBe('gpx');
+    // A route that never drops below the objective falls back to the typed trailhead.
+    const flat = [{ minute: 0, elevationFt: 10900 }, { minute: 60, elevationFt: 11000 }];
+    expect(buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, routeTimeline: flat }).source).toBe('manual');
+  });
+
+  test('comfort follows the analyzed route', () => {
+    const weatherData = { elevation: 11000, elevationForecast: bands };
+    const approachRequest = parseApproachQuery({ approach_checkpoints: '0:7400,240:11000', trailhead_ft: '9000' });
+    expect(resolveApproach({ approachRequest, weatherData, solarData: {} }).profile).toMatchObject({ source: 'route', trailheadElevationFt: 7400 });
   });
 });
 

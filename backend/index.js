@@ -61,6 +61,8 @@ const { createMultiDayUsageLimitService } = require('./src/auth/multi-day-usage-
 const { createAccountTierService } = require('./src/auth/account-tier');
 const { createEmailService } = require('./src/email/email-service');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
+const { registerEvaluateRoute } = require('./src/routes/evaluate');
+const { registerPlanComparisonRoutes } = require('./src/routes/plan-comparisons');
 const { registerTripForecastRoutes } = require('./src/routes/trip-forecasts');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
@@ -83,6 +85,7 @@ const POPULAR_PEAKS = require('./peaks.json');
 const { calculateSafetyScore } = require('./src/utils/safety-score');
 const { calculatePleasantnessScore } = require('./src/utils/pleasantness-score');
 const { parseApproachQuery, resolveApproach } = require('./src/utils/approach-elevation');
+const { attachPlanEvaluation } = require('./src/utils/plan-evaluation');
 const {
   createUnknownAvalancheData,
   evaluateAvalancheRelevance,
@@ -324,6 +327,8 @@ const buildSafetyResponsePayload = ({
 
   return sanitizeReportForFeatureFlags(payload, featureFlags || {});
 };
+
+const logEvaluationError = (error) => logger.warn({ err: error }, 'Plan evaluation failed');
 
 const safetyHandler = async (req, res) => {
   const startedAt = Date.now();
@@ -659,7 +664,7 @@ const safetyHandler = async (req, res) => {
     const todayDate = new Date().toISOString().slice(0, 10);
     const responseGeneratedAt = new Date().toISOString();
 
-    const responsePayload = buildSafetyResponsePayload({
+    const responsePayload = attachPlanEvaluation(buildSafetyResponsePayload({
       generatedAt: responseGeneratedAt,
       parsedLat,
       parsedLon,
@@ -688,7 +693,7 @@ const safetyHandler = async (req, res) => {
       pleasantness,
       contingencyData,
       featureFlags: scoreFeatures,
-    });
+    }), req.query, { onError: logEvaluationError });
     if (req.safetySignal?.aborted || res.headersSent) {
       return;
     }
@@ -802,7 +807,7 @@ const safetyHandler = async (req, res) => {
 
     const fallbackGeneratedAt = new Date().toISOString();
 
-    const fallbackResponsePayload = buildSafetyResponsePayload({
+    const fallbackResponsePayload = attachPlanEvaluation(buildSafetyResponsePayload({
       generatedAt: fallbackGeneratedAt,
       parsedLat,
       parsedLon,
@@ -831,7 +836,7 @@ const safetyHandler = async (req, res) => {
       contingencyData: safeContingencyData,
       featureFlags: scoreFeatures,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
-    });
+    }), req.query, { onError: logEvaluationError });
     await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.status(200).json(fallbackResponsePayload);
   }
@@ -884,7 +889,9 @@ const safetyHandlerWithTimeout = async (req, res) => {
 };
 
 registerSafetyRoute({ app, safetyHandler: safetyHandlerWithTimeout });
+registerEvaluateRoute({ app });
 const invokeSafetyHandler = createSafetyInvoker({ safetyHandler: safetyHandlerWithTimeout });
+registerPlanComparisonRoutes({ app, invokeSafetyHandler });
 
 registerSearchRoutes({
   app,

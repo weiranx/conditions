@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchApi } from '../../lib/api-client';
-import { buildTripForecastDays } from '../../app/trip-forecast';
+import { readTripDays } from '../../app/plan-evaluation';
 import { parseMultiDayUsage, type MultiDayUsage } from '../../app/multi-day-usage';
 import { shortlistDates, shortlistValidation, type ShortlistState, type ShortlistResult } from '../../app/objective-shortlist';
 import type { UserPreferences } from '../../app/types';
+import { planSettingsParams } from '../../app/plan-evaluation';
 
 export function useObjectiveShortlist(state: ShortlistState, preferences: UserPreferences, callbacks: {
   accountKey?: string;
@@ -33,7 +34,9 @@ export function useObjectiveShortlist(state: ShortlistState, preferences: UserPr
             method: 'POST', signal: controller.signal,
             headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
             body: JSON.stringify({ lat: objective.lat, lon: objective.lon, objectiveName: objective.name,
-              startDate: state.startDate, startTime: state.startTime, durationDays: dates.length, travelWindowHours: state.hours }),
+              startDate: state.startDate, startTime: state.startTime, durationDays: dates.length, travelWindowHours: state.hours,
+              // Objectives are compared on every hazard, avalanche included.
+              includeAvalanche: true, plan: planSettingsParams(preferences) }),
           });
           if (!isActive()) break;
           const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
@@ -43,17 +46,10 @@ export function useObjectiveShortlist(state: ShortlistState, preferences: UserPr
             if (response.status === 429) { stop = true; if (usage) callbacks.onUsageLimitReached(usage); }
             results.push({ objectiveId: objective.id, days: [], error: typeof record.error === 'string' ? record.error : 'Forecast unavailable. Try again.' });
           } else {
-            // Failed days are omitted by the API. Match explicit date/location instead of assigning by index.
-            // selectedStartTime describes a provider forecast period (usually ISO), not the requested
-            // local departure clock. The request key and abort guard already bind results to that clock.
-            // Missing precipitation metadata must not discard otherwise usable weather evidence.
-            const entries = (Array.isArray(record.days) ? record.days : []).filter(entry => entry && typeof entry === 'object'
-              && dates.includes(entry.forecast?.selectedDate)
-              && (entry.rainfall?.expected?.travelWindowHours == null || entry.rainfall.expected.travelWindowHours === state.hours)
-              && Math.abs(Number(entry.location?.lat) - objective.lat) < 0.0001
-              && Math.abs(Number(entry.location?.lon) - objective.lon) < 0.0001);
-            const uniqueEntries = [...new Map(entries.map(entry => [entry.forecast.selectedDate, entry])).values()];
-            const days = buildTripForecastDays(uniqueEntries, dates, state.startTime, state.hours, { ...preferences, travelWindowHours: state.hours }, false);
+            // The API returns one ranked day per requested date and omits failed days.
+            const days = readTripDays(record.days).filter(day => dates.includes(day.date)
+              && Math.abs(Number(day.safetyData.location?.lat) - objective.lat) < 0.0001
+              && Math.abs(Number(day.safetyData.location?.lon) - objective.lon) < 0.0001);
             results.push({ objectiveId: objective.id, days, error: days.length ? null : 'No matching forecasts returned. Try again.' });
           }
         } catch {

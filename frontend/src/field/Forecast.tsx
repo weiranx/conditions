@@ -2,15 +2,12 @@ import { useState } from "react";
 import "./sky/sky.css";
 import "./sky/parts.css";
 import "./forecast.css";
-import { buildReportWeatherRows } from "./report-weather";
 import { weatherAppearance } from "./weather-appearance";
-import { bluebirdPercentage } from "../app/bluebird";
 import {
-  buildWeatherTrendRows,
   buildWeatherTrendChartData,
   WEATHER_TREND_METRIC_LABELS,
   type WeatherTrendMetricKey,
-} from "../app/weather-card-state";
+} from "../app/weather-trend-chart";
 import { windDirectionFromDegrees } from "../app/wind-analysis";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import {
@@ -28,10 +25,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { PersistedReport } from "../app/report-storage";
-import { summarizeApproachHours, type ApproachProfile } from "../app/approach-elevation";
-import { computeFeelsLikeF } from "../app/planner-helpers";
-import type { WeatherTrendPoint } from "../app/types";
-import { buildTravelWindowInsights } from "../app/travel-window";
+import type { PlanEvaluation, WeatherTrendPoint } from "../app/types";
 import {
   formatClockForStyle,
   formatTemperatureForUnit,
@@ -64,10 +58,10 @@ const METRICS: WeatherTrendMetricKey[] = ["temp", "feelsLike", "gust", "wind", "
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
-export function Forecast({ report, approach = null, elevation = (ft) => `${ft} ft` }: {
+export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft` }: {
   report: PersistedReport;
-  /** When set, hours are checked at the party's estimated elevation, matching the brief. */
-  approach?: ApproachProfile | null;
+  /** The backend's evaluation: each reading checked against the limits, at the party's estimated elevation on the approach. */
+  evaluation: PlanEvaluation;
   elevation?: (ft: number) => string;
 }) {
   const [hour, setHour] = useState(0);
@@ -75,9 +69,8 @@ export function Forecast({ report, approach = null, elevation = (ft) => `${ft} f
   const flags = resolveReportFeatureFlags(report.safetyData.featureFlags);
   const preferences = report.preferences!;
   const trend = (report.safetyData.weather.trend || []).slice(0, report.plan.travelWindowHours);
-  const rows = buildReportWeatherRows(report.safetyData, preferences, report.plan.travelWindowHours,
-    approach ? { profile: approach, start: report.plan.alpineStartTime } : null);
-  const approachSummary = summarizeApproachHours(rows);
+  const { rows, insights: insight, approachSummary } = evaluation.travelWindow.readings;
+  const { weatherTrend: trendRows, bluebird } = evaluation.interpretation;
   const nearFt = (ft: number | undefined) => elevation(Math.round((ft ?? 0) / 100) * 100);
   // The values a row was actually checked against: the party's elevation on the approach.
   const checkedPoint = (index: number) => {
@@ -91,8 +84,6 @@ export function Forecast({ report, approach = null, elevation = (ft) => `${ft} f
       gust: row.gust,
     };
   };
-  const bluebird = bluebirdPercentage(trend);
-  const insight = buildTravelWindowInsights(rows, preferences.timeStyle);
   const selectedIndex = Math.min(hour, Math.max(0, trend.length - 1));
   const selected = trend[selectedIndex];
   const selectedRow = rows[selectedIndex];
@@ -126,7 +117,6 @@ export function Forecast({ report, approach = null, elevation = (ft) => `${ft} f
   });
   const tints = sky.map((h) => h.horizon);
 
-  const trendRows = buildWeatherTrendRows(trend, preferences.timeStyle);
   const chart = buildWeatherTrendChartData(trendRows, metric)
     .map((point) => (finite(point.value) ? point.value : null));
   const windArrows = buildWeatherTrendChartData(trendRows, "windDirection").map((point) => (finite(point.value) ? point.value : null));
@@ -166,7 +156,7 @@ export function Forecast({ report, approach = null, elevation = (ft) => `${ft} f
   const appearance = weatherAppearance(selected);
   const tone = tones[selectedIndex];
   // The readout shows the objective forecast; approach hours add what was checked below it.
-  const feelsLike = finite(selected.temp) && finite(selected.wind) ? computeFeelsLikeF(selected.temp, selected.wind) : null;
+  const feelsLike = trendRows[selectedIndex]?.feelsLike ?? null;
   const selectedAdjusted = Boolean(selectedRow?.approachAdjusted);
 
   return (
