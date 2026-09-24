@@ -116,7 +116,7 @@ describe('activity insights', () => {
   const report = (activity, extra = {}) => ({
     generatedAt: '2026-07-16T12:00:00Z',
     forecast: { activity, selectedDate: '2026-07-17', requestedStartTime: '06:00' },
-    weather: { elevation: 11000, description: 'Mostly Sunny', temperatureContext24h: { overnightLowF: 38 } },
+    weather: { elevation: 11000, description: 'Mostly Sunny', precedingNight: { complete: true, minTempF: 36, freezingHours: 0, freezingDegreeHours: 0 }, temperatureContext24h: { overnightLowF: 10 } },
     rainfall: { source: 'Open-Meteo', mode: 'projected_for_selected_start', totals: { rainPast24hIn: 0.4 }, expected: {} },
     heatRisk: { level: 3, label: 'High', source: 'Heat risk synthesis' },
     airQuality: { usAqi: 120, category: 'Unhealthy for Sensitive Groups', source: 'AirNow' },
@@ -143,11 +143,14 @@ describe('activity insights', () => {
     expect(wet.meaning).toContain('not a forecast for your start');
   });
 
-  test('snow objectives check the overnight refreeze', () => {
+  test('snow objectives check the night before the start, not the night after', () => {
     const refreeze = buildReportInsights(report('snow-climbing')).items.find((item) => item.id === 'refreeze');
     expect(refreeze).toMatchObject({ tone: 'caution', decisionRelevant: true });
-    const cold = report('snow-climbing', { weather: { elevation: 11000, temperatureContext24h: { overnightLowF: 20 } } });
-    expect(ids(cold)).not.toContain('refreeze');
+    const night = (precedingNight) => report('snow-climbing', { weather: { elevation: 11000, precedingNight } });
+    expect(ids(night({ complete: true, minTempF: 20, freezingHours: 8, freezingDegreeHours: 60 }))).not.toContain('refreeze');
+    const marginal = buildReportInsights(night({ complete: true, minTempF: 29, freezingHours: 3, freezingDegreeHours: 6 })).items.find((item) => item.id === 'refreeze');
+    expect(marginal).toMatchObject({ tone: 'context', decisionRelevant: false });
+    expect(ids(night({ complete: false, minTempF: 40, freezingHours: 0, freezingDegreeHours: 0 }))).not.toContain('refreeze');
   });
 
   test('a run checks heat and air quality, and drops them when those domains are off', () => {
@@ -161,6 +164,8 @@ describe('activity insights', () => {
     const loaded = report('ski-touring', { rainfall: { totals: { snowPast24hIn: 10 }, expected: {} } });
     expect(ids(loaded)).toContain('fresh-load');
     expect(ids({ ...loaded, featureFlags: { avalancheDetails: false } })).not.toContain('fresh-load');
+    const projected = report('ski-touring', { rainfall: { mode: 'projected_for_selected_start', totals: { snowPast24hIn: 10 }, expected: {} } });
+    expect(buildReportInsights(projected).items.find((item) => item.id === 'fresh-load').meaning).toContain('forecast in the 24 h before the start');
   });
 });
 

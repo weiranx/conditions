@@ -50,19 +50,27 @@ function addActivityInsights(report, add, evidence) {
   }
 
   if (is('snow-climbing', 'mountaineering', 'ski-touring')) {
-    const overnightLow = number(weather.temperatureContext24h?.overnightLowF);
-    const freezingLevel = number(report.atmosphere?.freezingLevelFt);
-    if (overnightLow !== null && overnightLow > 28) {
-      const noRefreeze = overnightLow > 32;
+    // The night before the start sets the snow surface; temperatureContext24h
+    // looks forward from the start. Same refreeze rule as surface-evidence.js.
+    const night = weather.precedingNight;
+    const low = night?.complete === true ? number(night.minTempF) : null;
+    const hours = number(night?.freezingHours) ?? 0;
+    const degreeHours = number(night?.freezingDegreeHours) ?? 0;
+    const strong = hours >= 4 && degreeHours >= 20;
+    const fair = !strong && hours >= 2 && degreeHours >= 4;
+    if (low !== null && !strong) {
+      const noRefreeze = !fair;
+      const freezingLevel = number(report.atmosphere?.freezingLevelFt);
       const freezingNote = freezingLevel !== null && elevation !== null && freezingLevel > elevation
         ? ` The freezing level (${Math.round(freezingLevel)} ft) also sits above the objective.`
         : '';
-      add('refreeze', noRefreeze ? 'caution' : 'context', noRefreeze ? 'The snow may not refreeze overnight' : 'The overnight refreeze looks marginal',
-        `The overnight low is ${Math.round(overnightLow)}°F${atElevation}.${freezingNote} ${noRefreeze ? 'Without a hard freeze, snow softens early, wet slides and cornice falls become more likely, and step-kicking or skinning gets harder.' : 'A shallow freeze gives a shorter window of firm snow after sunrise.'} Shaded and higher slopes can freeze harder than this point forecast.`,
+      const nightDetail = `Night before the start: low ${Math.round(low)}°F, ${hours} h below freezing`;
+      add('refreeze', noRefreeze ? 'caution' : 'context', noRefreeze ? (low > 32 ? 'The snow will not have refrozen overnight' : 'The overnight refreeze looks weak') : 'The overnight refreeze looks marginal',
+        `The night before your start bottoms out at ${Math.round(low)}°F with ${hours} hour${hours === 1 ? '' : 's'} below freezing${atElevation}.${freezingNote} ${noRefreeze ? 'Without a solid freeze, snow softens early, wet slides and cornice falls become more likely, and step-kicking or skinning gets harder.' : 'A shallow freeze gives a shorter window of firm snow after sunrise.'} Shaded and higher slopes can freeze harder than this point forecast.`,
         noRefreeze
           ? 'Start earlier, favor shaded or higher aspects, and set a firm turnaround for when the surface turns to slush.'
           : 'Plan to be on sun-exposed slopes early, and turn back if the crust breaks or the snow gets wet.',
-        [evidence(weather.sourceDetails?.primary || 'Point forecast', `Overnight low ${Math.round(overnightLow)}°F${freezingLevel !== null ? `; freezing level ${Math.round(freezingLevel)} ft` : ''}`, weather.issuedTime || null, weather.forecastLink)],
+        [evidence(weather.sourceDetails?.fieldSources?.precedingNight || weather.sourceDetails?.primary || 'Point forecast', `${nightDetail}${freezingLevel !== null ? `; freezing level ${Math.round(freezingLevel)} ft` : ''}`, night.endTime || null, weather.forecastLink)],
         [], noRefreeze);
     }
   }
@@ -72,7 +80,9 @@ function addActivityInsights(report, add, evidence) {
     const snowDuring = number(report.rainfall?.expected?.snowWindowIn);
     const loaded = (snow24 !== null && snow24 >= 6) || (snowDuring !== null && snowDuring >= 6);
     if (loaded) {
-      const detail = [snow24 !== null && snow24 > 0 ? `${round(snow24, 1)} in in the last 24 h` : null, snowDuring !== null && snowDuring > 0 ? `${round(snowDuring, 1)} in forecast during the tour` : null].filter(Boolean).join('; ');
+      // Projected totals end at the planned start; observed totals end now.
+      const beforeStart = report.rainfall?.mode === 'projected_for_selected_start';
+      const detail = [snow24 !== null && snow24 > 0 ? `${round(snow24, 1)} in ${beforeStart ? 'forecast in the 24 h before the start' : 'in the last 24 h'}` : null, snowDuring !== null && snowDuring > 0 ? `${round(snowDuring, 1)} in forecast during the tour` : null].filter(Boolean).join('; ');
       add('fresh-load', 'caution', 'New snow is loading the slopes you plan to ski',
         `The report shows ${detail}. Fresh load, especially with wind, is when new slabs are most sensitive. Match this against the avalanche forecast's storm and wind slab problems.`,
         'Keep to lower-angle terrain away from steeper slopes above you until the new snow has settled, and watch for cracking and recent slides.',
