@@ -117,6 +117,18 @@ test('a serious night calls for caution even when every day is clear; a hard nig
   expect(hard.coldestNightIndex).toBe(1);
 });
 
+test('a hard night the forecast only partly covers keeps its severity and stays unresolved', () => {
+  const assessment = check(['clear', 'clear', 'clear'], {
+    edit: (report, index) => {
+      if (index === 0) Object.assign(report.campNight, { severity: 'moderate', reasonCodes: ['coldNight'], complete: false, summary: 'A hard night at camp: feels like 20°F at the coldest.' });
+    },
+  });
+  expect(assessment.nights[0].state).toBe('hard');
+  expect(assessment.unresolved).toBe(1);
+  expect(assessment.level).toBe('INCOMPLETE');
+  expect(assessment.links.filter((link) => link.kind === 'night' && link.index === 0).map((link) => link.rank)).toEqual([3, 5]);
+});
+
 test('a partly forecast night and a not-yet-issued avalanche forecast are flagged', () => {
   const assessment = check(['clear', 'clear', 'clear'], {
     edit: (report, index) => {

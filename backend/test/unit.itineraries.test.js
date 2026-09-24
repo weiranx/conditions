@@ -170,6 +170,7 @@ test('rejects invalid itineraries before spending an allowance', async () => {
   const app = makeApp({ usageService, invokeSafetyHandler });
   const invalid = [
     { ...threeDays(), startDate: '2026-9-30' },
+    { ...threeDays(), startDate: '2026-02-30' },
     { ...threeDays(), stages: threeDays().stages.slice(0, 1) },
     { ...threeDays(), stages: Array.from({ length: 8 }, () => threeDays().stages[0]) },
     { ...threeDays(), stages: [{ ...threeDays().stages[0], travelHours: 0 }, threeDays().stages[1]] },

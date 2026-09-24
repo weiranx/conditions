@@ -4,7 +4,7 @@ const { assertFeatureEnabled } = require('../utils/feature-flags');
 const { toFiniteOrNull } = require('../utils/numbers');
 const { summarizeItineraryStages } = require('../utils/itinerary-summary');
 const { assessItinerary, buildItineraryChatContext } = require('../utils/itinerary-assessment');
-const { buildPlanContext, pickPlanParams } = require('../utils/plan-context');
+const { buildPlanContext, isCalendarDate, pickPlanParams } = require('../utils/plan-context');
 const {
   addUtcDays,
   resolveMultiDayCaller,
@@ -26,7 +26,6 @@ const MAX_BAIL_POINTS = 10;
 const STAGE_PLAN_KEYS = ['date', 'start', 'travel_window_hours', 'activity', 'approach', 'trailhead_ft', 'ascent_min_per_kft', 'approach_route', 'approach_checkpoints', 'target_elevation_ft'];
 // Parallel safety checks per request; an itinerary can need 21.
 const STAGE_CHECK_CONCURRENCY = 6;
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/u;
 const MIN_ELEVATION_FT = -1500;
 const MAX_ELEVATION_FT = 30000;
@@ -143,7 +142,8 @@ const registerItineraryRoutes = ({
     // 'summary' returns compact evidence per day instead of full reports (MCP clients).
     const summaryView = req.body?.view === 'summary';
     const idempotencyKey = String(req.headers['idempotency-key'] || '').trim();
-    if (!DATE_PATTERN.test(startDate) || !stages) {
+    // A shaped but nonexistent date ("2026-02-30") would roll into March.
+    if (!isCalendarDate(startDate) || !stages) {
       return res.status(400).json({ error: INVALID_REQUEST });
     }
     if (!idempotencyKey || idempotencyKey.length > 128) {

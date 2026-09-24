@@ -169,7 +169,9 @@ const assessItinerary = ({ stages, results, planSettings = {}, activity = '', to
     else if (night.state === 'hard') add('night', night.index, 3, summary, reasons);
     else if (night.state === 'unavailable') add('night', night.index, 4, 'This night could not be checked.');
     else if (night.state === 'not-forecast') add('night', night.index, 4, summary || 'No forecast covers this night yet.');
-    else if (night.state === 'incomplete') add('night', night.index, 5, summary);
+    // A hard or serious night can still be only partly forecast: what it holds
+    // before morning is unknown, so it stays unresolved as well.
+    if (night.data?.status === 'ok' && night.data.complete !== true) add('night', night.index, 5, summary);
   });
   // Within a rank the one with the most wrong leads; then the earliest, and a
   // day before its night: day 2 is walked before night 2.
