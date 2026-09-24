@@ -38,7 +38,6 @@ Enter an objective, pick a date and start time, and the app returns a unified co
 - Multi-day trip risk view and built-in app status checks
 - Objective shortlist: compare 2–5 destinations across 2–7 dates, inspect hazard and weather tradeoffs, and save Plan A / Plan B in this browser
 - Unit settings for temperature, elevation, wind speed, and time style
-- Collapsible card UI with preview summaries
 - Report logging with access-controlled retrieval
 - Tiered in-memory caching across all upstream API calls
 
@@ -48,9 +47,10 @@ Enter an objective, pick a date and start time, and the app returns a unified co
 summitsafe/
 ├── frontend/                # React + Vite SPA
 │   ├── src/
-│   │   ├── App.tsx                # Main orchestration layer
+│   │   ├── main.tsx               # Entry point (landing, MCP connect, or planner)
+│   │   ├── field/                 # Planner screens and report chapters; model/ holds state hooks
 │   │   ├── app/                   # Types, constants, core utilities, preferences
-│   │   ├── components/            # Extracted UI components (cards, search, loading)
+│   │   ├── hooks/, contexts/      # Data-fetching hooks and account/feature-flag providers
 │   │   ├── lib/                   # API client and search helpers
 │   │   └── utils/                 # Domain-specific utilities (avalanche)
 │   └── ...

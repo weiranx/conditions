@@ -71,7 +71,7 @@ Three parts: React + Vite SPA (`frontend/`), Express API (`backend/`, PostgreSQL
 - **`frontend/src/hooks/`**, **`frontend/src/contexts/`** — data-fetching hooks (`useSafetyData`, `useTripForecast`, …) and account/feature-flag/AI-access providers.
 - **`frontend/src/lib/`** — `api-client.ts` (API calls + retry), `search.ts` (local peak catalog + Nominatim), `gpx.ts`, `saved-reports.ts`, `objective-watches.ts`.
 - **`frontend/dev/`** — mock API used by `dev:mock` and `test:mock`.
-- **Legacy UI:** `frontend/src/App.tsx`, `components/planner/*`, `components/views/*` and most of `styles/` are the previous planner UI. `main.tsx` no longer imports them, so they are not in the production bundle — do not add features there.
+- Styling is plain CSS colocated with the screens (`field/*.css`); there is no Tailwind or component library.
 
 ### `/api/safety` pipeline
 

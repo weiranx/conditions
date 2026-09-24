@@ -1,6 +1,6 @@
 # Redesigned frontend
 
-`main.tsx` mounts `FieldApp`. The new presentation uses its own components and styles. The former frontend remains in place to preserve unrelated work.
+`main.tsx` mounts `FieldApp`. The screens use their own components and colocated CSS; the former planner UI (`App.tsx`, `components/planner`, `components/views`, `styles/`) has been removed.
 
 `model/useReportGeneration.ts` owns generation and startup checks; `useSavedReportSync.ts` owns browser/account persistence and report identity; `useReportComparisons.ts` enables comparisons only for the current completed plan. `useWorkspace.ts` composes these controllers.
 
