@@ -76,6 +76,11 @@ describe('start-time scenarios', () => {
   test('an invalid plan or a disabled feature is refused', async () => {
     const app = makeApp(fakeSafetyHandler());
     expect((await request(app).get('/api/start-time-scenarios').query({ ...PLAN, start: '7am' })).status).toBe(400);
+    // A date that does not exist is a bad request, not a server error.
+    for (const date of ['2026-99-99', '2026-02-30']) {
+      expect((await request(app).get('/api/start-time-scenarios').query({ ...PLAN, date })).status).toBe(400);
+      expect((await request(app).get('/api/day-over-day').query({ ...PLAN, date })).status).toBe(400);
+    }
     const disabled = makeApp(fakeSafetyHandler(), {
       ensureStartTimesEnabled: () => { throw Object.assign(new Error('This feature is unavailable'), { statusCode: 503 }); },
     });

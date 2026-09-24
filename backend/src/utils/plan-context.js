@@ -55,6 +55,13 @@ const PLAN_PARAM_KEYS = [
 
 const DEFAULT_START = '07:00';
 
+/** A YYYY-MM-DD date that exists on the calendar ("2026-02-30" does not). */
+const isCalendarDate = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+
 const text = (value) => (typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '');
 
 /**
@@ -97,7 +104,7 @@ const buildPlanContext = (source = {}, report = null, options = {}) => {
     || parseStartClock(report?.forecast?.requestedStartTime || '')
     || DEFAULT_START;
   const travelWindowHours = clampTravelWindowHours(params.travel_window_hours ?? null, 12);
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date || '')
+  const date = isCalendarDate(params.date)
     ? params.date
     : report?.forecast?.selectedDate || null;
   // Like the report's daylight check, a return after midnight is checked as
@@ -134,6 +141,7 @@ const buildPlanContext = (source = {}, report = null, options = {}) => {
 module.exports = {
   LIMIT_PARAMS,
   PLAN_PARAM_KEYS,
+  isCalendarDate,
   pickPlanParams,
   buildPlanContext,
 };

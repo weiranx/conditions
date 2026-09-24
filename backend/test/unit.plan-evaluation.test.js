@@ -32,6 +32,14 @@ describe('plan context', () => {
     expect(contextFor(report, { max_gust_mph: '500' }).limits.maxWindGustMph).toBe(80);
   });
 
+  test('a date that does not exist falls back to the report date', () => {
+    const report = makeReport();
+    report.forecast = { ...report.forecast, selectedDate: '2026-09-26' };
+    expect(contextFor(report, { date: '2026-02-30' }).date).toBe('2026-09-26');
+    expect(contextFor(report, { date: '2026-99-99' }).date).toBe('2026-09-26');
+    expect(contextFor(report, { date: '2028-02-29' }).date).toBe('2028-02-29');
+  });
+
   test('units default to imperial and a 12-hour clock', () => {
     expect(contextFor(makeReport()).units).toEqual({ temperature: 'f', wind: 'mph', elevation: 'ft', timeStyle: 'ampm' });
     expect(contextFor(makeReport(), { temp_unit: 'c', wind_unit: 'kph', elevation_unit: 'm', time_style: '24h' }).units)

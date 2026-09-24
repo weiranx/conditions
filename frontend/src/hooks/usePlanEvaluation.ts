@@ -9,7 +9,7 @@ const REEVALUATE_DELAY_MS = 250;
 const EVALUATION_MAX_AGE_MS = 15 * 60 * 1000;
 
 export interface PlanEvaluationState {
-  /** The evaluation for the current plan, or the report's own while a new one loads. */
+  /** The evaluation for the current plan, the last one while a new one loads, or null after a failed check. */
   evaluation: PlanEvaluation | null;
   /** True while the shown evaluation is for a different plan than the current one. */
   pending: boolean;
@@ -63,6 +63,9 @@ export function usePlanEvaluation(report: SafetyData | null, params: Record<stri
   if (!report) return { evaluation: null, pending: false, error: null, retry };
   if (ownMatches) return { evaluation: own, pending: false, error: null, retry };
   if (current?.evaluation) return { evaluation: current.evaluation, pending: false, error: null, retry };
+  // A failed check leaves no evaluation for this plan: the last one was for
+  // other limits or timing, so showing it would present a stale verdict.
+  if (current) return { evaluation: null, pending: false, error: current.error, retry };
   const fallback = (shown?.report === report ? shown.evaluation : null) ?? own;
-  return { evaluation: fallback, pending: !current, error: current?.error ?? null, retry };
+  return { evaluation: fallback, pending: true, error: null, retry };
 }

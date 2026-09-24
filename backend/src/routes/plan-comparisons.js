@@ -2,7 +2,7 @@
 
 const { assertFeatureEnabled } = require('../utils/feature-flags');
 const { toFiniteOrNull } = require('../utils/numbers');
-const { buildPlanContext, pickPlanParams } = require('../utils/plan-context');
+const { buildPlanContext, isCalendarDate, pickPlanParams } = require('../utils/plan-context');
 const { readEvaluation } = require('../utils/plan-evaluation');
 const {
   EXTENDED_START_TIME_SCENARIO_TIMES,
@@ -13,7 +13,6 @@ const {
 } = require('../utils/start-time-scenarios');
 const { buildDayOverDay } = require('../utils/day-over-day');
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/u;
 
 const addUtcDays = (isoDate, days) => {
@@ -28,7 +27,8 @@ const readComparisonRequest = (query) => {
   const lon = toFiniteOrNull(query?.lon);
   const params = pickPlanParams(query);
   if (lat === null || lat < -90 || lat > 90 || lon === null || lon < -180 || lon > 180) return null;
-  if (!DATE_PATTERN.test(params.date || '') || !TIME_PATTERN.test(params.start || '')) return null;
+  // A date that does not exist ("2026-99-99") is invalid, not a server error.
+  if (!isCalendarDate(params.date) || !TIME_PATTERN.test(params.start || '')) return null;
   return { lat, lon, params };
 };
 
