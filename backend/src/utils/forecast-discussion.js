@@ -34,13 +34,15 @@ const periodDayRange = (period, issuedDay) => {
   if (issuedDay === null) return null;
   const weekday = new Date(issuedDay).getUTCDay();
   const offset = (raw, minimum) => {
+    const next = /^next\s+/.test(raw);
     const token = raw.replace(/^(?:next|late|early)\s+/, '');
     if (/^(now|today|tonight|this (?:morning|afternoon|evening)|rest of (?:today|tonight|the day))/.test(token)) return 0;
     if (/^tomorrow/.test(token)) return 1;
     const index = WEEKDAYS.findIndex((day) => token.startsWith(day));
     if (index < 0) return null;
     let value = (index - weekday + 7) % 7;
-    while (value < minimum) value += 7;
+    // "Wednesday through next Wednesday" ends a week after it starts.
+    while (value < minimum || (next && value <= minimum)) value += 7;
     return value;
   };
   const parts = text.replace(/^through\s+/, '').split(/\s+(?:through|thru|to|and|into)\s+|\s*-\s*/);

@@ -180,6 +180,8 @@ test('period headings that cannot be read are left undated', () => {
   const wednesday = Date.UTC(2026, 8, 23);
   expect(periodDayRange('Tonight through Thursday', wednesday)).toEqual([0, 1]);
   expect(periodDayRange('Days 3-7', wednesday)).toEqual([2, 6]);
+  expect(periodDayRange('Wednesday through next Wednesday', wednesday)).toEqual([0, 7]);
+  expect(periodDayRange('Tonight through next Tuesday', wednesday)).toEqual([0, 6]);
   expect(periodDayRange('This Weekend', wednesday)).toBeNull();
   expect(periodDayRange('Issued at 300 PM', wednesday)).toBeNull();
   expect(periodDayRange('Friday', null)).toBeNull();
