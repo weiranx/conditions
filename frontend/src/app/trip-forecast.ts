@@ -1,5 +1,6 @@
-import type { SafetyData, UserPreferences, DecisionLevel, WeatherTrendPoint } from './types';
+import type { SafetyData, UserPreferences, DecisionLevel, TravelWindowRow, TravelWindowSpan, WeatherTrendPoint } from './types';
 import { DATE_FMT } from './constants';
+import { parseTimeInputMinutes } from './core';
 import { evaluateBackcountryDecision } from './decision';
 import { buildTravelWindowRows, buildTravelWindowInsights, buildTrendWindowFromStart } from './travel-window';
 
@@ -8,21 +9,34 @@ export type MultiDayTripForecastDay = {
   safetyData: SafetyData;
   decisionLevel: DecisionLevel;
   decisionHeadline: string;
+  /** Messages that set a CAUTION or NO-GO decision, most limiting first. Empty for GO. */
+  limitingChecks: string[];
   score: number | null;
   weatherDescription: string;
   tempHighF: number | null;
   tempLowF: number | null;
+  /** Departure reading. */
   windGustMph: number | null;
+  /** Highest reading from departure to the end of the plan, including its final partial hour. */
+  peakGustMph: number | null;
   windDirection: string | null;
+  /** Departure reading. */
   precipChance: number | null;
+  /** Highest reading from departure to the end of the plan, including its final partial hour. */
+  peakPrecipChance: number | null;
   expectedRainIn: number | null;
   expectedSnowIn: number | null;
   humidityPct: number | null;
   cloudCoverPct: number | null;
   isDaytime: boolean | null;
   travelSummary: string;
+  /** Hours within the limits. A missing gust or precipitation reading counts as zero here. */
   travelPassHours: number;
+  /** Hours within the limits whose temperature, wind, gust and precipitation readings all exist. */
+  travelCompletePassHours: number;
   travelTotalHours: number;
+  /** Longest run of consecutive hours within every limit. */
+  travelBestWindow: TravelWindowSpan | null;
   sunrise: string | null;
   sunset: string | null;
   dayLength: string | null;
@@ -34,6 +48,7 @@ export type MultiDayTripForecastDay = {
   partialData: boolean;
   apiWarning: string | null;
   sourceIssuedTime: string | null;
+  /** The readings from departure to the end of the plan, including its final partial hour. */
   hourlyWeather: WeatherTrendPoint[];
   deltas?: {
     score: number | null;
@@ -53,6 +68,59 @@ const finiteNumberOrNull = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+// The highest of the readings that exist; a missing reading is not a calm or dry one.
+const peakReading = (values: unknown[]): number | null => {
+  const known = values.map(finiteNumberOrNull).filter((value): value is number => value !== null);
+  return known.length ? Math.max(...known) : null;
+};
+
+// The trend opens with the reading that contains the departure, so a start off
+// the hour ends inside one more reading: 06:30 for 3 hours runs through 09:00.
+function trendRowsCoveringWindow(startTime: string, travelWindowHours: number): number {
+  const startMinute = parseTimeInputMinutes(startTime);
+  return travelWindowHours + (startMinute !== null && startMinute % 60 !== 0 ? 1 : 0);
+}
+
+const completeReading = (point: WeatherTrendPoint) =>
+  [point.temp, point.wind, point.gust, point.precipChance].every((value) => finiteNumberOrNull(value) !== null);
+
+const LIMIT_NAMES: Record<string, string> = {
+  'Gust above limit': 'wind gusts',
+  'Precip above limit': 'rain / snow chance',
+  'Feels-like below limit': 'cold',
+  'Heat above limit': 'heat',
+  'Severe weather risk': 'severe weather',
+  'Deep snow / postholing risk': 'deep snow',
+};
+
+// Names the limits behind a day with no clean hour, most widespread first;
+// some (heat below the decision's own threshold, deep snow) raise no caution
+// of their own.
+function everyHourCrossesALimit(rows: TravelWindowRow[]): string {
+  const hours = new Map<string, number>();
+  rows.forEach((row) => row.failedRuleLabels.forEach((label) => hours.set(label, (hours.get(label) || 0) + 1)));
+  const crossed = [...hours]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([label]) => LIMIT_NAMES[label] ?? label.toLowerCase());
+  return `No hour is within all of your limits${crossed.length ? ` (${crossed.join(', ')})` : ''}.`;
+}
+
+const DECISION_PRIORITY: Record<DecisionLevel, number> = { GO: 2, CAUTION: 1, 'NO-GO': 0 };
+
+/**
+ * Best first: the decision, then the report score, then hours with every
+ * reading present and within the user's limits, so missing readings never win
+ * a tie. A missing score ranks below any real one.
+ */
+export function compareTripDays(a: MultiDayTripForecastDay, b: MultiDayTripForecastDay): number {
+  return DECISION_PRIORITY[b.decisionLevel] - DECISION_PRIORITY[a.decisionLevel]
+    // Two missing scores give NaN, which falls through to the next key.
+    || (b.score ?? -Infinity) - (a.score ?? -Infinity)
+    || b.travelCompletePassHours - a.travelCompletePassHours;
+}
+
+export const sameTripRank = (a: MultiDayTripForecastDay, b: MultiDayTripForecastDay) => compareTripDays(a, b) === 0;
+
 export function buildTripForecastDays(
   serverDays: unknown[], dates: string[], safeStartTime: string,
   safeTravelWindowHours: number, preferences: UserPreferences,
@@ -68,6 +136,8 @@ export function buildTripForecastDays(
         const decisionOptions = { ignoreAvalancheForDecision };
         const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences, decisionOptions);
         const trendWindow = buildTrendWindowFromStart(dayData.weather?.trend || [], safeStartTime, safeTravelWindowHours);
+        const planTrend = buildTrendWindowFromStart(dayData.weather?.trend || [], safeStartTime,
+          trendRowsCoveringWindow(safeStartTime, safeTravelWindowHours));
         const tripSnowContext = {
           snowDepthIn: dayData.terrainCondition?.signals?.maxSnowDepthIn
             ?? dayData.snowpack?.snotel?.snowDepthIn
@@ -77,12 +147,17 @@ export function buildTripForecastDays(
         const travelRows = buildTravelWindowRows(trendWindow, preferences, tripSnowContext);
         const travelInsights = buildTravelWindowInsights(travelRows, preferences.timeStyle);
         const noCleanTravelHours = travelRows.length > 0 && travelInsights.passHours === 0;
-        const decisionLevel = noCleanTravelHours && dayDecision.level !== 'NO-GO'
-          ? 'CAUTION'
-          : dayDecision.level;
-        const decisionHeadline = noCleanTravelHours && dayDecision.level !== 'NO-GO'
+        const noCleanHoursCaution = noCleanTravelHours && dayDecision.level !== 'NO-GO';
+        const decisionLevel = noCleanHoursCaution ? 'CAUTION' : dayDecision.level;
+        const decisionHeadline = noCleanHoursCaution
           ? 'No travel hour meets every threshold — re-time the start, shorten the objective, or choose another day.'
           : dayDecision.headline;
+        const limitingChecks = decisionLevel === 'NO-GO'
+          ? dayDecision.blockers
+          : decisionLevel === 'CAUTION'
+            ? [...(noCleanHoursCaution ? [everyHourCrossesALimit(travelRows)] : []), ...dayDecision.cautions]
+            : [];
+        const peakPrecipRaw = peakReading([dayData?.weather?.precipChance, ...planTrend.map((point) => point.precipChance)]);
 
         // Match the score shown by the individual Planner report exactly.
         const rawSafetyScore = finiteNumberOrNull(dayData?.safety?.score);
@@ -110,13 +185,16 @@ export function buildTripForecastDays(
           safetyData: dayData,
           decisionLevel,
           decisionHeadline,
+          limitingChecks,
           score,
           weatherDescription: String(dayData?.weather?.description || 'Unknown'),
           tempHighF: tempHighRaw,
           tempLowF: tempLowRaw,
           windGustMph: gustRaw,
+          peakGustMph: peakReading([gustRaw, ...planTrend.map((point) => point.gust)]),
           windDirection: dayData?.weather?.windDirection || null,
           precipChance: precipRaw !== null ? Math.round(precipRaw) : null,
+          peakPrecipChance: peakPrecipRaw !== null ? Math.round(peakPrecipRaw) : null,
           expectedRainIn: expectedRainRaw,
           expectedSnowIn: expectedSnowRaw,
           humidityPct: humidityRaw !== null ? Math.round(humidityRaw) : null,
@@ -124,7 +202,9 @@ export function buildTripForecastDays(
           isDaytime: typeof dayData?.weather?.isDaytime === 'boolean' ? dayData.weather.isDaytime : null,
           travelSummary: `${travelInsights.passHours}/${travelRows.length}h passing`,
           travelPassHours: travelInsights.passHours,
+          travelCompletePassHours: travelRows.filter((row, hour) => row.pass && completeReading(trendWindow[hour])).length,
           travelTotalHours: travelRows.length,
+          travelBestWindow: travelInsights.bestWindow,
           sunrise: dayData?.solar?.sunrise || null,
           sunset: dayData?.solar?.sunset || null,
           dayLength: dayData?.solar?.dayLength || null,
@@ -136,7 +216,7 @@ export function buildTripForecastDays(
           partialData: Boolean(dayData?.partialData),
           apiWarning: dayData?.apiWarning || null,
           sourceIssuedTime: dayData?.weather?.issuedTime || null,
-          hourlyWeather: trendWindow,
+          hourlyWeather: planTrend,
         } as MultiDayTripForecastDay;
       } catch {
         return null;

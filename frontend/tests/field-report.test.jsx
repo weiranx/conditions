@@ -8,7 +8,7 @@ import { Forecast } from "../src/field/Forecast";
 import Compare from "../src/field/Compare";
 import { buildPersistedReport } from "../src/app/report-storage";
 import { getDefaultUserPreferences } from "../src/app/preferences";
-import { emptyAi } from "../src/field/data";
+import { dateLabel, emptyAi } from "../src/field/data";
 import { ComfortScore } from "../src/field/ComfortScore";
 const preferences = getDefaultUserPreferences();
 test("comfort shows its outlook, coverage, and the reason for a limiting score", () => {
@@ -142,11 +142,17 @@ test("sparse chart readings never create invalid SVG coordinates", () => {
 function comparison(decisions, overrides = {}) {
   const days = decisions.map((day) => ({
     decisionHeadline: `Decision for ${day.date}`,
+    limitingChecks: [],
     safetyData: { weather: { trend: [] }, capabilities: { ai: false } },
     windGustMph: 10,
+    peakGustMph: 12,
     precipChance: 5,
+    peakPrecipChance: 8,
     travelPassHours: 3,
+    travelCompletePassHours: 3,
     travelTotalHours: 3,
+    travelBestWindow: null,
+    hourlyWeather: [],
     tempLowF: 40,
     tempHighF: 50,
     expectedRainIn: 1,
@@ -205,25 +211,77 @@ test("a comparison with only blocked days never presents a favorable recommendat
 
 test("comparison exposes weather tradeoffs, ties and incomplete coverage", () => {
   const html = comparison([
-    { date: "2026-09-06", decisionLevel: "CAUTION", score: 75, windGustMph: 0, precipChance: 0, travelPassHours: 1, travelTotalHours: 1 },
-    { date: "2026-09-07", decisionLevel: "GO", score: 70, windGustMph: 0, precipChance: 0, travelPassHours: 2, travelTotalHours: 3 },
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: 75, peakGustMph: 0, peakPrecipChance: 0, travelPassHours: 1, travelTotalHours: 1 },
+    { date: "2026-09-07", decisionLevel: "GO", score: 70, peakGustMph: 0, peakPrecipChance: 0, travelPassHours: 2, travelTotalHours: 3 },
   ]);
   assert.match(html, /Every day, side by side/);
   assert.match(html, /All days tied/);
   assert.match(html, /Only 1 of 3 planned hours covered/);
   assert.match(html, /2 hours within limits/);
+  assert.match(html, /Peak gust/);
   assert.match(html, /Departure gust/);
   assert.match(html, /Avalanche conditions are excluded/);
 });
 
 test("missing comparison readings stay unavailable and do not win weather highlights", () => {
   const html = comparison([
-    { date: "2026-09-06", decisionLevel: "CAUTION", score: null, windGustMph: null, precipChance: null, travelPassHours: 0, travelTotalHours: 0, partialData: true },
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: null, windGustMph: null, peakGustMph: null, precipChance: null, peakPrecipChance: null, travelPassHours: 0, travelTotalHours: 0, partialData: true },
   ]);
   assert.match(html, /Score unavailable/);
   assert.match(html, /Hourly forecast unavailable/);
   assert.match(html, /Partial data/);
   assert.doesNotMatch(html, /NaN|Infinity|0 \/ 0 hours|0 mph|unavailable%/);
+});
+
+test("each compared day names the checks behind its decision", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: 91, limitingChecks: [
+      "Wind gusts reach about 31 mph. Shorten ridge exposure and secure loose gear.",
+      "Precipitation chance reaches 80%. Allow extra travel time.",
+      "Some sources are out of date or missing timestamps (weather). Refresh the report.",
+    ] },
+    { date: "2026-09-07", decisionLevel: "GO", score: 80, travelPassHours: 2, travelTotalHours: 3 },
+  ]);
+  // A glance row leads with the first check and counts the rest.
+  assert.match(html, /<span class="sky-day-note"><span>Wind gusts reach about 31 mph<\/span><small>\+2 more<\/small><\/span>/);
+  // The table lists two; a Go day with an hour over a limit says so.
+  assert.match(html, /Main concerns/);
+  assert.match(html, /<li>Precipitation chance reaches 80%<\/li><li class="compare-concerns-more">\+1 more<\/li>/);
+  assert.match(html, /1 h outside your limits/);
+  // The comparison states each check; the actions stay in the full report.
+  assert.doesNotMatch(html, /Shorten ridge exposure/);
+});
+
+test("a Caution recommendation lists its checks", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: 91, limitingChecks: ["Wind gusts reach about 31 mph. Shorten ridge exposure."] },
+  ]);
+  const recommendation = html.slice(html.indexOf("compare-recommendation"), html.indexOf("Your days at a glance"));
+  assert.match(recommendation, /<ul class="sky-limiting compare-limiting" aria-label="Checks setting this day&#x27;s decision"><li>Wind gusts reach about 31 mph<\/li><\/ul>/);
+});
+
+test("days with equal decisions and scores rank by complete hours within limits, and ties are named", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: 80, travelPassHours: 3, travelCompletePassHours: 1 },
+    { date: "2026-09-07", decisionLevel: "CAUTION", score: 80, travelCompletePassHours: 3 },
+    { date: "2026-09-08", decisionLevel: "CAUTION", score: 80, travelCompletePassHours: 3 },
+  ]);
+  assert.equal(html.match(/<h2 id="[^"]*-best">([^<]+)<\/h2>/)?.[1], dateLabel("2026-09-07"));
+  const ties = html.slice(html.indexOf("Also ranked first"), html.indexOf("daily departure"));
+  assert.match(ties, new RegExp(`<button type="button">${dateLabel("2026-09-08")}</button>`));
+  assert.doesNotMatch(ties, new RegExp(dateLabel("2026-09-06")), "hours counted only because a reading was missing do not tie");
+  assert.match(html, /then score, then hours with every reading within your limits/);
+});
+
+test("comparison tradeoffs use the peak over the trip window", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "GO", score: 80, windGustMph: 5, peakGustMph: 30, precipChance: 0, peakPrecipChance: 40 },
+    { date: "2026-09-07", decisionLevel: "GO", score: 80, windGustMph: 10, peakGustMph: 12, precipChance: 10, peakPrecipChance: 10 },
+  ]);
+  const highlights = html.slice(html.indexOf("Calmest day"), html.indexOf("Every day, side by side"));
+  assert.match(highlights, new RegExp(`Calmest day</span></span><span class="sky-big is-small">${dateLabel("2026-09-07")}</span><p class="sky-cap">Gusts peak at 12 mph</p>`));
+  assert.match(highlights, new RegExp(`Lowest rain / snow chance</span></span><span class="sky-big is-small">${dateLabel("2026-09-07")}</span><p class="sky-cap">Chance peaks at 10%</p>`));
+  assert.match(html, /<th scope="row">Peak gust<\/th><td[^>]*>30 mph<\/td><td[^>]*>12 mph<\/td>/);
 });
 
 test("refresh hides the previous comparison and its hourly detail", () => {

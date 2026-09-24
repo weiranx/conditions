@@ -1,7 +1,7 @@
 import { addDaysToIsoDate, parseTimeInputMinutes } from './core';
 import { dateTimeInputsFor } from './date-time-inputs';
 import { resolveObjectiveTimeZone } from './planned-start';
-import type { MultiDayTripForecastDay } from './trip-forecast';
+import { compareTripDays, type MultiDayTripForecastDay } from './trip-forecast';
 
 export const SHORTLIST_KEY = 'summitsafe:objective-shortlist:v1';
 export interface ShortlistObjective { id: string; name: string; lat: number; lon: number }
@@ -69,8 +69,7 @@ export function sameChoice(a: ShortlistChoice | null, b: ShortlistChoice | null)
 }
 // Comfort never changes the hazard ordering. Missing evidence cannot become a winner.
 export function rankShortlist(results: ShortlistResult[], requiredHours = 1) {
-  const priority = { GO: 2, CAUTION: 1, 'NO-GO': 0 };
   return results.flatMap(r => r.days.map(day => ({ objectiveId: r.objectiveId, day })))
     .filter(({ day }) => !day.partialData && day.score !== null && Number.isFinite(day.score) && day.travelTotalHours >= requiredHours)
-    .sort((a, b) => priority[b.day.decisionLevel] - priority[a.day.decisionLevel] || b.day.score! - a.day.score!);
+    .sort((a, b) => compareTripDays(a.day, b.day));
 }
