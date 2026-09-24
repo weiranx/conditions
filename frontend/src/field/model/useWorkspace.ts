@@ -5,7 +5,6 @@ import React, {
   useCallback,
   useMemo,
   useRef,
-  useLayoutEffect,
 } from "react";
 import type { LatLngLiteral } from "leaflet";
 import { buildPlannedReportWeatherRows } from "../report-weather";
@@ -456,9 +455,8 @@ export function useWorkspace() {
     clearRouteAnalysis,
     restoreRouteState,
   } = useRouteAnalysis(initialRestoredReport?.route);
-  // Set once the planned-route handler exists below; a new report starts it.
-  const reportGeneratedRef = useRef<() => void>(() => {});
-  const handleReportGenerated = useCallback(() => reportGeneratedRef.current(), []);
+  // A new report drops the previous route analysis; the Route chapter's button runs a new one.
+  const handleReportGenerated = clearRouteAnalysis;
 
   // Approach inputs sent with each report so the backend comfort score checks
   // approach hours at the same elevation as the brief. Kept current below.
@@ -1972,47 +1970,6 @@ export function useWorkspace() {
     alpineStartTime,
     travelWindowHours,
   ]);
-  // A new report analyzes the planned route alongside it. Guests and servers
-  // without route analysis skip it quietly; the Route chapter offers it instead.
-  // While the session is still loading, the decision waits for the account.
-  const [routeAwaitingAccount, setRouteAwaitingAccount] =
-    useState<typeof safetyData>(null);
-  useLayoutEffect(() => {
-    reportGeneratedRef.current = () => {
-      clearRouteAnalysis();
-      setRouteAwaitingAccount(null);
-      const capabilities = safetyData?.capabilities;
-      if (
-        !featureFlags.routeAnalysis ||
-        capabilities?.ai === false ||
-        capabilities?.routeAnalysis === false
-      )
-        return;
-      if (accountLoading) setRouteAwaitingAccount(safetyData);
-      else if (accountUser) handleAnalyzePlannedRoute();
-    };
-  });
-  useEffect(() => {
-    if (!routeAwaitingAccount || accountLoading) return;
-    setRouteAwaitingAccount(null);
-    // Only for the report it was deferred for, and not if one already started.
-    if (
-      accountUser &&
-      routeAwaitingAccount === safetyData &&
-      !routeAnalysis &&
-      !routeLoading
-    )
-      handleAnalyzePlannedRoute();
-  }, [
-    routeAwaitingAccount,
-    accountLoading,
-    accountUser,
-    safetyData,
-    routeAnalysis,
-    routeLoading,
-    handleAnalyzePlannedRoute,
-  ]);
-
   const prefHandlers = usePreferenceHandlers({
     preferences,
     setPreferences,
