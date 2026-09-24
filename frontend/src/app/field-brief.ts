@@ -78,7 +78,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
   const score = safetyData.safety?.assessmentStatus === 'insufficient_evidence' || !Number.isFinite(safetyData.safety?.score) ? null : Math.round(safetyData.safety.score);
   const scoreLabel = score === null ? 'Insufficient evidence' : `${score}/100`;
   const generatedAt = safetyData.generatedAt ? new Date(safetyData.generatedAt).toLocaleString() : 'Unknown';
-  const hazards = [...decision.blockers, ...decision.cautions]
+  const hazards = [...decision.blockers, ...decision.cautions, ...(decision.advisories ?? [])]
     .map(compact)
     .filter(Boolean);
   const triggers = decision.checks
