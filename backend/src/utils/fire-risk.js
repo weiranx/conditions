@@ -1,5 +1,38 @@
 const { FIRE_NEAR_KM, MI_PER_KM, fireEdgeKm } = require('./fire-proximity');
 
+// A fire this far contained is no longer spreading freely: closures and smoke
+// can remain, but it does not make the area's fire risk high or extreme.
+const LARGELY_CONTAINED_PERCENT = 90;
+// Active fire this close to the objective is treated as extreme.
+const FIRE_EXTREME_KM = 15;
+
+const finiteNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+const distanceText = (km) => `${Math.round(km)} km (${Math.round(km * MI_PER_KM)} mi)`;
+// WFIGS names are often all capitals ("GARDA FALLS"); read them as names.
+const incidentName = (incident) => {
+  const name = String(incident?.name || '').trim();
+  if (!name) return 'An unnamed fire';
+  const readable = name === name.toUpperCase() ? name.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()) : name;
+  return /\b(fire|complex)$/i.test(readable) ? `The ${readable}` : `The ${readable} fire`;
+};
+const isLargelyContained = (incident) => (finiteNumber(incident?.percentContained) ?? -1) >= LARGELY_CONTAINED_PERCENT;
+
+// One sentence naming the fire, its size and containment, and how far away it
+// is. WFIGS reports the distance to the fire's origin; for a large fire the
+// edge can be much closer, so say so rather than quoting the estimate as fact.
+const describeIncident = ({ incident, edgeKm }) => {
+  const facts = [
+    finiteNumber(incident?.acres) > 0 ? `${Math.round(incident.acres).toLocaleString('en-US')} acres` : null,
+    finiteNumber(incident?.percentContained) !== null ? `${Math.round(incident.percentContained)}% contained` : null,
+  ].filter(Boolean);
+  const reportedKm = finiteNumber(incident?.distanceKm) ?? edgeKm;
+  const edgeCloser = reportedKm - edgeKm >= 1;
+  const where = edgeCloser
+    ? `was reported about ${distanceText(reportedKm)} away; at its size its edge could be ${edgeKm < 1 ? 'at the objective' : `within about ${distanceText(edgeKm)}`}`
+    : `is about ${distanceText(reportedKm)} away`;
+  return `${incidentName(incident)}${facts.length ? ` (${facts.join(', ')})` : ''} ${where}.`;
+};
+
 const createUnavailableFireRiskData = (status = 'unavailable') => ({
   source: 'Derived from NOAA weather, NWS alerts, and air-quality signals',
   status,
@@ -32,68 +65,68 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData, localCondi
     : [];
 
   let level = 0;
-  const reasons = [];
+  // Each reason carries the level it supports and what drives it (fire
+  // weather, smoke, or fire on the ground), so the strongest comes first.
+  const rankedReasons = [];
+  const raise = (reasonLevel, driver, reason) => {
+    level = Math.max(level, reasonLevel);
+    rankedReasons.push({ level: reasonLevel, driver, reason });
+  };
 
   const hasRedFlagWarning = fireAlertEvents.some((alert) => /red flag warning/i.test(String(alert?.event || '')));
   const hasFireWeatherWatch = fireAlertEvents.some((alert) => /fire weather watch/i.test(String(alert?.event || '')));
   const hasWildfireOrSmokeAlert = fireAlertEvents.some((alert) => /wildfire|smoke|air quality/i.test(String(alert?.event || '')));
 
   if (hasRedFlagWarning) {
-    level = Math.max(level, 4);
-    reasons.push('Red Flag Warning is active.');
+    raise(4, 'weather', 'A Red Flag Warning is active.');
   } else if (hasFireWeatherWatch) {
-    level = Math.max(level, 3);
-    reasons.push('Fire Weather Watch is active.');
+    raise(3, 'weather', 'A Fire Weather Watch is active.');
   }
 
   if (Number.isFinite(tempF) && Number.isFinite(humidity) && Number.isFinite(wind)) {
     if (tempF >= 90 && humidity <= 20 && wind >= 20) {
-      level = Math.max(level, 4);
-      reasons.push(`Hot/dry/windy pattern (${tempF}F, RH ${humidity}%, wind ${wind} mph).`);
+      raise(4, 'weather', `Hot, dry, windy fire weather (${tempF}F, RH ${humidity}%, wind ${wind} mph).`);
     } else if (tempF >= 80 && humidity <= 25 && wind >= 15) {
-      level = Math.max(level, 3);
-      reasons.push(`Elevated fire-weather pattern (${tempF}F, RH ${humidity}%, wind ${wind} mph).`);
+      raise(3, 'weather', `Warm, dry, breezy fire weather (${tempF}F, RH ${humidity}%, wind ${wind} mph).`);
     } else if (tempF >= 70 && humidity <= 30 && (wind >= 12 || gust >= 20)) {
-      level = Math.max(level, 2);
-      reasons.push(`Dry and breezy conditions support faster fire spread (${tempF}F, RH ${humidity}%).`);
+      raise(2, 'weather', `Dry and breezy conditions support faster fire spread (${tempF}F, RH ${humidity}%).`);
     }
   }
 
   if (/smoke|haze/.test(weatherDescription) || (Number.isFinite(usAqi) && usAqi >= 101) || hasWildfireOrSmokeAlert) {
-    level = Math.max(level, 2);
-    reasons.push('Smoke/air-quality signal may indicate nearby fire activity or transport.');
+    raise(2, 'smoke', 'Smoke/air-quality signal may indicate nearby fire activity or transport.');
   } else if (Number.isFinite(usAqi) && usAqi >= 51) {
-    level = Math.max(level, 1);
-    reasons.push('Moderate AQI could affect exertion tolerance in exposed terrain.');
+    raise(1, 'smoke', 'Moderate AQI could affect exertion tolerance in exposed terrain.');
   }
 
-  // Measure incidents to their likely edge; see fire-proximity.js. Incidents
-  // beyond FIRE_NEAR_KM are noted but do not raise the level to a caution.
+  // Measure incidents to their likely edge; see fire-proximity.js. Only fire
+  // that is still spreading raises the level past a caution; incidents beyond
+  // FIRE_NEAR_KM are noted but do not raise it to a caution.
   const knownIncidents = nearbyIncidents
     .map((incident) => ({ incident, edgeKm: fireEdgeKm(incident) }))
     .filter((entry) => entry.edgeKm !== null)
     .sort((a, b) => a.edgeKm - b.edgeKm);
-  const nearestIncident = knownIncidents[0]?.incident;
+  const nearestActive = knownIncidents.find((entry) => !isLargelyContained(entry.incident));
+  const nearestContained = knownIncidents.find((entry) => isLargelyContained(entry.incident));
   const nearestIncidentKm = knownIncidents.length ? knownIncidents[0].edgeKm : NaN;
   const unplacedIncidents = nearbyIncidents.length - knownIncidents.length;
   const nearestDetectionKm = Math.min(...firmsDetections.map(fireEdgeKm).filter((value) => value !== null));
-  if (Number.isFinite(nearestIncidentKm) && nearestIncidentKm <= 15) {
-    level = Math.max(level, 4);
-    reasons.push(`Current WFIGS fire perimeter/incident is approximately ${Math.round(nearestIncidentKm)} km (${Math.round(nearestIncidentKm * MI_PER_KM)} mi) away (${nearestIncident?.name || 'unnamed incident'}).`);
-  } else if (Number.isFinite(nearestIncidentKm) && nearestIncidentKm <= FIRE_NEAR_KM) {
-    level = Math.max(level, 3);
-    reasons.push(`Current WFIGS fire activity is approximately ${Math.round(nearestIncidentKm)} km (${Math.round(nearestIncidentKm * MI_PER_KM)} mi) away (${nearestIncident?.name || 'unnamed incident'}).`);
+  if (nearestActive && nearestActive.edgeKm <= FIRE_EXTREME_KM) {
+    raise(4, 'fire', describeIncident(nearestActive));
+  } else if (nearestActive && nearestActive.edgeKm <= FIRE_NEAR_KM) {
+    raise(3, 'fire', describeIncident(nearestActive));
   } else if (unplacedIncidents > 0) {
-    level = Math.max(level, 2);
-    reasons.push(`${unplacedIncidents} current WFIGS fire incident/perimeter signal(s) within 150 km have no reported location, so they are treated as nearby.`);
+    raise(2, 'fire', `${unplacedIncidents} current WFIGS fire incident/perimeter signal(s) within 150 km have no reported location, so they are treated as nearby.`);
+  } else if (nearestContained && nearestContained.edgeKm <= FIRE_NEAR_KM) {
+    raise(1, 'fire', `${describeIncident(nearestContained)} It is largely contained, but closures and smoke can remain.`);
   } else if (nearbyIncidents.length > 0) {
-    level = Math.max(level, 1);
-    reasons.push(`${nearbyIncidents.length} current WFIGS fire incident/perimeter signal(s) are within 150 km, the nearest approximately ${Math.round(nearestIncidentKm)} km (${Math.round(nearestIncidentKm * MI_PER_KM)} mi) away; none are within ${FIRE_NEAR_KM} km.`);
+    raise(1, 'fire', `${nearbyIncidents.length} current WFIGS fire incident/perimeter signal(s) are within 150 km, the nearest approximately ${distanceText(nearestIncidentKm)} away; none are within ${FIRE_NEAR_KM} km.`);
   }
   if (Number.isFinite(nearestDetectionKm) && nearestDetectionKm <= 25) {
-    level = Math.max(level, 3);
-    reasons.push(`NASA FIRMS detected recent thermal activity approximately ${Math.round(nearestDetectionKm)} km away.`);
+    raise(3, 'fire', `NASA FIRMS detected recent thermal activity approximately ${Math.round(nearestDetectionKm)} km away.`);
   }
+  rankedReasons.sort((a, b) => b.level - a.level);
+  const reasons = rankedReasons.map((entry) => entry.reason);
 
   const labelMap = ['Low', 'Caution', 'Elevated', 'High', 'Extreme'];
   const guidanceMap = [
@@ -113,6 +146,9 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData, localCondi
     label: labelMap[level] || 'Low',
     guidance: guidanceMap[level] || guidanceMap[0],
     reasons: reasons.length > 0 ? reasons : [guidanceMap[0]],
+    // What sets the level: 'weather' (fire weather or a fire-weather alert),
+    // 'fire' (a fire or thermal detection near the objective) or 'smoke'.
+    primaryDriver: level > 0 ? rankedReasons[0]?.driver || null : null,
     alertsConsidered: fireAlertEvents.slice(0, 5).map((alert) => ({
       event: alert?.event || 'Alert',
       severity: alert?.severity || 'Unknown',

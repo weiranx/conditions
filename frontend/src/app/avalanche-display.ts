@@ -39,3 +39,31 @@ export function buildAvalancheDisplayState(
     : [];
   return { relevant, expiredForSelectedStart, coverageUnknown, unknown, overallLevel, notApplicableReason, elevationRows };
 }
+
+const DANGER_LABELS = ['No rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'];
+
+/**
+ * One line for the Brief's avalanche card: the rating when there is one;
+ * otherwise why there is none, then why avalanche terrain matters here.
+ */
+export function avalancheBriefCaption(
+  avalanche: SafetyData['avalanche'] | null | undefined,
+  display: AvalancheDisplayState,
+): string {
+  if (!avalanche) return 'No avalanche information is available for this plan.';
+  if (!display.relevant) return display.notApplicableReason;
+  const level = display.overallLevel;
+  if (level !== null && level > 0) {
+    return `${DANGER_LABELS[level] || `Level ${level}`} (${level} of 5) is the highest rating in the ${avalanche.center || 'avalanche center'} forecast.`;
+  }
+  const missing = display.expiredForSelectedStart
+    ? 'The avalanche forecast expires before your start.'
+    : avalanche.coverageStatus === 'no_active_forecast'
+      ? `${avalanche.center || 'The avalanche center'} has no current forecast for this zone.`
+      : avalanche.coverageStatus === 'no_center_coverage'
+        ? 'No avalanche center forecasts this area.'
+        : avalanche.coverageStatus === 'temporarily_unavailable'
+          ? 'The avalanche forecast could not be loaded.'
+          : 'The current avalanche product has no danger rating.';
+  return `${missing} ${display.notApplicableReason}`.trim();
+}

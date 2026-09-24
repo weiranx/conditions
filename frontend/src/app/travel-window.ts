@@ -10,6 +10,9 @@ import {
   convertWindMphToDisplayValue,
   formatClockForStyle,
   formatTemperatureForUnit,
+  minutesToTwentyFourHourClock,
+  parseHourLabelToMinutes,
+  parseTimeInputMinutes,
 } from './core';
 import { computeFeelsLikeF } from './planner-helpers';
 
@@ -113,6 +116,16 @@ export function annotateExposure(rows: TravelWindowRow[]): TravelWindowRow[] {
   return rows;
 }
 
+// When an hourly row's hour ends: the next row's start, or an hour after the
+// last row's start. A span through a 2:30 PM row runs until 3:30 PM.
+function rowEndTime(rows: TravelWindowRow[], index: number): string {
+  const next = rows[index + 1]?.time;
+  if (next) return next;
+  const time = rows[index].time;
+  const minutes = parseTimeInputMinutes(time) ?? parseHourLabelToMinutes(time);
+  return minutes === null ? time : minutesToTwentyFourHourClock((minutes + 60) % 1440);
+}
+
 export function deriveTravelWindowSpans(rows: TravelWindowRow[]): TravelWindowSpan[] {
   const spans: TravelWindowSpan[] = [];
   let startIndex = -1;
@@ -128,7 +141,7 @@ export function deriveTravelWindowSpans(rows: TravelWindowRow[]): TravelWindowSp
     const endIndex = row.pass ? idx : idx - 1;
     const length = endIndex - startIndex + 1;
     if (length > 0) {
-      spans.push({ start: rows[startIndex].time, end: rows[endIndex].time, length });
+      spans.push({ start: rows[startIndex].time, end: rowEndTime(rows, endIndex), length });
     }
     startIndex = -1;
   });

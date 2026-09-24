@@ -90,7 +90,7 @@ export function describeFailedCriticalCheck(check: SummitDecision['checks'][numb
     case 'air-quality':
       return 'Air quality is worse than AQI 100';
     case 'fire-risk':
-      return 'Fire danger is High or above';
+      return 'Fire risk is High or above';
     case 'heat-risk':
       return 'Heat risk is High or above';
     case 'terrain-signal':

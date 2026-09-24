@@ -5,6 +5,7 @@ import type { Workspace } from "./model/useWorkspace";
 import { freshnessClass } from "../app/core";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { compareReports, type ReportComparison } from "../app/report-changes";
+import { formatScoreDelta } from "../app/day-over-day";
 import { getReportComparisonBaseline } from "../lib/saved-reports";
 import { parsePersistedReport } from "../app/report-storage";
 import { ScoreExplanation } from "./ScoreExplanation";
@@ -124,12 +125,12 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
             <section className="sky-card" aria-labelledby="sky-sources-prior">
               <span className="sky-card-head">
                 <span id="sky-sources-prior">Change from the prior day</span>
-                <span className="sky-chip">{w.dayOverDay.delta > 0 ? "+" : ""}{w.dayOverDay.delta} pts</span>
+                {w.dayOverDay.scoreComparable && <span className="sky-chip">{formatScoreDelta(w.dayOverDay.delta)} pts</span>}
               </span>
               <p className="sky-cap is-body">
-                {w.dayOverDay.delta > 0 ? "+" : ""}
-                {w.dayOverDay.delta} score points compared with{" "}
-                {dateLabel(w.dayOverDay.previousDate)}.
+                {w.dayOverDay.scoreComparable
+                  ? <>{formatScoreDelta(w.dayOverDay.delta)} score points compared with {dateLabel(w.dayOverDay.previousDate)}.</>
+                  : <>Compared with {dateLabel(w.dayOverDay.previousDate)}. One of the two days lacks the evidence for a score, so only the forecast changes are listed.</>}
               </p>
               <p className="sky-cap">
                 Both days use a {w.formatClockForStyle(w.dayOverDay.startTime, w.preferences.timeStyle)} local start

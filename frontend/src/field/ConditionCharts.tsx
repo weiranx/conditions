@@ -77,7 +77,10 @@ export function ConditionTrend({
   const ticks = hours && hours.length === n
     ? hours.map((h, i) => ({ i, h })).filter(({ i }) => i % tickEvery === 0)
     : [];
-  const range = low === high ? format(low) : `${format(low)}–${format(high)}`;
+  // With a reference series ("trailhead to summit") the caption spans both.
+  const rangeLow = Math.min(low, ...referenceValid);
+  const rangeHigh = Math.max(high, ...referenceValid);
+  const range = rangeLow === rangeHigh ? format(rangeLow) : `${format(rangeLow)}–${format(rangeHigh)}`;
   const visibleBands = bands
     .map((b) => ({ ...b, y1: clampY(Math.min(ceiling, b.to)), y2: clampY(Math.max(floor, b.from)) }))
     .filter((b) => b.from < ceiling && b.to > floor && b.y2 - b.y1 > 1);

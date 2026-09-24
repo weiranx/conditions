@@ -4,12 +4,13 @@ import { DaylightChart } from "./DaylightChart";
 import { ContingencyCard } from "./ContingencyCard";
 import { Thresholds } from "./Settings";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
-import { minutesToTwentyFourHourClock, parseTimeInputMinutes } from "../app/core";
+import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
 import { buildPlannedReportWeatherRows } from "./report-weather";
 import { buildSkyHours, isOverHour, type SkyHour } from "./sky/sky-model";
 import { StartTimeline, type TimelineRow } from "./sky/StartTimeline";
 import { durationLabel } from "./sky/status";
 import { summarizeApproachHours, type ApproachSummary } from "../app/approach-elevation";
+import { decisionLevelRank } from "../app/decision";
 
 const LEVEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
@@ -46,7 +47,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
     return {
       key: opts.key || startTime,
       label: clockText(startTime),
-      sub: opts.best ? (comparison?.effectivelyTied ? "best of tied" : "best margin") : opts.current ? "your plan" : undefined,
+      sub: [opts.current ? "your plan" : null, opts.best ? "suggested" : null].filter(Boolean).join(" · ") || undefined,
       start,
       hours: rowHours,
       summit: start + (rowHours.length * 60) / 2,
@@ -82,7 +83,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
       return rowFor(scenario.startTime, rowHours, {
         daylight: scenario.daylightRemainingMinutes,
         decision: scenario.decision.level,
-        best: scenario.startTime === comparison.bestStartTime,
+        best: scenario.startTime === comparison.bestStartTime && !comparison.allNoGo,
         current,
       });
     })
@@ -96,6 +97,23 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
   const overPlan = hours.filter(isOverHour).length;
   const daylightLength = sunrise !== null && sunset !== null && sunset > sunrise ? sunset - sunrise : null;
   const best = comparison?.scenarios.find((s) => s.startTime === comparison.bestStartTime);
+  const planScenario = comparison?.scenarios.find((s) => s.startTime === w.alpineStartTime);
+  // Suggest another start only when it is clearly better: a better decision,
+  // or a score more than a point higher. The top-ranked departure need not
+  // have the most daylight, so do not call it the best margin.
+  const suggestion = !best || !comparison || comparison.allNoGo || comparison.effectivelyTied || best.startTime === w.alpineStartTime
+    ? null
+    : planScenario && decisionLevelRank(best.decision.level) > decisionLevelRank(planScenario.decision.level)
+      ? `changes the decision to ${LEVEL[best.decision.level] || best.decision.level}`
+      : planScenario ? `scores higher (${Math.round(best.score)} vs ${Math.round(planScenario.score)})` : "has the best decision and score of these departures";
+  // A peak only means something when an hour carries a risk signal; the
+  // first reading can open before an off-the-hour start.
+  const peak = w.peakCriticalWindow && w.peakCriticalWindow.score > 0 ? w.peakCriticalWindow : null;
+  const peakMinute = peak ? parseTimeInputMinutes(peak.time) ?? parseHourLabelToMinutes(peak.time) : null;
+  const planStartMinute = parseTimeInputMinutes(w.alpineStartTime);
+  const peakTime = peak && peakMinute !== null && planStartMinute !== null && planStartMinute - peakMinute > 0 && planStartMinute - peakMinute < 60
+    ? w.alpineStartTime
+    : peak?.time;
   const limits = [
     { label: "Gusts up to", value: w.formatWindDisplay(w.preferences.maxWindGustMph) },
     { label: "Rain chance up to", value: `${w.preferences.maxPrecipChance}%` },
@@ -112,8 +130,8 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
           ? <>, <strong className="is-over">{duration(-planDaylight)} after sunset</strong></>
           : <>, {duration(planDaylight)} before sunset</>)}
         {overPlan > 0 && <>, with <strong className="is-over">{overPlan} h over your limits</strong></>}.{" "}
-        {best && comparison && best.startTime !== w.alpineStartTime && (
-          <>A <strong>{clockText(best.startTime)} start</strong> has the best margin. </>
+        {suggestion && best && (
+          <>Starting at <strong>{clockText(best.startTime)}</strong> {suggestion}. </>
         )}
         <span className="sky-lead-note">
           {sunrise !== null && sunset !== null
@@ -132,7 +150,10 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
             {w.startTimeScenarios.loading && <p className="sky-muted" role="status">Checking departure windows…</p>}
             {w.startTimeScenarios.error && <p className="sky-notice is-caution" role="alert">{w.startTimeScenarios.error}</p>}
             <StartTimeline rows={rows} sunrise={sunrise} sunset={sunset} clock={clock}
-              caption={`Departures compared on one clock: ${rows.map((r) => `${r.label}${r.current ? " (your plan)" : ""}${r.best ? " (best margin)" : ""}`).join(", ")}.`} />
+              caption={`Departures compared on one clock: ${rows.map((r) => {
+                const notes = [r.current ? "your plan" : null, r.best ? "suggested" : null].filter(Boolean);
+                return `${r.label}${notes.length ? ` (${notes.join(", ")})` : ""}`;
+              }).join(", ")}.`} />
             {!comparison && !w.startTimeScenarios.loading && (
               <p className="sky-cap">
                 Departure comparisons are unavailable for this saved or undated
@@ -141,8 +162,10 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
             )}
             {comparison && (
               <p className="sky-cap">
-                {comparison.effectivelyTied ? "Best margin among tied scores" : "Recommended departure"}:{" "}
-                {clockText(comparison.bestStartTime)} · Main difference: {comparison.drivingRisk}
+                {comparison.allNoGo
+                  ? "No departure clears the no-go checks"
+                  : `${comparison.effectivelyTied ? "Suggested among near-equal departures" : "Suggested departure"}: ${clockText(comparison.bestStartTime)}`}
+                {" "}· Main difference: {comparison.drivingRisk}
               </p>
             )}
             <div className="sky-card-actions">
@@ -167,7 +190,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
                           <tr key={scenario.startTime}>
                             <th scope="row">
                               {clockText(scenario.startTime)}
-                              {scenario.startTime === comparison.bestStartTime && <small> · best margin</small>}
+                              {scenario.startTime === comparison.bestStartTime && !comparison.allNoGo && <small> · suggested</small>}
                             </th>
                             <td>{LEVEL[scenario.decision.level] || scenario.decision.level} <small>{Math.round(scenario.score)}/100</small></td>
                             <td className="is-num">{w.formatWindDisplay(scenario.peakGustMph)}</td>
@@ -231,9 +254,10 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
             ))}
           </dl>
           <p className="sky-cap">{w.travelWindowSummary}</p>
-          {w.peakCriticalWindow && (
+          {peak && peakTime && (
             <p className="sky-cap">
-              Most severe weather: {clockText(w.peakCriticalWindow.time)} · {w.peakCriticalWindow.condition}
+              Most severe weather: {clockText(peakTime)} · {peak.condition}
+              {peak.reasons.length > 0 && <> ({w.localizeUnitText(peak.reasons.join(", "))})</>}
             </p>
           )}
           <details className="sky-details report-threshold-disclosure">
@@ -251,6 +275,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
             clock={clock}
             formatTemp={(value) => w.formatTempDisplay(value)}
             formatWind={(value) => w.formatWindDisplay(value)}
+            timeZone={w.objectiveTimezone}
           />
         </div>
       )}

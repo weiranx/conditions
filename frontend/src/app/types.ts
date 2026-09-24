@@ -479,7 +479,10 @@ export interface SafetyData {
     level?: number;
     label?: string;
     guidance?: string;
+    /** Strongest first: reasons[0] is what sets the level. */
     reasons?: string[];
+    /** What sets the level: fire weather, a fire near the objective, or smoke. */
+    primaryDriver?: 'weather' | 'fire' | 'smoke' | null;
     alertsUsed?: number;
     alertsConsidered?: Array<{
       event?: string;
@@ -930,6 +933,8 @@ export interface DayOverDayComparison {
   travelWindowHours: number;
   previousScore: number;
   delta: number;
+  /** Both days were scored; otherwise the score change is not shown. */
+  scoreComparable: boolean;
   changes: string[];
 }
 
@@ -962,6 +967,7 @@ export interface TravelWindowRow {
 
 export interface TravelWindowSpan {
   start: string;
+  /** When the span's last hour ends (exclusive), not when it starts. */
   end: string;
   length: number;
 }

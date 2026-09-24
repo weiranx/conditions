@@ -14,22 +14,50 @@ interface ContingencyCardProps {
   clock: (minute: number) => string;
   formatTemp: (value: number | null | undefined) => string;
   formatWind: (value: number | null | undefined) => string;
+  /** The objective's IANA time zone; event times are read on its clock. */
+  timeZone?: string | null;
 }
 
 const hoursLabel = (hours: number) => durationLabel(Math.round(hours * 60));
 
-export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp, formatWind }: ContingencyCardProps) {
+// Minutes after local midnight at the objective for an instant, or null when
+// the zone is unusable.
+function localMinuteAt(ms: number, timeZone: string): number | null {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(ms));
+    const hour = Number(parts.find((part) => part.type === "hour")?.value);
+    const minute = Number(parts.find((part) => part.type === "minute")?.value);
+    return Number.isFinite(hour) && Number.isFinite(minute) ? (hour % 24) * 60 + minute : null;
+  } catch {
+    return null;
+  }
+}
+
+export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp, formatWind, timeZone = null }: ContingencyCardProps) {
   if (!contingency || contingency.status !== "ok") return null;
   const buffer = contingency.delayBuffer;
   const night = contingency.overnight?.status === "ok" ? contingency.overnight : null;
   if (!buffer && !night) return null;
   const at = (hoursAfterReturn: number) =>
     returnMinutes === null ? `${hoursLabel(hoursAfterReturn)} after return` : clock(returnMinutes + hoursAfterReturn * 60);
+  // Hours after return are rounded to a tenth; the event's own time is exact,
+  // so sunset reads as the sunset shown elsewhere in the report. Read it on the
+  // objective's clock: elapsed time from the return misreads the clock when a
+  // daylight-saving change falls in between.
+  const returnMs = Date.parse(contingency.plannedReturnIso || "");
+  const atEvent = (iso: string | null | undefined, hoursAfterReturn: number) => {
+    const eventMs = Date.parse(iso || "");
+    const localMinute = timeZone && Number.isFinite(eventMs) ? localMinuteAt(eventMs, timeZone) : null;
+    if (localMinute !== null) return clock(localMinute);
+    return returnMinutes !== null && Number.isFinite(returnMs) && Number.isFinite(eventMs)
+      ? clock(returnMinutes + Math.round((eventMs - returnMs) / 60000))
+      : at(hoursAfterReturn);
+  };
 
   const bufferEvents = buffer
     ? [
-      ...buffer.onsetHazards.map((hazard) => `${hazard.label} from ${at(hazard.hoursAfterReturn)}`),
-      ...(buffer.nightfall ? [`Dark by ${at(buffer.nightfall.hoursAfterReturn)}`] : []),
+      ...buffer.onsetHazards.map((hazard) => `${hazard.label} from ${atEvent(hazard.onsetIso, hazard.hoursAfterReturn)}`),
+      ...(buffer.nightfall ? [`Dark by ${atEvent(buffer.nightfall.onsetIso, buffer.nightfall.hoursAfterReturn)}`] : []),
     ]
     : [];
   const nightConditions = night
@@ -58,7 +86,7 @@ export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp,
         <>
           <p className="sky-cap is-body">
             Running up to <strong>{hoursLabel(buffer.hours)} late</strong>
-            {returnMinutes !== null && <> (back by {clock(returnMinutes + buffer.hours * 60)})</>}
+            {returnMinutes !== null && <> (back by {atEvent(buffer.endIso, buffer.hours)})</>}
             {buffer.coveredHours <= 0
               ? ": no forecast covers those hours."
               : bufferEvents.length > 0
@@ -85,7 +113,7 @@ export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp,
           </span>
           <p className="sky-cap is-body">
             {typeof night.hoursToDark === "number" && (
-              night.hoursToDark <= 0 ? "You'd already be out after dark. " : `Dark by ${at(night.hoursToDark)}. `
+              night.hoursToDark <= 0 ? "You'd already be out after dark. " : `Dark by ${atEvent(night.startIso, night.hoursToDark)}. `
             )}
             Coldest it feels overnight: <strong>{formatTemp(night.minFeelsLikeF)}</strong>
             {Number(night.peakGustMph) >= 20 && <>, gusts to {formatWind(night.peakGustMph)}</>}

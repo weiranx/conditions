@@ -4,6 +4,7 @@ import type { Workspace } from "../model/useWorkspace";
 import { freshnessClass } from "../../app/core";
 import { durationLabel, plainRule, surfaceLabel, terrainStatus, type CheckStatus } from "./status";
 import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
+import { avalancheBriefCaption } from "../../app/avalanche-display";
 
 export type BriefChapter = "forecast" | "timing" | "terrain" | "route" | "sources" | "gear";
 type Status = CheckStatus;
@@ -82,6 +83,11 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const surface = surfaceLabel(data);
   const terrain = terrainStatus(data);
   const fireHigh = Number(w.fireRiskLevel) >= 3;
+  // What sets an elevated fire level, in a few words; the full reason is in Weather.
+  const fireDriver = data.fireRisk?.primaryDriver;
+  const fireCause = Number(w.fireRiskLevel) >= 2 && fireDriver
+    ? ({ fire: "fire nearby", weather: "fire weather", smoke: "smoke" } as const)[fireDriver]
+    : "";
   const gear = (w.gearRecommendations || []).filter(Boolean).slice(0, 4);
   const gearTotal = (w.gearRecommendations || []).filter(Boolean).length;
 
@@ -134,7 +140,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
             </div>
           </div>
           <div className="sky-card sky-score">
-            <span className="sky-card-head"><span>Safety score</span><span className="sky-muted">{data.safety.tier || "hazards only"}</span></span>
+            <span className="sky-card-head"><span>Safety score</span><span className="sky-muted">{scoreValue === null ? "Not scored" : data.safety.tier || "hazards only"}</span></span>
             <div className="sky-score-row">
               <svg viewBox="0 0 88 88" className="sky-viz sky-ring" role="img" aria-label={scoreValue === null ? "Safety score unavailable" : `Safety score ${scoreValue} of 100`}>
                 <circle cx="44" cy="44" r="36" fill="none" className="s-okfill" strokeWidth="10" />
@@ -224,7 +230,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
           <CheckCard title="Avalanche" onOpen={() => onOpen("terrain")}
             status={w.avalancheRelevant && avalancheLevel === null ? "missing" : avalancheLevel !== null && avalancheLevel >= 3 ? "over" : "ok"}
             statusText={avalancheLevel !== null && avalancheLevel > 0 ? ["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel] || `Level ${avalancheLevel}` : w.avalancheRelevant ? "No rating" : "Not relevant"}
-            caption={w.avalancheNotApplicableReason || (avalancheLevel ? `Danger level ${avalancheLevel} of 5 for your elevation band.` : "No avalanche rating is available for this plan.")}>
+            caption={avalancheBriefCaption(data.avalanche, w.avalancheDisplay)}>
             <svg className="sky-viz" viewBox="0 0 240 40" role="img" aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5.` : "No avalanche danger rating."}>
               {["Low", "Mod", "Consid", "High", "Extreme"].map((label, i) => (
                 <g key={label}>
@@ -238,7 +244,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
           <CheckCard title="Air & fire" onOpen={() => onOpen("forecast")}
             status={fireHigh || (measured(aqi) && aqi > 100) ? "over" : !measured(aqi) ? "missing" : "ok"}
             statusText={fireHigh && !(measured(aqi) && aqi > 100) ? `Fire risk ${String(w.fireRiskLabel || "high").toLowerCase()}` : measured(aqi) ? `AQI ${aqi}` : "AQI unavailable"}
-            caption={`${aqiCategory || "Air quality unavailable"} · fire risk ${String(w.fireRiskLabel || "unavailable").toLowerCase()}.`}>
+            caption={`${aqiCategory || "Air quality unavailable"} · fire risk ${String(w.fireRiskLabel || "unavailable").toLowerCase()}${fireCause ? ` (${fireCause})` : ""}.`}>
             {measured(aqi) && (
               <svg className="sky-viz" viewBox="0 0 240 70" role="img" aria-label={`Air quality index ${aqi}, ${aqiCategory || "category unavailable"}.`}>
                 <path d="M64 64 A56 56 0 0 1 176 64" fill="none" className="s-okfill" strokeWidth="10" strokeLinecap="round" />

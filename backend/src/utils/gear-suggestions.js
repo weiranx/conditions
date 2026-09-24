@@ -1,5 +1,6 @@
 const { clampTravelWindowHours } = require('./time');
 const { computeFeelsLikeF } = require('./weather-normalizers');
+const { buildSunClock, windowIncludesDark, windowIncludesDaylight } = require('./daylight');
 
 const buildLayeringGearSuggestions = ({
   weatherData,
@@ -14,6 +15,8 @@ const buildLayeringGearSuggestions = ({
   selectedTravelWindowHours,
   scoreFeatures = null,
   contingencyData = null,
+  solarData = null,
+  selectedStartTime = null,
 }) => {
   const MAX_GEAR_SUGGESTIONS = 12;
   const BASELINE_GEAR_IDS = new Set(['backcountry-essentials', 'layering-core']);
@@ -120,7 +123,12 @@ const buildLayeringGearSuggestions = ({
   const snowy = /snow/.test(trailSurface);
   const hasRainAccumulation = Number.isFinite(rain24hIn) && rain24hIn >= 0.2;
   const hasFreshSnow = Number.isFinite(snow24hIn) && snow24hIn >= 2;
-  const hasDaylightInWindow = weatherData?.isDaytime !== false || trend.some((row) => row?.isDaytime === true);
+  // Sunrise and sunset decide light and dark; NOAA's isDaytime flag is a fixed
+  // 6 AM-6 PM period and is only the fallback.
+  const windowStartIso = selectedStartTime || weatherData?.forecastStartTime || null;
+  const sun = buildSunClock({ solarData, timeZone: weatherData?.timezone, anchorIso: windowStartIso });
+  const hasDaylightInWindow = windowIncludesDaylight(sun, windowStartIso, windowHours)
+    ?? (weatherData?.isDaytime !== false || trend.some((row) => row?.isDaytime === true));
   const convective = /thunder|lightning|t-storm|tstm/.test(windowDescription);
   const avyDanger = avalancheEnabled ? Number(avalancheData?.dangerLevel) : Number.NaN;
   const hasAlerts = Number(alertsData?.activeCount) > 0;
@@ -135,7 +143,8 @@ const buildLayeringGearSuggestions = ({
   const snow24h = formatWhole(snow24hIn, ' in');
   const snowDepth = formatWhole(maxObservedSnowDepthIn, ' in');
   const snowOnGround = snowy || icy || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 2);
-  const hasDarkInWindow = weatherData?.isDaytime === false || trend.some((row) => row?.isDaytime === false);
+  const hasDarkInWindow = windowIncludesDark(sun, windowStartIso, windowHours)
+    ?? (weatherData?.isDaytime === false || trend.some((row) => row?.isDaytime === false));
   const AVALANCHE_DANGER_LABELS = { 1: 'Low', 2: 'Moderate', 3: 'Considerable', 4: 'High', 5: 'Extreme' };
 
   addSuggestion(
@@ -286,15 +295,29 @@ const buildLayeringGearSuggestions = ({
     );
   }
   if (fireRiskEnabled && Number(fireRiskData?.level) >= 3) {
-    addSuggestion(
-      'fire-risk',
-      'Extra water and sun cover',
-      'Hot, dry air dehydrates you quickly. Check campfire and stove restrictions before you go.',
-      'Sun & heat',
-      'watch',
-      36,
-      String(fireRiskData.label || 'Elevated fire risk').replace(/\.$/, ''),
-    );
+    const fireLabel = String(fireRiskData.label || 'High').replace(/\.$/, '').toLowerCase();
+    if (fireRiskData.primaryDriver === 'fire') {
+      // Fire on the ground nearby: plan exits and updates, not hydration.
+      addSuggestion(
+        'fire-risk',
+        'Offline map with more than one exit',
+        'Know a second way out if smoke or fire closes the trail or road, and how you will check closure and evacuation updates.',
+        'Navigation & comms',
+        'watch',
+        36,
+        'Active fire near the objective',
+      );
+    } else {
+      addSuggestion(
+        'fire-risk',
+        'Extra water and sun cover',
+        'Hot, dry air dehydrates you quickly. Check campfire and stove restrictions before you go.',
+        'Sun & heat',
+        'watch',
+        36,
+        `${fireLabel.charAt(0).toUpperCase()}${fireLabel.slice(1)} fire danger in dry air`,
+      );
+    }
   }
 
   if (avalancheEnabled && avalancheData?.relevant !== false && (avyDanger >= 1 || avalancheData?.dangerUnknown)) {

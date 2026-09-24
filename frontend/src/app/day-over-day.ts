@@ -4,14 +4,33 @@ import { formatSignedDelta } from './weather-display';
 
 type DayOverDayUnits = Pick<UserPreferences, 'temperatureUnit' | 'windSpeedUnit'>;
 
+const oneDecimal = (value: number) => Number(value.toFixed(1));
+
+/** A score change as the report shows scores: one decimal, signed, "0" when unchanged. */
+export function formatScoreDelta(delta: number): string {
+  const rounded = oneDecimal(delta);
+  return rounded === 0 ? '0' : `${rounded > 0 ? '+' : ''}${rounded}`;
+}
+
+/**
+ * Scores can be compared only when both days were scored. A report without
+ * enough evidence shows no score, so a change in points would be meaningless.
+ */
+export function scoresComparable(current: SafetyData, previous: SafetyData): boolean {
+  return current?.safety?.assessmentStatus !== 'insufficient_evidence'
+    && previous?.safety?.assessmentStatus !== 'insufficient_evidence'
+    && Number.isFinite(parseOptionalFiniteNumber(current?.safety?.score))
+    && Number.isFinite(parseOptionalFiniteNumber(previous?.safety?.score));
+}
+
 export function buildDayOverDayChanges(current: SafetyData, previous: SafetyData, preferences: DayOverDayUnits): string[] {
   const changes: string[] = [];
   const currentScore = parseOptionalFiniteNumber(current?.safety?.score);
   const previousScore = parseOptionalFiniteNumber(previous?.safety?.score);
-  if (Number.isFinite(currentScore) && Number.isFinite(previousScore)) {
+  if (scoresComparable(current, previous)) {
     const scoreDelta = currentScore - previousScore;
     if (Math.abs(scoreDelta) >= 1) {
-      changes.push(`Safety score ${formatSignedDelta(scoreDelta)} (${Math.round(previousScore)} -> ${Math.round(currentScore)}).`);
+      changes.push(`Safety score ${formatScoreDelta(scoreDelta)} (${oneDecimal(previousScore)} -> ${oneDecimal(currentScore)}).`);
     }
   }
 

@@ -180,10 +180,12 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
             </ExposureCard>
           )}
           {flags.fireRiskDetails && (
-            <ExposureCard className="is-fire" icon={<Flame size={16} aria-hidden="true" />} title="Fire weather"
+            <ExposureCard className="is-fire" icon={<Flame size={16} aria-hidden="true" />} title="Fire risk"
               value={w.fireRiskLabel || "Unavailable"} tone={Number.isFinite(fireLevel) && fireLevel >= 3 ? "over" : levelTone(w.fireRiskLabel) === "missing" ? "missing" : "ok"}
-              note={data.fireRisk?.guidance}
-              evidence={<Details title="Fire-weather drivers and alerts" value={data.fireRisk} />}>
+              note={fireLevel >= 1 && data.fireRisk?.reasons?.[0]
+                ? `${w.localizeUnitText(data.fireRisk.reasons[0])} ${data.fireRisk.guidance || ""}`.trim()
+                : data.fireRisk?.guidance}
+              evidence={<Details title="What sets the fire risk" value={data.fireRisk} />}>
               <ConditionTrend label="Relative humidity" values={hours.map((hour) => hour.humidity)} format={percent} start={start} end={end} domain={[0, 100]}
                 hours={hourTicks} bands={[{ from: 0, to: 30, label: "dry, fire spreads faster", tone: "caution" }]} />
             </ExposureCard>

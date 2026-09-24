@@ -159,6 +159,55 @@ describe('overnight scenario', () => {
   });
 });
 
+describe('sunset, not the forecast period flag, sets darkness', () => {
+  // NOAA flags hours from 6 PM as night whatever the season.
+  const noaaFlags = (hour) => ({ isDaytime: (((hour % 24) + 24) % 24) >= 6 && (((hour % 24) + 24) % 24) < 18 });
+  const noaaWeather = (options) => ({ ...weatherFor({ ...options, overrides: noaaFlags }), timezone: 'America/Los_Angeles' });
+  const september = { sunrise: '6:43:42 AM', sunset: '7:13:19 PM' };
+  const december = { sunrise: '7:14:00 AM', sunset: '4:41:00 PM' };
+
+  test('a September evening stays light past 6 PM', () => {
+    const weatherData = noaaWeather({ startHour: 8, windowHours: 9 });
+    const assess = (solarData) => buildContingencyAssessment({ weatherData, selectedStartTime: isoAt(8), selectedTravelWindowHours: 9, solarData });
+    // Without sun times the 6 PM flag reads as dark an hour after the 5 PM return.
+    expect(assess(null).delayBuffer.nightfall).toMatchObject({ hoursAfterReturn: 1 });
+    const { delayBuffer, overnight } = assess(september);
+    expect(delayBuffer.nightfall).toEqual({ onsetIso: new Date(Date.parse(isoAt(19)) + 13 * 60000).toISOString(), hoursAfterReturn: 2.2 });
+    expect(overnight).toMatchObject({
+      hoursToDark: 2.2,
+      startIso: new Date(Date.parse(isoAt(19)) + 13 * 60000).toISOString(),
+      endIso: new Date(Date.parse(isoAt(30)) + 43 * 60000).toISOString(),
+      complete: true,
+    });
+    expect(overnight.coveredHours).toBe(11.5);
+  });
+
+  test('a December afternoon is dark before the 6 PM flag', () => {
+    const weatherData = noaaWeather({ startHour: 8, windowHours: 8 });
+    const assess = (solarData) => buildContingencyAssessment({ weatherData, selectedStartTime: isoAt(8), selectedTravelWindowHours: 8, solarData });
+    // The flag misses dusk inside the 2 h buffer after a 4 PM return.
+    expect(assess(null).delayBuffer.nightfall).toBeNull();
+    const { delayBuffer, overnight } = assess(december);
+    expect(delayBuffer.nightfall).toMatchObject({ hoursAfterReturn: 0.7 });
+    expect(delayBuffer.summary).toMatch(/darkness from about 0.7 h after your planned return/);
+    expect(overnight).toMatchObject({ hoursToDark: 0.7 });
+    expect(overnight.reasonCodes).toContain('nearDark');
+  });
+
+  test('a return after sunset starts the night at the return', () => {
+    const weatherData = noaaWeather({ startHour: 12, windowHours: 8 });
+    const { delayBuffer, overnight } = buildContingencyAssessment({ weatherData, selectedStartTime: isoAt(12), selectedTravelWindowHours: 8, solarData: september });
+    expect(delayBuffer.nightfall).toBeNull();
+    expect(overnight).toMatchObject({ hoursToDark: 0, startIso: new Date(Date.parse(isoAt(20))).toISOString() });
+  });
+
+  test('falls back to the forecast flags without a time zone', () => {
+    const weatherData = { ...noaaWeather({ startHour: 8, windowHours: 9 }), timezone: null };
+    const { delayBuffer } = buildContingencyAssessment({ weatherData, selectedStartTime: isoAt(8), selectedTravelWindowHours: 9, solarData: september });
+    expect(delayBuffer.nightfall).toMatchObject({ hoursAfterReturn: 1 });
+  });
+});
+
 describe('score, gear, and feature flag integration', () => {
   const stormAfterReturn = () => {
     const weatherData = weatherFor({

@@ -1,6 +1,7 @@
 const { parseIsoTimeToMs, clampTravelWindowHours } = require('./time');
 const { selectForecastIntervals } = require('./report-evidence');
 const { computeFeelsLikeF } = require('./weather-normalizers');
+const { buildSunClock } = require('./daylight');
 
 const HOUR = 3600000;
 
@@ -86,7 +87,25 @@ const mergeRows = (trend, afterWindowTrend) => {
   return [...byStart.entries()].sort((a, b) => a[0] - b[0]).map(([, row]) => row);
 };
 
-const buildDelayBuffer = ({ allRows, windowRows, returnMs, bufferHours }) => {
+// When dark falls within `bufferHours` of a return made in daylight. With the
+// sun's times this is sunset itself; otherwise the first row the forecast flags
+// as night, which for NOAA is a fixed 6 PM rather than sunset.
+const findNightfall = ({ sun, windowRows, bufferRows, returnMs, bufferHours }) => {
+  if (sun) {
+    if (sun.isDarkAt(returnMs - 1)) return null;
+    const sunsetMs = sun.nextSunset(returnMs);
+    return sunsetMs < returnMs + bufferHours * HOUR
+      ? { onsetIso: toIso(sunsetMs), hoursAfterReturn: roundHours(sunsetMs - returnMs) }
+      : null;
+  }
+  const windowEndsInDaylight = windowRows.length > 0 && windowRows[windowRows.length - 1].isDaytime === true;
+  const firstDarkRow = windowEndsInDaylight ? bufferRows.find((row) => row.isDaytime === false) : null;
+  return firstDarkRow
+    ? { onsetIso: toIso(Math.max(returnMs, rowStartMs(firstDarkRow) ?? returnMs)), hoursAfterReturn: roundHours(Math.max(0, (rowStartMs(firstDarkRow) ?? returnMs) - returnMs)) }
+    : null;
+};
+
+const buildDelayBuffer = ({ allRows, windowRows, returnMs, bufferHours, sun = null }) => {
   const bufferRows = selectForecastIntervals(allRows, toIso(returnMs), bufferHours).map(normalizeRow);
   const coveredHours = totalHours(bufferRows);
   const hazardsInWindow = new Set(
@@ -108,11 +127,7 @@ const buildDelayBuffer = ({ allRows, windowRows, returnMs, bufferHours }) => {
     })
     .filter(Boolean);
 
-  const windowEndsInDaylight = windowRows.length > 0 && windowRows[windowRows.length - 1].isDaytime === true;
-  const firstDarkRow = windowEndsInDaylight ? bufferRows.find((row) => row.isDaytime === false) : null;
-  const nightfall = firstDarkRow
-    ? { onsetIso: toIso(Math.max(returnMs, rowStartMs(firstDarkRow) ?? returnMs)), hoursAfterReturn: roundHours(Math.max(0, (rowStartMs(firstDarkRow) ?? returnMs) - returnMs)) }
-    : null;
+  const nightfall = findNightfall({ sun, windowRows, bufferRows, returnMs, bufferHours });
 
   const parts = onsetHazards.map((hazard) => `${hazard.label.toLowerCase()} ${describeOnset(hazard.hoursAfterReturn)}`);
   if (nightfall) parts.push(`darkness ${describeOnset(nightfall.hoursAfterReturn)}`);
@@ -146,21 +161,41 @@ const classifyOvernightSeverity = ({ minFeelsLikeF, peakGustMph, peakPrecipChanc
   return 'low';
 };
 
-const buildOvernight = ({ allRows, returnMs, windowHours, winterTerrain }) => {
+const NO_NIGHT_SUMMARY = 'No night falls soon after your planned return within the forecast range.';
+
+// The first night after the return: from sunset (or the return, if it is
+// already dark) to the next sunrise, and the forecast rows that cover it.
+const selectNight = ({ allRows, returnMs, sun }) => {
+  if (sun) {
+    const startMs = sun.isDarkAt(returnMs) ? returnMs : sun.nextSunset(returnMs);
+    if (startMs - returnMs > OVERNIGHT_SEARCH_HOURS * HOUR) return { error: NO_NIGHT_SUMMARY };
+    const endMs = sun.nextSunrise(startMs);
+    const rows = selectForecastIntervals(allRows, toIso(startMs), (endMs - startMs) / HOUR).map(normalizeRow);
+    if (!rows.length) return { error: NO_NIGHT_SUMMARY };
+    return { startMs, endMs, rows, complete: totalHours(rows) >= (endMs - startMs) / HOUR - 0.01 };
+  }
   const afterReturn = selectForecastIntervals(allRows, toIso(returnMs), AFTER_WINDOW_HOURS).map(normalizeRow);
-  const hasDayFlags = afterReturn.some((row) => typeof row.isDaytime === 'boolean');
-  if (!hasDayFlags) {
-    return { status: 'unavailable', relevant: false, reasons: [], reasonCodes: [], summary: 'Day/night timing is unavailable, so the overnight scenario could not be built.' };
+  if (!afterReturn.some((row) => typeof row.isDaytime === 'boolean')) {
+    return { error: 'Day/night timing is unavailable, so the overnight scenario could not be built.' };
   }
   const nightStartIndex = afterReturn.findIndex((row) => row.isDaytime === false);
-  const nightStartMs = nightStartIndex >= 0 ? Math.max(returnMs, rowStartMs(afterReturn[nightStartIndex]) ?? returnMs) : null;
-  if (nightStartIndex < 0 || nightStartMs - returnMs > OVERNIGHT_SEARCH_HOURS * HOUR) {
-    return { status: 'unavailable', relevant: false, reasons: [], reasonCodes: [], summary: 'No night falls soon after your planned return within the forecast range.' };
-  }
+  const startMs = nightStartIndex >= 0 ? Math.max(returnMs, rowStartMs(afterReturn[nightStartIndex]) ?? returnMs) : null;
+  if (nightStartIndex < 0 || startMs - returnMs > OVERNIGHT_SEARCH_HOURS * HOUR) return { error: NO_NIGHT_SUMMARY };
   const nightEndOffset = afterReturn.slice(nightStartIndex).findIndex((row) => row.isDaytime === true);
-  const nightRows = nightEndOffset < 0 ? afterReturn.slice(nightStartIndex) : afterReturn.slice(nightStartIndex, nightStartIndex + nightEndOffset);
-  const lastNightRow = nightRows[nightRows.length - 1];
-  const nightEndMs = nightEndOffset < 0 ? null : rowStartMs(afterReturn[nightStartIndex + nightEndOffset]);
+  const rows = nightEndOffset < 0 ? afterReturn.slice(nightStartIndex) : afterReturn.slice(nightStartIndex, nightStartIndex + nightEndOffset);
+  const lastRow = rows[rows.length - 1];
+  const endMs = nightEndOffset < 0
+    ? (rowStartMs(lastRow) ?? startMs) + (lastRow?.hours || 1) * HOUR
+    : rowStartMs(afterReturn[nightStartIndex + nightEndOffset]);
+  return { startMs, endMs, rows, complete: nightEndOffset >= 0 };
+};
+
+const buildOvernight = ({ allRows, returnMs, windowHours, winterTerrain, sun = null }) => {
+  const night = selectNight({ allRows, returnMs, sun });
+  if (night.error) {
+    return { status: 'unavailable', relevant: false, reasons: [], reasonCodes: [], summary: night.error };
+  }
+  const { startMs: nightStartMs, endMs: nightEndMs, rows: nightRows } = night;
   const coveredHours = totalHours(nightRows);
 
   const lowTempF = extremum(nightRows, 'temp', 'min');
@@ -216,8 +251,8 @@ const buildOvernight = ({ allRows, returnMs, windowHours, winterTerrain }) => {
     reasons,
     reasonCodes,
     startIso: toIso(nightStartMs),
-    endIso: nightEndMs !== null ? toIso(nightEndMs) : toIso((rowStartMs(lastNightRow) ?? nightStartMs) + (lastNightRow?.hours || 1) * HOUR),
-    complete: nightEndOffset >= 0,
+    endIso: toIso(nightEndMs),
+    complete: night.complete,
     coveredHours,
     hoursToDark,
     lowTempF,
@@ -259,6 +294,7 @@ const buildContingencyAssessment = ({
   selectedStartTime,
   selectedTravelWindowHours,
   winterTerrain = false,
+  solarData = null,
 }) => {
   const windowHours = clampTravelWindowHours(selectedTravelWindowHours ?? 12, 12);
   const startIso = selectedStartTime || weatherData?.forecastStartTime || null;
@@ -277,8 +313,9 @@ const buildContingencyAssessment = ({
   const returnMs = startMs + windowHours * HOUR;
   const allRows = mergeRows(trend, afterWindowTrend);
   const windowRows = selectForecastIntervals(trend, startIso, windowHours).map(normalizeRow);
-  const delayBuffer = buildDelayBuffer({ allRows, windowRows, returnMs, bufferHours: resolveDelayBufferHours(windowHours) });
-  const overnight = buildOvernight({ allRows, returnMs, windowHours, winterTerrain: Boolean(winterTerrain) });
+  const sun = buildSunClock({ solarData, timeZone: weatherData?.timezone, anchorIso: startIso });
+  const delayBuffer = buildDelayBuffer({ allRows, windowRows, returnMs, bufferHours: resolveDelayBufferHours(windowHours), sun });
+  const overnight = buildOvernight({ allRows, returnMs, windowHours, winterTerrain: Boolean(winterTerrain), sun });
   const coverage = delayBuffer.coveredHours > 0 || overnight.status === 'ok';
 
   return {
