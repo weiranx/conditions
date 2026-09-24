@@ -72,6 +72,9 @@
 .sky-approach-note button { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .sky-approach-note button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 2px; }
 .sky-hero .sky-approach-note { color: rgba(255, 255, 255, 0.9); }
+/* Route checkpoints over the user's limits: same note, marked as a caution. */
+.sky-route-note > svg { color: var(--sky-caution); opacity: 1; }
+.sky-hero .sky-route-note > svg { color: #FF9A4D; }
 .sky-hint { position: absolute; right: 24px; bottom: calc(var(--sky-ridge) + 8px); font-size: 12px; color: rgba(255, 255, 255, 0.8); pointer-events: none; }
 .sky-temp { font: 600 16px var(--f-font); }
 .sky-hour { font: 500 12px var(--f-font); }
@@ -194,6 +197,12 @@
 .sky-sh p { margin: 0; font-size: 14px; color: var(--sky-secondary); }
 .sky-nums { display: grid; grid-template-columns: 1.1fr 1fr 1.15fr; gap: 14px; }
 .sky-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+/* The planned route leads the checks across a full row. */
+.sky-check.is-route { grid-column: 1 / -1; }
+.sky-route-check-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.sky-route-check-name strong { font-size: 18px; font-weight: 600; color: var(--sky-label); overflow-wrap: anywhere; }
+.sky-route-strip { display: block; width: 100%; }
+.sky-checks .sky-route-strip .sky-viz { max-width: none; }
 .sky-pack { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 
 .sky-card {

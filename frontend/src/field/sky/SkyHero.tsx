@@ -94,7 +94,14 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   const [heroHeight, setHeroHeight] = useState(640);
   useEffect(() => {
     const el = ref.current;
-    if (el) setHeroHeight(el.getBoundingClientRect().height || 640);
+    if (!el) return;
+    const measure = () => setHeroHeight(el.getBoundingClientRect().height || 640);
+    measure();
+    // Notes can arrive after the first paint (a route analysis finishing, for one).
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [ref, width, headline, reason]);
   const horizon = heroHeight - ridge + 18;
   const peak = heroHeight - ridge - scene + 26;
@@ -251,7 +258,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
                     <rect className="sky-approach-mark" x={x(i) + 1.5} y={stripY + 12} width={Math.max(1, cw - 3)} height="2" rx="1" fill="rgba(255,255,255,.6)" />
                   )}
                   {showTick && <text x={x(i + 0.5)} y={stripY + 32} textAnchor="middle" className="sky-temp" fill={cold ? "#9fd0ff" : "#fff"}>
-                    {Number.isFinite(h.temp) ? `${Math.round(h.temp)}°` : "—"}
+                    {Number.isFinite(h.temp) ? format.temp(h.temp).replace(/°[FC]$/, "°") : "—"}
                   </text>}
                   {showTick && <text x={x(i + 0.5)} y={stripY + 52} textAnchor="middle" className="sky-hour" fill={over ? "#FF9A4D" : "rgba(255,255,255,.72)"} fontWeight={over ? 700 : 500}>
                     {shortHour(h.minute, format.timeStyle)}

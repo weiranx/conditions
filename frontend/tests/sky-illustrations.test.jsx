@@ -64,7 +64,7 @@ test("snow columns never draw a missing reading as zero snow", () => {
   assert.equal((html.match(/class="sc-snow"/g) || []).length, 1);
   assert.match(html, /sc-empty/);
   assert.match(html, />No reading</);
-  assert.match(html, /SNOTEL station: 30 in deep, 8 in of water\. NOHRSC model: depth unavailable\./);
+  assert.match(html, /SNOTEL station: 30 in deep, 8.0 in of water\. NOHRSC model: depth unavailable\./);
   assert.match(html, />Knee</, "body heights below the deepest reading are drawn");
   assert.doesNotMatch(html, />Chest</, "and ones far above it are left out");
 });
