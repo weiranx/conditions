@@ -5,14 +5,14 @@
 .sky-report :focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
 
 /* ---------- Brand ---------- */
-/* The app icon in miniature: the mint ridge on its forest tile, lit from above. The second
+/* The app icon in miniature: the mint ridge on its flat forest tile. The second
    selector outranks the older sidebar stylesheets; --brand-tile sets the size. */
 :is(.sky-brand-tile, .field-app .field-brand > .sky-brand-tile) {
   display: inline-grid; place-items: center; flex: none;
   width: var(--brand-tile, 32px); height: var(--brand-tile, 32px); padding: 0; border: 0; border-radius: 28%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%), var(--sky-brand-tile);
+  background: var(--sky-brand-tile);
   color: var(--sky-brand-line);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09), 0 1px 2px rgba(8, 24, 16, 0.2), 0 6px 14px -6px rgba(8, 24, 16, 0.5);
+  box-shadow: none;
 }
 .sky-brand-tile svg { width: 62%; height: 62%; }
 
@@ -95,17 +95,17 @@
   border-radius: 999px; border: 0; font-size: 14px; font-weight: 500; cursor: pointer; list-style: none;
 }
 .sky-report .field-report-actions summary::-webkit-details-marker { display: none; }
-/* Glass keys over the sky: a frosted fill and a bright hairline edge. */
+/* Glass keys over the sky: a frosted fill and a bright hairline edge, no drop shadow. */
 .sky-hero .field-report-actions > button,
 .sky-hero .field-report-actions summary {
   background: rgba(255, 255, 255, 0.16); color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24), 0 6px 16px -10px rgba(0, 10, 24, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
   -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
   transition: background-color 0.15s ease;
 }
 .sky-hero .field-report-actions > button:hover:not(:disabled),
 .sky-hero .field-report-actions summary:hover { background: rgba(255, 255, 255, 0.26); }
-.sky-hero .field-report-actions > button.is-prominent { background: #fff; color: #1e5a43; font-weight: 600; box-shadow: 0 8px 20px -10px rgba(0, 10, 24, 0.6); }
+.sky-hero .field-report-actions > button.is-prominent { background: #fff; color: #1e5a43; font-weight: 600; box-shadow: none; }
 .sky-hero .field-report-actions > button.is-prominent:hover:not(:disabled) { background: #f1f6f3; }
 .sky-chapter-head .field-report-actions > button,
 .sky-chapter-head .field-report-actions summary { background: var(--sky-raised); color: var(--sky-label); box-shadow: var(--sky-raised-shadow); }
@@ -113,7 +113,7 @@
 .sky-chapter-head .field-report-actions summary:hover { background: var(--sky-raised-hover); }
 .sky-chapter-head .field-report-actions > button.is-prominent {
   background: var(--sky-accent-fill); color: var(--sky-on-accent); font-weight: 600;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 1px color-mix(in srgb, var(--sky-accent) 82%, #000), 0 8px 18px -10px var(--sky-accent-glow);
+  box-shadow: none;
 }
 .sky-chapter-head .field-report-actions > button.is-prominent:hover:not(:disabled) { background: var(--sky-accent-fill-hover); }
 .sky-report .field-report-actions button:disabled { opacity: 0.6; cursor: default; }
