@@ -112,10 +112,14 @@ ROLLBACK_IMAGE=summitsafe-backend:rollback
 rollback_available=false
 
 if [ "$NO_BUILD" = false ]; then
-  # Keep the running release's image so an unhealthy build can be reverted
-  # without a rebuild. The first deployment on a host has nothing to keep.
-  if docker image inspect "$BACKEND_IMAGE" >/dev/null 2>&1; then
-    docker image tag "$BACKEND_IMAGE" "$ROLLBACK_IMAGE"
+  # Keep the image of the backend that is actually running, so an unhealthy
+  # build can be reverted without a rebuild. :latest is not used because an
+  # earlier release may have built it and then failed before restarting. With
+  # no running backend (first deployment) there is nothing known-good to keep.
+  running_backend="$(docker compose ps --quiet backend 2>/dev/null || true)"
+  if [ -n "$running_backend" ]; then
+    running_image="$(docker inspect --format '{{.Image}}' "$running_backend")"
+    docker image tag "$running_image" "$ROLLBACK_IMAGE"
     rollback_available=true
   fi
   echo "==> Building backend image..."
