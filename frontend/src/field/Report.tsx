@@ -165,7 +165,7 @@ export function Report({
       analysis: w.routeAnalysis,
       // Analysis waits for a loading account before it starts.
       checking: w.routeLoadingState?.kind === "analysis"
-        ? { checkpointCount: w.routeLoadingState.checkpointCount }
+        ? { checkpointCount: w.routeLoadingState.checkpointCount, routeName: w.routeLoadingState.routeName }
         : w.accountLoading && !w.viewingHistoryReport ? {} : null,
       error: w.routeError,
       limits: w.preferences,

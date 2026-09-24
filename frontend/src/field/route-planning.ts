@@ -100,12 +100,17 @@ export type PlannedRouteSummary =
     gainFt: number | null;
   };
 
+/** The analysis's own route name wins over the plan's, which may have been renamed since. */
+function routeLabel(name: string, analysis: RouteAnalysisResult | null): string {
+  return analysis?.routeName?.trim() || name.trim() || analysis?.routeSourceDetails?.matchedName?.trim() || "";
+}
+
 export function summarizePlannedRoute({ name, analysis, checking, error, limits, signedIn, available, saved }: {
   /** The route chosen in the plan; empty when none is. */
   name: string;
   analysis: RouteAnalysisResult | null;
   /** Set while this route's checkpoints are being analyzed (or the account that may analyze them is loading). */
-  checking: { checkpointCount?: number } | null;
+  checking: { checkpointCount?: number; routeName?: string } | null;
   error: string | null;
   limits: Limits;
   signedIn: boolean;
@@ -114,10 +119,10 @@ export function summarizePlannedRoute({ name, analysis, checking, error, limits,
   /** A saved snapshot, which can't be analyzed again. */
   saved: boolean;
 }): PlannedRouteSummary | null {
-  const label = name.trim() || analysis?.routeSourceDetails?.matchedName?.trim() || (analysis ? "Your route" : "");
+  const label = routeLabel(name, analysis) || (analysis ? "Your route" : "");
   if (!label) return null;
   if (!analysis) {
-    if (checking) return { state: "checking", name: label, checkpointCount: checking.checkpointCount ?? null };
+    if (checking) return { state: "checking", name: checking.routeName?.trim() || label, checkpointCount: checking.checkpointCount ?? null };
     const reason = error ? "failed" : saved ? "saved" : !available ? "unavailable" : !signedIn ? "sign-in" : "not-run";
     return { state: "unchecked", name: label, reason };
   }
@@ -172,7 +177,7 @@ export function buildRouteReportContext(name: string, analysis: RouteAnalysisRes
   const number = (value: unknown) => (hasRouteNumber(value) ? value : null);
   const meta = analysis.routeMetadata;
   return {
-    name: name.trim() || analysis.routeSourceDetails?.matchedName || null,
+    name: routeLabel(name, analysis) || null,
     source: analysis.routeSourceDetails?.sourceLabel || analysis.routeSource || null,
     basis: "Point forecasts at each checkpoint for its estimated arrival time. The decision level uses the objective's hourly forecast, not these.",
     distanceMiles: number(meta?.distanceMiles),

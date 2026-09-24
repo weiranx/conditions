@@ -29,6 +29,15 @@ test("no route is summarized when the plan has neither a route name nor an analy
   assert.equal(summarize({ name: "" , analysis: analysis([stop()]) }).name, "Your route");
 });
 
+test("an analysis keeps the route name it was run for when the plan's route is renamed", () => {
+  const result = analysis([stop()], { routeName: "East Ridge" });
+  assert.equal(summarize({ name: "West Face", analysis: result }).name, "East Ridge");
+  assert.equal(buildRouteReportContext("West Face", result).name, "East Ridge");
+  assert.equal(summarize({ name: "West Face", checking: { routeName: "East Ridge" } }).name, "East Ridge");
+  // Analyses saved before the name was stored fall back to the plan's route.
+  assert.equal(summarize({ name: "West Face", analysis: analysis([stop()]) }).name, "West Face");
+});
+
 test("an unanalyzed route says whether it is being checked and why it was not", () => {
   assert.deepEqual(summarize({ checking: { checkpointCount: 5 } }), { state: "checking", name: "East Ridge", checkpointCount: 5 });
   assert.equal(summarize({ error: "Timed out" }).reason, "failed");
