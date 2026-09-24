@@ -13,6 +13,7 @@ import {
   formatWindForUnit,
   freshnessClass,
   isTravelWindowCoveredByAlertWindow,
+  parseOptionalFiniteNumber,
   parseSolarClockMinutes,
   parseTimeInputMinutes,
   pickNewestIsoTimestamp,
@@ -114,6 +115,8 @@ export function evaluateBackcountryDecision(
   let feelsLike: number | null = approach && Number.isFinite(startPoint.temp)
     ? computeFeelsLikeF(startPoint.temp, Number.isFinite(startPoint.wind) ? startPoint.wind : 0)
     : data.weather.feelsLike ?? data.weather.temp ?? null;
+  // Coldest feels-like drives the cold check; the hottest drives the heat check.
+  let peakFeelsLike = feelsLike;
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const weatherUnavailable = /weather data unavailable/i.test(description);
   if (weatherUnavailable) {
@@ -138,10 +141,14 @@ export function evaluateBackcountryDecision(
     if (wg > gust) { gust = wg; peakGustHour = wpt.time || ''; }
     const wp = Number.isFinite(Number(wpt.precipChance)) ? Number(wpt.precipChance) : 0;
     if (wp > precip) { precip = wp; peakPrecipHour = wpt.time || ''; }
-    const wt = Number.isFinite(Number(wpt.temp)) ? Number(wpt.temp) : 0;
+    // A missing temperature is unknown, not 0 °F (Number(null) is 0).
+    const wt = parseOptionalFiniteNumber(wpt.temp);
     const ww = Number.isFinite(Number(wpt.wind)) ? Number(wpt.wind) : 0;
-    const wfl = computeFeelsLikeF(wt, ww);
-    if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; coldestIsInversion = hasInversion(wpt); }
+    if (Number.isFinite(wt)) {
+      const wfl = computeFeelsLikeF(wt, ww);
+      if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; coldestIsInversion = hasInversion(wpt); }
+      if (peakFeelsLike === null || wfl > peakFeelsLike) peakFeelsLike = wfl;
+    }
     if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
       hasStormSignal = true;
       stormSignalHour = wpt.time || '';
@@ -276,9 +283,10 @@ export function evaluateBackcountryDecision(
     addCaution(`Wind gusts reach about ${formatWind(gust)}. Shorten ridge exposure, secure loose gear, and use a firm turnaround if balance or communication becomes difficult.`);
   }
 
-  if (feelsLike !== null && feelsLike >= 95) {
-    addBlocker(`Apparent temperature reaches about ${formatTemp(feelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
-  } else if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
+  if (peakFeelsLike !== null && peakFeelsLike >= 95) {
+    addBlocker(`Apparent temperature reaches about ${formatTemp(peakFeelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
+  }
+  if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
     addCaution(`Apparent temperature falls near ${formatTemp(feelsLike)}${coldestIsInversion ? `${coldestFeelsLikeHour ? ` at ${coldestFeelsLikeHour}` : ''} near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit` : ''}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
   }
 

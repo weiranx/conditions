@@ -75,6 +75,18 @@ test('departure comparisons reuse the current report and fetch only added times 
   }
 });
 
+test('departure comparisons check a return past midnight on the start day', async t => {
+  const longDay = { ...preferences, travelWindowHours: 16 };
+  const h = await mountHook(t, useStartTimeScenarios, props({ preferences: longDay, sourceReport: makeReport({ ...plan, travel_window_hours: 16 }, 'clear') }));
+  await respondAll(h.requests);
+  const daylight = startTime => h.current.comparison.scenarios
+    .find(scenario => scenario.startTime === startTime).decision.checks.find(check => check.key === 'daylight');
+  // 08:00 + 16 h returns at midnight, long after the 7:30 PM sunset; it is not a morning finish.
+  assert.equal(daylight('08:00').ok, false);
+  assert.match(daylight('08:00').detail, /back by 23:59/);
+  assert.equal(daylight('04:00').ok, false);
+});
+
 for (const identity of ['date', 'location', 'start', 'duration', 'missing start', 'missing duration']) {
   test(`the current departure is fetched when its source has ${identity} identity uncertainty`, async t => {
     const input = props();

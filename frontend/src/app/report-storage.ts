@@ -9,7 +9,7 @@ import { hasStoredUserPreferences, normalizeUserPreferences } from './preference
 import type { SafetyData, UserPreferences } from './types';
 import { buildSafetyRequestKey } from './url-state';
 import type { RouteAnalysisResult, RouteOption } from '../hooks/useRouteAnalysis';
-import type { GpxCheckpoint, GpxTrackPoint, ParsedGpxRoute } from '../lib/gpx';
+import { MAX_DISPLAY_TRACK_POINTS, type GpxCheckpoint, type GpxTrackPoint, type ParsedGpxRoute } from '../lib/gpx';
 
 const PERSISTED_REPORT_VERSION = 3;
 
@@ -145,7 +145,8 @@ function parseGpxRoute(value: unknown): ParsedGpxRoute | null {
     || !Array.isArray(value.displayTrack)
     || value.checkpoints.length < 2
     || value.displayTrack.length < 2
-    || value.displayTrack.length > 500
+    // Imports before the limit was enforced could keep one extra end point.
+    || value.displayTrack.length > MAX_DISPLAY_TRACK_POINTS + 1
   ) return null;
 
   const elevationGainFt = parseNullableNumber(value.elevationGainFt);

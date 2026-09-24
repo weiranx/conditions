@@ -9,8 +9,12 @@ const computeFeelsLikeF = (tempF, windMph) => {
   return Math.round(tempF);
 };
 
+// NOAA sends a missing quantity as { value: null }, and Number(null) is 0.
+// A missing reading must stay missing rather than become 0 (or 32 °F).
+const toNumber = (value) => (value === null || value === undefined || value === '' ? Number.NaN : Number(value));
+
 const celsiusToF = (valueC) => {
-  const numeric = Number(valueC);
+  const numeric = toNumber(valueC);
   if (!Number.isFinite(numeric)) {
     return null;
   }
@@ -18,7 +22,7 @@ const celsiusToF = (valueC) => {
 };
 
 const normalizeNoaaDewPointF = (dewpointField) => {
-  const value = Number(dewpointField?.value);
+  const value = toNumber(dewpointField?.value);
   if (!Number.isFinite(value)) {
     return null;
   }
@@ -31,7 +35,7 @@ const normalizeNoaaDewPointF = (dewpointField) => {
 };
 
 const normalizePressureHpa = (value) => {
-  const numeric = Number(value);
+  const numeric = toNumber(value);
   if (!Number.isFinite(numeric)) {
     return null;
   }
@@ -46,7 +50,7 @@ const normalizeNoaaPressureHpa = (barometricPressureField) => {
     return normalizePressureHpa(barometricPressureField > 2000 ? barometricPressureField / 100 : barometricPressureField);
   }
 
-  const rawValue = Number(barometricPressureField?.value);
+  const rawValue = toNumber(barometricPressureField?.value);
   if (!Number.isFinite(rawValue)) {
     return null;
   }
@@ -61,7 +65,7 @@ const normalizeNoaaPressureHpa = (barometricPressureField) => {
 };
 
 const clampPercent = (value) => {
-  const numeric = Number(value);
+  const numeric = toNumber(value);
   if (!Number.isFinite(numeric)) {
     return null;
   }
@@ -116,7 +120,7 @@ const resolveNoaaCloudCover = (forecastPeriod) => {
 };
 
 const toFiniteNumberOrNull = (value) => {
-  const numeric = Number(value);
+  const numeric = toNumber(value);
   return Number.isFinite(numeric) ? numeric : null;
 };
 

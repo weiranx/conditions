@@ -3,6 +3,8 @@ const METERS_PER_MILE = 1609.344;
 const MAX_GPX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_TRACK_POINTS = 100_000;
 const DEFAULT_CHECKPOINT_COUNT = 5;
+/** Most points kept in a route's display track, as saved with reports. */
+export const MAX_DISPLAY_TRACK_POINTS = 500;
 
 type ParsedTrackPoint = {
   lat: number;
@@ -177,9 +179,11 @@ function chooseCheckpoints(points: ParsedTrackPoint[], totalDistanceMeters: numb
 }
 
 function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: number): GpxTrackPoint[] {
-  const maxDisplayPoints = 500;
-  const stride = Math.max(1, Math.ceil(points.length / maxDisplayPoints));
+  const stride = Math.max(1, Math.ceil(points.length / MAX_DISPLAY_TRACK_POINTS));
   const selected = points.filter((_, index) => index === 0 || index === points.length - 1 || index % stride === 0);
+  // Keeping the end point can put a strided track one over the limit (1,000
+  // points at stride 2 is 500 samples plus the end); drop the sample before it.
+  if (selected.length > MAX_DISPLAY_TRACK_POINTS) selected.splice(selected.length - 2, 1);
   return selected.map((point, index) => ({
     lat: Number(point.lat.toFixed(6)),
     lon: Number(point.lon.toFixed(6)),

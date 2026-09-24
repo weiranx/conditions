@@ -341,6 +341,7 @@ test('each reading covers the part of the trip its own clock time falls in', () 
   assert.deepEqual(readingMinutesAfterStart('6 AM', '05:30', 1), { from: 30, to: 90 });
   assert.deepEqual(readingMinutesAfterStart('05:00', '05:00', 0), { from: 0, to: 60 });
   assert.deepEqual(readingMinutesAfterStart('00:00', '23:00', 1), { from: 60, to: 120 }, 'past midnight');
+  assert.deepEqual(readingMinutesAfterStart('05:00', '06:00', 23), { from: 1380, to: 1440 }, 'last hour of a 24-hour plan');
   assert.deepEqual(readingMinutesAfterStart('Unavailable', '05:30', 2), { from: 120, to: 180 });
 });
 

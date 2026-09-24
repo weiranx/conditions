@@ -157,18 +157,20 @@ describe('clampTravelWindowHours', () => {
     expect(clampTravelWindowHours(24)).toBe(24);
   });
 
-  test('uses fallback only for non-finite input (NaN-producing values like undefined or bad strings)', () => {
-    // null coerces to 0 in JS (Number(null) === 0), so it clamps to 1, not fallback
-    expect(clampTravelWindowHours(null)).toBe(1);
-    // undefined produces NaN -> fallback applies
+  test('uses fallback for missing or non-numeric input', () => {
+    // A missing value takes the fallback even though Number(null) === 0
+    expect(clampTravelWindowHours(null)).toBe(12);
     expect(clampTravelWindowHours(undefined)).toBe(12);
+    expect(clampTravelWindowHours('')).toBe(12);
+    expect(clampTravelWindowHours('  ')).toBe(12);
     expect(clampTravelWindowHours('bad')).toBe(12);
   });
 
-  test('clamps null to 1 (null coerces to 0, clamped to minimum of 1)', () => {
-    // custom fallback only applies for NaN-producing inputs, not null
-    expect(clampTravelWindowHours(null, 8)).toBe(1);
+  test('applies a custom fallback to null, undefined and blank input', () => {
+    expect(clampTravelWindowHours(null, 8)).toBe(8);
     expect(clampTravelWindowHours(undefined, 8)).toBe(8);
+    expect(clampTravelWindowHours('', 8)).toBe(8);
+    expect(clampTravelWindowHours('0', 8)).toBe(1);
   });
 
   test('rounds fractional hours', () => {
@@ -304,9 +306,9 @@ describe('celsiusToF', () => {
     expect(celsiusToF(-40)).toBe(-40);
   });
 
-  test('returns null for NaN-producing inputs; note null coerces to 0 (32F)', () => {
-    // null -> Number(null) = 0 -> finite -> returns 32 (0°C = 32°F)
-    expect(celsiusToF(null)).toBe(32);
+  test('returns null for missing or NaN-producing inputs', () => {
+    // A missing reading is not 0°C = 32°F, even though Number(null) === 0
+    expect(celsiusToF(null)).toBeNull();
     // non-numeric strings produce NaN -> null
     expect(celsiusToF('warm')).toBeNull();
     // undefined -> NaN -> null
@@ -325,13 +327,11 @@ describe('normalizeNoaaDewPointF', () => {
     expect(result).toBe(45);
   });
 
-  test('returns null for non-finite value; null coerces to 0 (treated as 0°F dew point)', () => {
+  test('returns null for a missing or non-finite value', () => {
     expect(normalizeNoaaDewPointF(null)).toBeNull();
-    // { value: null } -> Number(null) = 0 -> IS finite, unitCode '' -> Math.round(0) = 0
-    // (no unit conversion: treated as 0°F, not 0°C)
-    expect(normalizeNoaaDewPointF({ value: null })).toBe(0);
-    // With Celsius unit, 0°C -> 32°F
-    expect(normalizeNoaaDewPointF({ value: null, unitCode: 'wmoUnit:degC' })).toBe(32);
+    // NOAA sends a missing dew point as { value: null }: it stays missing, not 0°F or 0°C = 32°F
+    expect(normalizeNoaaDewPointF({ value: null })).toBeNull();
+    expect(normalizeNoaaDewPointF({ value: null, unitCode: 'wmoUnit:degC' })).toBeNull();
     // { value: 'abc' } -> Number('abc') = NaN -> NOT finite -> returns null
     expect(normalizeNoaaDewPointF({ value: 'abc' })).toBeNull();
   });
@@ -343,9 +343,9 @@ describe('normalizePressureHpa', () => {
     expect(normalizePressureHpa(1013.15)).toBe(1013.2);
   });
 
-  test('returns 0 for null (null coerces to 0) and null for non-numeric strings', () => {
-    // Number(null) = 0 -> finite -> returns 0
-    expect(normalizePressureHpa(null)).toBe(0);
+  test('returns null for missing values and non-numeric strings', () => {
+    // A missing reading is not 0 hPa, even though Number(null) === 0
+    expect(normalizePressureHpa(null)).toBeNull();
     // Number('high') = NaN -> not finite -> returns null
     expect(normalizePressureHpa('high')).toBeNull();
     expect(normalizePressureHpa(undefined)).toBeNull();
@@ -369,10 +369,9 @@ describe('normalizeNoaaPressureHpa', () => {
     expect(normalizeNoaaPressureHpa(1013.1)).toBe(1013.1);
   });
 
-  test('returns null for explicit null input; value:null field coerces to 0', () => {
+  test('returns null for explicit null input and a missing { value: null } quantity', () => {
     expect(normalizeNoaaPressureHpa(null)).toBeNull();
-    // { value: null } -> Number(null) = 0 -> finite -> normalized to 0
-    expect(normalizeNoaaPressureHpa({ value: null })).toBe(0);
+    expect(normalizeNoaaPressureHpa({ value: null })).toBeNull();
     // { value: 'bad' } -> NaN -> null
     expect(normalizeNoaaPressureHpa({ value: 'bad' })).toBeNull();
   });
@@ -390,9 +389,9 @@ describe('clampPercent', () => {
     expect(clampPercent(50.4)).toBe(50);
   });
 
-  test('clamps null to 0 (null coerces to 0); returns null for non-numeric strings', () => {
-    // Number(null) = 0 -> finite -> Math.max(0, Math.min(100, 0)) = 0
-    expect(clampPercent(null)).toBe(0);
+  test('returns null for missing values and non-numeric strings', () => {
+    // A missing reading is not 0%, even though Number(null) === 0
+    expect(clampPercent(null)).toBeNull();
     // Number('abc') = NaN -> not finite -> null
     expect(clampPercent('abc')).toBeNull();
     expect(clampPercent(undefined)).toBeNull();
@@ -474,8 +473,6 @@ describe('resolveNoaaCloudCover', () => {
   });
 
   test('falls back to icon when skyCover field is entirely absent', () => {
-    // Note: { value: null } -> clampPercent(null) = 0 (not null), so skyCover 0 wins.
-    // To trigger icon fallback, skyCover must be absent or the whole field undefined.
     const period = {
       skyCover: undefined,
       icon: 'https://api.weather.gov/icons/land/day/ovc',
@@ -484,14 +481,13 @@ describe('resolveNoaaCloudCover', () => {
     expect(resolveNoaaCloudCover(period).source).toContain('icon');
   });
 
-  test('skyCover { value: null } coerces to 0 and takes priority over icon', () => {
-    // This documents the JS null-coercion behavior: Number(null) = 0, which is finite.
+  test('a missing skyCover { value: null } falls back to the icon instead of reading 0%', () => {
     const period = {
       skyCover: { value: null },
       icon: 'https://api.weather.gov/icons/land/day/ovc',
     };
-    expect(resolveNoaaCloudCover(period).value).toBe(0);
-    expect(resolveNoaaCloudCover(period).source).toBe('NOAA skyCover');
+    expect(resolveNoaaCloudCover(period).value).toBe(95);
+    expect(resolveNoaaCloudCover(period).source).toContain('icon');
   });
 
   test('falls back to text inference when icon is unrecognized', () => {
@@ -519,10 +515,10 @@ describe('toFiniteNumberOrNull', () => {
     expect(toFiniteNumberOrNull(0)).toBe(0);
   });
 
-  test('returns 0 for null (coerces to finite 0); returns null for truly non-finite inputs', () => {
-    // Number(null) = 0 -> finite -> returns 0
-    expect(toFiniteNumberOrNull(null)).toBe(0);
-    // These produce NaN or Infinity -> not finite -> null
+  test('returns null for missing and non-finite inputs', () => {
+    // A missing reading is not 0, even though Number(null) === 0
+    expect(toFiniteNumberOrNull(null)).toBeNull();
+    expect(toFiniteNumberOrNull('')).toBeNull();
     expect(toFiniteNumberOrNull(undefined)).toBeNull();
     expect(toFiniteNumberOrNull('abc')).toBeNull();
     expect(toFiniteNumberOrNull(Infinity)).toBeNull();

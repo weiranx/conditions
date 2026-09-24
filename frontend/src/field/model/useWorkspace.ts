@@ -1975,6 +1975,8 @@ export function useWorkspace() {
     travelWindowHours,
     targetElevationInput,
     setTargetElevationInput,
+    trailheadElevationInput,
+    setTrailheadElevationInput,
     onApplyToPlanner: useCallback(() => {
       setAlpineStartTime(preferences.defaultStartTime);
       navigateToView("planner");

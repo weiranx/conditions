@@ -142,7 +142,9 @@ const parseIsoClockMinutes = (isoValue) => {
 };
 
 const clampTravelWindowHours = (rawValue, fallback = 12) => {
-  const numeric = Number(rawValue);
+  // Number(null) and Number('') are 0; an absent value takes the fallback, not 1 hour.
+  const present = typeof rawValue === 'number' || (typeof rawValue === 'string' && rawValue.trim() !== '');
+  const numeric = present ? Number(rawValue) : Number.NaN;
   if (!Number.isFinite(numeric)) {
     return fallback;
   }

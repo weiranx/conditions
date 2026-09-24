@@ -7,7 +7,13 @@ export function useWidth<T extends HTMLElement>(fallback: number) {
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
+    // A hidden element (display: none, or a subtree hidden while a lazy chunk
+    // loads) measures 0 wide. Keep the last real width rather than laying the
+    // chart out at zero, which yields Infinity gradient offsets and negative radii.
+    const observer = new ResizeObserver(([entry]) => {
+      const next = Math.round(entry.contentRect.width);
+      if (next > 0) setWidth(next);
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
