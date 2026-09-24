@@ -8,8 +8,20 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#173723" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Browser bars take the page background; the app retints them when its own theme setting differs. -->
+    <meta name="theme-color" content="#f2f3f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1211" media="(prefers-color-scheme: dark)" />
+    <!-- viewport-fit=cover lets the layout pad for the home indicator and notch with env(safe-area-inset-*). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <style>
+      /* First paint, until the app applies its theme: no white flash in dark mode. */
+      html:not([data-theme]) { background: #f2f3f1; color: #18201c; }
+      body { margin: 0; }
+      .loading-state { padding: 24px 16px; font: 15px/1.5 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme]) { background: #0f1211; color: #eceeed; }
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

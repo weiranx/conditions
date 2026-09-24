@@ -41,6 +41,9 @@ export interface UsePreferenceHandlersParams {
   travelWindowHours: number;
   targetElevationInput: string;
   setTargetElevationInput: React.Dispatch<React.SetStateAction<string>>;
+  /** Trailhead elevation typed in the current elevation unit. */
+  trailheadElevationInput?: string;
+  setTrailheadElevationInput?: React.Dispatch<React.SetStateAction<string>>;
   onApplyToPlanner: () => void;
   persistLocally: boolean;
   onPreferencesChange?: (preferences: UserPreferences) => void;
@@ -98,6 +101,8 @@ export function usePreferenceHandlers({
   travelWindowHours,
   targetElevationInput,
   setTargetElevationInput,
+  trailheadElevationInput,
+  setTrailheadElevationInput,
   onApplyToPlanner,
   persistLocally,
   onPreferencesChange,
@@ -195,14 +200,26 @@ export function usePreferenceHandlers({
     if (elevationUnit === preferences.elevationUnit) {
       return;
     }
-    const parsed = parseOptionalElevationInput(targetElevationInput);
-    if (parsed !== null) {
+    // Typed elevations are in the display unit; keep the same height in the new one.
+    const convertInput = (input: string) => {
+      const parsed = parseOptionalElevationInput(input);
+      if (parsed === null) return null;
       const asFeet = convertDisplayElevationToFeet(parsed, preferences.elevationUnit);
-      const nextDisplay = convertElevationFeetToDisplayValue(asFeet, elevationUnit);
-      setTargetElevationInput(String(Math.max(0, Math.round(nextDisplay))));
-    }
+      return String(Math.max(0, Math.round(convertElevationFeetToDisplayValue(asFeet, elevationUnit))));
+    };
+    const nextTarget = convertInput(targetElevationInput);
+    if (nextTarget !== null) setTargetElevationInput(nextTarget);
+    const nextTrailhead = convertInput(trailheadElevationInput ?? '');
+    if (nextTrailhead !== null) setTrailheadElevationInput?.(nextTrailhead);
     updatePreferences({ elevationUnit });
-  }, [preferences.elevationUnit, targetElevationInput, setTargetElevationInput, updatePreferences]);
+  }, [
+    preferences.elevationUnit,
+    targetElevationInput,
+    setTargetElevationInput,
+    trailheadElevationInput,
+    setTrailheadElevationInput,
+    updatePreferences,
+  ]);
 
   const handleTimeStyleChange = useCallback((timeStyle: TimeStyle) => {
     updatePreferences({ timeStyle });

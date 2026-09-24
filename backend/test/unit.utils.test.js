@@ -157,17 +157,20 @@ describe('clampTravelWindowHours', () => {
     expect(clampTravelWindowHours(24)).toBe(24);
   });
 
-  test('uses the fallback for missing or non-numeric input', () => {
-    // An absent window is not 0 hours clamped up to 1.
+  test('uses fallback for missing or non-numeric input', () => {
+    // A missing value takes the fallback even though Number(null) === 0
     expect(clampTravelWindowHours(null)).toBe(12);
-    expect(clampTravelWindowHours('')).toBe(12);
     expect(clampTravelWindowHours(undefined)).toBe(12);
+    expect(clampTravelWindowHours('')).toBe(12);
+    expect(clampTravelWindowHours('  ')).toBe(12);
     expect(clampTravelWindowHours('bad')).toBe(12);
   });
 
-  test('applies a custom fallback to missing input', () => {
+  test('applies a custom fallback to null, undefined and blank input', () => {
     expect(clampTravelWindowHours(null, 8)).toBe(8);
     expect(clampTravelWindowHours(undefined, 8)).toBe(8);
+    expect(clampTravelWindowHours('', 8)).toBe(8);
+    expect(clampTravelWindowHours('0', 8)).toBe(1);
   });
 
   test('rounds fractional hours', () => {
@@ -303,10 +306,11 @@ describe('celsiusToF', () => {
     expect(celsiusToF(-40)).toBe(-40);
   });
 
-  test('returns null for missing or non-numeric input', () => {
-    // A missing reading must not become 0 °C = 32 °F.
+  test('returns null for missing or NaN-producing inputs', () => {
+    // A missing reading is not 0°C = 32°F, even though Number(null) === 0
     expect(celsiusToF(null)).toBeNull();
     expect(celsiusToF('')).toBeNull();
+    // non-numeric strings produce NaN -> null
     expect(celsiusToF('warm')).toBeNull();
     expect(celsiusToF(undefined)).toBeNull();
   });
@@ -323,10 +327,12 @@ describe('normalizeNoaaDewPointF', () => {
     expect(result).toBe(45);
   });
 
-  test('returns null when the reading is missing or non-numeric', () => {
+  test('returns null for a missing or non-finite value', () => {
     expect(normalizeNoaaDewPointF(null)).toBeNull();
+    // NOAA sends a missing dew point as { value: null }: it stays missing, not 0°F or 0°C = 32°F
     expect(normalizeNoaaDewPointF({ value: null })).toBeNull();
     expect(normalizeNoaaDewPointF({ value: null, unitCode: 'wmoUnit:degC' })).toBeNull();
+    // { value: 'abc' } -> Number('abc') = NaN -> NOT finite -> returns null
     expect(normalizeNoaaDewPointF({ value: 'abc' })).toBeNull();
   });
 
@@ -341,8 +347,10 @@ describe('normalizePressureHpa', () => {
     expect(normalizePressureHpa(1013.15)).toBe(1013.2);
   });
 
-  test('returns null for missing or non-numeric input', () => {
+  test('returns null for missing values and non-numeric strings', () => {
+    // A missing reading is not 0 hPa, even though Number(null) === 0
     expect(normalizePressureHpa(null)).toBeNull();
+    // Number('high') = NaN -> not finite -> returns null
     expect(normalizePressureHpa('high')).toBeNull();
     expect(normalizePressureHpa(undefined)).toBeNull();
   });
@@ -365,10 +373,11 @@ describe('normalizeNoaaPressureHpa', () => {
     expect(normalizeNoaaPressureHpa(1013.1)).toBe(1013.1);
   });
 
-  test('returns null when the input or its reading is missing', () => {
+  test('returns null for explicit null input and a missing { value: null } quantity', () => {
     expect(normalizeNoaaPressureHpa(null)).toBeNull();
     expect(normalizeNoaaPressureHpa({ value: null })).toBeNull();
     expect(normalizeNoaaPressureHpa({ value: null, unitCode: 'wmoUnit:Pa' })).toBeNull();
+    // { value: 'bad' } -> NaN -> null
     expect(normalizeNoaaPressureHpa({ value: 'bad' })).toBeNull();
   });
 });
@@ -385,8 +394,10 @@ describe('clampPercent', () => {
     expect(clampPercent(50.4)).toBe(50);
   });
 
-  test('returns null for missing or non-numeric input', () => {
+  test('returns null for missing values and non-numeric strings', () => {
+    // A missing reading is not 0%, even though Number(null) === 0
     expect(clampPercent(null)).toBeNull();
+    // Number('abc') = NaN -> not finite -> null
     expect(clampPercent('abc')).toBeNull();
     expect(clampPercent(undefined)).toBeNull();
   });
@@ -475,7 +486,7 @@ describe('resolveNoaaCloudCover', () => {
     expect(resolveNoaaCloudCover(period).source).toContain('icon');
   });
 
-  test('a null skyCover reading falls back to the icon instead of reading as clear', () => {
+  test('a missing skyCover { value: null } falls back to the icon instead of reading 0%', () => {
     const period = {
       skyCover: { value: null },
       icon: 'https://api.weather.gov/icons/land/day/ovc',

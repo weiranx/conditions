@@ -118,6 +118,8 @@ export function evaluateBackcountryDecision(
   let feelsLike: number | null = approach && isFiniteNumber(startPoint.temp)
     ? computeFeelsLikeF(startPoint.temp, isFiniteNumber(startPoint.wind) ? startPoint.wind : 0)
     : data.weather.feelsLike ?? data.weather.temp ?? null;
+  // Coldest feels-like drives the cold check; the hottest drives the heat check.
+  let peakFeelsLike = feelsLike;
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const weatherUnavailable = /weather data unavailable/i.test(description);
   if (weatherUnavailable) {
@@ -143,6 +145,7 @@ export function evaluateBackcountryDecision(
     if (isFiniteNumber(wpt.temp)) {
       const wfl = computeFeelsLikeF(wpt.temp, isFiniteNumber(wpt.wind) ? wpt.wind : 0);
       if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; coldestIsInversion = hasInversion(wpt); }
+      if (peakFeelsLike === null || wfl > peakFeelsLike) peakFeelsLike = wfl;
     }
     if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
       hasStormSignal = true;
@@ -278,9 +281,10 @@ export function evaluateBackcountryDecision(
     addCaution(`Wind gusts reach about ${formatWind(gust)}. Shorten ridge exposure, secure loose gear, and use a firm turnaround if balance or communication becomes difficult.`);
   }
 
-  if (feelsLike !== null && feelsLike >= 95) {
-    addBlocker(`Apparent temperature reaches about ${formatTemp(feelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
-  } else if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
+  if (peakFeelsLike !== null && peakFeelsLike >= 95) {
+    addBlocker(`Apparent temperature reaches about ${formatTemp(peakFeelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
+  }
+  if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
     addCaution(`Apparent temperature falls near ${formatTemp(feelsLike)}${coldestIsInversion ? `${coldestFeelsLikeHour ? ` at ${coldestFeelsLikeHour}` : ''} near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit` : ''}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
   }
 

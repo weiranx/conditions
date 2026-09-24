@@ -142,13 +142,16 @@ const registerTripForecastRoutes = ({
       }));
       const days = results.filter(Boolean);
       if (days.length === 0) {
-        await usageService.finish({
-          reservationId: reservation.reservationId,
-          userId: user?.id,
-          anonymousId,
-          tierKey: accountTier.key,
-          succeeded: false,
-        });
+        // A replayed key belongs to a run that already succeeded; keep it counted.
+        if (!reservation.duplicate) {
+          await usageService.finish({
+            reservationId: reservation.reservationId,
+            userId: user?.id,
+            anonymousId,
+            tierKey: accountTier.key,
+            succeeded: false,
+          });
+        }
         return res.status(502).json({ error: 'Could not load multi-day forecasts right now. Try again in a moment.' });
       }
       const multiDayUsage = await usageService.finish({

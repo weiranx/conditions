@@ -15,6 +15,8 @@ jest.mock('../src/utils/fire-risk', () => {
   return { ...actual, buildFireRiskData: jest.fn(actual.buildFireRiskData) };
 });
 
+const { buildOpenMeteoWeatherApiUrl } = require('../src/utils/weather-data');
+
 const FORECAST_DATE = '2026-07-15';
 
 const buildHourlyPeriods = (count = 36) =>
@@ -120,6 +122,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
   });
 
   test('GET /api/safety overlaps dated secondary sources with the weather request', async () => {
+    const openMeteoWeatherUrl = buildOpenMeteoWeatherApiUrl('api.open-meteo.com', 46.88, -121.7269);
     let releaseHourlyForecast;
     hourlyForecastGate = new Promise((resolve) => {
       releaseHourlyForecast = resolve;
@@ -137,7 +140,9 @@ describe('/api/safety response payload (mocked upstreams)', () => {
           urls.some((url) => url.includes('/gridpoints/MOCK/1,1/forecast/hourly'))
           && urls.some((url) => url.includes('api.sunrisesunset.io'))
           && urls.some((url) => url.includes('api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/'))
-          && urls.some((url) => url.includes('/awdbRestApi/services/v1/stations'));
+          && urls.some((url) => url.includes('/awdbRestApi/services/v1/stations'))
+          && urls.includes(openMeteoWeatherUrl)
+          && urls.some((url) => url.includes('hourly=uv_index%2Cfreezing_level_height'));
         if (startedAllPrefetches) break;
         await new Promise((resolve) => setImmediate(resolve));
       }
@@ -147,6 +152,8 @@ describe('/api/safety response payload (mocked upstreams)', () => {
         expect.stringContaining('api.sunrisesunset.io'),
         expect.stringContaining('api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/'),
         expect.stringContaining('/awdbRestApi/services/v1/stations'),
+        openMeteoWeatherUrl,
+        expect.stringContaining('hourly=uv_index%2Cfreezing_level_height'),
       ]));
     } finally {
       hourlyForecastGate = null;
@@ -224,11 +231,16 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(Array.isArray(res.body.pleasantness.factors)).toBe(true);
   }, 20000);
 
-  test('GET /api/safety uses the documented 12-hour window when travel_window_hours is omitted', async () => {
+  test('GET /api/safety uses the documented 12-hour travel window when none is requested', async () => {
     const res = await request(app)
       .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00`);
     expect(res.status).toBe(200);
     expect(res.body.weather.trend).toHaveLength(12);
+    expect(res.body.pleasantness.coverage.requestedHours).toBe(12);
+
+    const blank = await request(app)
+      .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00&travel_window_hours=`);
+    expect(blank.body.weather.trend).toHaveLength(12);
 
     const explicit = await request(app)
       .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00&travel_window_hours=4`);

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
   Binoculars,
   Compass,
@@ -12,7 +12,8 @@ import {
   Sun,
   type LucideIcon,
 } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { Markdown } from "./Markdown";
+import { preloadMarkdown } from "./markdown-loader";
 import {
   parseExplanation,
   parseSnowAnalysis,
@@ -77,7 +78,7 @@ function Section({
         {tag && <span className="ai-explanation-tag">{tag}</span>}
       </header>
       <div className="field-markdown ai-explanation-copy">
-        <Streamdown mode="static">{section.text}</Streamdown>
+        <Markdown mode="static">{section.text}</Markdown>
       </div>
     </article>
   );
@@ -172,6 +173,8 @@ export function SnowAnalysis({
 }
 
 export function AiExplanationSkeleton() {
+  // Shown while AI text is being written; have the renderer ready for it.
+  useEffect(preloadMarkdown, []);
   return (
     <div className="ai-explanation-skeleton" aria-hidden="true">
       <span />

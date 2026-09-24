@@ -377,18 +377,8 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     },
   });
 
-  const fetchOpenMeteoWeatherFallback = async ({
-    lat,
-    lon,
-    selectedDate,
-    startClock,
-    fetchOptions,
-    objectiveElevationFt,
-    objectiveElevationSource,
-    trendHours,
-  }) => {
-    const cacheKey = normalizeCoordKey(lat, lon);
-    const cachedForecast = await openMeteoWeatherPayloadCache.getOrFetch(cacheKey, async () => {
+  const getOpenMeteoWeatherPayload = (lat, lon, fetchOptions) =>
+    openMeteoWeatherPayloadCache.getOrFetch(normalizeCoordKey(lat, lon), async () => {
       const apiUrls = [
         buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon),
         buildOpenMeteoWeatherApiUrl('customer-api.open-meteo.com', lat, lon),
@@ -447,7 +437,25 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       const hourlyTimes = payload.hourly.time.map((time) => zonedForecastIso(time, payload.timezone));
       return { payload, payloadIssuedTime, hourlyTimes };
     });
-    const { payload, payloadIssuedTime, hourlyTimes } = cachedForecast;
+
+  // The raw payload depends only on coordinates, so a report can start it
+  // beside NOAA; the later fallback/supplement call joins the in-flight fetch.
+  // A failed prefetch is retried by that call.
+  const prefetchOpenMeteoWeather = ({ lat, lon, fetchOptions }) => {
+    getOpenMeteoWeatherPayload(lat, lon, fetchOptions).catch(() => {});
+  };
+
+  const fetchOpenMeteoWeatherFallback = async ({
+    lat,
+    lon,
+    selectedDate,
+    startClock,
+    fetchOptions,
+    objectiveElevationFt,
+    objectiveElevationSource,
+    trendHours,
+  }) => {
+    const { payload, payloadIssuedTime, hourlyTimes } = await getOpenMeteoWeatherPayload(lat, lon, fetchOptions);
 
     const hourly = payload?.hourly;
     if (!hourlyTimes.length) {
@@ -657,7 +665,7 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     };
   };
 
-  return { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback };
+  return { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback, prefetchOpenMeteoWeather };
 };
 
 module.exports = {

@@ -28,6 +28,7 @@ const createSnowpackService = ({
 }) => {
   const snotelStationCacheInstance = createCache({ name: 'snotel-stations', ttlMs: stationCacheTtlMs, staleTtlMs: stationCacheTtlMs, maxEntries: 1 });
   const snowpackDataCache = createCache({ name: 'snowpack', ttlMs: 4 * 60 * 60 * 1000, staleTtlMs: 8 * 60 * 60 * 1000, maxEntries: 100 });
+  const viirsMetadataCache = createCache({ name: 'viirs-snow-cover', ttlMs: 4 * 60 * 60 * 1000, staleTtlMs: 8 * 60 * 60 * 1000, maxEntries: 100 });
 
   const MAX_REASONABLE_NOHRSC_DEPTH_METERS = 20;
   const MAX_REASONABLE_NOHRSC_SWE_MM = 5000;
@@ -671,20 +672,17 @@ const createSnowpackService = ({
 
     const nohrscTask = sampleNohrscSnowAnalysis(lat, lon, fetchOptions);
     const cdecTask = sampleCdecStationData(lat, lon, selectedDate, fetchOptions);
-    const viirsTask = fetchViirsSnowCoverMetadata(lat, lon, selectedDate, fetchOptions);
-    const [snotelResult, nearbySnotelResult, nohrscResult, cdecResult, viirsResult] = await Promise.allSettled([
+    const [snotelResult, nearbySnotelResult, nohrscResult, cdecResult] = await Promise.allSettled([
       snotelTask,
       nearbySnotelTask,
       nohrscTask,
       cdecTask,
-      viirsTask,
     ]);
 
     const snotelData = snotelResult.status === 'fulfilled' ? snotelResult.value : null;
     const snotelStations = nearbySnotelResult.status === 'fulfilled' ? nearbySnotelResult.value : [];
     const nohrscData = nohrscResult.status === 'fulfilled' ? nohrscResult.value : null;
     const cdecData = cdecResult.status === 'fulfilled' ? cdecResult.value : null;
-    const viirsData = viirsResult.status === 'fulfilled' ? viirsResult.value : null;
 
     if (!snotelData && !nohrscData && !cdecData) {
       return createUnavailableSnowpackData('unavailable');
@@ -748,19 +746,48 @@ const createSnowpackService = ({
       })(),
       nohrsc: nohrscData,
       cdec: cdecData,
-      viirs: viirsData,
+      viirs: null,
       historical: snotelData?.historical || null,
     };
   };
 
-  const fetchSnowpackData = (lat, lon, selectedDate, fetchOptions) => {
-    const key = normalizeCoordDateKey(lat, lon, selectedDate || 'today');
-    return snowpackDataCache.getOrFetch(key, () => _fetchSnowpackDataUncached(lat, lon, selectedDate, fetchOptions));
+  // The VIIRS granule lookup (NASA CMR) is freshness metadata that no score
+  // reads, and CMR can stall for the whole request timeout. It never holds up
+  // the report: it is attached when it has arrived by the time the other
+  // sources finish, and otherwise completes in the background for later reports.
+  const settledValue = (promise) => Promise.race([
+    promise,
+    new Promise((resolve) => { setImmediate(resolve, null); }),
+  ]);
+
+  // Snowpack depends on the report date only through the SNOTEL target date
+  // (a future date reads the latest observations) and whether the date is in
+  // the future, so every future date for an objective, such as the days of a
+  // multi-day forecast, shares one entry.
+  const snowpackCacheKey = (lat, lon, selectedDate) => {
+    const targetDate = getSnotelTargetDate(selectedDate);
+    const future = Boolean(targetDate && selectedDate && selectedDate > targetDate);
+    return normalizeCoordDateKey(lat, lon, `${targetDate || selectedDate || 'today'}${future ? ':future' : ''}`);
   };
+
+  const fetchSnowpackData = async (lat, lon, selectedDate, fetchOptions) => {
+    const key = snowpackCacheKey(lat, lon, selectedDate);
+    const viirsLookup = viirsMetadataCache
+      .getOrFetch(key, () => fetchViirsSnowCoverMetadata(lat, lon, selectedDate, fetchOptions))
+      .catch(() => null);
+    const snowpack = await snowpackDataCache.getOrFetch(key, () => _fetchSnowpackDataUncached(lat, lon, selectedDate, fetchOptions));
+    if (snowpack.status === 'unavailable') return snowpack;
+    return { ...snowpack, viirs: await settledValue(viirsLookup) };
+  };
+
+  // Every snowpack lookup starts from this multi-second station list download;
+  // loading it at startup keeps it off the first report after a restart.
+  const prewarmSnotelStations = (fetchOptions) => getSnotelStations(fetchOptions).then(() => {}, () => {});
 
   return {
     createUnavailableSnowpackData,
     fetchSnowpackData,
+    prewarmSnotelStations,
     sampleCdecStationData,
   };
 };

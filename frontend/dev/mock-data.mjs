@@ -1,6 +1,7 @@
 // Synthetic fixtures, never observations. No external requests or credentials.
 import pleasantnessScoring from "../../backend/src/utils/pleasantness-score.js";
 import contingency from "../../backend/src/utils/contingency.js";
+import approachElevation from "../../backend/src/utils/approach-elevation.js";
 import gearSuggestions from "../../backend/src/utils/gear-suggestions.js";
 export const scenarios = [
   "mixed",
@@ -452,6 +453,12 @@ export function makeReport(params = {}, scenario = "mixed") {
     weatherData: report.weather,
     airQualityData: report.airQuality,
     selectedTravelWindowHours: count,
+    // Score the approach from the request, as /api/safety does.
+    approach: approachElevation.resolveApproach({
+      approachRequest: approachElevation.parseApproachQuery(params),
+      weatherData: report.weather,
+      solarData: report.solar,
+    }),
   });
   return report;
 }

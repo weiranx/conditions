@@ -1976,7 +1976,8 @@ test('clampTravelWindowHours clamps to [1, 24] range', () => {
   expect(clampTravelWindowHours(30)).toBe(24);
 });
 
-test('clampTravelWindowHours uses fallback for missing or non-numeric input', () => {
+test('clampTravelWindowHours uses fallback for non-numeric input', () => {
+  // A missing value is not 0 hours, even though Number(null) === 0
   expect(clampTravelWindowHours(null)).toBe(12);
   expect(clampTravelWindowHours('')).toBe(12);
   expect(clampTravelWindowHours(undefined)).toBe(12);
@@ -2264,7 +2265,7 @@ test('celsiusToF converts known reference points', () => {
 
 test('celsiusToF returns null for missing or non-numeric input', () => {
   expect(celsiusToF('warm')).toBeNull();
-  // A missing reading is not 0 °C = 32 °F.
+  // A missing reading is not 0°C, even though Number(null) === 0
   expect(celsiusToF(null)).toBeNull();
 });
 
@@ -2346,9 +2347,11 @@ test('normalizeNoaaDewPointF passes through Fahrenheit values rounded', () => {
 });
 
 test('normalizeNoaaDewPointF returns null for missing/invalid value', () => {
-  // A null reading is missing, not 0 °F (or 32 °F after a Celsius conversion).
+  // NOAA's missing quantity ({ value: null }) stays missing rather than reading 0°C = 32°F
   expect(normalizeNoaaDewPointF({ value: null })).toBeNull();
   expect(normalizeNoaaDewPointF({ value: null, unitCode: 'wmoUnit:degC' })).toBeNull();
+  // null input: accessing null.value throws, but the function checks field?.value
+  // Number(undefined) = NaN → not finite → returns null
   expect(normalizeNoaaDewPointF(null)).toBeNull();
   expect(normalizeNoaaDewPointF({ value: 'warm' })).toBeNull();
 });
@@ -2373,6 +2376,7 @@ test('normalizeNoaaPressureHpa handles numeric input directly (large value → P
 
 test('normalizeNoaaPressureHpa returns null for invalid input', () => {
   expect(normalizeNoaaPressureHpa(null)).toBeNull();
+  // NOAA's missing quantity ({ value: null }) stays missing rather than reading 0 hPa
   expect(normalizeNoaaPressureHpa({ value: null, unitCode: 'wmoUnit:Pa' })).toBeNull();
 });
 
@@ -2391,9 +2395,11 @@ test('clampPercent rounds to integer', () => {
   expect(clampPercent(12.2)).toBe(12);
 });
 
-test('clampPercent returns null for missing or non-numeric input', () => {
+test('clampPercent returns null for non-numeric input', () => {
+  // null is a missing reading, not 0%
   expect(clampPercent(null)).toBeNull();
   expect(clampPercent('')).toBeNull();
+  // 'high' → NaN → not finite → null
   expect(clampPercent('high')).toBeNull();
   expect(clampPercent(undefined)).toBeNull();
 });
@@ -2458,6 +2464,7 @@ test('buildPrecipitationSummaryForAi uses past24hIn legacy alias when rainPast24
 // --- buildVisibilityRisk ---
 
 test('buildVisibilityRisk returns Unknown when description signals unavailability and numeric fields are absent', () => {
+  // The Unknown path requires every numeric field to be missing (omitted or null).
   const result = buildVisibilityRisk({
     description: 'Weather data unavailable',
     // precipChance, humidity, cloudCover, windSpeed, windGust are intentionally omitted

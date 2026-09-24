@@ -1,7 +1,7 @@
 import { formatSnowDepthForElevationUnit } from "../app/core";
 import { useRef, useState } from "react";
 import { ArrowRight, CircleDashed, Clock, CloudRain, Info, Moon, Mountain, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Upload, Wind } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
 import { parseGpxFile } from "../lib/gpx";
 import { useAiAvailability } from "../hooks/useAiAvailability";
@@ -513,7 +513,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               </>
             ) : (
               <div className="field-markdown">
-                <Streamdown>{result.analysis}</Streamdown>
+                <Markdown>{result.analysis}</Markdown>
               </div>
             )}
           </section>

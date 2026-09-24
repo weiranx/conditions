@@ -58,9 +58,8 @@ const createAtmosphericService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }
     maxEntries: 100,
   });
 
-  const fetchOpenMeteoAtmosphere = async ({ lat, lon, selectedDate, startClock, fetchOptions }) => {
-    const cacheKey = normalizeCoordKey(lat, lon);
-    const payload = await openMeteoAtmospherePayloadCache.getOrFetch(cacheKey, async () => {
+  const getOpenMeteoAtmospherePayload = (lat, lon, fetchOptions) =>
+    openMeteoAtmospherePayloadCache.getOrFetch(normalizeCoordKey(lat, lon), async () => {
       const params = new URLSearchParams({
         latitude: String(lat),
         longitude: String(lon),
@@ -99,6 +98,15 @@ const createAtmosphericService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }
       if (!nextPayload) throw lastError || new Error('Open-Meteo atmosphere failed');
       return nextPayload;
     });
+
+  // The payload depends only on coordinates, so a report can start it beside
+  // the weather request; fetchAtmosphericSignals then joins the in-flight fetch.
+  const prefetchOpenMeteoAtmosphere = ({ lat, lon, fetchOptions }) => {
+    getOpenMeteoAtmospherePayload(lat, lon, fetchOptions).catch(() => {});
+  };
+
+  const fetchOpenMeteoAtmosphere = async ({ lat, lon, selectedDate, startClock, fetchOptions }) => {
+    const payload = await getOpenMeteoAtmospherePayload(lat, lon, fetchOptions);
 
     const times = Array.isArray(payload?.hourly?.time) ? payload.hourly.time : [];
     if (!times.length) throw new Error('Open-Meteo atmosphere missing hourly time series');
@@ -196,7 +204,7 @@ const createAtmosphericService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }
     return result;
   };
 
-  return { fetchAtmosphericSignals, resolveGridpointValueAt };
+  return { fetchAtmosphericSignals, prefetchOpenMeteoAtmosphere, resolveGridpointValueAt };
 };
 
 module.exports = { createAtmosphericService };

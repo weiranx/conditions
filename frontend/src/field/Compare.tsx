@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { copyTextToClipboard } from "../app/clipboard";
 import { Details } from "./Details";
 import { ArrowRight, Check, Sunrise, TriangleAlert } from "lucide-react";
@@ -19,6 +19,7 @@ import { buildSkyHours } from "./sky/sky-model";
 import { buildPlannedReportWeatherRows } from "./report-weather";
 import { formatClockForStyle, minutesToTwentyFourHourClock, parseSolarClockMinutes } from "../app/core";
 import ObjectiveShortlist from "./ObjectiveShortlist";
+import { revealStart } from "./page-scroll";
 
 const isNumber = (value: number | null | undefined): value is number =>
   value != null && Number.isFinite(value);
@@ -53,6 +54,14 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
 function CompareDays({ workspace: w }: { workspace: Workspace }) {
   const [selectedDate, setSelectedDate] = useState("");
   const tableId = useId();
+  const results = useRef<HTMLDivElement>(null);
+  const wasLoading = useRef(w.tripForecastLoading);
+  useEffect(() => {
+    const started = w.tripForecastLoading && !wasLoading.current;
+    wasLoading.current = w.tripForecastLoading;
+    // In one column the results sit below the form: follow the comparison just started.
+    if (started) revealStart(results.current);
+  }, [w.tripForecastLoading]);
   const [showMeasurements, setShowMeasurements] = useState(false);
   const days = useMemo(
     () => w.tripForecastLoading ? [] : w.tripForecastRows,
@@ -174,7 +183,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
       </header>
       <div className="field-compare-layout">
         <WorkspacePlan workspace={w} comparison />
-        <div className="sky-compare-results">
+        <div className="sky-compare-results" ref={results}>
           {w.tripForecastError && (
             <p className="sky-notice is-caution" role="alert">
               {w.tripForecastError}

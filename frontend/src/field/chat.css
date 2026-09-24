@@ -21,7 +21,7 @@
 
 .field-chat-dialog { position: static; width: 100%; max-width: none; max-height: none; margin: 14px 0 0; padding: 0; border: 0; border-top: 1px solid var(--chat-separator); background: transparent; color: var(--chat-label); font: inherit; }
 .field-chat-dialog[open] { display: flex; flex-direction: column; }
-.field-chat-dialog.is-fullscreen { position: fixed; inset: 0; box-sizing: border-box; width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; padding-top: env(safe-area-inset-top); background: var(--chat-surface); }
+.field-chat-dialog.is-fullscreen { position: fixed; inset: 0; box-sizing: border-box; width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); background: var(--chat-surface); }
 .field-chat-dialog::backdrop { background: var(--sky-surface, var(--f-paper)); }
 .field-chat-dialog-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 20px; }
 .field-chat-dialog-header > div { min-width: 0; }

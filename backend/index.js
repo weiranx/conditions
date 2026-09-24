@@ -137,7 +137,7 @@ const solarCache = createCache({ name: 'solar', ttlMs: 7 * 24 * 60 * 60 * 1000, 
 const noaaForecastCache = createCache({ name: 'noaa-forecast', ttlMs: 20 * 60 * 1000, staleTtlMs: 25 * 60 * 1000, maxEntries: 100 });
 const avalancheForecastCache = createCache({ name: 'avalanche-forecast', ttlMs: 10 * 60 * 1000, staleTtlMs: 20 * 60 * 1000, maxEntries: 300 });
 
-const { createUnavailableSnowpackData, fetchSnowpackData } = createSnowpackService({
+const { createUnavailableSnowpackData, fetchSnowpackData, prewarmSnotelStations } = createSnowpackService({
   fetchWithTimeout,
   formatIsoDateUtc,
   shiftIsoDateUtc,
@@ -145,7 +145,7 @@ const { createUnavailableSnowpackData, fetchSnowpackData } = createSnowpackServi
   stationCacheTtlMs: SNOTEL_STATION_CACHE_TTL_MS,
 });
 
-const { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback } = createWeatherDataService({
+const { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback, prefetchOpenMeteoWeather } = createWeatherDataService({
   fetchWithTimeout,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
@@ -160,7 +160,7 @@ const { fetchRecentRainfallData } = createPrecipitationService({
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
 
-const { fetchAtmosphericSignals } = createAtmosphericService({
+const { fetchAtmosphericSignals, prefetchOpenMeteoAtmosphere } = createAtmosphericService({
   fetchWithTimeout,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
@@ -425,6 +425,9 @@ const safetyHandler = async (req, res) => {
           (reason) => ({ status: 'rejected', reason }),
         )
       : null;
+    // The atmospheric step waits for weather, but its Open-Meteo payload needs
+    // only coordinates.
+    prefetchOpenMeteoAtmosphere({ lat: parsedLat, lon: parsedLon, fetchOptions });
     try {
       const weatherResult = await fetchWeatherPipeline({
         parsedLat,
@@ -439,6 +442,7 @@ const safetyHandler = async (req, res) => {
         fetchWithTimeout,
         fetchObjectiveElevationFt,
         fetchOpenMeteoWeatherFallback,
+        prefetchOpenMeteoWeather,
         createUnavailableWeatherData,
         noaaCircuitBreaker,
       });
@@ -975,7 +979,9 @@ const startServer = async () => {
   await reportUsageLimitService.initializeSettings();
   await initializeFeatureFlags();
   await initializeAISettings();
-  return startBackendServer({ app, port: PORT, onShutdown: () => database.close() });
+  const server = startBackendServer({ app, port: PORT, onShutdown: () => database.close() });
+  void prewarmSnotelStations({ headers: DEFAULT_FETCH_HEADERS });
+  return server;
 };
 
 if (require.main === module) {
