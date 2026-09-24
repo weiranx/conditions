@@ -17,6 +17,7 @@ import type { Workspace } from "./model/useWorkspace";
 import { MAP_STYLE_OPTIONS } from "../app/constants";
 import type { MapStyle } from "../app/types";
 import { useProductFeatureFlags } from "../contexts/feature-flags";
+import { hasCoarsePointer } from "./touch";
 const pin = L.divIcon({
   className: "field-map-pin",
   html: "<span></span>",
@@ -51,6 +52,33 @@ function Pick({ onPick }: { onPick?: (lat: number, lon: number) => void }) {
   useMapEvents({ click: (e) => onPick?.(e.latlng.lat, e.latlng.lng) });
   return null;
 }
+// On a touch screen one finger scrolls the page past the map, so say how to
+// move the map when someone tries.
+function TwoFingerHint() {
+  const map = useMap();
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const container = map.getContainer();
+    let timer = 0;
+    const move = (event: TouchEvent) => {
+      // Dragging the pin is a one-finger gesture that works.
+      if ((event.target as Element).closest?.(".leaflet-marker-icon")) return;
+      window.clearTimeout(timer);
+      setShown(event.touches.length === 1);
+      timer = window.setTimeout(() => setShown(false), 1400);
+    };
+    container.addEventListener("touchmove", move, { passive: true });
+    return () => {
+      container.removeEventListener("touchmove", move);
+      window.clearTimeout(timer);
+    };
+  }, [map]);
+  return (
+    <div className={`field-map-gesture-hint${shown ? " is-shown" : ""}`} aria-hidden="true">
+      Use two fingers to move the map
+    </div>
+  );
+}
 export default function FieldMap({
   plan,
   onPick,
@@ -62,6 +90,8 @@ export default function FieldMap({
 }) {
   const [localStyle, setLocalStyle] = useState<MapStyle>("topo");
   const [nonce, setNonce] = useState(0);
+  // Leaflet reads this once, when the map is created.
+  const [touch] = useState(hasCoarsePointer);
   const flags = useProductFeatureFlags();
   const style = w?.mapStyle || localStyle;
   const source =
@@ -106,9 +136,13 @@ export default function FieldMap({
         center={[lat, lon]}
         zoom={10}
         scrollWheelZoom={false}
+        // Touch: one finger scrolls the page and taps choose a point; Leaflet's
+        // pinch handler moves and zooms the map with two fingers.
+        dragging={!touch}
         className="field-map"
         aria-label="Objective map"
       >
+        {touch && <TwoFingerHint />}
         <TileLayer
           key={source.url}
           attribution={source.attribution}

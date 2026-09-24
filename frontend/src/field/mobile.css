@@ -96,7 +96,7 @@
   /* Keep long preference pages navigable without returning to the top. */
   .field-app .field-settings-shortcuts {
     position: sticky;
-    top: 0;
+    top: var(--field-sticky-top, 0px);
     z-index: 15;
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -112,7 +112,7 @@
   }
 
   .field-app .field-settings section[id] {
-    scroll-margin-top: 80px;
+    scroll-margin-top: calc(var(--field-sticky-top, 0px) + 80px);
   }
 
   .field-dialog {

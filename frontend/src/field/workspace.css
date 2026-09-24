@@ -404,7 +404,7 @@
 }
 .field-plan-form,
 .field-planner-map {
-  scroll-margin-top: 16px;
+  scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px);
 }
 .field-app .field-planner-map > .field-planner-map-heading {
   display: flex;
@@ -870,6 +870,31 @@
   padding: 8px 12px;
   border-radius: 7px;
   font-size: 12px;
+}
+/* Touch screens: shown while one finger scrolls the page across the map. */
+.field-map-gesture-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(10 22 34 / 0.55);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.field-map-gesture-hint.is-shown {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-map-gesture-hint {
+    transition: none;
+  }
 }
 .field-settings-inputs {
   display: grid;
