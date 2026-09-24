@@ -36,10 +36,22 @@ test('every other job waits on the gated backend deploy', () => {
   assert.deepEqual(Object.keys(all), ['backend', 'frontend', 'smoke-test']);
   assert.match(all.frontend, /^ {4}needs: backend$/m);
   assert.match(all['smoke-test'], /^ {4}needs: frontend$/m);
-  for (const [name, block] of Object.entries(all)) {
-    // A job-level if would replace the implicit success() check on needs.
-    if (name !== 'backend') assert.doesNotMatch(block, /^ {4}if:/m, `${name} has no job-level if`);
-  }
+  // Only the backend's release decides whether the frontend ships, and no
+  // status function (always(), failure()) drops the implicit success() on needs.
+  assert.match(all.frontend, /^ {4}if: needs\.backend\.outputs\.released == 'true'$/m);
+  assert.doesNotMatch(all['smoke-test'], /^ {4}if:/m);
+  assert.doesNotMatch(workflow, /always\(\)|failure\(\)|cancelled\(\)/);
+});
+
+test('the frontend ships exactly when the backend released the tested commit', () => {
+  const { backend, frontend } = jobs();
+  assert.match(backend, /released: \$\{\{ steps\.release\.outputs\.released \}\}/);
+  assert.match(backend, /capture_stdout: true/);
+  assert.ok(backend.includes('"==> Releasing tested commit $DEPLOY_SHA"'), 'matches the ci-deploy.sh release line');
+  const bootstrap = readFileSync(new URL('../ci-deploy.sh', import.meta.url), 'utf8');
+  assert.ok(bootstrap.includes('echo "==> Releasing tested commit $DEPLOY_SHA"'), 'ci-deploy.sh prints the release line');
+  // A second supersession check could skip a frontend whose backend shipped.
+  assert.doesNotMatch(frontend, /ls-remote|superseded/i);
 });
 
 test('every job releases the commit that passed CI', () => {

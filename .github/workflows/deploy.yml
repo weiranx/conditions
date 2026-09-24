@@ -25,6 +25,8 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      released: ${{ steps.release.outputs.released }}
 
     steps:
       - name: Check out the commit that passed CI
@@ -34,6 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Deploy tested commit to VPS
+        id: ssh
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -52,12 +55,30 @@ jobs:
           # Send the tested bootstrap from the runner, including on the first
           # release when the VPS still has the previous deployment script.
           script_path: scripts/ci-deploy.sh
+          capture_stdout: true
+
+      # ci-deploy.sh exits 0 without releasing when main has moved past this
+      # commit. The frontend follows this one decision, so production never
+      # pairs this backend with an older frontend or the reverse.
+      - name: Record whether the backend released this commit
+        id: release
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_OUTPUT: ${{ steps.ssh.outputs.stdout }}
+        run: |
+          if grep -qF "==> Releasing tested commit $DEPLOY_SHA" <<< "$DEPLOY_OUTPUT"; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "==> Backend skipped $DEPLOY_SHA; skipping the frontend too."
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # Cloudflare Pages' automatic production deployments must stay disabled
   # (Settings → Build → Branch control) so the frontend, like the backend,
   # ships only commits whose complete CI run passed.
   frontend:
     needs: backend
+    if: needs.backend.outputs.released == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -71,24 +92,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
-      # Like ci-deploy.sh: an older CI run finishing late must not roll the
-      # frontend back past a newer commit, which has its own CI run.
-      - name: Skip superseded commit
-        id: current
-        env:
-          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-        run: |
-          remote_head="$(git ls-remote "$REPO_URL" refs/heads/main | cut -f1)"
-          if [ "$remote_head" = "$DEPLOY_SHA" ]; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "==> Skipping superseded commit $DEPLOY_SHA; main is $remote_head."
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Use Node.js 24
-        if: steps.current.outputs.deploy == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -96,13 +100,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Build
-        if: steps.current.outputs.deploy == 'true'
         env:
           VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL || 'https://apivps.conditions.weiranxiong.com' }}
         run: npm ci && npm run build
 
       - name: Deploy tested commit to Cloudflare Pages
-        if: steps.current.outputs.deploy == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
