@@ -44,6 +44,7 @@ const byId = (suggestions, id) => suggestions.find((item) => item.id === id);
 describe('normalizeGearActivity', () => {
   test('keeps known activities and falls back to backcountry', () => {
     expect(normalizeGearActivity('ski-touring')).toBe('ski-touring');
+    expect(normalizeGearActivity('mountaineering')).toBe('mountaineering');
     expect(normalizeGearActivity(' Trail-Running ')).toBe('trail-running');
     expect(normalizeGearActivity('paragliding')).toBe('backcountry');
     expect(normalizeGearActivity(undefined)).toBe('backcountry');
@@ -100,6 +101,21 @@ describe('buildLayeringGearSuggestions — activity tailoring', () => {
     const icy = buildLayeringGearSuggestions(icyInput({ activity: 'snow-climbing' }));
     expect(byId(icy, 'alpine-hardware').tone).toBe('caution');
     expect(ids(icy)).not.toContain('traction-snow');
+  });
+
+  test('mountaineers carry glacier gear, axe, and crampons without microspikes', () => {
+    const calm = buildLayeringGearSuggestions(calmInput({ activity: 'mountaineering' }));
+    expect(byId(calm, 'alpine-hardware')).toMatchObject({ title: 'Ice axe, crampons, helmet, and harness', tone: 'go' });
+    expect(byId(calm, 'glacier-kit')).toMatchObject({ tone: 'go', category: 'Safety & rescue' });
+    expect(byId(calm, 'sun-protection').title).toBe('Glacier glasses and sunscreen');
+
+    const icy = buildLayeringGearSuggestions(icyInput({
+      activity: 'mountaineering',
+      avalancheData: { relevant: true, dangerLevel: 0 },
+    }));
+    expect(byId(icy, 'alpine-hardware').tone).toBe('caution');
+    expect(ids(icy)).not.toContain('traction-snow');
+    expect(byId(icy, 'avalanche-kit').reason).toBe('Mountaineering in avalanche terrain');
   });
 
   test('ski tourers get skins and a repair kit, never microspikes or snowshoes', () => {

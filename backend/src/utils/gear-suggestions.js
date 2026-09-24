@@ -7,6 +7,7 @@ const GEAR_ACTIVITIES = new Set([
   'hiking',
   'scrambling',
   'alpine-climbing',
+  'mountaineering',
   'snow-climbing',
   'ski-touring',
   'trail-running',
@@ -41,13 +42,15 @@ const buildLayeringGearSuggestions = ({
   const skiing = gearActivity === 'ski-touring';
   const snowClimbing = gearActivity === 'snow-climbing';
   const alpineClimbing = gearActivity === 'alpine-climbing';
+  const mountaineering = gearActivity === 'mountaineering';
   const scrambling = gearActivity === 'scrambling';
   // Activities whose route is on snow whatever the nearby stations report.
-  const snowTravel = skiing || snowClimbing;
+  const snowTravel = skiing || snowClimbing || mountaineering;
   // Kit that belongs to the activity itself is never trimmed by the item cap.
   const ACTIVITY_BASELINE_GEAR_IDS = {
     scrambling: ['helmet-scramble'],
     'alpine-climbing': ['climbing-kit'],
+    mountaineering: ['alpine-hardware', 'glacier-kit'],
     'snow-climbing': ['alpine-hardware'],
     'ski-touring': ['ski-touring-kit'],
     'trail-running': ['hydration-run'],
@@ -248,6 +251,16 @@ const buildLayeringGearSuggestions = ({
       12,
     );
   }
+  if (mountaineering) {
+    addSuggestion(
+      'glacier-kit',
+      'Rope and crevasse rescue kit',
+      'On a glacier, travel roped with pulleys, prusiks, pickets or screws, and locking carabiners, and a team that has practiced crevasse rescue.',
+      'Safety & rescue',
+      'go',
+      13,
+    );
+  }
   if (skiing) {
     addSuggestion(
       'ski-touring-kit',
@@ -336,13 +349,15 @@ const buildLayeringGearSuggestions = ({
       : snowDepth && maxObservedSnowDepthIn >= 2 ? `Snow depth ~${snowDepth} nearby`
         : snowy ? 'Snow on the trail' : 'Snow in the forecast';
   const iceAxeTerrain = icy && (cold || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4));
-  if (snowClimbing) {
-    // Crampons and an axe are the snow climber's baseline; icy conditions only
+  if (snowClimbing || mountaineering) {
+    // Crampons and an axe are the baseline on snow routes; icy conditions only
     // raise their urgency.
     addSuggestion(
       'alpine-hardware',
-      'Ice axe, crampons, and helmet',
-      'Crampons fitted to your boots and an axe you have practiced self-arrest with. On a glacier, add a rope, harness, and crevasse rescue gear.',
+      mountaineering ? 'Ice axe, crampons, helmet, and harness' : 'Ice axe, crampons, and helmet',
+      mountaineering
+        ? 'Crampons fitted to your boots, an axe you have practiced self-arrest with, and a harness for roped glacier travel.'
+        : 'Crampons fitted to your boots and an axe you have practiced self-arrest with. On a glacier, add a rope, harness, and crevasse rescue gear.',
       'Safety & rescue',
       iceAxeTerrain ? 'caution' : 'go',
       iceAxeTerrain ? 15 : 12,
@@ -489,14 +504,14 @@ const buildLayeringGearSuggestions = ({
       avalancheData?.dangerUnknown
         ? 'No avalanche forecast covers this area'
         : dangerLabel ? `Avalanche danger ${dangerLabel} (${Math.round(avyDanger)} of 5)`
-          : snowTravel ? `${skiing ? 'Ski touring' : 'Snow climbing'} in avalanche terrain` : 'Avalanche terrain on this objective',
+          : snowTravel ? `${skiing ? 'Ski touring' : mountaineering ? 'Mountaineering' : 'Snow climbing'} in avalanche terrain` : 'Avalanche terrain on this objective',
     );
   }
 
   if (Number.isFinite(windowMaxFeelsLikeF) && windowMaxFeelsLikeF >= 68 && hasDaylightInWindow) {
     addSuggestion('sun-protection', 'Sunscreen, sunglasses, and sun hat', 'UV is stronger on open terrain and at altitude.', 'Sun & heat', 'go', 40, `Feels like up to ${formatWhole(windowMaxFeelsLikeF, 'F')} in daylight`);
   } else if ((snowOnGround || snowTravel) && hasDaylightInWindow) {
-    addSuggestion('sun-protection', snowClimbing ? 'Glacier glasses and sunscreen' : 'Dark sunglasses and sunscreen', 'Snow reflects most UV, so sunburn and snow blindness happen even on cold days.', 'Sun & heat', 'watch', 40, 'Daylight travel over snow');
+    addSuggestion('sun-protection', snowClimbing || mountaineering ? 'Glacier glasses and sunscreen' : 'Dark sunglasses and sunscreen', 'Snow reflects most UV, so sunburn and snow blindness happen even on cold days.', 'Sun & heat', 'watch', 40, 'Daylight travel over snow');
   }
   if (Number.isFinite(heatLevel) && heatLevel >= 1) {
     addSuggestion('hydration-heat', 'Extra water', 'Carry more than usual and know where you can refill.', 'Sun & heat', 'watch', 38, heatRiskData?.label ? `Heat risk: ${String(heatRiskData.label).replace(/\.$/, '')}` : 'Heat stress possible in your window');
