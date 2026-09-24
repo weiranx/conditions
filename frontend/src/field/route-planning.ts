@@ -1,4 +1,4 @@
-import type { RouteAnalysisResult, RouteTiming, RouteWaypointSummary } from "../hooks/useRouteAnalysis";
+import type { RouteAnalysisResult, RouteShapeChoice, RouteTiming, RouteWaypointSummary } from "../hooks/useRouteAnalysis";
 import { computeFeelsLikeF } from "../app/planner-helpers";
 
 export function hasRouteNumber(value: unknown): value is number {
@@ -279,6 +279,7 @@ export function describeCheckpointHazard(hazard: CheckpointHazard): string {
 /** What changed in the plan since a route was analyzed; empty when nothing did or the analysis predates the record. */
 export function describeStaleRouteAnalysis(analysis: RouteAnalysisResult | null, plan: {
   date: string; start: string; travelWindowHours: number; lat: number; lon: number;
+  routeShape?: RouteShapeChoice; pace?: { minutesPerMile: number; ascentMinutesPer1000Ft: number; stopBufferMinutes?: number };
 }): string[] {
   const request = analysis?.request;
   if (!request) return [];
@@ -286,8 +287,14 @@ export function describeStaleRouteAnalysis(analysis: RouteAnalysisResult | null,
   if (Math.abs(request.lat - plan.lat) > 0.0005 || Math.abs(request.lon - plan.lon) > 0.0005) changes.push("objective");
   if (request.date !== plan.date) changes.push("date");
   if (request.start !== plan.start) changes.push("start time");
-  // Arrivals set by pace don't depend on the planned duration.
-  if (analysis.timing?.mode !== "pace" && request.travelWindowHours !== plan.travelWindowHours) changes.push("planned duration");
+  // Even arrivals set by pace are checked against it, for the fit and the turnaround.
+  if (request.travelWindowHours !== plan.travelWindowHours) changes.push("planned duration");
+  if (plan.routeShape && (request.routeShape ?? "auto") !== plan.routeShape) changes.push("route shape");
+  // Only arrivals set by pace depend on it.
+  const paced = request.pace;
+  if (analysis.timing?.mode === "pace" && paced && plan.pace && (paced.minutesPerMile !== plan.pace.minutesPerMile
+    || paced.ascentMinutesPer1000Ft !== plan.pace.ascentMinutesPer1000Ft
+    || (paced.stopBufferMinutes ?? 0) !== (plan.pace.stopBufferMinutes ?? 0))) changes.push("pace");
   return changes;
 }
 
@@ -336,7 +343,9 @@ export function buildRouteReportContext(name: string, analysis: RouteAnalysisRes
 export function describeRouteTiming(timing: RouteTiming | undefined): string {
   if (!timing) return "Estimated arrivals use your planned duration, not terrain-adjusted pace.";
   const window = `your ${timing.travelWindowHours}-hour plan`;
-  const spread = timing.basis === "distance-and-vert"
+  const spread = timing.mode === "pace"
+    ? `Arrivals follow your pace: ${timing.pace.minutesPerMile} min per mile, ${timing.pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing, descents at a third of that${timing.stopMinutes ? `, and ${timing.stopMinutes} min of stops spread along the way` : ""}${timing.trackTimed ? ", over every climb and descent of your track" : ""}.`
+    : timing.basis === "distance-and-vert"
     ? `Arrivals spread ${window} by distance and climbing${timing.paceSource === "user" ? ", weighted by your pace settings" : ""}.`
     : timing.basis === "distance"
       ? `Arrivals spread ${window} by distance only; some checkpoint elevations are unknown, so climbing is not weighted.`
@@ -358,6 +367,17 @@ export function describeRouteTiming(timing: RouteTiming | undefined): string {
         ? " The route is a traverse, so it finishes somewhere other than where it starts."
         : "";
   return `${spread}${shape}${distance}`;
+}
+
+/** "about 9.5 h" from minutes, to the nearest half hour. */
+export function formatRouteHours(minutes: number): string {
+  const hours = Math.round((minutes / 60) * 2) / 2;
+  return `${hours % 1 ? hours.toFixed(1) : hours} h`;
+}
+
+/** Whole hours for the planned duration that fits a pace estimate, within the planner's 1–24 h. */
+export function hoursToFit(minutes: number): number {
+  return Math.max(1, Math.min(24, Math.ceil(minutes / 60)));
 }
 
 /** "2026-09-09" → "Wed, Sep 9", read as a calendar date rather than a UTC instant. */

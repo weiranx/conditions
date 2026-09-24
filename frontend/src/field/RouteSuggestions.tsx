@@ -25,7 +25,8 @@ export function RouteSuggestions({ workspace: w }: { workspace: Workspace }) {
         const gain = hasRouteNumber(route.elev_gain_ft) && route.elev_gain_ft >= 0 ? route.elev_gain_ft : null;
         // Suggested lengths and climbs are approximate, so the time is only offered when both are listed.
         const hours = distance !== null && gain !== null && hasRouteNumber(pace.paceMinutesPerMile)
-          ? estimateRouteDurationHours({ distanceMiles: distance, elevationGainFt: gain }, pace)
+          // A round trip descends what it climbs.
+          ? estimateRouteDurationHours({ distanceMiles: distance, elevationGainFt: gain, elevationLossFt: gain }, pace)
           : null;
         return (
           <button

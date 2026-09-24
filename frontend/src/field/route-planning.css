@@ -16,6 +16,12 @@
 .sky-route-choose > .field-feedback,
 .sky-route-choose > .sky-route-suggestions { flex: 1 1 100%; }
 .sky-route-suggestions:empty { display: none; }
+.sky-route-choose > .sky-route-shape { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.sky-route-shape > span { font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
+.sky-route-shape .sky-segmented { margin: 0; }
+.sky-route-choose .field-feedback .field-text-button { display: inline; min-height: 0; padding: 0; }
+.sky-route-fit > span { flex: 1 1 auto; }
+.sky-route-fit > .field-text-button { flex: none; white-space: nowrap; }
 .sky-route-suggestions .sky-plan-route-options { margin-top: 0; }
 .sky-route-planned-name { flex: 1 1 260px; display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
 .sky-route-planned-name input {

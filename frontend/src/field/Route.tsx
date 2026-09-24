@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CircleCheck, CircleDashed, Clock, Eye, Signpost, type LucideIcon, CloudRain, Footprints, Info, Moon, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Wind } from "lucide-react";
 import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
+import type { RouteShapeChoice } from "../hooks/useRouteAnalysis";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
 import { dateLabel } from "./data";
@@ -22,7 +23,9 @@ import {
   describeRouteTiming,
   formatEtaDate,
   formatLegDuration,
+  formatRouteHours,
   hasRouteNumber,
+  hoursToFit,
   objectiveHourAt,
   splitRouteBriefing,
 } from "./route-planning";
@@ -35,6 +38,13 @@ import "./forecast.css";
 import { RouteProfile, type ProfileLevel, type ProfileStop } from "./sky/RouteProfile";
 import { knownFeet } from "./sky/status";
 import { skyAt } from "./sky/sky-model";
+
+const SHAPE_CHOICES: { value: RouteShapeChoice; label: string }[] = [
+  { value: "auto", label: "As mapped" },
+  { value: "out-and-back", label: "Out and back" },
+  { value: "loop", label: "Loop" },
+  { value: "point-to-point", label: "One way" },
+];
 
 const BRIEF_ICONS: Record<string, LucideIcon> = {
   "hazard-zones": TriangleAlert,
@@ -112,7 +122,18 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   ].filter(Boolean).join(" · ") : "";
   const staleChanges = readOnly ? [] : describeStaleRouteAnalysis(result, {
     date: w.forecastDate, start: w.alpineStartTime, travelWindowHours: w.travelWindowHours, lat: w.position.lat, lon: w.position.lng,
+    routeShape: w.routeShape,
+    pace: {
+      minutesPerMile: w.preferences.runnerPaceMinutesPerMile,
+      ascentMinutesPer1000Ft: w.preferences.runnerAscentMinutesPer1000Ft,
+      stopBufferMinutes: w.preferences.runnerStopBufferMinutes,
+    },
   });
+  const timing = result?.timing;
+  const turnaround = timing?.turnaround;
+  const estimate = timing?.mode === "pace" && hasRouteNumber(timing.estimatedMinutes) ? timing.estimatedMinutes : null;
+  const firstDark = (result?.summaries ?? []).findIndex((p) => p.daylight === "dark");
+  const lastLight = firstDark > 0 && result?.summaries[firstDark - 1]?.daylight === "day" ? result.summaries[firstDark - 1] : null;
   const vert = (feet: number) => (Math.abs(feet) < 10 ? "level" : w.formatElevationDeltaDisplay(feet));
   const profileLegs = legs.map((leg) => {
     const parts = [leg.distanceMiles !== null ? miles(leg.distanceMiles) : null, leg.elevationDeltaFt !== null ? vert(leg.elevationDeltaFt) : null]
@@ -145,7 +166,16 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
     ...(lastStop?.etaTime
       ? [{ label: returnStop ? "Back at start" : "Finish", value: clock(lastStop.etaTime), ...(lastStop.daylight === "dark" ? { note: "After dark" } : {}) }] : []),
     // The duration this analysis was run with, which the plan may have changed since.
-    { label: "Planned time", value: `${result?.timing?.travelWindowHours ?? w.travelWindowHours} h` },
+    { label: "Planned time", value: `${result?.timing?.travelWindowHours ?? w.travelWindowHours} h`,
+      ...(estimate !== null ? { note: `${formatRouteHours(estimate)} at your pace` } : {}) },
+    ...(turnaround ? [{
+      label: "Turn around by", value: clock(turnaround.byPlanEnd),
+      note: turnaround.marginToPlanEndMinutes < 0 ? `You reach ${turnaround.objectiveName} later` : `At ${turnaround.objectiveName}, to finish on plan`,
+    }] : []),
+    ...(turnaround?.byDark ? [{
+      label: "Before dark", value: clock(turnaround.byDark),
+      note: hasRouteNumber(turnaround.marginToDarkMinutes) && turnaround.marginToDarkMinutes < 0 ? "Too late to finish in daylight" : "Turn around by this to finish by sunset",
+    }] : []),
   ];
   const canAnalyze = !readOnly && !w.routeLoading && available.routeAnalysis && Boolean(w.plannedRouteName);
   function analyze() {
@@ -165,6 +195,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               <>You reach the high point, {result.summaries[highIndex].name}, at <strong className={stops[highIndex]?.tone === "over" ? "is-over" : undefined}>{clock(result.summaries[highIndex].etaTime)}</strong>{returnStop?.etaTime
                 ? <> and are back at the start around <strong>{clock(returnStop.etaTime)}</strong>{returnStop.daylight === "dark" ? ", after dark" : ""}</>
                 : null}. </>
+            )}
+            {lastLight && firstDark >= 0 && result.summaries[firstDark].etaTime && (
+              <>It is dark from {result.summaries[firstDark].name} ({clock(result.summaries[firstDark].etaTime)}); {lastLight.name} is the last checkpoint in daylight. </>
             )}
             {overStops > 0
               ? <strong className="is-over">{overStops} {overStops === 1 ? "checkpoint crosses" : "checkpoints cross"} your limits.</strong>
@@ -221,6 +254,24 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               <RouteSuggestions workspace={w} />
             </div>
           )}
+          <div className="sky-route-shape" role="group" aria-label="Route shape">
+            <span>Shape</span>
+            <div className="sky-segmented">
+              {SHAPE_CHOICES.map((choice) => (
+                <button key={choice.value} type="button" aria-pressed={w.routeShape === choice.value}
+                  onClick={() => w.setRouteShape(choice.value)}>
+                  {choice.value === "auto" && gpx ? "As drawn" : choice.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {gpx?.routeShape === "point-to-point" && w.routeShape === "auto" && (
+            <p className="field-feedback">
+              This track ends away from where it starts. If it only covers the way there, choose
+              {" "}<button type="button" className="field-text-button" onClick={() => w.setRouteShape("out-and-back")}>Out and back</button>{" "}
+              to check the way back too.
+            </p>
+          )}
           <p className="field-route-plan-context">
             {dateLabel(w.forecastDate)} · {w.displayStartTime} start · {w.travelWindowHours} hours
             {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
@@ -251,6 +302,22 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
         <p className="sky-notice is-caution" role="alert">
           {w.routeError}
         </p>
+      )}
+      {result && estimate !== null && timing?.windowFit && timing.windowFit !== "fits" && (
+        <div className={`sky-notice ${timing.windowFit === "longer" ? "is-caution" : "is-info"} sky-route-fit`} role="status">
+          <Clock size={18} aria-hidden="true" />
+          <span>
+            At your pace this outing takes about {formatRouteHours(estimate)}{timing.stopMinutes ? `, ${timing.stopMinutes} min of stops included` : ""};
+            {" "}the plan is {timing.travelWindowHours} h, so {timing.windowFit === "longer"
+              ? "the last checkpoints fall after it ends and its hourly checks miss them"
+              : "you'd finish well before it ends and its hourly checks cover time you're already back"}.
+          </span>
+          {!readOnly && w.travelWindowHours !== hoursToFit(estimate) && (
+            <button type="button" className="field-text-button" onClick={() => w.updatePreferences({ travelWindowHours: hoursToFit(estimate) })}>
+              Plan {hoursToFit(estimate)} h
+            </button>
+          )}
+        </div>
       )}
       {result && staleChanges.length > 0 && (
         <p className="sky-notice is-missing sky-route-stale" role="status">
@@ -394,7 +461,11 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                             {point.daylight === "dark" && <span className="sky-route-pill is-night"><Moon size={13} aria-hidden="true" />After dark</span>}
                           </span>
                         </button>
-                        {turnsBack && <p className="field-route-turn" aria-hidden="true">Return by the same route</p>}
+                        {turnsBack && (
+                          <p className="field-route-turn" aria-hidden="true">
+                            Return by the same route{turnaround ? ` · turn around by ${clock(turnaround.byPlanEnd)}` : ""}
+                          </p>
+                        )}
                         {leg && (leg.minutes !== null || leg.elevationDeltaFt !== null || leg.distanceMiles !== null) && (
                           <p className="field-route-leg" aria-label={`To ${result.summaries[i + 1]?.name ?? "the next checkpoint"}`}>
                             {leg.distanceMiles !== null && <span><Footprints size={13} aria-hidden="true" />{miles(leg.distanceMiles)}</span>}

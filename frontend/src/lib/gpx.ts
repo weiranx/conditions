@@ -272,10 +272,42 @@ function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: num
   }));
 }
 
-export function estimateRouteDurationHours(route: Pick<ParsedGpxRoute, 'distanceMiles' | 'elevationGainFt'>, profile: RouteTimingProfile): number {
+/**
+ * The track's distance and elevation, [miles, feet | null] per display point, so
+ * route analysis can time arrivals over every climb and descent between checkpoints.
+ */
+export function gpxTrackForAnalysis(route: Pick<ParsedGpxRoute, 'distanceMiles' | 'displayTrack'>): Array<[number, number | null]> | undefined {
+  const points = (route.displayTrack || []).filter((point) => Number.isFinite(point.progress_percent));
+  if (points.length < 2 || !(route.distanceMiles > 0)) return undefined;
+  return points.map((point) => [
+    Number(((point.progress_percent / 100) * route.distanceMiles).toFixed(3)),
+    Number.isFinite(point.elev_ft) ? (point.elev_ft as number) : null,
+  ]);
+}
+
+// Descents cost a third of the climbing rate, as in the backend's route timing.
+const DESCENT_SHARE_OF_ASCENT = 1 / 3;
+
+/**
+ * Hours for a route at the traveler's pace: distance, climbing, descent and stops,
+ * the same model the backend uses for route checkpoints. Descent is the given
+ * loss, else the drops along the display track, else none.
+ */
+export function estimateRouteDurationHours(
+  route: Pick<ParsedGpxRoute, 'distanceMiles' | 'elevationGainFt'> & { elevationLossFt?: number | null; displayTrack?: GpxTrackPoint[] },
+  profile: RouteTimingProfile,
+): number {
+  const trackLoss = (route.displayTrack || []).reduce((total, point, index, track) => {
+    const previous = track[index - 1];
+    return previous && Number.isFinite(previous.elev_ft) && Number.isFinite(point.elev_ft)
+      ? total + Math.max(0, (previous.elev_ft as number) - (point.elev_ft as number)) : total;
+  }, 0);
+  const lossFt = Number.isFinite(route.elevationLossFt) ? Math.max(0, route.elevationLossFt as number) : trackLoss;
   const distanceMinutes = Math.max(0, route.distanceMiles) * Math.max(5, profile.paceMinutesPerMile);
-  const ascentMinutes = Math.max(0, route.elevationGainFt || 0) / 1000 * Math.max(0, profile.ascentMinutesPer1000Ft);
-  const totalMinutes = distanceMinutes + ascentMinutes + Math.max(0, profile.stopBufferMinutes);
+  const ascentRate = Math.max(0, profile.ascentMinutesPer1000Ft);
+  const ascentMinutes = Math.max(0, route.elevationGainFt || 0) / 1000 * ascentRate;
+  const descentMinutes = lossFt / 1000 * ascentRate * DESCENT_SHARE_OF_ASCENT;
+  const totalMinutes = distanceMinutes + ascentMinutes + descentMinutes + Math.max(0, profile.stopBufferMinutes);
   return Math.max(1, Math.min(24, Math.round(totalMinutes / 60)));
 }
 

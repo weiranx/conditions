@@ -768,3 +768,89 @@ test('GPX checkpoints with only a positional label take the name of a map featur
   // cached across tests, so only the absence is checked.)
   expect(reverseCalls).not.toContain('46.83');
 });
+
+const gpxPaceApp = () => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => { throw new Error('no AI in this test'); },
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 40 }, safety: { score: 80 }, solar: { sunrise: '6:30:00 AM', sunset: '7:30:00 PM' } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+  });
+  return app;
+};
+const gpxPaceBody = (overrides = {}) => ({
+  peak: 'Pace Test Peak', route: 'Pace track', lat: 46.84, lon: -121.7, date: '2026-07-12', start: '06:00', travel_window_hours: 4,
+  waypoints: [
+    { name: 'Camp Lot', lat: 46.8, lon: -121.7, elev_ft: 5000, distance_miles: 0 },
+    { name: 'Meadow', lat: 46.82, lon: -121.7, elev_ft: 6000, distance_miles: 2 },
+    { name: 'Pace Test Peak', lat: 46.84, lon: -121.7, elev_ft: 7000, distance_miles: 4 },
+  ],
+  track: [[0, 5000], [1, 5500], [2, 6000], [3, 6500], [4, 7000]],
+  route_metadata: { fileName: 'pace.gpx', routeShape: 'point-to-point' },
+  pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 60, stopBufferMinutes: 30 },
+  ...overrides,
+});
+
+test('a GPX track retraced as an out-and-back gets arrivals from the traveler\'s pace, a fit check and a turnaround', async () => {
+  const response = await request(gpxPaceApp()).post('/api/route-analysis').send(gpxPaceBody({ route_shape: 'out-and-back' }));
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.name)).toEqual([
+    'Camp Lot', 'Meadow', 'Pace Test Peak', 'Return to Meadow', 'Return to Camp Lot',
+  ]);
+  expect(response.body.waypoints.map((waypoint) => waypoint.distance_miles)).toEqual([0, 2, 4, 6, 8]);
+  // Up: 4 mi × 30 + 2,000 ft × 60/1,000 = 240 min; down: 120 + 2,000 × 20/1,000 = 160 min;
+  // 30 min of stops spread over 400 moving minutes.
+  expect(response.body.waypoints.map((waypoint) => waypoint.offset_minutes)).toEqual([0, 129, 258, 344, 430]);
+  expect(response.body.summaries.map((summary) => summary.etaTime)).toEqual(['06:00', '08:09', '10:18', '11:44', '13:10']);
+  expect(response.body.timing).toMatchObject({
+    mode: 'pace', roundTrip: true, routeShape: 'out-and-back', shapeSource: 'traveler', trackTimed: true,
+    stopMinutes: 30, estimatedMinutes: 430, windowFit: 'longer',
+    turnaround: { objectiveName: 'Pace Test Peak', objectiveEta: '10:18', returnMinutes: 172, byPlanEnd: '07:08', byDark: '16:38', sunset: '19:30' },
+  });
+  expect(response.body.timing.turnaround.marginToPlanEndMinutes).toBeLessThan(0);
+  expect(response.body.analysis).toContain('turn around at Pace Test Peak by 07:08');
+});
+
+test('a one-way GPX track is timed by pace as it is, and without a pace the plan\'s window spreads it', async () => {
+  const oneWay = await request(gpxPaceApp()).post('/api/route-analysis').send(gpxPaceBody());
+  expect(oneWay.status).toBe(200);
+  expect(oneWay.body.waypoints).toHaveLength(3);
+  expect(oneWay.body.timing).toMatchObject({ mode: 'pace', roundTrip: false, estimatedMinutes: 270, windowFit: 'fits' });
+  expect(oneWay.body.timing.routeShape).toBeUndefined();
+  expect(oneWay.body.timing.turnaround).toBeUndefined();
+
+  const noPace = await request(gpxPaceApp()).post('/api/route-analysis').send(gpxPaceBody({ pace: undefined }));
+  expect(noPace.body.timing.mode).toBe('window');
+  expect(noPace.body.waypoints.at(-1).offset_minutes).toBe(240);
+  expect(noPace.body.timing.estimatedMinutes).toBeUndefined();
+});
+
+test('the traveler can close a named route as a loop or finish it one way; a loop with an unknown way back is not timed by pace', async () => {
+  const landmarks = JSON.stringify([
+    { name: 'Shape Trailhead', lat: 40.0, lon: -105.1, elev_ft: 8000 },
+    { name: 'Shape Ridge', lat: 40.02, lon: -105.08, elev_ft: 10000 },
+    { name: 'Shape Peak', lat: 40.03, lon: -105.05, elev_ft: 11000, objective: true },
+  ]);
+  const body = { peak: 'Shape Override Peak', route: 'Shape Trail', lat: 40.03, lon: -105.05, date: '2026-07-12', start: '06:00',
+    route_distance_rt_miles: 12, pace: { minutesPerMile: 25, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 20 } };
+
+  const loop = await request(generatedRouteApp(landmarks)).post('/api/route-analysis').send({ ...body, route_shape: 'loop' });
+  expect(loop.status).toBe(200);
+  expect(loop.body.waypoints.map((waypoint) => waypoint.name)).toEqual(['Shape Trailhead', 'Shape Ridge', 'Shape Peak', 'Return to Shape Trailhead']);
+  expect(loop.body.waypoints.every((waypoint) => waypoint.leg === undefined)).toBe(true);
+  expect(loop.body.timing).toMatchObject({ routeShape: 'loop', roundTrip: false, mode: 'window' });
+
+  const oneWay = await request(generatedRouteApp(landmarks)).post('/api/route-analysis').send({ ...body, route_shape: 'point-to-point' });
+  expect(oneWay.body.waypoints.map((waypoint) => waypoint.name)).toEqual(['Shape Trailhead', 'Shape Ridge', 'Shape Peak']);
+  expect(oneWay.body.timing).toMatchObject({ routeShape: 'point-to-point', roundTrip: false });
+
+  // Left to the route, it is retraced, scaled to its listed length and timed by pace.
+  const auto = await request(generatedRouteApp(landmarks)).post('/api/route-analysis').send(body);
+  expect(auto.body.waypoints).toHaveLength(5);
+  expect(auto.body.timing).toMatchObject({ routeShape: 'out-and-back', roundTrip: true, distanceBasis: 'route-length', mode: 'pace' });
+  expect(auto.body.timing.turnaround.objectiveName).toBe('Shape Peak');
+});

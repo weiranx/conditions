@@ -108,7 +108,7 @@ const workspace = (overrides = {}) => ({
   objectiveName: 'Test mountain', position: { lat: 46, lng: -121 },
   forecastDate: '2026-09-08', alpineStartTime: '23:00', travelWindowHours: 4,
   objectiveTimezone: 'America/Los_Angeles', customRouteName: '', plannedRouteName: '',
-  handleAnalyzePlannedRoute: () => {}, setCustomRouteName: () => {},
+  handleAnalyzePlannedRoute: () => {}, setCustomRouteName: () => {}, routeShape: 'auto', setRouteShape: () => {},
   routeSuggestions: [{ name: 'West ridge', class: 'Class 2', distance_rt_miles: 10, elev_gain_ft: 3000 }],
   formatElevationDisplay: n => `${n} ft`, formatDistanceDisplay: n => `${n} mi`,
   formatElevationDeltaDisplay: n => `+${n} ft`, formatTempDisplay: n => `${n}°F`,
@@ -197,16 +197,66 @@ test('a checkpoint is compared with the objective at the same local hour', () =>
   assert.match(html, /Vs\. objective<\/dt><dd>\+4°F · gusts −15 mph · rain −20%/);
 });
 
-test('a changed plan marks the analysis as out of date, except the duration when arrivals follow pace', () => {
+test('a changed plan marks the analysis as out of date: date, start, duration, shape, and pace when arrivals follow it', () => {
   const plan = { date: '2026-09-08', start: '23:00', travelWindowHours: 4, lat: 46, lon: -121 };
-  const analysis = { ...result([point()]), request: { ...plan } };
-  assert.deepEqual(describeStaleRouteAnalysis(analysis, plan), []);
+  const pace = { minutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 45 };
+  const analysis = { ...result([point()]), request: { ...plan, routeShape: 'auto', pace } };
+  assert.deepEqual(describeStaleRouteAnalysis(analysis, { ...plan, routeShape: 'auto', pace }), []);
   assert.deepEqual(describeStaleRouteAnalysis(analysis, { ...plan, start: '05:00', travelWindowHours: 6 }), ['start time', 'planned duration']);
-  assert.deepEqual(describeStaleRouteAnalysis({ ...analysis, timing: { mode: 'pace' } }, { ...plan, travelWindowHours: 6 }), []);
+  assert.deepEqual(describeStaleRouteAnalysis(analysis, { ...plan, routeShape: 'loop' }), ['route shape']);
+  // Pace only matters when it set the arrivals.
+  const slower = { ...pace, minutesPerMile: 40 };
+  assert.deepEqual(describeStaleRouteAnalysis(analysis, { ...plan, pace: slower }), []);
+  assert.deepEqual(describeStaleRouteAnalysis({ ...analysis, timing: { mode: 'pace' } }, { ...plan, pace: slower }), ['pace']);
   assert.deepEqual(describeStaleRouteAnalysis({ ...analysis, request: undefined }, { ...plan, date: '2026-09-10' }), []);
   const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: analysis, alpineStartTime: '05:00',
     plannedRouteName: 'West ridge', customRouteName: 'West ridge' })} />);
   assert.match(html, /start time changed after this route was analyzed/);
+});
+
+const pacedTiming = (overrides = {}) => ({
+  basis: 'distance-and-vert', mode: 'pace', roundTrip: true, routeShape: 'out-and-back', travelWindowHours: 4,
+  pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 60 }, paceSource: 'user', stopMinutes: 30,
+  estimatedMinutes: 430, windowFit: 'longer', trackTimed: true,
+  turnaround: { objectiveName: 'Summit', objectiveEta: '10:18', returnMinutes: 172, byPlanEnd: '07:08', byDark: '16:38',
+    sunset: '19:30', marginToPlanEndMinutes: -190, marginToDarkMinutes: 380 },
+  ...overrides,
+});
+
+test('arrivals by pace show the estimate, a way to plan for it, and when to turn around', () => {
+  let planned = null;
+  const summaries = [point(), point({ name: 'Summit', elev_ft: 9000, distance_miles: 4 }),
+    point({ name: 'Return to Trailhead', leg: 'return', distance_miles: 8 })];
+  const html = renderToStaticMarkup(<Route workspace={workspace({
+    routeAnalysis: { ...result(summaries), timing: pacedTiming() },
+    updatePreferences: (update) => { planned = update; },
+  })} />);
+  assert.match(html, /Arrivals follow your pace: 30 min per mile, 60 min per 1,000 ft of climbing, descents at a third of that, and 30 min of stops spread along the way, over every climb and descent of your track\./);
+  assert.match(html, /At your pace this outing takes about 7 h, 30 min of stops included;\s*the plan is 4 h, so the last checkpoints fall after it ends/);
+  assert.match(html, /Planned time<\/dt><dd>4 h<\/dd><small>7 h at your pace/);
+  assert.match(html, /Turn around by<\/dt><dd>07:08<\/dd><small>You reach Summit later/);
+  assert.match(html, /Before dark<\/dt><dd>16:38/);
+  assert.match(html, /Return by the same route · turn around by 07:08/);
+  const doc = new JSDOM(html).window.document;
+  assert.ok([...doc.querySelectorAll('.sky-route-fit button')].some((b) => b.textContent === 'Plan 8 h'));
+  assert.equal(planned, null);
+  // A fitting estimate raises no notice.
+  const fits = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: { ...result(summaries), timing: pacedTiming({ windowFit: 'fits', estimatedMinutes: 250 }) } })} />);
+  assert.doesNotMatch(fits, /sky-route-fit/);
+});
+
+test('the chapter offers the route shape, and asks about a one-way GPX track', () => {
+  let shape = null;
+  const gpx = { name: 'Up only', fileName: 'up.gpx', checkpoints: [{}, {}], routeShape: 'point-to-point', distanceMiles: 4 };
+  const html = renderToStaticMarkup(<Route workspace={workspace({ importedGpxRoute: gpx, plannedRouteName: 'Up only',
+    routeShape: 'auto', setRouteShape: (value) => { shape = value; } })} />);
+  const doc = new JSDOM(html).window.document;
+  const buttons = [...doc.querySelectorAll('.sky-route-shape button')].map((b) => [b.textContent, b.getAttribute('aria-pressed')]);
+  assert.deepEqual(buttons, [['As drawn', 'true'], ['Out and back', 'false'], ['Loop', 'false'], ['One way', 'false']]);
+  assert.match(html, /This track ends away from where it starts/);
+  const chosen = renderToStaticMarkup(<Route workspace={workspace({ importedGpxRoute: gpx, plannedRouteName: 'Up only', routeShape: 'out-and-back' })} />);
+  assert.doesNotMatch(chosen, /This track ends away/);
+  assert.equal(shape, null);
 });
 
 test('unverified generated locations are called out once per place', () => {

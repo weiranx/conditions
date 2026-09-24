@@ -13,9 +13,15 @@ const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/r
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 const { finiteNumber, serializeWaypointReports } = require('../utils/route-briefing');
 const { toFiniteOrNull } = require('../utils/numbers');
+const { parseClockToMinutes } = require('../utils/time');
 const {
   DEFAULT_ROUTE_PACE,
+  appendLoopEnd,
   appendReturnCheckpoint,
+  buildTrackTimeline,
+  describeWindowFit,
+  minutesAtMiles,
+  mirrorTrack,
   assignRouteDistances,
   classifyDaylight,
   computeCheckpointFractions,
@@ -38,6 +44,8 @@ const withTimeout = (promise, ms, label) => {
 };
 
 const MAX_SUPPLIED_WAYPOINTS = 8;
+const MAX_TRACK_POINTS = 600;
+const ROUTE_SHAPES = new Set(['out-and-back', 'loop', 'point-to-point']);
 // A generated landmark this close to the objective, and not the objective itself,
 // has the objective's coordinates rather than its own.
 const COPIED_OBJECTIVE_COORDINATE_KM = 0.25;
@@ -70,11 +78,26 @@ const pick = (obj, keys) => {
 
 // `fractions` (0–1 per checkpoint, from computeCheckpointFractions) places each
 // arrival within the travel window; without it, route progress or even spacing is used.
-const buildCheckpointSchedule = (waypoints, date, start = '06:00', travelWindowHours = 12, fractions = null) => {
+// `offsets` (minutes after the start, from the traveler's pace) place arrivals directly.
+const buildCheckpointSchedule = (waypoints, date, start = '06:00', travelWindowHours = 12, fractions = null, offsets = null) => {
   const [year, month, day] = String(date).split('-').map(Number);
   const [hour, minute] = String(start || '06:00').split(':').map(Number);
   const baseMs = Date.UTC(year, month - 1, day, hour, minute);
   const safeHours = Math.max(1, Math.min(24, Math.round(Number(travelWindowHours) || 12)));
+  // Minutes after the start, set by pace, place each arrival directly.
+  if (Array.isArray(offsets)) {
+    const last = offsets[offsets.length - 1];
+    return waypoints.map((_, index) => {
+      const offsetMinutes = Math.max(0, Math.round(offsets[index]));
+      const eta = new Date(baseMs + offsetMinutes * 60 * 1000);
+      return {
+        date: eta.toISOString().slice(0, 10),
+        time: eta.toISOString().slice(11, 16),
+        offsetMinutes,
+        progressPercent: last > 0 ? Math.round((offsets[index] / last) * 100) : 0,
+      };
+    });
+  }
   return waypoints.map((waypoint, index) => {
     const fallbackProgress = waypoints.length > 1 ? (index / (waypoints.length - 1)) * 100 : 0;
     const progress = Array.isArray(fractions) && Number.isFinite(fractions[index])
@@ -93,7 +116,7 @@ const buildCheckpointSchedule = (waypoints, date, start = '06:00', travelWindowH
   });
 };
 
-const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = [], units = null) => {
+const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = [], units = null, routeTiming = null) => {
   const available = summaries.filter((summary) => summary.dataAvailable);
   const scored = available.filter((summary) => finiteNumber(summary.score));
   const worst = scored.reduce((current, summary) => (!current || Number(summary.score) < Number(current.score) ? summary : current), null);
@@ -131,7 +154,7 @@ const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = [], un
     `HAZARD ZONES: ${worst ? `${worst.name} has the least modeled margin at ${worst.etaTime} with a score of ${Math.round(worst.score)}${worst.tier ? ` (${worst.tier})` : ''}.` : 'No checkpoint score is available.'}${missing}${hazards ? ` Reported primary hazards: ${hazards}.` : ''}`,
     `WEATHER WINDOW: Checkpoint forecasts follow estimated arrival times from ${timing}. ${gustText} ${precipText}${incompleteWeather ? ' Weather coverage is incomplete; missing values are unknown.' : ''}`,
     `OTHER CONCERNS: ${concerns ? `${concerns} ` : ''}This briefing uses forecast and modeled checkpoint data. Verify official alerts, route access, surface conditions, and any unavailable checkpoint before departure.`,
-    `DECISION POINTS: Reassess at each timed checkpoint${worst ? `, especially before ${worst.name}` : ''}. Turn around when observed conditions arrive earlier or are worse than the checkpoint forecast.`,
+    `DECISION POINTS: Reassess at each timed checkpoint${worst ? `, especially before ${worst.name}` : ''}. Turn around when observed conditions arrive earlier or are worse than the checkpoint forecast.${routeTiming?.turnaround ? ` At your pace, turn around at ${routeTiming.turnaround.objectiveName} by ${routeTiming.turnaround.byPlanEnd} to finish within the planned window${routeTiming.turnaround.byDark ? `, and by ${routeTiming.turnaround.byDark} to finish before sunset` : ''}.` : ''}`,
     `BOTTOM LINE: ${available.some((summary) => (finiteNumber(summary.score) && summary.score < 40) || summary.tier === 'Extreme') ? 'The route contains a low-margin checkpoint and should not be treated as a go.' : !scored.length ? 'Checkpoint scores are unavailable; there is insufficient evidence for a route decision.' : 'Use the timed checkpoints as verification gates rather than a guarantee.'} Rebuild the route brief when timing or pace changes.`,
   ].join('\n');
 };
@@ -289,6 +312,34 @@ const sanitizeRouteMetadata = (raw) => {
   };
 };
 
+/**
+ * A GPX track's elevation along its length, [miles, elevFt | null] per point,
+ * so arrivals and the approach can follow every climb and descent between
+ * checkpoints. Null when not supplied.
+ */
+const sanitizeSuppliedTrack = (raw) => {
+  if (raw == null) return null;
+  if (!Array.isArray(raw) || raw.length < 2 || raw.length > MAX_TRACK_POINTS) {
+    throw new Error(`track must contain between 2 and ${MAX_TRACK_POINTS} points`);
+  }
+  const track = raw.map((point, index) => {
+    const miles = Number(Array.isArray(point) ? point[0] : point?.miles);
+    const rawElevation = Array.isArray(point) ? point[1] : point?.elevFt;
+    const elevFt = rawElevation == null ? null : Number(rawElevation);
+    if (!Number.isFinite(miles) || miles < 0 || miles > 1000) throw new Error(`track[${index}] must have a distance between 0 and 1000 miles`);
+    if (elevFt !== null && (!Number.isFinite(elevFt) || elevFt < -2000 || elevFt > 30000)) throw new Error(`track[${index}] must have a plausible elevation in feet`);
+    return { miles, elevFt };
+  });
+  if (track.some((point, index) => index > 0 && point.miles < track[index - 1].miles)) throw new Error('track distances must not decrease');
+  return track[track.length - 1].miles > 0 ? track : null;
+};
+
+const clockAfter = (start, minutes) => {
+  const [hour, minute] = String(start || '06:00').split(':').map(Number);
+  const total = ((((hour * 60 + minute + Math.round(minutes)) % 1440) + 1440) % 1440);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
+
 // Geocode a waypoint name near the peak using Nominatim (cached 24h), return { lat, lon } or null
 const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHeaders) => {
   const cacheKey = `${normalizeTextKey(name)}|${normalizeCoordKey(peakLat, peakLon)}`;
@@ -393,13 +444,17 @@ const nameMappedCheckpoints = async (waypoints, landmarks, { safeLat, safeLon, s
   }
 };
 
-const describeTiming = ({ basis, roundTrip, routeShape, travelWindowHours, pace, paceSource }, daylightEnabled = true) => {
+const describeTiming = ({ basis, mode, roundTrip, routeShape, travelWindowHours, pace, paceSource, stopMinutes, estimatedMinutes, windowFit, turnaround }, daylightEnabled = true) => {
   const weighting = basis === 'distance-and-vert'
     ? `weighted by segment distance and elevation change (${pace.minutesPerMile} min per mile, ${pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing${paceSource === 'user' ? ' from the traveler\'s pace settings' : ', a default ratio'})`
     : basis === 'distance'
       ? 'weighted by segment distance only because some checkpoint elevations are unknown'
       : basis === 'progress' ? 'spaced by reported route progress' : 'spaced evenly because route distances are unknown';
-  return `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the window and the checkpoints after it (leg "return") retrace the same route back to the start, the final one being the estimated return to the start.' : ''}${routeShape === 'loop' ? ' The route is a loop: checkpoints after the objective continue around it, and the final checkpoint is the return to the start.' : routeShape === 'point-to-point' ? ' The route is a traverse: checkpoints after the objective continue to a different finish.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
+  const hours = (minutes) => `${Math.round((minutes / 60) * 10) / 10} hours`;
+  const arrivals = mode === 'pace'
+    ? `ETAs follow the traveler's own pace (${pace.minutesPerMile} min per mile, ${pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing, descents at a third of that, plus ${stopMinutes} minutes of stops spread across the outing), about ${hours(estimatedMinutes)} in all against a planned ${travelWindowHours}-hour window${windowFit === 'longer' ? ', so the outing runs past the planned window' : windowFit === 'shorter' ? ', so it finishes well inside the planned window' : ''}. They are estimates.${turnaround ? ` To finish within the plan, turn around at ${turnaround.objectiveName} by ${turnaround.byPlanEnd}${turnaround.byDark ? ` (by ${turnaround.byDark} to finish before sunset)` : ''}.` : ''}`
+    : `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.`;
+  return `${arrivals}${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the outing and the checkpoints after it (leg "return") retrace the same route back to the start, the final one being the estimated return to the start.' : ''}${routeShape === 'loop' ? ' The route is a loop: checkpoints after the objective continue around it, and the final checkpoint is the return to the start.' : routeShape === 'point-to-point' ? ' The route is a traverse or one-way trip: it finishes somewhere other than where it starts.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
 };
 
 const registerRouteAnalysisRoutes = ({
@@ -465,7 +520,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
   // POST /api/route-analysis
   // Body: { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints?, route_metadata?, pace?, route_distance_rt_miles? }
   app.post('/api/route-analysis', async (req, res) => {
-    const { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints, route_metadata, pace, route_distance_rt_miles } = req.body;
+    const { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints, route_metadata, pace, route_distance_rt_miles, route_shape, track } = req.body;
     if (!peak || !route || lat == null || lon == null || !date) {
       return res.status(400).json({ error: 'peak, route, lat, lon, and date are required' });
     }
@@ -489,6 +544,14 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       return res.status(400).json({ error: error.message });
     }
     const routeMetadata = suppliedWaypoints ? sanitizeRouteMetadata(route_metadata) : null;
+    let suppliedTrack = null;
+    try {
+      suppliedTrack = suppliedWaypoints ? sanitizeSuppliedTrack(track) : null;
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    // How the traveler says the route runs past its objective; null leaves it to the route.
+    const requestedShape = ROUTE_SHAPES.has(route_shape) ? route_shape : null;
     const userPace = sanitizeRoutePace(pace);
     // Round-trip length of a suggested route, used to scale checkpoint distances.
     const routeDistanceRtMiles = toFiniteOrNull(route_distance_rt_miles);
@@ -523,6 +586,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       let routeGeometry = null;
       let waypointsCopy;
       let routeShape = 'out-and-back';
+      // Where the objective sits among the checkpoints, when landmarks continue past it.
+      let objectiveIndex = null;
       const locatedAtObjectiveByMistake = new Set();
       const generateLandmarks = () => {
         // Version the cache key so older generic "checkpoint 2" results are not
@@ -582,6 +647,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           waypointsCopy = generatedWaypoints.map(({ objective, ...wp }) => ({ ...wp }));
           const shape = classifyGeneratedRoute(generatedWaypoints);
           routeShape = shape.routeShape;
+          objectiveIndex = shape.objectiveIndex;
           const summit = waypointsCopy[shape.objectiveIndex];
           summit.lat = safeLat;
           summit.lon = safeLon;
@@ -649,11 +715,34 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           }
         }));
       }
-      // GPX tracks already cover the whole outing, and so do generated loops and
-      // traverses. Other named and mapped routes stop at the objective, so add the
-      // trip back down through the same checkpoints.
-      const roundTrip = routeSource !== 'gpx' && routeShape === 'out-and-back';
+      // Shape the outing. GPX tracks already cover it; a one-way track is retraced
+      // when the traveler says it is an out-and-back. Named and mapped routes run
+      // to the objective and, unless the landmarks already continue past it, are
+      // retraced back down (out-and-back), closed back to the start (loop), or
+      // left to finish there (one way).
+      const naturalShape = routeSource === 'gpx'
+        ? (routeMetadata?.routeShape === 'closed route' ? 'loop' : 'point-to-point')
+        : routeShape;
+      let effectiveShape = requestedShape ?? naturalShape;
+      // Unknown way back from the objective: the loop's return can't be timed by pace.
+      let returnPathUnknown = false;
+      if (routeSource === 'gpx') {
+        if (effectiveShape === 'out-and-back' && naturalShape === 'loop') effectiveShape = 'loop';
+      } else if (effectiveShape !== naturalShape) {
+        const objectiveAt = objectiveIndex ?? waypointsCopy.length - 1;
+        // Drop landmarks past the objective when the chosen shape doesn't follow them.
+        if (naturalShape !== 'out-and-back') waypointsCopy = waypointsCopy.slice(0, objectiveAt + 1);
+        if (effectiveShape === 'loop') {
+          waypointsCopy = appendLoopEnd(waypointsCopy);
+          returnPathUnknown = true;
+          if (locatedAtObjectiveByMistake.has(waypointsCopy[0])) locatedAtObjectiveByMistake.add(waypointsCopy[waypointsCopy.length - 1]);
+        }
+        objectiveIndex = objectiveAt;
+      }
+      routeShape = effectiveShape;
+      const roundTrip = effectiveShape === 'out-and-back' && !(routeSource === 'gpx' && naturalShape !== 'point-to-point');
       const outboundWaypoints = waypointsCopy;
+      if (objectiveIndex === null) objectiveIndex = outboundWaypoints.length - 1;
       let distanceBasis = null;
       if (roundTrip) {
         waypointsCopy = appendReturnCheckpoint(waypointsCopy);
@@ -671,11 +760,45 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           if (progress) waypoint.progress_percent = progress[index];
           else delete waypoint.progress_percent;
         });
+      } else if (roundTrip) {
+        // A retraced GPX track: the return checkpoints continue its distances.
+        assignRouteDistances(waypointsCopy, haversineKm, null, { measuredAlongTrail: true });
+        const total = waypointsCopy[waypointsCopy.length - 1].distance_miles;
+        waypointsCopy.forEach((waypoint) => {
+          if (Number.isFinite(waypoint.distance_miles) && total > 0) waypoint.progress_percent = Math.round((waypoint.distance_miles / total) * 100);
+        });
       }
       const routePace = userPace || DEFAULT_ROUTE_PACE;
-      const { basis: timingBasis, fractions } = computeCheckpointFractions(waypointsCopy, { haversineKm, pace: routePace });
+      const { basis: timingBasis, fractions, movingMinutes: checkpointMovingMinutes } = computeCheckpointFractions(waypointsCopy, { haversineKm, pace: routePace });
       const travelWindowHours = Math.max(1, Math.min(24, Math.round(Number(travel_window_hours) || 12)));
-      const checkpointSchedule = buildCheckpointSchedule(waypointsCopy, date, start || '06:00', travelWindowHours, fractions);
+      // Arrivals follow the traveler's own pace when the route's length is known:
+      // a GPX track, a mapped trail, or a named route scaled to its listed length.
+      // Otherwise they are spread across the planned duration.
+      const gpxDistancesKnown = routeSource === 'gpx' && waypointsCopy.every((waypoint) => Number.isFinite(waypoint.distance_miles));
+      const trackForTiming = suppliedTrack && gpxDistancesKnown ? (roundTrip ? mirrorTrack(suppliedTrack) : suppliedTrack) : null;
+      const paceMode = Boolean(userPace) && !returnPathUnknown && (
+        trackForTiming !== null
+        || (timingBasis === 'distance-and-vert' && (gpxDistancesKnown || distanceBasis === 'along-trail' || distanceBasis === 'route-length'))
+      );
+      const stopMinutes = paceMode ? (userPace.stopBufferMinutes ?? 0) : 0;
+      let estimatedMinutes = null;
+      let checkpointSchedule;
+      if (paceMode) {
+        let movingOffsets;
+        if (trackForTiming) {
+          const timeline = buildTrackTimeline(trackForTiming, routePace);
+          movingOffsets = waypointsCopy.map((waypoint) => minutesAtMiles(trackForTiming, timeline, waypoint.distance_miles));
+        } else {
+          movingOffsets = fractions.map((fraction) => fraction * checkpointMovingMinutes);
+        }
+        const moving = movingOffsets[movingOffsets.length - 1];
+        // Stops are spread across the outing so it ends when the trip does.
+        const scale = moving > 0 ? (moving + stopMinutes) / moving : 1;
+        estimatedMinutes = Math.round(moving + stopMinutes);
+        checkpointSchedule = buildCheckpointSchedule(waypointsCopy, date, start || '06:00', 24, null, movingOffsets.map((offset) => offset * scale));
+      } else {
+        checkpointSchedule = buildCheckpointSchedule(waypointsCopy, date, start || '06:00', travelWindowHours, fractions);
+      }
       waypointsCopy.forEach((waypoint, index) => {
         waypoint.eta_date = checkpointSchedule[index].date;
         waypoint.eta_time = checkpointSchedule[index].time;
@@ -734,14 +857,45 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       });
       // Terrain sampling describes the mapped geometry once, not the retraced return.
       const terrainProfile = buildRouteTerrainProfile(outboundWaypoints, haversineKm);
+      // With a way back, when to turn around at the objective to finish by the
+      // plan's end, and by sunset where the route ends.
+      let turnaround = null;
+      if (paceMode && (roundTrip || routeShape === 'loop') && objectiveIndex < waypointsCopy.length - 1) {
+        const objectiveOffset = waypointsCopy[objectiveIndex].offset_minutes;
+        const returnMinutes = waypointsCopy[waypointsCopy.length - 1].offset_minutes - objectiveOffset;
+        const finishSettled = safetySettled[waypointsCopy.length - 1];
+        const sunset = parseClockToMinutes(finishSettled.status === 'fulfilled' ? finishSettled.value?.payload?.solar?.sunset : null);
+        const [startHour, startMinute] = String(start || '06:00').split(':').map(Number);
+        const startClock = startHour * 60 + startMinute;
+        turnaround = {
+          objectiveName: waypointsCopy[objectiveIndex].name,
+          objectiveEta: waypointsCopy[objectiveIndex].eta_time,
+          returnMinutes,
+          byPlanEnd: clockAfter(start, travelWindowHours * 60 - returnMinutes),
+          ...(sunset !== null ? { byDark: clockAfter('00:00', sunset - returnMinutes), sunset: clockAfter('00:00', sunset) } : {}),
+          // Whether the objective is reached before those times, in minutes after the start.
+          marginToPlanEndMinutes: travelWindowHours * 60 - returnMinutes - objectiveOffset,
+          ...(sunset !== null ? { marginToDarkMinutes: sunset - startClock - returnMinutes - objectiveOffset } : {}),
+        };
+      }
       const timing = {
         basis: timingBasis,
+        mode: paceMode ? 'pace' : 'window',
         roundTrip,
-        ...(routeSource !== 'gpx' ? { routeShape } : {}),
+        // A GPX track's shape is only reported when known: closed, or set by the traveler.
+        ...(routeSource !== 'gpx' || requestedShape || routeShape === 'loop' ? { routeShape } : {}),
+        ...(requestedShape ? { shapeSource: 'traveler' } : {}),
         travelWindowHours,
         pace: routePace,
         paceSource: userPace ? 'user' : 'default',
         ...(distanceBasis ? { distanceBasis } : {}),
+        ...(paceMode ? {
+          stopMinutes,
+          estimatedMinutes,
+          windowFit: describeWindowFit(estimatedMinutes, travelWindowHours * 60),
+        } : {}),
+        ...(trackForTiming ? { trackTimed: true } : {}),
+        ...(turnaround ? { turnaround } : {}),
       };
 
       // Step 4: Synthesize — feed the AI the raw safety report per waypoint (bounded),
@@ -773,7 +927,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         : `\nDisabled product domains: ${disabledDomains.join(', ')}. Do not mention them, infer them, recommend domain-specific checks or gear, or refer the user to their sources.\n`;
 
       let analysisSource = 'deterministic';
-      let generatedAnalysis = buildDeterministicRouteBriefing(summaries, failedWaypointNames, units);
+      let generatedAnalysis = buildDeterministicRouteBriefing(summaries, failedWaypointNames, units, timing);
       if (aiFeatureEnabled && summaries.some((summary) => summary.dataAvailable)) {
         try {
           const aiAnalysis = await withTimeout(askAI(

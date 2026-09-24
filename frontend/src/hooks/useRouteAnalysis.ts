@@ -18,6 +18,27 @@ export interface RouteOption {
 
 export type RouteLeg = 'return';
 
+/** How a route runs past its objective: back the same way, around a loop, or on to another finish. */
+export type RouteShape = 'out-and-back' | 'loop' | 'point-to-point';
+/** The traveler's choice of shape; "auto" leaves it to the route (a GPX track as drawn, a named route's landmarks). */
+export type RouteShapeChoice = 'auto' | RouteShape;
+
+/** When to turn around at the objective, from the traveler's pace. */
+export interface RouteTurnaround {
+  objectiveName: string;
+  objectiveEta: string;
+  /** Minutes from the objective back to the finish. */
+  returnMinutes: number;
+  /** Latest turnaround clock (HH:MM) to finish by the end of the planned window. */
+  byPlanEnd: string;
+  /** Latest turnaround clock to finish by sunset at the finish, when sunset is known. */
+  byDark?: string;
+  sunset?: string;
+  /** Minutes to spare at the objective before those turnaround times; negative when it is reached later. */
+  marginToPlanEndMinutes: number;
+  marginToDarkMinutes?: number;
+}
+
 export interface RouteWaypointSummary {
   name: string;
   /** Null when no elevation source knew the checkpoint's elevation. */
@@ -91,11 +112,15 @@ export interface RouteAnalysisRequest {
   date: string;
   start: string;
   travelWindowHours: number;
+  routeShape?: RouteShapeChoice;
+  pace?: RoutePace;
 }
 
 export interface RoutePace {
   minutesPerMile: number;
   ascentMinutesPer1000Ft: number;
+  /** Stop and transition minutes for the outing; with a pace, arrivals follow it directly. */
+  stopBufferMinutes?: number;
 }
 
 /** How checkpoint arrival times were spread across the planned travel window. */
@@ -108,11 +133,22 @@ export interface RouteTiming {
    */
   mode?: 'pace' | 'window';
   roundTrip: boolean;
-  /** How a named route runs past its objective: back the same way, around a loop, or on to another finish. */
-  routeShape?: 'out-and-back' | 'loop' | 'point-to-point';
+  /** How the route runs past its objective: back the same way, around a loop, or on to another finish. */
+  routeShape?: RouteShape;
+  /** Set when the traveler chose the shape rather than the route. */
+  shapeSource?: 'traveler';
   travelWindowHours: number;
   pace: RoutePace;
   paceSource: 'user' | 'default';
+  /** Stop and transition minutes spread across the outing, in pace mode. */
+  stopMinutes?: number;
+  /** The whole outing at the traveler's pace, stops included, in pace mode. */
+  estimatedMinutes?: number;
+  /** How the pace estimate compares with the planned duration, in pace mode. */
+  windowFit?: 'fits' | 'longer' | 'shorter';
+  /** Arrivals follow every climb and descent of the GPX track, not just those between checkpoints. */
+  trackTimed?: boolean;
+  turnaround?: RouteTurnaround;
   /**
    * How named-route checkpoint distances were found: measured along a mapped
    * trail, scaled to the route's listed length, or straight lines.
@@ -137,6 +173,9 @@ export interface RouteAnalysisOptions {
   pace?: RoutePace;
   /** Round-trip length of the chosen suggested route, to scale checkpoint distances. */
   routeDistanceRtMiles?: number;
+  /** A GPX track's distance and elevation, [miles, feet | null], to time arrivals over every climb. */
+  track?: Array<[number, number | null]>;
+  routeShape?: RouteShapeChoice;
 }
 
 export interface RouteLoadingState {
@@ -156,6 +195,8 @@ export interface UseRouteAnalysisReturn {
   setRouteError: Dispatch<SetStateAction<string | null>>;
   customRouteName: string;
   setCustomRouteName: (value: string) => void;
+  routeShape: RouteShapeChoice;
+  setRouteShape: (value: RouteShapeChoice) => void;
   fetchRouteSuggestions: (peak: string, lat: number, lon: number) => Promise<void>;
   fetchRouteAnalysis: (
     peak: string,
@@ -175,6 +216,7 @@ export interface UseRouteAnalysisReturn {
     routeSuggestions: RouteOption[] | null;
     routeAnalysis: RouteAnalysisResult | null;
     customRouteName: string;
+    routeShape?: RouteShapeChoice;
   }) => void;
 }
 
@@ -182,12 +224,14 @@ export function useRouteAnalysis(initialState?: {
   routeSuggestions?: RouteOption[] | null;
   routeAnalysis?: RouteAnalysisResult | null;
   customRouteName?: string;
+  routeShape?: RouteShapeChoice;
 }): UseRouteAnalysisReturn {
   const [routeSuggestions, setRouteSuggestions] = useState<RouteOption[] | null>(initialState?.routeSuggestions ?? null);
   const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResult | null>(initialState?.routeAnalysis ?? null);
   const [routeLoadingState, setRouteLoadingState] = useState<RouteLoadingState | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [customRouteName, setCustomRouteName] = useState(initialState?.customRouteName ?? '');
+  const [routeShape, setRouteShape] = useState<RouteShapeChoice>(initialState?.routeShape ?? 'auto');
   const activeRequestRef = useRef<{ id: number; controller: AbortController } | null>(null);
   const nextRequestIdRef = useRef(0);
 
@@ -264,13 +308,19 @@ export function useRouteAnalysis(initialState?: {
           ...(options?.routeMetadata ? { route_metadata: options.routeMetadata } : {}),
           ...(options?.pace ? { pace: options.pace } : {}),
           ...(options?.routeDistanceRtMiles ? { route_distance_rt_miles: options.routeDistanceRtMiles } : {}),
+          ...(options?.track ? { track: options.track } : {}),
+          ...(options?.routeShape && options.routeShape !== 'auto' ? { route_shape: options.routeShape } : {}),
         }),
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
       if (!isCurrentRequest(request.id)) return;
       // Keep the name and plan with the result, so renaming the route later can't
       // relabel these checkpoints and a changed plan can be flagged.
-      setRouteAnalysis({ ...(payload as RouteAnalysisResult), routeName: route, request: { lat, lon, date, start, travelWindowHours } });
+      setRouteAnalysis({
+        ...(payload as RouteAnalysisResult),
+        routeName: route,
+        request: { lat, lon, date, start, travelWindowHours, routeShape: options?.routeShape ?? 'auto', ...(options?.pace ? { pace: options.pace } : {}) },
+      });
     } catch (err) {
       if (request.controller.signal.aborted || !isCurrentRequest(request.id)) return;
       setRouteError(err instanceof Error ? err.message : 'Route analysis failed. Try again.');
@@ -288,6 +338,7 @@ export function useRouteAnalysis(initialState?: {
     setRouteAnalysis(null);
     setRouteError(null);
     setCustomRouteName('');
+    setRouteShape('auto');
   }, []);
 
   const clearRouteAnalysis = useCallback(() => {
@@ -303,6 +354,7 @@ export function useRouteAnalysis(initialState?: {
     routeSuggestions: RouteOption[] | null;
     routeAnalysis: RouteAnalysisResult | null;
     customRouteName: string;
+    routeShape?: RouteShapeChoice;
   }) => {
     activeRequestRef.current?.controller.abort();
     activeRequestRef.current = null;
@@ -312,6 +364,7 @@ export function useRouteAnalysis(initialState?: {
     setRouteSuggestions(state.routeSuggestions);
     setRouteAnalysis(state.routeAnalysis);
     setCustomRouteName(state.customRouteName);
+    setRouteShape(state.routeShape ?? 'auto');
   }, []);
 
   return {
@@ -324,6 +377,8 @@ export function useRouteAnalysis(initialState?: {
     setRouteError,
     customRouteName,
     setCustomRouteName,
+    routeShape,
+    setRouteShape,
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,

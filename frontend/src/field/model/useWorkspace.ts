@@ -97,7 +97,7 @@ import { useTripForecast } from "../../hooks/useTripForecast";
 import { useSafetyData } from "../../hooks/useSafetyData";
 import { useSearchSuggestions } from "../../hooks/useSearchSuggestions";
 import { normalizeSuggestionText } from "../../lib/search";
-import { estimateRouteDurationHours, type ParsedGpxRoute } from "../../lib/gpx";
+import { estimateRouteDurationHours, gpxTrackForAnalysis, type ParsedGpxRoute } from "../../lib/gpx";
 import { useUrlState, useSyncUrlEffect } from "../../hooks/useUrlState";
 import type { AppView } from "../../hooks/useUrlState";
 import { useReportGeneration } from "./useReportGeneration";
@@ -385,6 +385,8 @@ export function useWorkspace() {
     setRouteError,
     customRouteName,
     setCustomRouteName,
+    routeShape,
+    setRouteShape,
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,
@@ -1042,6 +1044,7 @@ export function useWorkspace() {
                 routeAnalysis,
                 customRouteName,
                 gpxRoute: importedGpxRoute,
+                routeShape,
               },
             },
           )
@@ -1060,6 +1063,7 @@ export function useWorkspace() {
       routeAnalysis,
       customRouteName,
       importedGpxRoute,
+      routeShape,
     ],
   );
 
@@ -1248,6 +1252,7 @@ export function useWorkspace() {
           pace: {
             minutesPerMile: preferences.runnerPaceMinutesPerMile,
             ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+            stopBufferMinutes: preferences.runnerStopBufferMinutes,
           },
         },
       );
@@ -1259,6 +1264,7 @@ export function useWorkspace() {
       preferences.elevationUnit,
       preferences.runnerPaceMinutesPerMile,
       preferences.runnerAscentMinutesPer1000Ft,
+      preferences.runnerStopBufferMinutes,
       requestAiAccess,
     ],
   );
@@ -1285,6 +1291,7 @@ export function useWorkspace() {
         trailheadElevationFt,
         gpxRoute: importedGpxRoute,
         routeCheckpoints: routeAnalysis?.waypoints,
+        routeRetracesTrack: routeAnalysis?.routeSource === "gpx" && routeAnalysis.timing?.roundTrip === true,
         timing: {
           paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
           ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
@@ -1761,12 +1768,18 @@ export function useWorkspace() {
               maxElevationFt: gpx.maxElevationFt,
               routeShape: gpx.routeShape,
             },
+            track: gpxTrackForAnalysis(gpx),
+            routeShape,
           }
-        : suggestion && Number.isFinite(suggestion.distance_rt_miles) && suggestion.distance_rt_miles > 0
-          ? { routeDistanceRtMiles: suggestion.distance_rt_miles }
-          : undefined,
+        : {
+            ...(suggestion && Number.isFinite(suggestion.distance_rt_miles) && suggestion.distance_rt_miles > 0
+              ? { routeDistanceRtMiles: suggestion.distance_rt_miles }
+              : {}),
+            routeShape,
+          },
     );
   }, [
+    routeShape,
     plannedRouteName,
     routeSuggestions,
     viewingHistoryReport,
@@ -2274,6 +2287,8 @@ export function useWorkspace() {
     setRouteError,
     customRouteName,
     setCustomRouteName,
+    routeShape,
+    setRouteShape,
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,
