@@ -38,7 +38,7 @@
 .sky-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 20px 40px; align-items: start; }
 .sky-hero-text { min-width: 0; max-width: 640px; }
 .sky-kicker { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
-.sky-hero .sky-hero-title { margin: 6px 0 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -0.032em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
+.sky-hero .sky-hero-title { margin: 6px 0 0; font-family: var(--sky-display); font-size: 54px; line-height: 1.02; font-weight: 500; letter-spacing: -0.022em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
 .sky-subtitle { margin: 8px 0 0; font-size: 15px; color: rgba(255, 255, 255, 0.92); font-variant-numeric: tabular-nums; }
 .sky-generated, .sky-nowrap { white-space: nowrap; }
 .sky-pill {
@@ -143,7 +143,7 @@
 .sky-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 10px 0 4px; border: 0; background: none; color: var(--sky-accent); font-size: 16px; font-weight: 600; cursor: pointer; border-radius: 10px; }
 .sky-chapter-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 32px; flex-wrap: wrap; padding: 8px 0 12px; }
 .sky-chapter-title .sky-kicker { color: var(--sky-secondary); opacity: 1; }
-.sky-chapter-title h1 { margin: 4px 0 0; font-size: 36px; line-height: 1.08; font-weight: 700; letter-spacing: -0.03em; outline: none; }
+.sky-chapter-title h1 { margin: 4px 0 0; font-family: var(--sky-display); font-size: 46px; line-height: 1.04; font-weight: 500; letter-spacing: -0.022em; outline: none; }
 .sky-chapter-tabs { position: sticky; top: var(--field-sticky-top, 0px); z-index: 4; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 10px; border-bottom: 1px solid var(--sky-separator); background: color-mix(in srgb, var(--f-bg) 88%, transparent); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); }
 .sky-chapter-tabs button { flex: none; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: none; color: var(--sky-secondary); font-size: 14px; font-weight: 500; cursor: pointer; }
 .sky-chapter-tabs button[aria-current="page"] { background: var(--sky-label); color: var(--sky-bg); font-weight: 600; }
@@ -163,7 +163,7 @@
 
 .sky-pager { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 36px; }
 .sky-pager button {
-  display: grid; gap: 2px; text-align: left; padding: 14px 16px; border-radius: 16px; border: 0; background: var(--sky-surface); color: var(--sky-label); cursor: pointer;
+  display: grid; gap: 2px; text-align: left; padding: 14px 16px; border-radius: 16px; border: 0; background: var(--sky-surface) var(--sky-sheen); color: var(--sky-label); cursor: pointer;
   box-shadow: var(--sky-elevation); transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .sky-pager button:hover { box-shadow: var(--sky-elevation-raised); transform: translateY(-1px); }
@@ -190,7 +190,7 @@
 /* The note sits beside the heading when both fit; in a narrow column it drops below
    instead of squeezing the heading onto two lines. */
 .sky-sh { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; padding: 0 4px 12px; }
-.sky-sh h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.sky-sh h2 { margin: 0; font-family: var(--sky-display); font-size: 28px; font-weight: 500; line-height: 1.15; letter-spacing: -0.015em; }
 .sky-sh p { margin: 0; font-size: 14px; color: var(--sky-secondary); }
 .sky-nums { display: grid; grid-template-columns: 1.1fr 1fr 1.15fr; gap: 14px; }
 .sky-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -198,7 +198,7 @@
 
 .sky-card {
   position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0;
-  padding: 16px 18px; border-radius: var(--sky-radius); border: 0; background: var(--sky-surface);
+  padding: 16px 18px; border-radius: var(--sky-radius); border: 0; background: var(--sky-surface) var(--sky-sheen);
   box-shadow: var(--sky-elevation); color: var(--sky-label); text-align: left; font-size: 15px;
 }
 button.sky-card { cursor: pointer; transition: box-shadow 0.2s ease, transform 0.2s ease; }
@@ -253,7 +253,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
 .sky-item-cat { font-size: 12px; font-weight: 600; color: var(--sky-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
 .sky-item-name { font-size: 16px; font-weight: 600; }
 
-.sky-group { border-radius: var(--sky-radius); overflow: hidden; background: var(--sky-surface); box-shadow: var(--sky-elevation); }
+.sky-group { border-radius: var(--sky-radius); overflow: hidden; background: var(--sky-surface) var(--sky-sheen); box-shadow: var(--sky-elevation); }
 .sky-row { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 16px; border: 0; background: none; color: var(--sky-label); text-align: left; cursor: pointer; }
 .sky-row + .sky-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 1px solid var(--sky-separator); }
 .sky-row > span:first-child { flex: 1; min-width: 0; display: grid; gap: 1px; }
@@ -276,7 +276,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-report { font-size: 17px; }
   .sky-hero { margin: 0 calc(50% - 50vw); border-radius: 0 0 24px 24px; }
   .sky-hero-in { padding: 16px 16px calc(var(--sky-scene) + var(--sky-ridge)); }
-  .sky-hero .sky-hero-title { font-size: 36px; }
+  .sky-hero .sky-hero-title { font-size: 42px; }
   .sky-hero h2 { font-size: 23px; }
   .sky-hero-actions { justify-content: flex-start; margin: 0 0 14px; }
   .sky-report .field-report-actions > button, .sky-report .field-report-actions summary { min-height: 44px; }
@@ -296,7 +296,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-action-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .sky-report .field-report-actions > button:not(.is-prominent) { padding: 0; width: 44px; justify-content: center; }
   .sky-chapter-tabs { margin: 0 calc(50% - 50vw); padding-inline: 20px; }
-  .sky-chapter-title h1 { font-size: 30px; }
+  .sky-chapter-title h1 { font-size: 38px; }
   .sky-daystrip { width: 100%; }
   .sky-pager { gap: 10px; }
 }

@@ -6,7 +6,7 @@
 .sky-setting-section { display: grid; gap: 0; min-width: 0; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px); }
 .sky-setting-section:focus { outline: none; }
 .sky-setting-section:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 8px; border-radius: 12px; }
-.sky-setting-section > h2 { margin: 0 0 10px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--sky-label); }
+.sky-setting-section > h2 { margin: 0 0 10px; font-family: var(--sky-display); font-size: 28px; font-weight: 500; letter-spacing: -0.015em; color: var(--sky-label); }
 .sky-setting-subhead { margin: 26px 0 8px; padding: 0 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sky-secondary); }
 
 /* A grouped card of rows */

@@ -45,7 +45,7 @@
   box-shadow: 0 0 0 1px var(--sky-hairline), 0 0 0 9px color-mix(in srgb, var(--sky-fill) 40%, transparent), 0 10px 24px -12px rgba(24, 32, 28, 0.28);
 }
 .sky-empty-card > svg { width: 26px; height: 26px; margin: 4px 0 8px; }
-.sky-empty-card :is(h2, h3) { margin: 0; font-size: 20px; font-weight: 700; }
+.sky-empty-card :is(h2, h3) { margin: 0; font-family: var(--sky-display); font-size: 25px; font-weight: 500; letter-spacing: -0.012em; }
 .sky-empty-card p { max-width: 46ch; margin: 0; font-size: 15px; line-height: 1.5; color: var(--sky-secondary); }
 .sky-empty-card .field-button { margin-top: 6px; }
 .field-app .field-button.sky-icon-only { width: 44px; padding: 0; justify-content: center; }
@@ -65,11 +65,11 @@
 .field-app .sky-lost { max-width: 560px; margin: 48px auto; padding: 44px 32px 36px; gap: 12px; }
 .sky-lost-icon { display: grid; place-items: center; box-sizing: border-box; width: 76px; height: 76px; padding: 0; margin-bottom: 10px; }
 .sky-lost-code { font-size: 13px; font-weight: 700; letter-spacing: 0.12em; color: var(--sky-secondary); }
-.field-app .sky-lost h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+.field-app .sky-lost h1 { margin: 0; font-family: var(--sky-display); font-size: 38px; font-weight: 500; letter-spacing: -0.02em; }
 .field-app .sky-lost p { max-width: 40ch; margin: 0; font-size: 16px; line-height: 1.5; color: var(--sky-secondary); }
 .sky-lost .sky-toolbar-actions { justify-content: center; margin-top: 10px; }
 @media (max-width: 650px) {
   .field-app .sky-lost { margin: 24px 0; padding: 32px 20px 24px; }
-  .field-app .sky-lost h1 { font-size: 26px; }
+  .field-app .sky-lost h1 { font-size: 32px; }
   .sky-lost .sky-toolbar-actions { flex-direction: column; align-items: stretch; }
 }
