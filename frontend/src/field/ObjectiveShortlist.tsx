@@ -188,7 +188,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
                   {state.objectives.find(o => o.id === option.objectiveId)?.name} · {dateLabel(option.day.date)}
                 </button>)}
               </div></div>}</> : <p>No complete, scored hourly forecast is available to rank. Review missing evidence below.</p>}
-            <p className="shortlist-caption">{comparison.results.reduce((count, result) => count + result.days.length, 0)} of {state.objectives.length * dates.length} options returned. Ranked by hazard decision, then the existing report score, then hours within your limits. Comfort does not affect ranking. Partial results and incomplete hourly windows are excluded. These are point forecasts; review route conditions and official sources before committing.</p>
+            <p className="shortlist-caption">{comparison.results.reduce((count, result) => count + result.days.length, 0)} of {state.objectives.length * dates.length} options returned. Ranked by hazard decision, then the existing report score, then hours with every reading within your limits. Comfort does not affect ranking. Partial results and incomplete hourly windows are excluded. These are point forecasts; review route conditions and official sources before committing.</p>
           </section>}
           <div className="sky-trio sky-section compare-highlights" aria-label="Objective weather tradeoffs" role="group">
             {highlights.map(highlight => {

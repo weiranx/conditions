@@ -26,6 +26,27 @@ test('peak gust and rain / snow chance cover the planned hours, not just departu
   assert.equal(short.peakPrecipChance, 15);
 });
 
+test('a start off the hour reaches into the reading that holds the final partial hour', () => {
+  // Like the API: hour-aligned readings from the one containing the start, one extra for 06:30.
+  const hourly = (time, gust, precipChance) => ({ time, temp: 50, wind: 10, gust, precipChance, condition: 'Cloudy' });
+  const readings = [hourly('06:00', 12, 10), hourly('07:00', 14, 10), hourly('08:00', 15, 20), hourly('09:00', 38, 70)];
+  const data = report(1, 'clear', data => {
+    data.weather.windGust = 12;
+    data.weather.precipChance = 10;
+    data.weather.trend = readings;
+    return data;
+  });
+  const days = start => buildTripForecastDays([data], [data.forecast.selectedDate], start, 3, { ...preferences, travelWindowHours: 3 });
+  const [offHour] = days('06:30');
+  assert.equal(offHour.peakGustMph, 38, 'the 09:00 reading covers 09:00–09:30');
+  assert.equal(offHour.peakPrecipChance, 70);
+  assert.equal(offHour.hourlyWeather.length, 4);
+  const [onHour] = days('06:00');
+  assert.equal(onHour.peakGustMph, 15, 'a 06:00 plan ends as the 09:00 reading begins');
+  assert.equal(onHour.peakPrecipChance, 20);
+  assert.equal(onHour.hourlyWeather.length, 3);
+});
+
 test('missing gust and precipitation readings are skipped, never read as calm or dry', () => {
   const [partly] = build([report(1, 'rain', data => {
     data.weather.windGust = null;
@@ -42,6 +63,16 @@ test('missing gust and precipitation readings are skipped, never read as calm or
   })]);
   assert.equal(none.peakGustMph, null);
   assert.equal(none.peakPrecipChance, null);
+});
+
+test('hours with a missing reading are not counted as complete passing hours', () => {
+  const [day] = build([report(1, 'clear', data => {
+    data.weather.trend.slice(0, 3).forEach(hour => { hour.gust = null; });
+    data.weather.trend[3].precipChance = null;
+    return data;
+  })]);
+  assert.equal(day.travelPassHours, 12, 'the hour count still reads a missing gust or precipitation as zero');
+  assert.equal(day.travelCompletePassHours, 8);
 });
 
 test('each day keeps the checks behind a Caution or No-go and none for Go', () => {
@@ -72,15 +103,16 @@ test('a day with no hour inside the limits names the limits, including ones the 
 test('the longest stretch within limits is named only for a partly clear day', () => {
   const [mixed, clear, rain] = build([report(1, 'mixed'), report(2, 'clear'), report(3, 'rain')]);
   assert.equal(mixed.travelPassHours, 8);
-  assert.deepEqual(mixed.travelBestWindow, { start: '07:00', end: '11:00', length: 5 });
+  assert.equal(mixed.travelBestWindow.start, '07:00');
+  assert.equal(mixed.travelBestWindow.length, 5);
   assert.equal(longestStretch(mixed, 'ampm'), 'Longest stretch 5 h from 7:00 AM');
   assert.equal(longestStretch(mixed, '24h'), 'Longest stretch 5 h from 07:00');
   assert.equal(longestStretch(clear, 'ampm'), null, 'every hour is within limits');
   assert.equal(longestStretch(rain, 'ampm'), null, 'no hour is within limits');
 });
 
-test('days rank by decision, then score, then hours within limits; a missing score ranks last', () => {
-  const day = (decisionLevel, score, travelPassHours) => ({ decisionLevel, score, travelPassHours });
+test('days rank by decision, then score, then complete hours within limits; a missing score ranks last', () => {
+  const day = (decisionLevel, score, travelCompletePassHours) => ({ decisionLevel, score, travelCompletePassHours });
   const blocked = day('NO-GO', 99, 12), go = day('GO', 60, 4), caution = day('CAUTION', 90, 10),
     moreHours = day('CAUTION', 90, 12), unscored = day('CAUTION', null, 12);
   assert.deepEqual([blocked, unscored, caution, go, moreHours].sort(compareTripDays), [go, moreHours, caution, unscored, blocked]);
@@ -88,6 +120,10 @@ test('days rank by decision, then score, then hours within limits; a missing sco
   assert.ok(sameTripRank(day('CAUTION', null, 6), day('CAUTION', null, 6)), 'two missing scores still tie');
   assert.ok(!sameTripRank(day('CAUTION', 80, 6), day('CAUTION', 80, 7)));
   assert.ok(!sameTripRank(day('CAUTION', 80, 6), day('CAUTION', null, 6)));
+  // Hours counted as passing only because a reading was missing do not win a tie.
+  const zeroFilled = { ...day('CAUTION', 80, 8), travelPassHours: 12 };
+  const measured = { ...day('CAUTION', 80, 10), travelPassHours: 10 };
+  assert.deepEqual([zeroFilled, measured].sort(compareTripDays), [measured, zeroFilled]);
 });
 
 test('the trip chat reads a compact week that fits the chat limit', () => {

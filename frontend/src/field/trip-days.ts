@@ -64,7 +64,7 @@ export function buildTripChatContext(days: MultiDayTripForecastDay[], plan: {
       time: preferences.timeStyle,
     },
     ranking: {
-      method: "Weather decision, then report score, then hours within the limits.",
+      method: "Weather decision, then report score, then hours with every reading present and within the limits.",
       bestDate: best?.date ?? null,
       datesTiedWithBest: best ? ranked.filter((day) => day !== best && sameTripRank(day, best)).map((day) => day.date) : [],
     },

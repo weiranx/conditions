@@ -149,6 +149,7 @@ function comparison(decisions, overrides = {}) {
     precipChance: 5,
     peakPrecipChance: 8,
     travelPassHours: 3,
+    travelCompletePassHours: 3,
     travelTotalHours: 3,
     travelBestWindow: null,
     hourlyWeather: [],
@@ -259,17 +260,17 @@ test("a Caution recommendation lists its checks", () => {
   assert.match(recommendation, /<ul class="sky-limiting compare-limiting" aria-label="Checks setting this day&#x27;s decision"><li>Wind gusts reach about 31 mph<\/li><\/ul>/);
 });
 
-test("days with equal decisions and scores rank by hours within limits, and ties are named", () => {
+test("days with equal decisions and scores rank by complete hours within limits, and ties are named", () => {
   const html = comparison([
-    { date: "2026-09-06", decisionLevel: "CAUTION", score: 80, travelPassHours: 1 },
-    { date: "2026-09-07", decisionLevel: "CAUTION", score: 80, travelPassHours: 3 },
-    { date: "2026-09-08", decisionLevel: "CAUTION", score: 80, travelPassHours: 3 },
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: 80, travelPassHours: 3, travelCompletePassHours: 1 },
+    { date: "2026-09-07", decisionLevel: "CAUTION", score: 80, travelCompletePassHours: 3 },
+    { date: "2026-09-08", decisionLevel: "CAUTION", score: 80, travelCompletePassHours: 3 },
   ]);
   assert.equal(html.match(/<h2 id="[^"]*-best">([^<]+)<\/h2>/)?.[1], dateLabel("2026-09-07"));
   const ties = html.slice(html.indexOf("Also ranked first"), html.indexOf("daily departure"));
   assert.match(ties, new RegExp(`<button type="button">${dateLabel("2026-09-08")}</button>`));
-  assert.doesNotMatch(ties, new RegExp(dateLabel("2026-09-06")), "fewer hours within limits is not a tie");
-  assert.match(html, /then score, then hours within your limits/);
+  assert.doesNotMatch(ties, new RegExp(dateLabel("2026-09-06")), "hours counted only because a reading was missing do not tie");
+  assert.match(html, /then score, then hours with every reading within your limits/);
 });
 
 test("comparison tradeoffs use the peak over the trip window", () => {

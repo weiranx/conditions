@@ -94,11 +94,11 @@ test('hazard rank precedes score and comfort; partial and missing data never win
   assert.deepEqual(ranked.map(r => r.day.score), [80, 100]);
   assert.deepEqual(rankShortlist([{ objectiveId: rainier.id, days: [day] }], 12), [], 'an incomplete hourly window cannot win');
 });
-test('equal hazard and score rank the option with more hours within limits first', () => {
+test('equal hazard and score rank the option with more complete hours within limits first', () => {
   const day = { score: 80, decisionLevel: 'CAUTION', partialData: false, travelTotalHours: 8 };
   const ranked = rankShortlist([
-    { objectiveId: rainier.id, days: [{ ...day, travelPassHours: 3 }] },
-    { objectiveId: hood.id, days: [{ ...day, travelPassHours: 7 }] },
+    { objectiveId: rainier.id, days: [{ ...day, travelPassHours: 8, travelCompletePassHours: 3 }] },
+    { objectiveId: hood.id, days: [{ ...day, travelPassHours: 7, travelCompletePassHours: 7 }] },
   ]);
   assert.deepEqual(ranked.map(r => r.objectiveId), [hood.id, rainier.id]);
 });

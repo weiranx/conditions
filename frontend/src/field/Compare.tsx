@@ -257,7 +257,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
                   </p>
                   <p className="sky-cap compare-method">
-                    Ranked by weather decision, then score, then hours within your limits. Avalanche conditions are excluded from this comparison; review the full report before choosing a day.
+                    Ranked by weather decision, then score, then hours with every reading within your limits. Avalanche conditions are excluded from this comparison; review the full report before choosing a day.
                     {best.partialData && " The leading day has partial data."}
                     {!isNumber(best.score) && " Its score is unavailable."}
                   </p>
