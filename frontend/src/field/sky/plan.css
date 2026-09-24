@@ -89,7 +89,7 @@
 .field-app .field-map-tools > div button:hover { background: transparent; color: var(--sky-label); }
 .field-app .field-map-tools > div button[aria-pressed="true"] { background: var(--sky-segment); color: var(--sky-label); font-weight: 600; box-shadow: var(--sky-raised-shadow); }
 .field-app .field-map-tools > button {
-  display: grid; place-items: center; width: 38px; min-height: 38px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; align-self: center; width: 38px; min-height: 38px; padding: 0; border-radius: 50%;
   background: var(--sky-raised); color: var(--sky-label); box-shadow: var(--sky-raised-shadow);
 }
 .field-app .field-map-tools > button:hover { background: var(--sky-raised-hover); }
@@ -97,6 +97,13 @@
 .field-app .field-map .leaflet-control-zoom { border: 0; border-radius: 10px; overflow: hidden; box-shadow: var(--sky-raised-shadow); }
 .field-app .field-map .leaflet-control-zoom a { background: var(--sky-raised); color: var(--sky-label); border-color: var(--sky-separator); }
 .field-app .field-map .leaflet-control-zoom a:hover { background: var(--sky-raised-hover); }
+@media (max-width: 650px) {
+  /* Phones keep 44px touch targets on every map control, as workspace.css and mobile.css intend.
+     The zoom rule also outranks Leaflet's own 30px .leaflet-touch sizing, which loads later. */
+  .field-app .field-map-tools > div button { min-height: 44px; }
+  .field-app .field-map-tools > button { width: 44px; min-height: 44px; }
+  .field-app .field-map .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; }
+}
 
 .field-app .field-workspace-bottom h2 { font-size: 17px; font-weight: 650; letter-spacing: -0.015em; }
 .field-app .field-quick-locations .field-location-row { gap: 14px; padding: 12px 10px; border-top-color: var(--sky-separator); }
