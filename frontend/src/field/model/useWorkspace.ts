@@ -801,6 +801,12 @@ export function useWorkspace() {
         if (linkState.view === "trip") {
           initializeTripView(linkState.forecastDate, linkState.alpineStartTime);
         }
+        // Only the planner and trip URLs carry plan state. The workspace and other
+        // pages omit it, so returning to them keeps the current (or restored) report.
+        if (linkState.view !== "planner" && linkState.view !== "trip") {
+          setError(null);
+          return;
+        }
         // Back/forward within the same plan (e.g. report → Settings → Back) should not
         // throw away the generated report — only a genuinely different plan state resets.
         const sameReport =
