@@ -1,4 +1,5 @@
-const { parseSynoptic, createSupplementalEvidenceService } = require('../src/utils/supplemental-evidence');
+const { parseSynoptic, selectSynopticStations, createSupplementalEvidenceService } = require('../src/utils/supplemental-evidence');
+const { parseDiscussionSections, periodDayRange } = require('../src/utils/forecast-discussion');
 const { parseNbp } = require('../src/utils/nbm-guidance');
 const { smokeRanges, normalizeSmoke, createHrrrSmokeService } = require('../src/utils/hrrr-smoke');
 const { createEvidenceFetcher } = require('../src/utils/evidence-fetch');
@@ -109,6 +110,7 @@ test('NWS discussion preserves regional prose and rejects an expired product', a
   const args = { ...location, featureFlags: { fieldObservations: false, airQualityDetails: false }, targetTimeIso: fresh };
   const first = await createSupplementalEvidenceService({ fetchWithTimeout, now: () => now })(args);
   expect(first.discussion).toMatchObject({ available: true, kind: 'regional_context', office: 'SGX', text: 'Regional winds increase tomorrow.' });
+  expect(first.discussion).toMatchObject({ sections: [], targetTime: fresh });
   expect(first.nbm.available).toBe(false); // Failed station lookup does not hide AFD.
   issuanceTime = '2026-09-14T12:00:00Z';
   const expired = await createSupplementalEvidenceService({ fetchWithTimeout, now: () => now })(args);
@@ -120,4 +122,65 @@ test('source failures never expose credential-bearing fetch errors', async () =>
   const result = await service({ ...location, targetTimeIso: fresh, featureFlags: { weatherContextDetails: false, airQualityDetails: false } });
   expect(result.synoptic).toMatchObject({ available: false, status: 'unavailable' });
   expect(JSON.stringify(result)).not.toContain('private-token');
+});
+
+test('station selection prefers a similar-elevation station over a closer valley one', () => {
+  const valley = { id: 'VALLEY', distanceKm: 3, elevationFt: 4000 };
+  const ridge = { id: 'RIDGE', distanceKm: 12, elevationFt: 9800 };
+  const unknown = { id: 'UNKNOWN', distanceKm: 2, elevationFt: null };
+  expect(selectSynopticStations([valley, unknown, ridge], 10000).map((s) => s.id)).toEqual(['RIDGE', 'UNKNOWN', 'VALLEY']);
+  // Without an objective elevation, distance decides.
+  expect(selectSynopticStations([ridge, valley, unknown]).map((s) => s.id)).toEqual(['UNKNOWN', 'VALLEY', 'RIDGE']);
+});
+
+const afd = `Area Forecast Discussion
+National Weather Service Boise ID
+1149 PM MDT Wed Sep 23 2026
+
+.KEY MESSAGES...
+
+- Cooler Saturday.
+
+&&
+
+.DISCUSSION /Through Wednesday/...
+Issued at 1105 PM MDT Wed Sep 23 2026
+Whole-week discussion.
+.SHORT TERM...Now through Friday Night...Dry
+and mild.
+.LONG TERM /Saturday through Wednesday/...
+Trough arrives.
+
+&&
+
+.AVIATION /06Z Thursday through Friday/...
+VFR.
+
+&&
+
+.BOI WATCHES/WARNINGS/ADVISORIES...
+ID...None.
+$$`;
+test('forecast discussion sections are dated from their headings against the trip date', () => {
+  const { tripDayOffset, sections } = parseDiscussionSections(afd, { selectedDate: '2026-09-26' });
+  expect(tripDayOffset).toBe(3);
+  expect(sections.map(({ title, period, kind, matchesTrip }) => [title, period, kind, matchesTrip])).toEqual([
+    ['KEY MESSAGES', undefined, 'key_messages', null],
+    ['DISCUSSION', 'Through Wednesday', 'overview', true],
+    ['SHORT TERM', 'Now through Friday Night', 'period', false],
+    ['LONG TERM', 'Saturday through Wednesday', 'period', true],
+    ['AVIATION', '06Z Thursday through Friday', 'not_relevant', null],
+    ['BOI WATCHES/WARNINGS/ADVISORIES', undefined, 'warnings', null],
+  ]);
+  expect(sections[2].text).toBe('Dry\nand mild.');
+  // Without a readable trip date nothing is claimed to match.
+  expect(parseDiscussionSections(afd).sections.find((s) => s.title === 'LONG TERM').matchesTrip).toBeNull();
+});
+test('period headings that cannot be read are left undated', () => {
+  const wednesday = Date.UTC(2026, 8, 23);
+  expect(periodDayRange('Tonight through Thursday', wednesday)).toEqual([0, 1]);
+  expect(periodDayRange('Days 3-7', wednesday)).toEqual([2, 6]);
+  expect(periodDayRange('This Weekend', wednesday)).toBeNull();
+  expect(periodDayRange('Issued at 300 PM', wednesday)).toBeNull();
+  expect(periodDayRange('Friday', null)).toBeNull();
 });

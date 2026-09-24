@@ -4,6 +4,7 @@ const { toFiniteOrNull } = require('./numbers');
 const { createEvidenceFetcher } = require('./evidence-fetch');
 const { createNbmService } = require('./nbm-guidance');
 const { createHrrrSmokeService } = require('./hrrr-smoke');
+const { parseDiscussionSections } = require('./forecast-discussion');
 const HOUR = 3600000;
 const SOURCES = {
   synoptic: { source: 'Synoptic Weather', kind: 'observation', sourceLink: 'https://synopticdata.com/data-viewer/' },
@@ -11,6 +12,14 @@ const SOURCES = {
   discussion: { source: 'NWS Area Forecast Discussion', kind: 'regional_context', sourceLink: 'https://www.weather.gov/' },
   hrrrSmoke: { source: 'NOAA HRRR-Smoke', kind: 'modeled_forecast', sourceLink: 'https://rapidrefresh.noaa.gov/hrrr/HRRRsmoke/' },
 };
+// Rank stations by how well they represent the objective, not distance alone:
+// on mountain objectives 1,000 ft of elevation difference counts like 10 km.
+// A station with unknown elevation is ranked as if it were 1,500 ft off.
+const representativeness = (station, elevationFt) => {
+  const difference = Number.isFinite(elevationFt) && Number.isFinite(station.elevationFt) ? Math.abs(station.elevationFt - elevationFt) : 1500;
+  return station.distanceKm + difference / 100;
+};
+const rankStations = (stations, elevationFt) => [...stations].sort((a, b) => representativeness(a, elevationFt) - representativeness(b, elevationFt) || a.distanceKm - b.distanceKm);
 const parseSynoptic = (data, { lat, lon, elevationFt, now = Date.now() }) => {
   const variables = { air_temp: ['temperatureF', 'F'], wind_speed: ['windMph', 'Miles/hour'], wind_gust: ['gustMph', 'Miles/hour'] };
   return (data.STATION || []).flatMap((s) => {
@@ -35,8 +44,9 @@ const parseSynoptic = (data, { lat, lon, elevationFt, now = Date.now() }) => {
     return [{ id: String(s.STID), name: String(s.NAME || s.STID), latitude, longitude, elevationFt: stationElevation,
       elevationDifferenceFt: Number.isFinite(elevationFt) && stationElevation !== null ? Math.round(stationElevation - elevationFt) : null,
       distanceKm: +distanceKm.toFixed(1), readings }];
-  }).sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 3);
+  });
 };
+const selectSynopticStations = (stations, elevationFt) => rankStations(stations, elevationFt).slice(0, 3);
 const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, now = Date.now }) => {
   const getBytes = createEvidenceFetcher(fetchWithTimeout);
   const json = async (url, fetchOptions) => JSON.parse((await getBytes(url, { fetchOptions })).toString());
@@ -57,7 +67,7 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
       return [{ id: p.stationIdentifier, name: p.name, latitude: c[1], longitude: c[0], distanceKm: +haversineKm(lat, lon, c[1], c[0]).toFixed(1), elevationFt: elevation === null ? null : Math.round(elevation * 3.28084) }];
     }).sort((a, b) => a.distanceKm - b.distanceKm);
   };
-  const discussion = async ({ lat, lon, fetchOptions }) => {
+  const discussion = async ({ lat, lon, selectedDate, fetchOptions }) => {
     const p = await point(lat, lon, fetchOptions);
     const office = p.properties?.gridId;
     if (!/^[A-Z]{3}$/.test(office || '')) throw new Error('NWS office unavailable');
@@ -69,7 +79,8 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     });
     const issued = Date.parse(product.issuanceTime);
     if (!Number.isFinite(issued) || now() - issued > 24 * HOUR || product.productCode !== 'AFD' || !product.productText?.trim()) return { available: false, status: 'no_data', note: 'No regional forecast discussion issued within the last 24 hours.' };
-    return { available: true, status: 'ok', office, issuedTime: product.issuanceTime, text: product.productText.slice(0, 30000), sourceLink: `https://forecast.weather.gov/product.php?site=NWS&issuedby=${office}&product=AFD&format=CI&version=1&glossary=1`, note: 'Forecaster discussion for the entire office region. Read its stated time periods and locations; it is not a forecast at the objective.' };
+    const text = product.productText.slice(0, 30000);
+    return { available: true, status: 'ok', office, issuedTime: product.issuanceTime, text, ...parseDiscussionSections(text, { selectedDate }), sourceLink: `https://forecast.weather.gov/product.php?site=NWS&issuedby=${office}&product=AFD&format=CI&version=1&glossary=1`, note: 'Forecaster discussion for the entire office region. Read its stated time periods and locations; it is not a forecast at the objective.' };
   };
   const synoptic = async (args) => {
     if (!synopticToken) return { available: false, status: 'not_configured', note: 'Synoptic observations are not configured.' };
@@ -79,7 +90,7 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
       return json(`https://api.synopticdata.com/v2/stations/latest?${params}`, fetchOptions);
     });
     if (data.SUMMARY?.RESPONSE_CODE !== 1) return { available: false, status: data.SUMMARY?.RESPONSE_CODE === 2 ? 'no_data' : 'unavailable', note: 'No usable station observations were returned.' };
-    const matches = parseSynoptic(data, { ...args, now: now() });
+    const matches = selectSynopticStations(parseSynoptic(data, { ...args, now: now() }), args.elevationFt);
     return { available: matches.length > 0, status: matches.length ? 'ok' : 'no_data', stations: matches, note: 'Quality-controlled readings from the last 2 hours. Distance and elevation do not establish equivalent terrain or exposure; these are current observations, not conditions on a future trip.' };
   };
   return async (args) => {
@@ -93,7 +104,7 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     args = { ...args, fetchOptions: { ...args.fetchOptions, signal: controller.signal } };
     const definitions = {
       synoptic: [flags.fieldObservations !== false, () => synoptic(args)],
-      nbm: [flags.weatherContextDetails !== false, async () => nbm({ ...args, stations: await stations(args.lat, args.lon, args.fetchOptions) })],
+      nbm: [flags.weatherContextDetails !== false, async () => nbm({ ...args, stations: rankStations(await stations(args.lat, args.lon, args.fetchOptions), args.elevationFt) })],
       discussion: [flags.weatherContextDetails !== false, () => discussion(args)],
       hrrrSmoke: [flags.airQualityDetails !== false, () => smoke(args)],
     };
@@ -101,7 +112,7 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
       let value;
       try { value = await run(); }
       catch { value = { available: false, status: 'unavailable', note: 'This source could not be loaded. No absence of hazard is implied.' }; }
-      return [key, { ...SOURCES[key], ...value, checkedTime: new Date(now()).toISOString() }];
+      return [key, { ...SOURCES[key], ...value, checkedTime: new Date(now()).toISOString(), ...(args.targetTimeIso ? { targetTime: args.targetTimeIso } : {}) }];
     }));
     clearTimeout(timer);
     upstream?.removeEventListener('abort', abort);
@@ -109,4 +120,4 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     return Object.fromEntries(entries);
   };
 };
-module.exports = { createSupplementalEvidenceService, parseSynoptic };
+module.exports = { createSupplementalEvidenceService, parseSynoptic, selectSynopticStations, rankStations };
