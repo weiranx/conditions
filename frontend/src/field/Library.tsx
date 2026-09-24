@@ -43,6 +43,7 @@ import { useAccount } from "../hooks/useAccount";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
 import { ageLabel, dateLabel, sentenceCase, type Page } from "./data";
+import { formatClockForStyle } from "../app/core";
 import { Dialog } from "./Dialog";
 import { Details } from "./Details";
 
@@ -142,7 +143,7 @@ interface LibraryProps {
 
 export function Library(props: LibraryProps) {
   return props.kind === "history"
-    ? <ReportHistory localReport={props.localReport} onOpen={props.onOpen} navigate={props.navigate} sharingEnabled={props.workspace.featureFlags.reportSharing} />
+    ? <ReportHistory localReport={props.localReport} onOpen={props.onOpen} navigate={props.navigate} sharingEnabled={props.workspace.featureFlags.reportSharing} timeStyle={props.workspace.preferences.timeStyle} />
     : <WatchLibrary {...props} />;
 }
 
@@ -349,7 +350,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
               <div>
                 <span className="sky-muted">
                   {dateLabel(item.plan.forecastDate)} ·{" "}
-                  {item.plan.alpineStartTime} · {item.plan.travelWindowHours}h window
+                  {formatClockForStyle(item.plan.alpineStartTime, w.preferences.timeStyle)} · {item.plan.travelWindowHours}h window
                 </span>
                 <h2>{item.title}</h2>
               </div>

@@ -1017,14 +1017,15 @@ const calculateSafetyScore = ({
 
   if (alertsRelevantForSelectedTime && Number.isFinite(alertsCount) && alertsCount > 0) {
     const listedEvents = alertEvents.length ? ` (${alertEvents.join(', ')})` : '';
+    const activeAlerts = alertsCount === 1 ? '1 active NWS alert' : `${alertsCount} active NWS alerts`;
     if (highestAlertSeverity === 'extreme') {
-      applyFactor('Official Alert', T.alerts.extreme, `${alertsCount} active NWS alert(s)${listedEvents} with EXTREME severity.`, 'NOAA/NWS Active Alerts');
+      applyFactor('Official Alert', T.alerts.extreme, `${activeAlerts}${listedEvents} with EXTREME severity.`, 'NOAA/NWS Active Alerts');
     } else if (highestAlertSeverity === 'severe') {
-      applyFactor('Official Alert', T.alerts.severe, `${alertsCount} active NWS alert(s)${listedEvents} with severe impacts possible.`, 'NOAA/NWS Active Alerts');
+      applyFactor('Official Alert', T.alerts.severe, `${activeAlerts}${listedEvents} with severe impacts possible.`, 'NOAA/NWS Active Alerts');
     } else if (highestAlertSeverity === 'moderate') {
-      applyFactor('Official Alert', T.alerts.moderate, `${alertsCount} active NWS alert(s)${listedEvents} indicate moderate hazard.`, 'NOAA/NWS Active Alerts');
+      applyFactor('Official Alert', T.alerts.moderate, `${activeAlerts}${listedEvents} ${alertsCount === 1 ? 'indicates' : 'indicate'} moderate hazard.`, 'NOAA/NWS Active Alerts');
     } else {
-      applyFactor('Official Alert', T.alerts.minor, `${alertsCount} active NWS alert(s)${listedEvents} are in effect.`, 'NOAA/NWS Active Alerts');
+      applyFactor('Official Alert', T.alerts.minor, `${activeAlerts}${listedEvents} ${alertsCount === 1 ? 'is' : 'are'} in effect.`, 'NOAA/NWS Active Alerts');
     }
   }
 

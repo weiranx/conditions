@@ -177,9 +177,17 @@ export function useTripForecast({
 
       setTripForecastRowsState(rows);
       if (failedCount > 0) {
-        setTripForecastNote(`${failedCount} day(s) could not be loaded and were skipped.`);
+        setTripForecastNote(
+          failedCount === 1
+            ? '1 day could not be loaded and was skipped.'
+            : `${failedCount} days could not be loaded and were skipped.`,
+        );
       } else if (rows.length < safeDurationDays) {
-        setTripForecastNote(`Only ${rows.length} day(s) are available inside the current forecast range.`);
+        setTripForecastNote(
+          rows.length === 1
+            ? 'Only 1 day is available inside the current forecast range.'
+            : `Only ${rows.length} days are available inside the current forecast range.`,
+        );
       } else {
         setTripForecastNote(null);
       }

@@ -343,7 +343,7 @@ const createSnowpackService = ({
       },
       note:
         filteredSignals.length > 0
-          ? `Median of ${samples.length} nearby NOAA National Snow Analysis samples. Implausible ${filteredSignals.join(' + ')} value(s) were discarded.`
+          ? `Median of ${samples.length} nearby NOAA National Snow Analysis samples. Implausible ${filteredSignals.join(' + ')} values were discarded.`
           : `Median of ${samples.length} nearby NOAA National Snow Analysis samples (depth converted from meters; SWE converted from millimeters).`,
     };
   };

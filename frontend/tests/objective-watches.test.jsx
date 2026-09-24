@@ -42,7 +42,7 @@ async function setup(t, handler, units = mph) {
   const noop = () => {};
   await act(async () => root.render(<AccountContext.Provider value={{ user: { id: 'user', emailVerified: true } }}>
     <Library kind="watches" localReport={null} onOpen={noop} navigate={noop}
-      workspace={{ featureFlags: {}, handleOpenObjectiveWatch: noop, ...units }} />
+      workspace={{ featureFlags: {}, preferences: { timeStyle: 'ampm' }, handleOpenObjectiveWatch: noop, ...units }} />
   </AccountContext.Provider>));
   t.after(async () => {
     await act(async () => root.unmount());
@@ -72,6 +72,8 @@ test('failed watch loading shows recovery instead of a misleading empty state', 
   await h.click('Retry loading plans');
   assert.deepEqual(h.cards(), ['Rainier']);
   assert.doesNotMatch(h.text(), /Watches unavailable/);
+  // The plan's start follows the clock preference, not the stored 24-hour value.
+  assert.match(h.text(), /5:30 AM · 12h window/);
 });
 
 test('active and attention filters include partial, failed and overdue checks; completed plans remain accessible', async t => {

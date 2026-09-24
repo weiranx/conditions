@@ -986,48 +986,27 @@ export function useWorkspace() {
   ]);
 
   useEffect(() => {
+    // Named as in the navigation, so a tab or bookmark reads like the page it opens.
+    const pageTitles: Partial<Record<typeof view, string>> = {
+      settings: "Preferences",
+      account: "Account",
+      history: "Saved reports",
+      watches: "Watchlist",
+      status: "Status",
+      trip: "Compare",
+      privacy: "Privacy Policy",
+      terms: "Terms of Use",
+      "not-found": "Page Not Found",
+      admin: "Administration",
+    };
     if (view === "home") {
       document.title = "Backcountry Conditions";
       return;
     }
 
-    if (view === "settings" || view === "account") {
-      document.title = "Settings & Account - Backcountry Conditions";
-      return;
-    }
-
-    if (view === "history") {
-      document.title = "Report History - Backcountry Conditions";
-      return;
-    }
-
-    if (view === "watches") {
-      document.title = "Objective Watches - Backcountry Conditions";
-      return;
-    }
-
-    if (view === "status") {
-      document.title = "Status - Backcountry Conditions";
-      return;
-    }
-
-    if (view === "trip") {
-      document.title = "Multi-Day Trip Tool - Backcountry Conditions";
-      return;
-    }
-
-    if (view === "privacy") {
-      document.title = "Privacy Policy - Backcountry Conditions";
-      return;
-    }
-
-    if (view === "terms") {
-      document.title = "Terms of Use - Backcountry Conditions";
-      return;
-    }
-
-    if (view === "not-found" || showAdminNotFound) {
-      document.title = "Page Not Found - Backcountry Conditions";
+    const pageTitle = showAdminNotFound ? pageTitles["not-found"] : pageTitles[view];
+    if (pageTitle) {
+      document.title = `${pageTitle} - Backcountry Conditions`;
       return;
     }
 

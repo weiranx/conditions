@@ -378,7 +378,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     if (hasSnowWeatherSignal || snowTrendHours > 0) {
       addReason(
         snowTrendHours > 0
-          ? `Near-term forecast shows ${snowTrendHours} hour(s) with snow/icy cues during the travel window.`
+          ? `Near-term forecast shows ${snowTrendHours} ${snowTrendHours === 1 ? 'hour' : 'hours'} with snow/icy cues during the travel window.`
           : `Forecast description indicates winter surface cues ("${weatherData?.description || 'snow signal'}").`,
         1,
       );
@@ -407,7 +407,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       );
     }
     if (wetTrendHours > 0) {
-      addReason(`Near-term forecast shows ${wetTrendHours} wet hour(s) during the travel window.`, 1);
+      addReason(`Near-term forecast shows ${wetTrendHours} wet ${wetTrendHours === 1 ? 'hour' : 'hours'} during the travel window.`, 1);
     }
     if (hasRainWeatherSignal) {
       addReason(`Forecast condition carries wet surface cues ("${weatherData?.description || 'rain signal'}").`, 1);
