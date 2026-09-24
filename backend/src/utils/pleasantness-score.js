@@ -91,6 +91,8 @@ const combineWindowScores = (scores) => {
 };
 
 const coveredHours = (rows) => Math.round(rows.reduce((sum, row) => sum + row.hours, 0) * 100) / 100;
+// Coverage keeps two decimals for comparisons; text shows one.
+const displayHours = (hours) => Math.round(hours * 10) / 10;
 
 // Hourly forecasts describe intervals. Clip them to the actual departure and
 // return, deduplicate overlapping intervals, and retain gaps as missing coverage.
@@ -574,7 +576,7 @@ const calculatePleasantnessScore = ({
     if (component.factor === 'Air quality' && !airQualityEnabled) return [];
     if (component.score === null) return [`${component.factor} data is unavailable${component.factor === 'Air quality' ? ' for this date' : ''}.`];
     if (component.hours < requestedHours) return [
-      `${component.factor}: hourly readings cover ${component.hours} of ${requestedHours} planned hours.${component.hours === 0 ? ' Only a summary or start-time reading is available.' : ''}`,
+      `${component.factor}: hourly readings cover ${displayHours(component.hours)} of ${requestedHours} planned hours.${component.hours === 0 ? ' Only a summary or start-time reading is available.' : ''}`,
     ];
     return [];
   });
@@ -619,7 +621,7 @@ const calculatePleasantnessScore = ({
   if (completeHours < requestedHours) {
     // Scales from Mixed at two-thirds coverage up to just below Excellent.
     const maximum = Math.round(clamp(44 + (45 * (completeHours / requestedHours)), 74, 89));
-    limitScore(maximum, `Complete temperature, wind, and precipitation readings cover ${completeHours} of ${requestedHours} planned hours; the rating is limited to ${labelForScore(maximum)}.`);
+    limitScore(maximum, `Complete temperature, wind, and precipitation readings cover ${displayHours(completeHours)} of ${requestedHours} planned hours; the rating is limited to ${labelForScore(maximum)}.`);
   }
   const allHoursHaveConditions = coveredHours(trend) === requestedHours && trend.every((row) => String(row?.condition || '').trim());
   const windowConditions = (allHoursHaveConditions ? hourlyConditions : [weatherDescription, ...hourlyConditions])
@@ -657,7 +659,7 @@ const calculatePleasantnessScore = ({
     : `${label} overall, with comfortable weather across the selected travel window.`;
   const bindingAdjustments = adjustments.filter((adjustment) => adjustment.maximumScore === score);
   const summary = completeHours < requestedHours
-    ? `Limited forecast coverage (${completeHours}/${requestedHours} complete hours). ${limiters.length ? outlook : `${label} rating based on available readings.`}`
+    ? `Limited forecast coverage (${displayHours(completeHours)}/${requestedHours} complete hours). ${limiters.length ? outlook : `${label} rating based on available readings.`}`
     : bindingAdjustments.length > 0 ? `${outlook} ${bindingAdjustments[0].reason}` : outlook;
 
   return {
