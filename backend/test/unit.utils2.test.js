@@ -1430,14 +1430,25 @@ describe('buildLayeringGearSuggestions — avalanche rescue kit', () => {
     expect(kit.tone).toBe('nogo');
   });
 
-  test('adds avalanche unknown coverage suggestion when dangerUnknown is true', () => {
+  test('explains the missing rating on the rescue kit when dangerUnknown is true', () => {
     const suggestions = buildLayeringGearSuggestions({
       ...baseSuggestionInput(),
       avalancheData: { relevant: true, dangerLevel: null, dangerUnknown: true },
     });
 
-    expect(suggestions.some((s) => s.id === 'avalanche-unknown')).toBe(true);
-    expect(suggestions.some((s) => s.id === 'avalanche-kit')).toBe(true);
+    const kit = suggestions.find((s) => s.id === 'avalanche-kit');
+    expect(kit.reason).toBe('No avalanche forecast covers this area');
+    expect(kit.detail).toMatch(/low-angle terrain/);
+    expect(suggestions.some((s) => s.id === 'avalanche-unknown')).toBe(false);
+  });
+
+  test('names the danger rating as the reason for the rescue kit', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      avalancheData: { relevant: true, dangerLevel: 3, dangerUnknown: false },
+    });
+
+    expect(suggestions.find((s) => s.id === 'avalanche-kit').reason).toBe('Avalanche danger Considerable (3 of 5)');
   });
 
   test('does not add avalanche kit when relevant is explicitly false', () => {
@@ -1481,8 +1492,8 @@ describe('buildLayeringGearSuggestions — travel-window hazards', () => {
       },
     });
 
-    expect(suggestions.some((s) => s.id === 'shell-wet' && /window peak 80%/.test(s.detail))).toBe(true);
-    expect(suggestions.some((s) => s.id === 'insulation-stop' && /16F/.test(s.detail))).toBe(true);
+    expect(suggestions.some((s) => s.id === 'shell-wet' && /Up to 80% chance of rain/.test(s.reason))).toBe(true);
+    expect(suggestions.some((s) => s.id === 'insulation-stop' && /Feels like 16F at the coldest/.test(s.reason))).toBe(true);
     expect(suggestions.some((s) => s.id === 'traction-snow')).toBe(true);
   });
 
@@ -1671,6 +1682,40 @@ describe('buildLayeringGearSuggestions — shell selection logic', () => {
 
     expect(suggestions.some((s) => s.id === 'shell-wet')).toBe(true);
     expect(suggestions.some((s) => s.id === 'shell-wind-snow')).toBe(false);
+  });
+});
+
+describe('buildLayeringGearSuggestions — reasons and daylight', () => {
+  test('baseline items carry no reason and forecast items explain themselves', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      weatherData: { ...baseSuggestionInput().weatherData, windSpeed: 20, windGust: 35 },
+    });
+
+    expect(suggestions.find((s) => s.id === 'backcountry-essentials').reason).toBe('');
+    expect(suggestions.find((s) => s.id === 'shell-wind-snow').reason).toBe('Gusts to 35 mph');
+  });
+
+  test('adds a headlamp only when part of the window is dark', () => {
+    const dark = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        trend: [{ temp: 60, isDaytime: true }, { temp: 50, isDaytime: false }],
+      },
+    });
+    expect(dark.some((s) => s.id === 'headlamp-dark')).toBe(true);
+    expect(buildLayeringGearSuggestions(baseSuggestionInput()).some((s) => s.id === 'headlamp-dark')).toBe(false);
+  });
+
+  test('recommends glare protection for daylight travel over snow even when cold', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      weatherData: { ...baseSuggestionInput().weatherData, temp: 25, feelsLike: 20 },
+      trailStatus: 'Snowy',
+    });
+    const sun = suggestions.find((s) => s.id === 'sun-protection');
+    expect(sun).toMatchObject({ title: 'Dark sunglasses and sunscreen', tone: 'watch' });
   });
 });
 

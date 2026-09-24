@@ -12,26 +12,41 @@ import "./gear-actions.css";
 type GearItem = {
   title: string;
   detail: string;
+  reason?: string;
   category: string;
   tone: string;
 };
 const itemKey = (item: GearItem) =>
   JSON.stringify([item.title, item.detail, item.category]);
 const groups = [
-  { id: "priority", label: "High priority", note: "Address these first." },
+  {
+    id: "priority",
+    label: "Don’t leave without",
+    note: "Required for the hazards in this report.",
+  },
   {
     id: "conditions",
-    label: "For these conditions",
-    note: "Extra preparation for this forecast.",
+    label: "For today’s conditions",
+    note: "Added because of this forecast. Each item says why.",
   },
   {
     id: "other",
-    label: "Additional preparation",
-    note: "Round out your usual kit.",
+    label: "Standard kit",
+    note: "Bring these on any trip.",
   },
 ] as const;
 const groupFor = (tone: string) =>
-  tone === "nogo" ? "priority" : tone === "caution" ? "conditions" : "other";
+  tone === "nogo"
+    ? "priority"
+    : tone === "caution" || tone === "watch"
+      ? "conditions"
+      : "other";
+const headline = {
+  "NO-GO": "Change the plan before packing",
+  CAUTION: "Settle the plan, then pack",
+  GO: "Plan looks workable. Pack for the conditions.",
+} as const;
+const identity = (text: string) => text;
 
 export function GearActions({
   hidden,
@@ -39,12 +54,14 @@ export function GearActions({
   decision,
   actionLine,
   onSources,
+  localize = identity,
 }: {
   hidden: boolean;
   recommendations: GearItem[];
   decision: SummitDecision;
   actionLine: string;
   onSources: () => void;
+  localize?: (text: string) => string;
 }) {
   const id = useId();
   const [packed, setPacked] = useState<Set<string>>(() => new Set());
@@ -82,11 +99,7 @@ export function GearActions({
       <div className={`gear-decision${noGo ? " is-blocked" : ""}`}>
         <TriangleAlert size={20} aria-hidden="true" />
         <div>
-          <strong>
-            {noGo
-              ? "Change the plan before packing"
-              : "Your field plan comes first"}
-          </strong>
+          <strong>{headline[decision.level] ?? headline.CAUTION}</strong>
           <p>{actionLine}</p>
         </div>
       </div>
@@ -98,7 +111,7 @@ export function GearActions({
         <div className="gear-plan-card">
           {blockers.length > 0 && (
             <div className="gear-concerns is-blocked">
-              <h3>Resolve before departure</h3>
+              <h3>Must resolve</h3>
               <ol>
                 {blockers.map((item) => (
                   <li key={item}>{item}</li>
@@ -108,7 +121,7 @@ export function GearActions({
           )}
           {cautions.length > 0 && (
             <div className="gear-concerns">
-              <h3>Adjust for these conditions</h3>
+              <h3>Plan around</h3>
               <ol start={blockers.length + 1} style={{ counterReset: `gear ${blockers.length}` }}>
                 {cautions.map((item) => (
                   <li key={item}>{item}</li>
@@ -119,8 +132,8 @@ export function GearActions({
           {actions.length > 0 && (
             <details className="gear-check-actions sky-details">
               <summary>
-                Actions from {actions.length} unmet{" "}
-                {actions.length === 1 ? "check" : "checks"}
+                {actions.length}{" "}
+                {actions.length === 1 ? "check needs" : "checks need"} attention
               </summary>
               <ul>
                 {actions.map((check, i) => (
@@ -137,8 +150,8 @@ export function GearActions({
             cautions.length === 0 &&
             actions.length === 0 && (
               <p className="gear-quiet">
-                No specific adjustments are listed in this report. Review
-                current sources and agree on checkpoints with your group.
+                Nothing in this report calls for a plan change. Check current
+                sources and agree on a turnaround time with your group.
               </p>
             )}
           <button className="field-button" type="button" onClick={onSources}>
@@ -151,9 +164,9 @@ export function GearActions({
         <div className="sky-sh">
           <h2 id={`${id}-kit`}>
             <Backpack size={20} aria-hidden="true" />
-            Pack for this day
+            Packing list
           </h2>
-          <p>Each item is here because of this forecast.</p>
+          <p>Based on this forecast and your time window.</p>
         </div>
         {items.length > 0 ? (
           <>
@@ -174,7 +187,7 @@ export function GearActions({
                   onClick={() => setPacked(new Set())}
                 >
                   <RotateCcw size={14} aria-hidden="true" />
-                  Reset checks
+                  Clear
                 </button>
               </div>
               <progress
@@ -229,9 +242,15 @@ export function GearActions({
                                 {checked && <span>Packed</span>}
                               </span>
                               <strong>{item.title}</strong>
+                              {item.reason && (
+                                <span className="gear-item-why">
+                                  <span className="sr-only">Why: </span>
+                                  {localize(item.reason)}
+                                </span>
+                              )}
                               {item.detail && (
                                 <span className="gear-item-detail">
-                                  {item.detail}
+                                  {localize(item.detail)}
                                 </span>
                               )}
                             </span>
@@ -252,9 +271,8 @@ export function GearActions({
           </p>
         )}
         <p className="gear-footnote">
-          Checks stay while this report is open; a new report starts fresh.
-          Carry your normal essentials too. Packing progress does not change
-          the report’s risk assessment.
+          Checkmarks last while this report is open and do not change the
+          risk assessment.
         </p>
       </section>
     </section>

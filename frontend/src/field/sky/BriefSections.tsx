@@ -253,13 +253,13 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
 
       {gearEnabled && gear.length > 0 && (
         <section className="sky-section" aria-labelledby="sky-pack">
-          <div className="sky-sh"><h2 id="sky-pack">Pack for this day</h2><p>From the conditions in this brief.</p></div>
+          <div className="sky-sh"><h2 id="sky-pack">Pack for today</h2><p>Top items for these conditions.</p></div>
           <div className="sky-pack">
             {gear.map((item, i) => item && (
               <button type="button" key={`${item.title}-${i}`} className="sky-card sky-item" onClick={() => onOpen("gear")}>
                 <span className="sky-item-cat">{item.category}</span>
                 <span className="sky-item-name">{item.title}</span>
-                <span className="sky-cap">{w.localizeUnitText(item.detail)}</span>
+                <span className="sky-cap">{w.localizeUnitText(item.reason || item.detail)}</span>
               </button>
             ))}
           </div>
