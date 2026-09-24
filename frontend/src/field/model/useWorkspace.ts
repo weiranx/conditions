@@ -390,6 +390,7 @@ export function useWorkspace() {
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,
+    cancelRouteRequest,
     clearRouteAnalysis,
     restoreRouteState,
   } = useRouteAnalysis(initialRestoredReport?.route);
@@ -2287,6 +2288,7 @@ export function useWorkspace() {
     setRouteError,
     customRouteName,
     setCustomRouteName,
+    cancelRouteRequest,
     routeShape,
     setRouteShape,
     fetchRouteSuggestions,

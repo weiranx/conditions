@@ -576,6 +576,25 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       aiFeatureEnabled = false;
     }
 
+    // A client that accepts NDJSON gets progress lines as the analysis runs, then
+    // the result (or an error) as the last line. The stream starts once the route
+    // is found, so a request that fails before then still gets a plain status.
+    const streaming = String(req.headers?.accept || '').includes('application/x-ndjson');
+    let streamStarted = false;
+    const emit = (event) => {
+      if (!streaming) return;
+      if (!streamStarted) {
+        streamStarted = true;
+        res.status(200);
+        res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+        // no-transform keeps compression from buffering the progress lines.
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+      }
+      res.write(`${JSON.stringify(event)}\n`);
+    };
+
     try {
       // Step 1: Use authoritative GPX checkpoints when provided. For named routes,
       // mapped trail geometry (NPS, then OpenStreetMap) comes first when it reaches
@@ -692,6 +711,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         }
       }
 
+      emit({ type: 'stage', stage: 'locating', routeSource, checkpointCount: waypointsCopy.length });
       // GPX and mapped checkpoints without a landmark name take one from the map.
       if (routeSource !== 'generated') {
         await nameGenericCheckpoints(waypointsCopy, { fetchWithTimeout, fetchHeaders });
@@ -804,12 +824,25 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         waypoint.eta_time = checkpointSchedule[index].time;
         waypoint.offset_minutes = checkpointSchedule[index].offsetMinutes;
       });
+      emit({
+        type: 'stage',
+        stage: 'forecasts',
+        checkpoints: waypointsCopy.map((wp) => ({ name: wp.name, etaTime: wp.eta_time, ...(wp.leg ? { leg: wp.leg } : {}) })),
+      });
       const safetySettled = await Promise.allSettled(
         waypointsCopy.map((wp, index) =>
           withTimeout(Promise.resolve().then(() => invokeSafetyHandler(
             { lat: String(wp.lat), lon: String(wp.lon), date: checkpointSchedule[index].date, start: checkpointSchedule[index].time, travel_window_hours: '1', name: `Route waypoint: ${wp.name || 'unnamed'}` },
             { suppressReportLog: true },
           )), 60000, `Safety check for ${wp.name}`)
+            .then((value) => {
+              const weather = value?.statusCode === 200 ? value.payload?.weather : null;
+              emit({ type: 'checkpoint', index, dataAvailable: Boolean(weather), ...(weather ? { weather: pick(weather, ['temp', 'windGust', 'precipChance', 'description']) } : {}) });
+              return value;
+            }, (error) => {
+              emit({ type: 'checkpoint', index, dataAvailable: false });
+              throw error;
+            })
         )
       );
 
@@ -929,6 +962,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       let analysisSource = 'deterministic';
       let generatedAnalysis = buildDeterministicRouteBriefing(summaries, failedWaypointNames, units, timing);
       if (aiFeatureEnabled && summaries.some((summary) => summary.dataAvailable)) {
+        emit({ type: 'stage', stage: 'briefing' });
         try {
           const aiAnalysis = await withTimeout(askAI(
             `${describeUnitsInstruction(units)}
@@ -975,7 +1009,7 @@ Use plain, calm language that feels like advice from an experienced trip partner
       }
       const analysis = removeDisabledNarrativeReferences(generatedAnalysis, featureFlags);
 
-      return res.json({
+      const payload = {
         waypoints: waypointsCopy,
         summaries,
         analysis,
@@ -988,10 +1022,20 @@ Use plain, calm language that feels like advice from an experienced trip partner
         ...(routeGeometry ? { routeGeometry } : {}),
         ...(terrainProfile ? { terrainProfile } : {}),
         ...(routeMetadata ? { routeMetadata } : {}),
-      });
+      };
+      if (streamStarted) {
+        emit({ type: 'result', payload });
+        return res.end();
+      }
+      return res.json(payload);
     } catch (err) {
       logger.error({ err }, 'route-analysis error');
-      return res.status(500).json({ error: 'Failed to analyze route: ' + err.message });
+      const error = 'Failed to analyze route: ' + err.message;
+      if (streamStarted) {
+        emit({ type: 'error', status: 500, error });
+        return res.end();
+      }
+      return res.status(500).json({ error });
     }
   });
 };

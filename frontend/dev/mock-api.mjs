@@ -746,8 +746,13 @@ export function createMockApi({ databasePath } = {}) {
         const total = (startHour * 60 + startMinute + offset) % (24 * 60);
         return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
       };
-      const offsets = [0, 0.3, 0.6, 0.85, 1].map((share) => Math.round(windowMinutes * share));
-      return ok({
+      // With a pace, arrivals follow it (as the backend does for a route of known length).
+      const paced = Boolean(body.pace);
+      const pacedMinutes = [0, 190, 330, 420, 500];
+      const offsets = paced ? pacedMinutes : [0, 0.3, 0.6, 0.85, 1].map((share) => Math.round(windowMinutes * share));
+      const estimatedMinutes = pacedMinutes.at(-1);
+      const fitTolerance = Math.max(45, windowMinutes * 0.15);
+      return { ndjson: true, ...ok({
         waypoints: waypoints.map((w, i) => ({ ...w, offset_minutes: offsets[i] })),
         timing: {
           basis: "distance-and-vert",
@@ -756,6 +761,23 @@ export function createMockApi({ databasePath } = {}) {
           pace: body.pace || { minutesPerMile: 20, ascentMinutesPer1000Ft: 30 },
           paceSource: body.pace ? "user" : "default",
           distanceBasis: body.route_distance_rt_miles ? "route-length" : "straight-line",
+          routeShape: "out-and-back",
+          ...(paced ? {
+            mode: "pace",
+            stopMinutes: body.pace.stopBufferMinutes ?? 0,
+            estimatedMinutes,
+            windowFit: estimatedMinutes - windowMinutes > fitTolerance ? "longer" : windowMinutes - estimatedMinutes > fitTolerance ? "shorter" : "fits",
+            turnaround: {
+              objectiveName: "Demo summit",
+              objectiveEta: clock(offsets[2]),
+              returnMinutes: estimatedMinutes - offsets[2],
+              byPlanEnd: clock(windowMinutes - (estimatedMinutes - offsets[2])),
+              byDark: clock(19 * 60 - (startHour * 60 + startMinute) - (estimatedMinutes - offsets[2])),
+              sunset: "19:00",
+              marginToPlanEndMinutes: windowMinutes - estimatedMinutes,
+              marginToDarkMinutes: 19 * 60 - (startHour * 60 + startMinute) - estimatedMinutes,
+            },
+          } : { mode: "window" }),
         },
         summaries: waypoints.map((w, i) => ({
           ...w,
@@ -787,7 +809,7 @@ export function createMockApi({ databasePath } = {}) {
         analysisSource: "deterministic",
         partialData: false,
         routeSource: "generated",
-      });
+      }) };
     }
     if (p.startsWith("/api/admin/") && !db.signedIn)
       return fail(401, "Sign in to the mock admin account.");
@@ -1233,6 +1255,25 @@ export function mockApiPlugin({ databasePath }) {
           res.statusCode = result.status;
           res.setHeader("Cache-Control", "no-store");
           res.setHeader("x-conditions-mock", "true");
+          // Route analysis streams its progress, like the backend, to clients that ask.
+          if (result.ndjson && String(req.headers.accept || "").includes("application/x-ndjson")) {
+            const payload = result.payload;
+            const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const write = (event) => res.write(`${JSON.stringify(event)}\n`);
+            res.setHeader("Content-Type", "application/x-ndjson");
+            write({ type: "stage", stage: "locating", routeSource: payload.routeSource, checkpointCount: payload.summaries.length });
+            await wait(500);
+            write({ type: "stage", stage: "forecasts", checkpoints: payload.summaries.map((stop) => ({ name: stop.name, etaTime: stop.etaTime, ...(stop.leg ? { leg: stop.leg } : {}) })) });
+            for (const [index, stop] of payload.summaries.entries()) {
+              await wait(450);
+              write({ type: "checkpoint", index, dataAvailable: stop.dataAvailable, weather: { temp: stop.weather.temp, windGust: stop.weather.windGust } });
+            }
+            write({ type: "stage", stage: "briefing" });
+            await wait(700);
+            write({ type: "result", payload });
+            res.end();
+            return;
+          }
           if (result.stream) {
             res.setHeader("Content-Type", "text/event-stream");
             res.setHeader("x-vercel-ai-ui-message-stream", "v1");

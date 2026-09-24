@@ -1,10 +1,10 @@
 import { KM_PER_MILE } from "../app/constants";
 import { formatSnowDepthForElevationUnit, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { CircleCheck, CircleDashed, Clock, Eye, Signpost, type LucideIcon, CloudRain, Footprints, Info, Moon, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Wind } from "lucide-react";
 import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
-import type { RouteShapeChoice } from "../hooks/useRouteAnalysis";
+import type { RouteAnalysisStage, RouteLoadingState, RouteShapeChoice } from "../hooks/useRouteAnalysis";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
 import { dateLabel } from "./data";
@@ -39,6 +39,8 @@ import { RouteProfile, type ProfileLevel, type ProfileStop } from "./sky/RoutePr
 import { knownFeet } from "./sky/status";
 import { skyAt } from "./sky/sky-model";
 
+const RouteMap = lazy(() => import("./RouteMap"));
+
 const SHAPE_CHOICES: { value: RouteShapeChoice; label: string }[] = [
   { value: "auto", label: "As mapped" },
   { value: "out-and-back", label: "Out and back" },
@@ -52,6 +54,68 @@ const BRIEF_ICONS: Record<string, LucideIcon> = {
   "other-concerns": Eye,
   "decision-points": Signpost,
 };
+
+const STAGES: { stage: RouteAnalysisStage; label: string }[] = [
+  { stage: "route", label: "Finding the route" },
+  { stage: "locating", label: "Placing checkpoints" },
+  { stage: "forecasts", label: "Checkpoint forecasts" },
+  { stage: "briefing", label: "Writing the briefing" },
+];
+
+/** What a running analysis is doing, the checkpoints as their forecasts arrive, and a way to stop it. */
+function RouteProgress({ state, onCancel, clock, temp }: {
+  state: RouteLoadingState;
+  onCancel: () => void;
+  clock: (value: string | undefined) => string;
+  temp: (f: number) => string;
+}) {
+  if (state.kind === "suggestions") {
+    return (
+      <div className="sky-notice is-info sky-route-loading" role="status">
+        <span><strong>Finding route options</strong> for {state.routeName}.</span>
+        <button type="button" className="field-text-button" onClick={onCancel}>Cancel</button>
+      </div>
+    );
+  }
+  const current = STAGES.findIndex((entry) => entry.stage === (state.stage ?? "route"));
+  const checkpoints = state.checkpoints ?? [];
+  const done = checkpoints.filter((checkpoint) => checkpoint.status !== "pending").length;
+  return (
+    <div className="sky-card sky-section sky-route-progress" role="status" aria-live="polite">
+      <div className="sky-route-progress-head">
+        <strong>Checking {state.routeName}</strong>
+        <button type="button" className="field-text-button" onClick={onCancel}>Cancel</button>
+      </div>
+      <ol className="sky-route-steps">
+        {STAGES.map((entry, i) => (
+          <li key={entry.stage} className={i < current ? "is-done" : i === current ? "is-current" : undefined}
+            aria-current={i === current ? "step" : undefined}>
+            {i < current ? <CircleCheck size={15} aria-hidden="true" /> : <CircleDashed size={15} aria-hidden="true" />}
+            {entry.label}
+            {entry.stage === "forecasts" && checkpoints.length > 0 ? ` · ${done} of ${checkpoints.length}` : ""}
+          </li>
+        ))}
+      </ol>
+      {checkpoints.length > 0 && (
+        <ol className="sky-route-progress-stops" aria-label="Checkpoint forecasts so far">
+          {checkpoints.map((checkpoint, i) => (
+            <li key={i} className={`is-${checkpoint.status}`}>
+              <span className="field-route-stop-number" aria-hidden="true">{i + 1}</span>
+              <span>{checkpoint.name}</span>
+              <small>
+                {checkpoint.etaTime ? `${clock(checkpoint.etaTime)} · ` : ""}
+                {checkpoint.status === "pending" ? "waiting"
+                  : checkpoint.status === "missing" ? "no forecast"
+                    : hasRouteNumber(checkpoint.weather?.temp) ? temp(checkpoint.weather.temp) : "in"}
+              </small>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="sky-cap">Live route analysis can take a minute or more.</p>
+    </div>
+  );
+}
 
 export function Route({ workspace: w }: { workspace: Workspace }) {
   const [checkpoint, setCheckpoint] = useState(0);
@@ -129,6 +193,15 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
       stopBufferMinutes: w.preferences.runnerStopBufferMinutes,
     },
   });
+  // The map draws a GPX track or mapped trail as recorded, else straight lines between checkpoints.
+  const mapStops = (result?.waypoints ?? []).map((point, i) => ({
+    name: point.name, lat: point.lat, lon: point.lon, tone: stops[i]?.tone ?? "missing", eta: stops[i]?.eta ?? "",
+    estimated: Boolean(result?.summaries[i]?.locationEstimated),
+  }));
+  const mappedLine: [number, number][] | null = result?.routeSource === "gpx" && gpx?.displayTrack?.length
+    ? gpx.displayTrack.map((point) => [point.lat, point.lon])
+    : result?.routeGeometry?.length ? result.routeGeometry.map((point) => [point.lat, point.lon]) : null;
+  const mapLine = mappedLine ?? (result?.waypoints ?? []).filter((point) => point.leg !== "return").map((point) => [point.lat, point.lon] as [number, number]);
   const timing = result?.timing;
   const turnaround = timing?.turnaround;
   const estimate = timing?.mode === "pace" && hasRouteNumber(timing.estimatedMinutes) ? timing.estimatedMinutes : null;
@@ -168,13 +241,14 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
     // The duration this analysis was run with, which the plan may have changed since.
     { label: "Planned time", value: `${result?.timing?.travelWindowHours ?? w.travelWindowHours} h`,
       ...(estimate !== null ? { note: `${formatRouteHours(estimate)} at your pace` } : {}) },
+    // When to leave the objective to finish on plan, and before sunset.
     ...(turnaround ? [{
       label: "Turn around by", value: clock(turnaround.byPlanEnd),
-      note: turnaround.marginToPlanEndMinutes < 0 ? `You reach ${turnaround.objectiveName} later` : `At ${turnaround.objectiveName}, to finish on plan`,
+      ...(turnaround.marginToPlanEndMinutes < 0 ? { note: "Reached later" } : {}),
     }] : []),
     ...(turnaround?.byDark ? [{
-      label: "Before dark", value: clock(turnaround.byDark),
-      note: hasRouteNumber(turnaround.marginToDarkMinutes) && turnaround.marginToDarkMinutes < 0 ? "Too late to finish in daylight" : "Turn around by this to finish by sunset",
+      label: "Daylight turnaround", value: clock(turnaround.byDark),
+      ...(hasRouteNumber(turnaround.marginToDarkMinutes) && turnaround.marginToDarkMinutes < 0 ? { note: "Reached later" } : {}),
     }] : []),
   ];
   const canAnalyze = !readOnly && !w.routeLoading && available.routeAnalysis && Boolean(w.plannedRouteName);
@@ -285,18 +359,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
           )}
         </form>
       )}
-      {w.routeLoading && (
-        <div className="sky-notice is-info sky-route-loading" role="status">
-          <div>
-            <strong>
-              {w.routeLoadingState?.kind === "analysis"
-                ? "Checking route checkpoints"
-                : "Finding route options"}
-            </strong>{" "}
-            {w.routeLoadingState?.routeName} · Live route analysis can take a
-            minute or more.
-          </div>
-        </div>
+      {w.routeLoading && w.routeLoadingState && (
+        <RouteProgress state={w.routeLoadingState} onCancel={w.cancelRouteRequest} clock={clock}
+          temp={(f) => w.formatTempDisplay(f)} />
       )}
       {w.routeError && (
         <p className="sky-notice is-caution" role="alert">
@@ -376,6 +441,12 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     forecast before relying on this analysis.
                   </span>
                 </p>
+              )}
+              {mapStops.length > 0 && (
+                <Suspense fallback={<div className="field-map-loading route-map-loading">Loading map…</div>}>
+                  <RouteMap workspace={w} stops={mapStops} line={mapLine} lineEstimated={!mappedLine}
+                    selected={selectedIndex} onSelect={setCheckpoint} />
+                </Suspense>
               )}
               {profile && (
                 <RouteProfile points={points} stops={stops} selected={selectedIndex} onSelect={setCheckpoint}

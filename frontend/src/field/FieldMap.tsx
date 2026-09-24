@@ -18,6 +18,8 @@ import { MAP_STYLE_OPTIONS } from "../app/constants";
 import type { MapStyle } from "../app/types";
 import { useProductFeatureFlags } from "../contexts/feature-flags";
 import { hasCoarsePointer } from "./touch";
+import { checkpointPin, groupCheckpointsByPlace, worstTone } from "./route-map-pins";
+import { checkpointTone } from "./route-planning";
 const pin = L.divIcon({
   className: "field-map-pin",
   html: "<span></span>",
@@ -178,14 +180,21 @@ export default function FieldMap({
             pathOptions={{ color: "#2878d7", weight: 4 }}
           />
         )}
-        {/* The return checkpoint sits on the start marker, so it is not drawn twice. */}
-        {w?.routeAnalysis?.waypoints.filter((point) => point.leg !== "return").map((point, index) => (
-          <Marker key={index} position={[point.lat, point.lon]} icon={pin}>
-            <Tooltip>
-              {point.name} · {w.formatElevationDisplay(point.elev_ft)}
-            </Tooltip>
-          </Marker>
-        ))}
+        {/* Numbered and colored like the Route chapter; the way back shares the way out's pin. */}
+        {w?.routeAnalysis && groupCheckpointsByPlace(w.routeAnalysis.waypoints).map((indexes) => {
+          const analysis = w.routeAnalysis!;
+          const point = analysis.waypoints[indexes[0]];
+          const tones = indexes.map((index) => (analysis.summaries[index] ? checkpointTone(analysis.summaries[index], w.preferences) : "missing"));
+          return (
+            <Marker key={indexes.join("-")} position={[point.lat, point.lon]}
+              icon={checkpointPin({ label: indexes.map((index) => index + 1).join("·"), tone: worstTone(tones),
+                estimated: indexes.some((index) => analysis.summaries[index]?.locationEstimated) })}>
+              <Tooltip>
+                {point.name} · {w.formatElevationDisplay(point.elev_ft)}
+              </Tooltip>
+            </Marker>
+          );
+        })}
       </MapContainer>
     </div>
   );

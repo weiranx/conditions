@@ -209,3 +209,38 @@
 .sky-route-profile .rp-stop:hover .rp-dot { r: 12; }
 .sky-route-profile .rp-stop:focus-visible { outline: none; }
 .sky-route-profile .rp-stop:focus-visible .rp-dot { stroke: var(--sky-accent); stroke-width: 4; }
+
+/* Route map: numbered checkpoint pins, colored like the profile's stops. */
+.route-map { margin-top: 12px; border-radius: 16px; overflow: hidden; }
+.route-map .route-map-canvas, .route-map-loading { height: 300px; }
+.route-map-pin-anchor { background: none; border: none; }
+.route-map-pin {
+  display: flex; align-items: center; justify-content: center; height: 26px; padding: 0 7px; box-sizing: border-box;
+  border-radius: 13px; background: #fff; color: #18201c; border: 2.5px solid #18201c;
+  font: 750 12px/1 var(--f-font, system-ui); font-variant-numeric: tabular-nums; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.route-map-pin.is-over { background: var(--sky-caution); border-color: #fff; color: #fff; }
+.route-map-pin.is-hazard { border-color: var(--sky-caution); color: var(--sky-caution); border-width: 3px; }
+.route-map-pin.is-missing { border-style: dashed; border-color: var(--sky-missing); color: var(--sky-missing); }
+.route-map-pin.is-estimated { border-style: dashed; }
+.route-map-pin.is-selected { outline: 4px solid color-mix(in srgb, var(--sky-accent) 55%, transparent); outline-offset: 1px; transform: scale(1.12); }
+.route-map-tip { display: block; }
+@media (max-width: 640px) { .route-map .route-map-canvas, .route-map-loading { height: 240px; } }
+
+/* A running analysis: its steps, and each checkpoint as its forecast arrives. */
+.sky-route-progress { display: grid; gap: 10px; }
+.sky-route-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sky-route-steps { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--sky-secondary); }
+.sky-route-steps li { display: inline-flex; align-items: center; gap: 6px; }
+.sky-route-steps li.is-done { color: var(--sky-label); }
+.sky-route-steps li.is-current { color: var(--sky-label); font-weight: 650; }
+.sky-route-steps li.is-current svg { animation: sky-route-spin 1.4s linear infinite; }
+@keyframes sky-route-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sky-route-steps li.is-current svg { animation: none; } }
+.sky-route-progress-stops { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sky-route-progress-stops li { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 10px; border-radius: 10px; background: var(--sky-fill); font-size: 13px; }
+.sky-route-progress-stops li > span:nth-child(2) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sky-route-progress-stops li small { flex: none; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.sky-route-progress-stops li.is-pending { opacity: 0.6; }
+.sky-route-progress-stops li.is-missing small { color: var(--sky-missing); }
+.sky-route-loading > span { flex: 1 1 auto; }

@@ -854,3 +854,38 @@ test('the traveler can close a named route as a loop or finish it one way; a loo
   expect(auto.body.timing).toMatchObject({ routeShape: 'out-and-back', roundTrip: true, distanceBasis: 'route-length', mode: 'pace' });
   expect(auto.body.timing.turnaround.objectiveName).toBe('Shape Peak');
 });
+
+test('an NDJSON client gets stages and each checkpoint as it lands, then the result; others get plain JSON', async () => {
+  const compression = require('compression');
+  const app = gpxPaceApp();
+  // The real server compresses responses; the stream must not be buffered by it.
+  const compressed = express();
+  compressed.use(compression());
+  compressed.use(app);
+  const response = await request(compressed)
+    .post('/api/route-analysis')
+    .set('Accept', 'application/x-ndjson')
+    .set('Accept-Encoding', 'gzip')
+    .send(gpxPaceBody({ route_shape: 'out-and-back' }));
+
+  expect(response.status).toBe(200);
+  expect(response.headers['content-type']).toMatch(/application\/x-ndjson/);
+  expect(response.headers['content-encoding']).toBeUndefined();
+  const events = response.text.trim().split('\n').map((line) => JSON.parse(line));
+  expect(events[0]).toMatchObject({ type: 'stage', stage: 'locating', routeSource: 'gpx', checkpointCount: 3 });
+  const plan = events.find((event) => event.stage === 'forecasts');
+  expect(plan.checkpoints.map((checkpoint) => checkpoint.name)).toEqual(['Camp Lot', 'Meadow', 'Pace Test Peak', 'Return to Meadow', 'Return to Camp Lot']);
+  const checkpoints = events.filter((event) => event.type === 'checkpoint');
+  expect(checkpoints.map((event) => event.index).sort()).toEqual([0, 1, 2, 3, 4]);
+  expect(checkpoints[0]).toMatchObject({ dataAvailable: true, weather: { temp: 40 } });
+  expect(events.at(-1).type).toBe('result');
+  expect(events.at(-1).payload.summaries).toHaveLength(5);
+
+  const plain = await request(app).post('/api/route-analysis').send(gpxPaceBody());
+  expect(plain.headers['content-type']).toMatch(/application\/json/);
+  expect(plain.body.summaries).toHaveLength(3);
+
+  // A request that fails before the route is found keeps its status code.
+  const invalid = await request(app).post('/api/route-analysis').set('Accept', 'application/x-ndjson').send(gpxPaceBody({ date: 'soon' }));
+  expect(invalid.status).toBe(400);
+});

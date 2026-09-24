@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
-import { fetchApi, readApiErrorMessage } from '../lib/api-client';
+import { fetchApi, fetchApiStream, readApiErrorMessage, type StreamEvent } from '../lib/api-client';
 import type { GpxCheckpoint } from '../lib/gpx';
 
 export interface RouteAnalysisUnits {
@@ -178,11 +178,25 @@ export interface RouteAnalysisOptions {
   routeShape?: RouteShapeChoice;
 }
 
+/** Where a streamed route analysis has got to: finding the route, placing checkpoints, their forecasts, the briefing. */
+export type RouteAnalysisStage = 'route' | 'locating' | 'forecasts' | 'briefing';
+
+export interface RouteProgressCheckpoint {
+  name: string;
+  etaTime?: string;
+  leg?: RouteLeg;
+  status: 'pending' | 'done' | 'missing';
+  weather?: { temp?: number; windGust?: number; precipChance?: number; description?: string };
+}
+
 export interface RouteLoadingState {
   kind: 'suggestions' | 'analysis';
   routeName: string;
   checkpointCount?: number;
   startedAt: number;
+  /** Set as a streaming server reports progress. */
+  stage?: RouteAnalysisStage;
+  checkpoints?: RouteProgressCheckpoint[];
 }
 
 export interface UseRouteAnalysisReturn {
@@ -210,6 +224,8 @@ export interface UseRouteAnalysisReturn {
     options?: RouteAnalysisOptions,
   ) => Promise<void>;
   resetRouteState: () => void;
+  /** Stops the analysis or suggestions in progress, keeping whatever was there before. */
+  cancelRouteRequest: () => void;
   /** Drops the analysis for a new report but keeps the planned route and its options. */
   clearRouteAnalysis: () => void;
   restoreRouteState: (state: {
@@ -286,12 +302,41 @@ export function useRouteAnalysis(initialState?: {
     const request = beginRequest({
       kind: 'analysis',
       routeName: route,
+      stage: 'route',
       ...(options?.waypoints ? { checkpointCount: options.waypoints.length } : {}),
     });
     setRouteAnalysis(null);
     setRouteError(null);
+    // Progress lines update the loading state while this request is still current.
+    const onProgress = (event: StreamEvent) => {
+      if (!isCurrentRequest(request.id)) return;
+      setRouteLoadingState((state) => {
+        if (!state || state.kind !== 'analysis') return state;
+        if (event.type === 'stage' && event.stage === 'forecasts' && Array.isArray(event.checkpoints)) {
+          return {
+            ...state,
+            stage: 'forecasts',
+            checkpointCount: event.checkpoints.length,
+            checkpoints: (event.checkpoints as Array<{ name: string; etaTime?: string; leg?: RouteLeg }>).map((checkpoint) => ({ ...checkpoint, status: 'pending' })),
+          };
+        }
+        if (event.type === 'stage' && (event.stage === 'locating' || event.stage === 'briefing')) {
+          return { ...state, stage: event.stage, ...(typeof event.checkpointCount === 'number' && !state.checkpoints ? { checkpointCount: event.checkpointCount } : {}) };
+        }
+        if (event.type === 'checkpoint' && typeof event.index === 'number' && state.checkpoints?.[event.index]) {
+          const checkpoints = [...state.checkpoints];
+          checkpoints[event.index] = {
+            ...checkpoints[event.index],
+            status: event.dataAvailable ? 'done' : 'missing',
+            ...(event.weather ? { weather: event.weather as RouteProgressCheckpoint['weather'] } : {}),
+          };
+          return { ...state, checkpoints };
+        }
+        return state;
+      });
+    };
     try {
-      const { response, payload } = await fetchApi('/api/route-analysis', {
+      const { ok, payload } = await fetchApiStream('/api/route-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: request.controller.signal,
@@ -311,8 +356,8 @@ export function useRouteAnalysis(initialState?: {
           ...(options?.track ? { track: options.track } : {}),
           ...(options?.routeShape && options.routeShape !== 'auto' ? { route_shape: options.routeShape } : {}),
         }),
-      });
-      if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
+      }, onProgress);
+      if (!ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
       if (!isCurrentRequest(request.id)) return;
       // Keep the name and plan with the result, so renaming the route later can't
       // relabel these checkpoints and a changed plan can be flagged.
@@ -339,6 +384,13 @@ export function useRouteAnalysis(initialState?: {
     setRouteError(null);
     setCustomRouteName('');
     setRouteShape('auto');
+  }, []);
+
+  const cancelRouteRequest = useCallback(() => {
+    activeRequestRef.current?.controller.abort();
+    activeRequestRef.current = null;
+    nextRequestIdRef.current += 1;
+    setRouteLoadingState(null);
   }, []);
 
   const clearRouteAnalysis = useCallback(() => {
@@ -382,6 +434,7 @@ export function useRouteAnalysis(initialState?: {
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,
+    cancelRouteRequest,
     clearRouteAnalysis,
     restoreRouteState,
   };

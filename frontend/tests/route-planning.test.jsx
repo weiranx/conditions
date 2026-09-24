@@ -14,6 +14,8 @@ import {
   objectiveHourAt,
 } from '../src/field/route-planning';
 import { formatClockForStyle } from '../src/app/core';
+import { fetchApiStream } from '../src/lib/api-client';
+import { groupCheckpointsByPlace, worstTone } from '../src/field/route-map-pins';
 import { parseGpxText } from '../src/lib/gpx';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
 import { makeReport } from '../dev/mock-data.mjs';
@@ -234,8 +236,8 @@ test('arrivals by pace show the estimate, a way to plan for it, and when to turn
   assert.match(html, /Arrivals follow your pace: 30 min per mile, 60 min per 1,000 ft of climbing, descents at a third of that, and 30 min of stops spread along the way, over every climb and descent of your track\./);
   assert.match(html, /At your pace this outing takes about 7 h, 30 min of stops included;\s*the plan is 4 h, so the last checkpoints fall after it ends/);
   assert.match(html, /Planned time<\/dt><dd>4 h<\/dd><small>7 h at your pace/);
-  assert.match(html, /Turn around by<\/dt><dd>07:08<\/dd><small>You reach Summit later/);
-  assert.match(html, /Before dark<\/dt><dd>16:38/);
+  assert.match(html, /Turn around by<\/dt><dd>07:08<\/dd><small>Reached later/);
+  assert.match(html, /Daylight turnaround<\/dt><dd>16:38<\/dd><\/div>/);
   assert.match(html, /Return by the same route · turn around by 07:08/);
   const doc = new JSDOM(html).window.document;
   assert.ok([...doc.querySelectorAll('.sky-route-fit button')].some((b) => b.textContent === 'Plan 8 h'));
@@ -531,6 +533,67 @@ test('the plan carries the route: a name, suggestions to pick from, or the impor
   const comparison = renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ tripStartDate: '2026-09-08',
     tripStartTime: '07:00', tripDurationDays: 3 })} comparison />);
   assert.doesNotMatch(comparison, /sky-plan-route/);
+});
+
+test('a streamed analysis reads its progress lines and ends with the result; plain JSON still works', async (t) => {
+  const encoder = new TextEncoder();
+  const lines = [
+    { type: 'stage', stage: 'locating', checkpointCount: 2 },
+    { type: 'stage', stage: 'forecasts', checkpoints: [{ name: 'A' }, { name: 'B' }] },
+    { type: 'checkpoint', index: 1, dataAvailable: true },
+    { type: 'result', payload: { summaries: [1, 2] } },
+  ].map((event) => `${JSON.stringify(event)}\n`).join('');
+  const previous = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previous; });
+  const streamed = (text) => new Response(new ReadableStream({
+    start(controller) {
+      // Split mid-line, as a network would.
+      controller.enqueue(encoder.encode(text.slice(0, 40)));
+      controller.enqueue(encoder.encode(text.slice(40)));
+      controller.close();
+    },
+  }), { headers: { 'content-type': 'application/x-ndjson' } });
+  let sentAccept = '';
+  globalThis.fetch = async (url, init) => { sentAccept = init.headers.Accept; return streamed(lines); };
+  const events = [];
+  const result = await fetchApiStream('/api/route-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (event) => events.push(event));
+  assert.match(sentAccept, /application\/x-ndjson/);
+  assert.deepEqual(events.map((event) => event.stage ?? event.type), ['locating', 'forecasts', 'checkpoint']);
+  assert.deepEqual(result, { ok: true, status: 200, payload: { summaries: [1, 2] } });
+
+  globalThis.fetch = async () => streamed(`${JSON.stringify({ type: 'error', status: 500, error: 'Failed to analyze route: boom' })}\n`);
+  assert.deepEqual(await fetchApiStream('/x', {}, () => {}), { ok: false, status: 500, payload: { error: 'Failed to analyze route: boom' } });
+  globalThis.fetch = async () => streamed(`${JSON.stringify({ type: 'stage', stage: 'locating' })}\n`);
+  assert.equal((await fetchApiStream('/x', {}, () => {})).ok, false, 'a stream cut off before its result is a failure');
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Bad date' }), { status: 400, headers: { 'content-type': 'application/json' } });
+  assert.deepEqual(await fetchApiStream('/x', {}, () => {}), { ok: false, status: 400, payload: { error: 'Bad date' } });
+});
+
+test('a running analysis shows its steps, each checkpoint as its forecast arrives, and can be cancelled', () => {
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: null, routeLoading: true,
+    routeLoadingState: { kind: 'analysis', routeName: 'West ridge', startedAt: 0, stage: 'forecasts', checkpoints: [
+      { name: 'Trailhead', etaTime: '06:00', status: 'done', weather: { temp: 41 } },
+      { name: 'Col', etaTime: '08:10', status: 'missing' },
+      { name: 'Summit', etaTime: '10:00', status: 'pending' },
+    ] }, cancelRouteRequest: () => {} })} />);
+  const doc = new JSDOM(html).window.document;
+  const steps = [...doc.querySelectorAll('.sky-route-steps li')].map((li) => [li.textContent, li.className]);
+  assert.deepEqual(steps, [
+    ['Finding the route', 'is-done'], ['Placing checkpoints', 'is-done'],
+    ['Checkpoint forecasts · 2 of 3', 'is-current'], ['Writing the briefing', ''],
+  ]);
+  assert.deepEqual([...doc.querySelectorAll('.sky-route-progress-stops small')].map((el) => el.textContent), ['06:00 · 41°F', '08:10 · no forecast', '10:00 · waiting']);
+  assert.ok([...doc.querySelectorAll('.sky-route-progress button')].some((b) => b.textContent === 'Cancel'));
+});
+
+test('route map pins group the way back with the way out and show the worst forecast there', () => {
+  const points = [{ lat: 1, lon: 2 }, { lat: 1.01, lon: 2 }, { lat: 1.02, lon: 2 }, { lat: 1.01, lon: 2 }, { lat: 1, lon: 2 }];
+  assert.deepEqual(groupCheckpointsByPlace(points), [[0, 4], [1, 3], [2]]);
+  assert.equal(worstTone(['within', 'missing', 'hazard']), 'hazard');
+  assert.equal(worstTone(['hazard', 'over']), 'over');
+  // The map loads with the chapter, after the route is analyzed.
+  assert.match(renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: { ...result([point(), point({ name: 'Summit' })]),
+    waypoints: [{ name: 'Trailhead', lat: 46, lon: -121 }, { name: 'Summit', lat: 46.01, lon: -121 }] } })} />), /Loading map/);
 });
 
 // Last in the file: the published availability is shared module state.
