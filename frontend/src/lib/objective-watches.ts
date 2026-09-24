@@ -1,6 +1,22 @@
 import type { PersistedReport, PersistedReportPlan } from '../app/report-storage';
 import { fetchApi, readApiErrorMessage } from './api-client';
 
+export type ObjectiveWatchChangeDirection = 'worse' | 'better' | 'mixed';
+
+export interface ObjectiveWatchChange {
+  checkedAt?: string;
+  direction?: ObjectiveWatchChangeDirection | null;
+  reasons?: Array<{ key?: string; label?: string; direction?: 'worse' | 'better' }>;
+}
+
+/** Change events recorded since the watch was last marked reviewed. */
+export interface ObjectiveWatchUnreviewedChanges {
+  count: number;
+  worsened: boolean;
+  latest: ObjectiveWatchChange | null;
+  latestWorse: ObjectiveWatchChange | null;
+}
+
 export interface ObjectiveWatch {
   id: string;
   title: string;
@@ -10,10 +26,9 @@ export interface ObjectiveWatch {
   lastCheckedAt: string | null;
   latestCheck?: ObjectiveWatchCheck | null;
   nextCheckAt: string | null;
-  lastChange: {
-    checkedAt?: string;
-    reasons?: Array<{ key?: string; label?: string }>;
-  } | null;
+  lastChange: ObjectiveWatchChange | null;
+  reviewedAt?: string | null;
+  unreviewedChanges?: ObjectiveWatchUnreviewedChanges;
   consecutiveFailures: number;
   notificationsEnabled: boolean;
   createdAt: string;
@@ -33,10 +48,7 @@ export interface ObjectiveWatchPolicy {
 
 export interface ObjectiveWatchEvent {
   id: string;
-  change: {
-    checkedAt?: string;
-    reasons?: Array<{ key?: string; label?: string }>;
-  } | null;
+  change: ObjectiveWatchChange | null;
   checkedAt: string | null;
 }
 
@@ -52,7 +64,7 @@ export interface ObjectiveWatchCheck {
     maxPrecipChance?: number | null;
     terrainImpact?: string;
   } | null;
-  change: ObjectiveWatchEvent['change'];
+  change: ObjectiveWatchChange | null;
   error: string | null;
   checkedAt: string | null;
 }
@@ -101,6 +113,24 @@ const parseObjectiveWatchPolicy = (value: unknown): ObjectiveWatchPolicy | null 
   } as ObjectiveWatchPolicy;
 };
 
+const IMPROVEMENT_REASON_KEYS = new Set([
+  'score_improvement', 'risk_tier_improvement', 'avalanche_danger_improvement', 'closure_lifted',
+  'weather_alert_cleared', 'wind_gust_improvement', 'precipitation_improvement', 'terrain_condition_improvement',
+]);
+
+export const objectiveWatchReasonDirection = (reason: { key?: string; direction?: string }): 'worse' | 'better' =>
+  reason.direction === 'worse' || reason.direction === 'better'
+    ? reason.direction
+    : IMPROVEMENT_REASON_KEYS.has(String(reason.key || '')) ? 'better' : 'worse';
+
+/** Whether a change made conditions worse, better, or both; null when it lists nothing. */
+export const objectiveWatchChangeDirection = (change: ObjectiveWatchChange | null | undefined): ObjectiveWatchChangeDirection | null => {
+  const directions = new Set((change?.reasons || []).map(objectiveWatchReasonDirection));
+  if (directions.has('worse') && directions.has('better')) return 'mixed';
+  if (directions.has('worse')) return 'worse';
+  return directions.has('better') ? 'better' : null;
+};
+
 export const formatObjectiveWatchCadence = (minutes: number) => {
   if (minutes === 60) return 'hourly';
   if (minutes < 60 || minutes % 60 !== 0) return `every ${minutes} minutes`;
@@ -138,7 +168,7 @@ export async function listObjectiveWatches(signal?: AbortSignal): Promise<{ watc
 }
 
 export async function getObjectiveWatch(
-  plan: PersistedReportPlan,
+  plan: Pick<PersistedReportPlan, 'lat' | 'lon' | 'forecastDate' | 'alpineStartTime' | 'travelWindowHours'>,
   signal?: AbortSignal,
 ): Promise<{ watch: ObjectiveWatch | null; policy: ObjectiveWatchPolicy }> {
   const params = new URLSearchParams({
@@ -180,6 +210,16 @@ export async function setObjectiveWatchNotifications(
     body: JSON.stringify({ notificationsEnabled }),
   });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not update Objective Watch alerts.'));
+  const watch = parseObjectiveWatch((payload as { watch?: unknown } | null)?.watch);
+  if (!watch) throw new Error('Objective watches returned an unexpected response.');
+  return { watch, policy: requirePolicy(payload) };
+}
+
+export async function reviewObjectiveWatch(watchId: string): Promise<ObjectiveWatchResult> {
+  const { response, payload } = await fetchApi(`/api/account/objective-watches/${encodeURIComponent(watchId)}/review`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not mark these changes reviewed.'));
   const watch = parseObjectiveWatch((payload as { watch?: unknown } | null)?.watch);
   if (!watch) throw new Error('Objective watches returned an unexpected response.');
   return { watch, policy: requirePolicy(payload) };

@@ -46,6 +46,29 @@ const policy = {
   schedulerEnabled: false,
   checkIntervalMinutes: 180,
 };
+const MOCK_WATCH_CHANGES = [
+  {
+    direction: "worse",
+    reasons: [
+      { key: "wind_gust", direction: "worse", label: "Peak gusts increased from 20 mph to 40 mph." },
+      { key: "new_weather_alert", direction: "worse", label: "New weather alert: Wind Advisory (Moderate)." },
+    ],
+  },
+  {
+    direction: "better",
+    reasons: [{ key: "wind_gust_improvement", direction: "better", label: "Peak gusts decreased from 40 mph to 22 mph." }],
+  },
+];
+const mockUnreviewedChanges = (watch) => {
+  const pending = (watch.events || []).filter((event) => !watch.reviewedAt || event.checkedAt > watch.reviewedAt);
+  const worse = pending.filter((event) => event.change.direction !== "better");
+  return {
+    count: pending.length,
+    worsened: worse.length > 0,
+    latest: pending[0]?.change || null,
+    latestWorse: worse[0]?.change || null,
+  };
+};
 const tier = {
   key: "premium",
   label: "Premium",
@@ -376,7 +399,14 @@ export function createMockApi({ databasePath } = {}) {
               ) || null,
             policy,
           });
-        return ok({ watches: db.watches.map((watch) => ({ ...watch, latestCheck: watch.checks?.[0] || null })), policy });
+        return ok({
+          watches: db.watches.map((watch) => ({
+            ...watch,
+            latestCheck: watch.checks?.[0] || null,
+            unreviewedChanges: mockUnreviewedChanges(watch),
+          })),
+          policy,
+        });
       }
       if (method === "POST") {
         if (!body.report?.plan) return fail(400, "Report required.");
@@ -393,11 +423,13 @@ export function createMockApi({ databasePath } = {}) {
             lastCheckedAt: null,
             nextCheckAt: null,
             lastChange: null,
+            reviewedAt: now(),
             consecutiveFailures: 0,
             notificationsEnabled: true,
             createdAt: now(),
             updatedAt: now(),
             checks: [],
+            events: [],
           };
           db.watches.unshift(watch);
         }
@@ -411,21 +443,30 @@ export function createMockApi({ databasePath } = {}) {
         .flatMap((part, i) => (i ? part.split("/") : [part]));
       const watch = db.watches.find((w) => w.id === id);
       if (!watch) return fail(404, "Mock watch not found.");
-      if (action === "events") return ok({ events: [], policy });
+      if (action === "events") return ok({ events: watch.events || [], policy });
       if (action === "checks") return ok({ checks: watch.checks, policy });
       if (action === "refresh") {
-        watch.lastCheckedAt = now();
-        watch.lastAttemptedAt = watch.lastCheckedAt;
+        // The first checks report a risk increase, then an improvement.
+        const checkedAt = now();
+        const scripted = MOCK_WATCH_CHANGES[watch.checks.length];
+        const change = scripted ? { checkedAt, ...scripted } : null;
+        watch.lastCheckedAt = checkedAt;
+        watch.lastAttemptedAt = checkedAt;
+        if (change) {
+          watch.lastChange = change;
+          watch.events = [{ id: randomUUID(), change, checkedAt }, ...(watch.events || [])];
+        }
         watch.checks.unshift({
           id: randomUUID(),
           checkType: "manual",
-          status: "unchanged",
+          status: change ? "changed" : "unchanged",
           summary: { score: watch.baselineReport.safetyData.safety.score },
-          change: null,
+          change,
           error: null,
-          checkedAt: now(),
+          checkedAt,
         });
       }
+      if (action === "review") watch.reviewedAt = now();
       if (method === "PATCH")
         watch.notificationsEnabled = Boolean(body.notificationsEnabled);
       if (method === "DELETE")

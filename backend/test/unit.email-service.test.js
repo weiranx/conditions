@@ -223,6 +223,39 @@ describe('transactional email service', () => {
     expect(options).toEqual({ idempotencyKey: 'objective-watch/watch-7/event-4/abc123' });
   });
 
+  test('Objective Watch alerts name the plan and list improvements apart from risk increases', async () => {
+    const send = jest.fn().mockResolvedValue({ data: { id: 'watch-email-124' }, error: null });
+    const service = createEmailService({
+      apiKey: 're_test',
+      fromAddress: 'accounts@mail.example.com',
+      appBaseUrl: 'https://conditions.example.com',
+      client: { emails: { send } },
+    });
+
+    await service.sendObjectiveWatchChangeEmail({
+      eventId: 'event-5',
+      changeKey: 'def456',
+      watchId: 'watch-7',
+      title: 'Mount Rainier',
+      plan: { forecastDate: '2026-07-15', alpineStartTime: '05:30' },
+      change: {
+        reasons: [
+          { key: 'wind_gust', direction: 'worse', label: 'Peak gusts increased from 20 mph to 40 mph.' },
+          { key: 'precipitation_improvement', direction: 'better', label: 'Precipitation chance decreased from 70% to 30%.' },
+        ],
+      },
+      to: 'climber@example.com',
+      displayName: 'Avery',
+    });
+
+    const [message] = send.mock.calls[0];
+    expect(message.subject).toBe('Risk increased for Mount Rainier · Wed, Jul 15');
+    expect(message.text).toContain('meaningful risk increase for Mount Rainier (Wed, Jul 15 · 05:30 start):');
+    expect(message.text).toContain('- Peak gusts increased from 20 mph to 40 mph.\n\nAlso changed:\n- Precipitation chance decreased from 70% to 30%.');
+    expect(message.html.indexOf('Peak gusts increased')).toBeLessThan(message.html.indexOf('Also changed:'));
+    expect(message.html.indexOf('Also changed:')).toBeLessThan(message.html.indexOf('Precipitation chance decreased'));
+  });
+
   test('sends owner health alerts with incident-scoped idempotency', async () => {
     const send = jest.fn().mockResolvedValue({ data: { id: 'health-email-123' }, error: null });
     const service = createEmailService({

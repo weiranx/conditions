@@ -111,118 +111,229 @@ const buildPlanKey = (plan) => {
   ].join(':');
 };
 
+// NWS statuses that mean the alert feed answered. Anything else ('unavailable')
+// is an outage, and its empty alert list says nothing about active alerts.
+const ANSWERED_ALERT_STATUSES = new Set(['ok', 'none', 'none_for_selected_start']);
+const AVALANCHE_DANGER_LABELS = ['No rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'];
+
+// Each compared signal and the reason keys that report it getting worse or better.
+const SIGNAL_REASON_KEYS = {
+  score: ['score_drop', 'score_improvement'],
+  tier: ['risk_tier', 'risk_tier_improvement'],
+  avalancheDanger: ['avalanche_danger', 'avalanche_danger_improvement'],
+  closureTitles: ['new_closure', 'closure_lifted'],
+  alertKeys: ['new_weather_alert', 'weather_alert_cleared'],
+  maxWindGust: ['wind_gust', 'wind_gust_improvement'],
+  maxPrecipChance: ['precipitation', 'precipitation_improvement'],
+  terrainImpact: ['terrain_condition', 'terrain_condition_improvement'],
+};
+const COMPARED_SIGNALS = Object.keys(SIGNAL_REASON_KEYS);
+const IMPROVEMENT_REASON_KEYS = new Set(Object.values(SIGNAL_REASON_KEYS).map(([, better]) => better));
+
+const SCORE_CHANGE_POINTS = 10;
+const WIND_GUST_ALERT_MPH = 35;
+const WIND_GUST_JUMP_FLOOR_MPH = 25;
+const WIND_GUST_JUMP_MPH = 15;
+const PRECIP_ALERT_PERCENT = 60;
+// A threshold crossing must also move by this much, so a forecast hovering at
+// the line does not report a change on every check.
+const WIND_GUST_CROSSING_MARGIN_MPH = 5;
+const PRECIP_CROSSING_MARGIN_PERCENT = 10;
+
+const readAvalancheDanger = (avalanche) => {
+  if (!avalanche || typeof avalanche !== 'object' || avalanche.dangerUnknown === true) return null;
+  const level = finiteNumber(avalanche.dangerLevel);
+  return level !== null && level >= 1 && level <= 5 ? Math.round(level) : null;
+};
+
+const readAlertKeys = (alerts) => {
+  if (!alerts || typeof alerts !== 'object' || !Array.isArray(alerts.alerts)) return null;
+  if (alerts.status !== undefined && !ANSWERED_ALERT_STATUSES.has(alerts.status)) return null;
+  return uniqueSorted(alerts.alerts.map((alert) => `${alert?.event || 'Weather alert'}:${alert?.severity || ''}`));
+};
+
+const readClosureTitles = (closures) => {
+  if (!closures || typeof closures !== 'object' || closures.available !== true || !Array.isArray(closures.alerts)) {
+    return null;
+  }
+  return uniqueSorted(closures.alerts.map((closure) => closure?.title));
+};
+
+// Missing sources read as unknown (null or ''), never as zero danger or an
+// empty alert list: an outage must not look like conditions improving.
 const extractWatchSignals = (payload) => {
   const weatherTrend = Array.isArray(payload?.weather?.trend) ? payload.weather.trend : [];
-  const closures = Array.isArray(payload?.localConditions?.closures?.alerts)
-    ? payload.localConditions.closures.alerts
-    : [];
-  const alerts = Array.isArray(payload?.alerts?.alerts) ? payload.alerts.alerts : [];
+  const tier = String(payload?.safety?.tier || '').trim();
+  const terrainImpact = String(payload?.terrainCondition?.impact || '').trim().toLowerCase();
   return {
     partial: payload?.partialData === true,
     score: finiteNumber(payload?.safety?.score),
-    tier: String(payload?.safety?.tier || ''),
-    avalancheDanger: finiteNumber(payload?.avalanche?.dangerLevel),
+    tier: tierRank(tier) > 0 ? tier : '',
+    avalancheDanger: readAvalancheDanger(payload?.avalanche),
     maxWindGust: maxFinite([payload?.weather?.windGust, ...weatherTrend.map((point) => point?.gust)]),
     maxPrecipChance: maxFinite([payload?.weather?.precipChance, ...weatherTrend.map((point) => point?.precipChance)]),
-    terrainImpact: String(payload?.terrainCondition?.impact || ''),
-    closureTitles: uniqueSorted(closures.map((closure) => closure?.title)),
-    alertKeys: uniqueSorted(alerts.map((alert) => `${alert?.event || 'Weather alert'}:${alert?.severity || ''}`)),
+    terrainImpact: terrainRank(terrainImpact) > 0 ? terrainImpact : '',
+    closureTitles: readClosureTitles(payload?.localConditions?.closures),
+    alertKeys: readAlertKeys(payload?.alerts),
+  };
+};
+
+// Reference signals come back from JSONB; accept only well-formed values.
+const readStoredSignals = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const tier = String(value.tier || '').trim();
+  const terrainImpact = String(value.terrainImpact || '').trim().toLowerCase();
+  const avalancheDanger = finiteNumber(value.avalancheDanger);
+  return {
+    score: finiteNumber(value.score),
+    tier: tierRank(tier) > 0 ? tier : '',
+    avalancheDanger: avalancheDanger !== null && avalancheDanger >= 1 && avalancheDanger <= 5 ? Math.round(avalancheDanger) : null,
+    maxWindGust: finiteNumber(value.maxWindGust),
+    maxPrecipChance: finiteNumber(value.maxPrecipChance),
+    terrainImpact: terrainRank(terrainImpact) > 0 ? terrainImpact : '',
+    closureTitles: Array.isArray(value.closureTitles) ? uniqueSorted(value.closureTitles) : null,
+    alertKeys: Array.isArray(value.alertKeys) ? uniqueSorted(value.alertKeys) : null,
+  };
+};
+
+const isKnownSignal = (value) => value !== null && value !== undefined && value !== '';
+
+const formatAlertKey = (key) => {
+  const separator = key.lastIndexOf(':');
+  const event = separator >= 0 ? key.slice(0, separator) : key;
+  const severity = separator >= 0 ? key.slice(separator + 1).trim() : '';
+  return severity && severity.toLowerCase() !== 'unknown' ? `${event} (${severity})` : event;
+};
+
+const listItems = (items, format = (item) => item) => {
+  const shown = items.slice(0, 2).map(format).join('; ');
+  return items.length > 2 ? `${shown}; and ${items.length - 2} more` : shown;
+};
+
+const avalancheDangerLabel = (level) => `${AVALANCHE_DANGER_LABELS[level]} (${level})`;
+
+const summarizeDirection = (reasons) => {
+  const worse = reasons.some((reason) => reason.direction === 'worse');
+  const better = reasons.some((reason) => reason.direction === 'better');
+  if (worse && better) return 'mixed';
+  if (worse) return 'worse';
+  return better ? 'better' : null;
+};
+
+// Compares only signals known on both sides, and lists what got worse first.
+const compareWatchSignals = (reference, current) => {
+  const reasons = [];
+  const add = (key, direction, label) => reasons.push({ key, direction, label });
+  const known = (signal) => isKnownSignal(reference?.[signal]) && isKnownSignal(current?.[signal]);
+
+  if (known('score')) {
+    const from = Math.round(reference.score);
+    const to = Math.round(current.score);
+    if (reference.score - current.score >= SCORE_CHANGE_POINTS) add('score_drop', 'worse', `Conditions score dropped from ${from} to ${to}.`);
+    if (current.score - reference.score >= SCORE_CHANGE_POINTS) add('score_improvement', 'better', `Conditions score improved from ${from} to ${to}.`);
+  }
+  if (known('tier')) {
+    const from = tierRank(reference.tier);
+    const to = tierRank(current.tier);
+    if (from > 0 && to > from) add('risk_tier', 'worse', `Risk tier increased from ${reference.tier} to ${current.tier}.`);
+    if (to > 0 && from > to) add('risk_tier_improvement', 'better', `Risk tier decreased from ${reference.tier} to ${current.tier}.`);
+  }
+  if (known('avalancheDanger')) {
+    const from = reference.avalancheDanger;
+    const to = current.avalancheDanger;
+    if (to > from) add('avalanche_danger', 'worse', `Avalanche danger increased from ${avalancheDangerLabel(from)} to ${avalancheDangerLabel(to)}.`);
+    if (to < from) add('avalanche_danger_improvement', 'better', `Avalanche danger decreased from ${avalancheDangerLabel(from)} to ${avalancheDangerLabel(to)}.`);
+  }
+  if (known('closureTitles')) {
+    const before = new Set(reference.closureTitles);
+    const after = new Set(current.closureTitles);
+    const added = current.closureTitles.filter((title) => !before.has(title));
+    const lifted = reference.closureTitles.filter((title) => !after.has(title));
+    if (added.length > 0) add('new_closure', 'worse', `New access or closure notice: ${listItems(added)}.`);
+    if (lifted.length > 0) add('closure_lifted', 'better', `Access or closure notice cleared: ${listItems(lifted)}.`);
+  }
+  if (known('alertKeys')) {
+    const before = new Set(reference.alertKeys);
+    const after = new Set(current.alertKeys);
+    const added = current.alertKeys.filter((alert) => !before.has(alert));
+    const cleared = reference.alertKeys.filter((alert) => !after.has(alert));
+    if (added.length > 0) add('new_weather_alert', 'worse', `New weather alert: ${listItems(added, formatAlertKey)}.`);
+    if (cleared.length > 0) add('weather_alert_cleared', 'better', `Weather alert cleared: ${listItems(cleared, formatAlertKey)}.`);
+  }
+  if (known('maxWindGust')) {
+    const from = reference.maxWindGust;
+    const to = current.maxWindGust;
+    const rose = (to >= WIND_GUST_ALERT_MPH && from < WIND_GUST_ALERT_MPH && to - from >= WIND_GUST_CROSSING_MARGIN_MPH)
+      || (to >= WIND_GUST_JUMP_FLOOR_MPH && to - from >= WIND_GUST_JUMP_MPH);
+    const eased = (from >= WIND_GUST_ALERT_MPH && to < WIND_GUST_ALERT_MPH && from - to >= WIND_GUST_CROSSING_MARGIN_MPH)
+      || (from >= WIND_GUST_JUMP_FLOOR_MPH && from - to >= WIND_GUST_JUMP_MPH);
+    if (rose) add('wind_gust', 'worse', `Peak gusts increased from ${Math.round(from)} mph to ${Math.round(to)} mph.`);
+    if (eased) add('wind_gust_improvement', 'better', `Peak gusts decreased from ${Math.round(from)} mph to ${Math.round(to)} mph.`);
+  }
+  if (known('maxPrecipChance')) {
+    const from = reference.maxPrecipChance;
+    const to = current.maxPrecipChance;
+    if (to >= PRECIP_ALERT_PERCENT && from < PRECIP_ALERT_PERCENT && to - from >= PRECIP_CROSSING_MARGIN_PERCENT) {
+      add('precipitation', 'worse', `Precipitation chance increased from ${Math.round(from)}% to ${Math.round(to)}%.`);
+    }
+    if (from >= PRECIP_ALERT_PERCENT && to < PRECIP_ALERT_PERCENT && from - to >= PRECIP_CROSSING_MARGIN_PERCENT) {
+      add('precipitation_improvement', 'better', `Precipitation chance decreased from ${Math.round(from)}% to ${Math.round(to)}%.`);
+    }
+  }
+  if (known('terrainImpact')) {
+    const from = terrainRank(reference.terrainImpact);
+    const to = terrainRank(current.terrainImpact);
+    if (from > 0 && to > from) add('terrain_condition', 'worse', `Terrain impact increased from ${reference.terrainImpact} to ${current.terrainImpact}.`);
+    if (to > 0 && from > to) add('terrain_condition_improvement', 'better', `Terrain impact decreased from ${reference.terrainImpact} to ${current.terrainImpact}.`);
+  }
+
+  return [
+    ...reasons.filter((reason) => reason.direction === 'worse'),
+    ...reasons.filter((reason) => reason.direction === 'better'),
+  ];
+};
+
+const buildSignalChange = (reference, current, checkedAt) => {
+  const reasons = compareWatchSignals(reference, current);
+  if (reasons.length === 0) return null;
+  return {
+    checkedAt: new Date(checkedAt).toISOString(),
+    direction: summarizeDirection(reasons),
+    reasons,
+    previous: reference,
+    current,
   };
 };
 
 const buildMeaningfulChange = (previousPayload, currentPayload, checkedAt) => {
   if (!previousPayload || !currentPayload || currentPayload.partialData === true) return null;
-  const previous = extractWatchSignals(previousPayload);
-  const current = extractWatchSignals(currentPayload);
-  const reasons = [];
+  return buildSignalChange(extractWatchSignals(previousPayload), extractWatchSignals(currentPayload), checkedAt);
+};
 
-  if (previous.score !== null && current.score !== null && previous.score - current.score >= 10) {
-    reasons.push({ key: 'score_drop', label: `Conditions score dropped from ${Math.round(previous.score)} to ${Math.round(current.score)}.` });
-  }
-  if (previous.score !== null && current.score !== null && current.score - previous.score >= 10) {
-    reasons.push({ key: 'score_improvement', label: `Conditions score improved from ${Math.round(previous.score)} to ${Math.round(current.score)}.` });
-  }
-  if (tierRank(current.tier) > tierRank(previous.tier)) {
-    reasons.push({ key: 'risk_tier', label: `Risk tier increased from ${previous.tier || 'unknown'} to ${current.tier}.` });
-  }
-  if (tierRank(current.tier) > 0 && tierRank(previous.tier) > tierRank(current.tier)) {
-    reasons.push({ key: 'risk_tier_improvement', label: `Risk tier decreased from ${previous.tier} to ${current.tier || 'unknown'}.` });
-  }
-  if (previous.avalancheDanger !== null && current.avalancheDanger !== null && current.avalancheDanger > previous.avalancheDanger) {
-    reasons.push({ key: 'avalanche_danger', label: `Avalanche danger increased from ${previous.avalancheDanger} to ${current.avalancheDanger}.` });
-  }
-  if (previous.avalancheDanger !== null && current.avalancheDanger !== null && current.avalancheDanger < previous.avalancheDanger) {
-    reasons.push({ key: 'avalanche_danger_improvement', label: `Avalanche danger decreased from ${previous.avalancheDanger} to ${current.avalancheDanger}.` });
-  }
+// Checks compare against the value last reported for each signal, not the
+// previous check, so a slow drift still adds up to a reported change. A signal
+// the reference lacks is filled from the first check that has it.
+const advanceReferenceSignals = (reference, current, reasons) => {
+  const reported = new Set(reasons.map((reason) => reason.key));
+  return Object.fromEntries(COMPARED_SIGNALS.map((signal) => {
+    const changed = SIGNAL_REASON_KEYS[signal].some((key) => reported.has(key));
+    const value = changed || !isKnownSignal(reference?.[signal]) ? current?.[signal] : reference[signal];
+    return [signal, value ?? null];
+  }));
+};
 
-  const previousClosures = new Set(previous.closureTitles);
-  const newClosures = current.closureTitles.filter((title) => !previousClosures.has(title));
-  if (newClosures.length > 0) {
-    reasons.push({ key: 'new_closure', label: `New access or closure notice: ${newClosures.slice(0, 2).join('; ')}.` });
-  }
-  const currentClosures = new Set(current.closureTitles);
-  const liftedClosures = previous.closureTitles.filter((title) => !currentClosures.has(title));
-  if (liftedClosures.length > 0) {
-    reasons.push({ key: 'closure_lifted', label: `Access or closure notice cleared: ${liftedClosures.slice(0, 2).join('; ')}.` });
-  }
-
-  const previousAlerts = new Set(previous.alertKeys);
-  const newAlerts = current.alertKeys.filter((alert) => !previousAlerts.has(alert));
-  if (newAlerts.length > 0) {
-    reasons.push({ key: 'new_weather_alert', label: `New weather alert: ${newAlerts.slice(0, 2).join('; ')}.` });
-  }
-  const currentAlerts = new Set(current.alertKeys);
-  const clearedAlerts = previous.alertKeys.filter((alert) => !currentAlerts.has(alert));
-  if (clearedAlerts.length > 0) {
-    reasons.push({ key: 'weather_alert_cleared', label: `Weather alert cleared: ${clearedAlerts.slice(0, 2).join('; ')}.` });
-  }
-
-  if (
-    current.maxWindGust !== null
-    && previous.maxWindGust !== null
-    && ((current.maxWindGust >= 35 && previous.maxWindGust < 35)
-      || (current.maxWindGust >= 25 && current.maxWindGust - previous.maxWindGust >= 15))
-  ) {
-    reasons.push({ key: 'wind_gust', label: `Peak gusts increased from ${Math.round(previous.maxWindGust)} to ${Math.round(current.maxWindGust)} mph.` });
-  }
-  if (
-    current.maxWindGust !== null
-    && previous.maxWindGust !== null
-    && ((previous.maxWindGust >= 35 && current.maxWindGust < 35)
-      || (previous.maxWindGust >= 25 && previous.maxWindGust - current.maxWindGust >= 15))
-  ) {
-    reasons.push({ key: 'wind_gust_improvement', label: `Peak gusts decreased from ${Math.round(previous.maxWindGust)} to ${Math.round(current.maxWindGust)} mph.` });
-  }
-  if (
-    current.maxPrecipChance !== null
-    && previous.maxPrecipChance !== null
-    && current.maxPrecipChance >= 60
-    && previous.maxPrecipChance < 60
-  ) {
-    reasons.push({ key: 'precipitation', label: `Precipitation chance increased from ${Math.round(previous.maxPrecipChance)}% to ${Math.round(current.maxPrecipChance)}%.` });
-  }
-  if (
-    current.maxPrecipChance !== null
-    && previous.maxPrecipChance !== null
-    && previous.maxPrecipChance >= 60
-    && current.maxPrecipChance < 60
-  ) {
-    reasons.push({ key: 'precipitation_improvement', label: `Precipitation chance decreased from ${Math.round(previous.maxPrecipChance)}% to ${Math.round(current.maxPrecipChance)}%.` });
-  }
-  if (terrainRank(current.terrainImpact) > terrainRank(previous.terrainImpact)) {
-    reasons.push({ key: 'terrain_condition', label: `Terrain impact increased from ${previous.terrainImpact || 'unknown'} to ${current.terrainImpact}.` });
-  }
-  if (terrainRank(current.terrainImpact) > 0 && terrainRank(previous.terrainImpact) > terrainRank(current.terrainImpact)) {
-    reasons.push({ key: 'terrain_condition_improvement', label: `Terrain impact decreased from ${previous.terrainImpact} to ${current.terrainImpact || 'unknown'}.` });
-  }
-
-  if (reasons.length === 0) return null;
-  return {
-    checkedAt: new Date(checkedAt).toISOString(),
-    reasons,
-    previous,
-    current,
-  };
+// Stored changes from before reasons carried a direction infer it from their key.
+const normalizeWatchChange = (change) => {
+  if (!change || typeof change !== 'object' || Array.isArray(change)) return null;
+  const reasons = (Array.isArray(change.reasons) ? change.reasons : [])
+    .filter((reason) => reason && typeof reason === 'object')
+    .map((reason) => ({
+      ...reason,
+      direction: reason.direction === 'worse' || reason.direction === 'better'
+        ? reason.direction
+        : IMPROVEMENT_REASON_KEYS.has(String(reason.key || '')) ? 'better' : 'worse',
+    }));
+  return { ...change, reasons, direction: summarizeDirection(reasons) };
 };
 
 const buildChangeKey = (watchId, change) => createHash('sha256')
@@ -256,7 +367,7 @@ const createObjectiveWatchChecker = ({
     if (!emailService?.available || typeof emailService.sendObjectiveWatchChangeEmail !== 'function') return 0;
     const result = await database.query(`
       SELECT events.id, events.change_key, events.change, watches.id AS watch_id,
-             watches.title, users.email, users.display_name
+             watches.title, watches.plan, users.email, users.display_name
       FROM objective_watch_events events
       JOIN objective_watches watches ON watches.id = events.watch_id
       JOIN users ON users.id = watches.user_id
@@ -272,13 +383,25 @@ const createObjectiveWatchChecker = ({
     `);
     let sent = 0;
     for (const event of result.rows) {
+      const change = normalizeWatchChange(event.change);
+      // Alerts promise risk increases; an event queued before directions were
+      // recorded may only describe improvements.
+      if (change?.direction === 'better') {
+        await database.query(`
+          UPDATE objective_watch_events
+          SET notification_status = 'not_requested'
+          WHERE id = $1
+        `, [event.id]);
+        continue;
+      }
       try {
         await emailService.sendObjectiveWatchChangeEmail({
           eventId: String(event.id),
           changeKey: event.change_key,
           watchId: event.watch_id,
           title: event.title,
-          change: event.change,
+          plan: event.plan,
+          change,
           to: event.email,
           displayName: event.display_name,
         });
@@ -396,7 +519,7 @@ const createObjectiveWatchChecker = ({
         RETURNING watches.*
       )
       SELECT watches.id, watches.user_id, watches.title, watches.plan,
-             watches.baseline_report, watches.last_snapshot, watches.consecutive_failures,
+             watches.baseline_report, watches.last_snapshot, watches.reference_signals, watches.consecutive_failures,
              watches.notifications_enabled, users.email, users.display_name, users.email_verified_at,
              COALESCE(account_tier.tier_key, 'free') AS tier_key
       FROM claimed_watches watches
@@ -471,18 +594,25 @@ const createObjectiveWatchChecker = ({
           throw new Error(result?.payload?.error || `Safety report returned ${result?.statusCode || 'no response'}.`);
         }
 
+        const currentSignals = extractWatchSignals(result.payload);
+        const partial = currentSignals.partial;
         for (const watch of group) {
-          const previousPayload = watch.last_snapshot || watch.baseline_report?.safetyData || null;
-          const change = buildMeaningfulChange(previousPayload, result.payload, checkedAt);
+          // Without stored reference signals (a new or re-baselined watch, or
+          // one saved before they existed) compare with the latest snapshot,
+          // else the baseline, so an upgrade does not replay old drift as new.
+          const referenceSignals = readStoredSignals(watch.reference_signals)
+            || extractWatchSignals(watch.last_snapshot || watch.baseline_report?.safetyData || null);
+          const change = partial ? null : buildSignalChange(referenceSignals, currentSignals, checkedAt);
+          const nextReference = partial ? null : advanceReferenceSignals(referenceSignals, currentSignals, change?.reasons || []);
           const premium = watch.tier_key === 'premium';
           const nextCheckAt = premium ? calculateNextCheckAt(watch.plan, checkedAt, standardIntervalMinutes) : null;
-          const checkStatus = result.payload.partialData === true ? 'partial' : change ? 'changed' : 'unchanged';
-          const checkSummary = extractWatchSignals(result.payload);
+          const checkStatus = partial ? 'partial' : change ? 'changed' : 'unchanged';
           const updateResult = await database.query(`
             UPDATE objective_watches
             SET last_attempted_at = $2, last_checked_at = $2, next_check_at = $3,
                 last_snapshot = COALESCE($4::jsonb, last_snapshot),
                 last_change = COALESCE($5::jsonb, last_change), consecutive_failures = 0,
+                reference_signals = COALESCE($7::jsonb, reference_signals),
                 check_claimed_at = NULL, check_claim_token = NULL
             WHERE id = $1 AND check_claim_token = $6::uuid
             RETURNING id
@@ -490,9 +620,10 @@ const createObjectiveWatchChecker = ({
             watch.id,
             checkedAt.toISOString(),
             nextCheckAt?.toISOString() || null,
-            result.payload.partialData === true ? null : JSON.stringify(result.payload),
+            partial ? null : JSON.stringify(result.payload),
             change ? JSON.stringify(change) : null,
             claimToken,
+            nextReference ? JSON.stringify(nextReference) : null,
           ]);
           if (updateResult?.rowCount === 0) continue;
           await database.query(`
@@ -502,14 +633,16 @@ const createObjectiveWatchChecker = ({
             watch.id,
             manual ? 'manual' : 'automatic',
             checkStatus,
-            JSON.stringify(checkSummary),
+            JSON.stringify(currentSignals),
             change ? JSON.stringify(change) : null,
             checkedAt.toISOString(),
           ]);
           checked += 1;
 
           if (change) {
+            // Email alerts promise risk increases; improvements stay in-app.
             const notificationStatus = premium && watch.notifications_enabled && watch.email && watch.email_verified_at
+              && change.direction !== 'better'
               ? 'pending'
               : 'not_requested';
             await database.query(`
@@ -569,11 +702,14 @@ const createObjectiveWatchChecker = ({
 
 module.exports = {
   OBJECTIVE_WATCH_CLAIM_LEASE_MS,
+  advanceReferenceSignals,
   buildChangeKey,
   buildMeaningfulChange,
   buildPlanKey,
+  buildSignalChange,
   calculateNextCheckAt,
   createObjectiveWatchChecker,
   extractWatchSignals,
+  normalizeWatchChange,
   planDateHasEnded,
 };
