@@ -925,19 +925,28 @@ test('source insights are actionable, traceable and escape provider text', () =>
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /https:\/\/www.nps.gov\/alerts/);
 });
-test('access review propagates into decision checks without changing safety score', () => {
+const lightningInsight = { id: 'lightning', tone: 'caution', title: 'Lightning needs an immediate check', meaning: 'Lightning was detected at the objective.', action: 'Reassess exposed travel before committing.', features: ['fieldObservations'], decisionRelevant: true, evidence: [] };
+test('source review propagates into decision checks without changing safety score', () => {
   const data = makeReport({}, 'field-alerts');
   const original = data.safety.score;
-  data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
+  data.reportInsights = { version: 1, summary: '', items: [lightningInsight] };
   const decision = evaluateBackcountryDecision(data, '12:00', preferences);
   assert.notEqual(decision.level, 'GO');
-  assert.ok(decision.checks.some(check => check.key === 'source-access' && !check.ok));
-  assert.ok(decision.cautions.some(text => text.includes(accessInsight.action)));
+  assert.ok(decision.checks.some(check => check.key === 'source-lightning' && !check.ok));
+  assert.ok(decision.cautions.some(text => text.includes(lightningInsight.action)));
   assert.equal(data.safety.score, original);
   data.featureFlags = { ...data.featureFlags, fieldObservations: false };
   assert.equal(reportInsightItems(data).length, 0);
   assert.equal(renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} />), '');
-  assert.ok(!evaluateBackcountryDecision(data, '12:00', preferences).checks.some(check => check.key === 'source-access'));
+  assert.ok(!evaluateBackcountryDecision(data, '12:00', preferences).checks.some(check => check.key === 'source-lightning'));
+});
+test('nearby closures not matched to the route are advice, not a caution', () => {
+  const data = makeReport({}, 'field-alerts');
+  data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
+  const decision = evaluateBackcountryDecision(data, '12:00', preferences);
+  assert.ok(!decision.checks.some(check => check.key === 'source-access'));
+  assert.ok(!decision.cautions.some(text => text.includes(accessInsight.action)));
+  assert.ok(decision.advisories.some(text => text.includes(accessInsight.action)));
 });
 test('offline field brief carries interpreted findings and actions', () => {
   const data = makeReport({}, 'field-alerts'); data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
@@ -976,7 +985,34 @@ test('a source review changes an otherwise GO decision to CAUTION, never weakens
   const before = evaluateBackcountryDecision(data, '23:59', relaxed);
   assert.equal(before.level, 'GO', JSON.stringify(before));
   data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
+  assert.equal(evaluateBackcountryDecision(data, '23:59', relaxed).level, 'GO');
+  data.reportInsights = { version: 1, summary: '', items: [accessInsight, lightningInsight] };
   assert.equal(evaluateBackcountryDecision(data, '23:59', relaxed).level, 'CAUTION');
   data.weather.description = 'Weather data unavailable';
   assert.equal(evaluateBackcountryDecision(data, '23:59', relaxed).level, 'NO-GO');
+});
+
+test('minor signals inside the limits advise without lowering a GO', () => {
+  const data = makeReport({}, 'clear');
+  data.featureFlags = { avalancheDetails: false, daylightTimeline: false, snowpackDetails: false, airQualityDetails: true, heatRiskDetails: true, fireRiskDetails: true, weatherContextDetails: false, fieldObservations: false };
+  data.rainfall = { ...data.rainfall, anchorTime: new Date().toISOString() };
+  data.airQuality = { status: 'ok', usAqi: 62, category: 'Moderate', measuredTime: new Date().toISOString() };
+  data.fireRisk = { status: 'ok', level: 2, label: 'Elevated', reasons: [] };
+  data.heatRisk = { status: 'ok', level: 2, label: 'Elevated' };
+  data.terrainCondition = { code: 'dry_loose', label: 'Drying / Footing Uncertain', impact: 'moderate' };
+  const relaxed = { ...preferences, maxWindGustMph: 100, maxPrecipChance: 100, minFeelsLikeF: -100, maxFeelsLikeF: 150 };
+  const decision = evaluateBackcountryDecision(data, '23:59', relaxed);
+  assert.equal(decision.level, 'GO', JSON.stringify(decision));
+  for (const text of ['Air quality is moderate', 'Fire risk is elevated', 'Heat risk is elevated', 'Terrain and trail surfaces']) {
+    assert.ok(decision.advisories.some(item => item.startsWith(text)), text);
+  }
+  const brief = buildFieldBrief({ objectiveName: 'Test', forecastDate: '2026-09-16', startTime: '07:00', returnTime: '12:00', travelWindowHours: 5, activity: 'hiking', safetyData: data, decision, actionLine: '' });
+  const decisive = brief.text.split('DECISIVE HAZARDS')[1].split('\n\n')[0];
+  assert.doesNotMatch(decisive, /Air quality is moderate/);
+  assert.match(brief.text, /ADVISORIES \(DO NOT CHANGE THE DECISION\)\n- Air quality is moderate/);
+  assert.match(brief.html, /<h2>Advisories<\/h2><ul><li>Air quality is moderate/);
+  data.terrainCondition = { code: 'snow_ice', label: 'Icy / Firm Snow', impact: 'high' };
+  const icy = evaluateBackcountryDecision(data, '23:59', relaxed);
+  assert.equal(icy.level, 'CAUTION');
+  assert.ok(icy.cautions.some(item => item.startsWith('Terrain and trail surfaces')));
 });
