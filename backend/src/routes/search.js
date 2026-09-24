@@ -1,60 +1,48 @@
 const { createCache, normalizeTextKey } = require('../utils/cache');
 const { logger } = require('../utils/logger');
-
-const normalizeSearchText = (value = '') =>
-  String(value)
-    .toLowerCase()
-    .replace(/[.,]/g, ' ')
-    .replace(/\bmt\b/g, 'mount')
-    .replace(/\s+/g, ' ')
-    .trim();
+const { matchCatalogPeaks, parseSearchBias, popularCatalogPeaks, rankPlaceResults } = require('../utils/place-search');
 
 const nominatimSearchCache = createCache({ name: 'nominatim-search', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 300 });
 
+const MAX_RESULTS = 8;
+
 const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks }) => {
   app.get('/api/search', async (req, res) => {
-    const { q } = req.query;
+    const { q, near } = req.query;
     const query = typeof q === 'string' ? q.trim().slice(0, 120) : '';
-    const normalizedQuery = normalizeSearchText(query);
 
     if (!query) {
-      return res.json(peaks.slice(0, 5).map((peak) => ({ ...peak, type: 'peak', class: 'popular' })));
+      return res.json(popularCatalogPeaks(peaks, 5));
     }
 
-    const localMatches = peaks
-      .filter((peak) => normalizeSearchText(peak.name).includes(normalizedQuery))
-      .map((peak) => ({ ...peak, type: 'peak', class: 'natural' }));
+    const localMatches = matchCatalogPeaks(peaks, query);
 
-    if (query.length < 3) return res.json(localMatches);
+    if (query.length < 3) return res.json(localMatches.slice(0, MAX_RESULTS));
 
     try {
       const fetchOptions = { headers: defaultFetchHeaders };
-      const searchCacheKey = normalizeTextKey(query);
+      const bias = parseSearchBias(near);
+      // Separate components: query text could otherwise spell out another query's bias.
+      const searchCacheKey = JSON.stringify([normalizeTextKey(query), bias ? bias.key : null]);
       const apiResults = await nominatimSearchCache.getOrFetch(searchCacheKey, async () => {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us&limit=5&addressdetails=1`;
+        // More candidates than we show: businesses are dropped and outdoor features re-ranked first.
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us&limit=12&addressdetails=1&extratags=1&dedupe=1&accept-language=en${bias ? `&viewbox=${bias.viewbox}` : ''}`;
         const response = await fetchWithTimeout(url, fetchOptions);
         if (!response.ok) {
           throw new Error(`Nominatim request failed with status ${response.status}`);
         }
-        const payload = await response.json();
-        return payload.map((item) => ({
-          name: item.display_name,
-          lat: parseFloat(item.lat),
-          lon: parseFloat(item.lon),
-          type: item.type,
-          class: item.class,
-        }));
+        return rankPlaceResults(await response.json(), { biased: Boolean(bias) });
       });
 
       const combined = [...localMatches, ...apiResults];
       const uniqueResults = combined
         .filter((value, index, array) => array.findIndex((entry) => entry.name === value.name) === index)
-        .slice(0, 8);
+        .slice(0, MAX_RESULTS);
 
       return res.json(uniqueResults);
     } catch (error) {
       logger.warn({ err: error, query }, 'Nominatim search failed; serving local catalog matches only');
-      return res.json(localMatches);
+      return res.json(localMatches.slice(0, MAX_RESULTS));
     }
   });
 };

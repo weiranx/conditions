@@ -3995,3 +3995,16 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
     box-shadow: none;
   }
 }
+.field-suggestion-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.field-suggestion-label strong {
+  font-weight: 600;
+}
+.field-suggestion-label small {
+  font-size: 0.9em;
+  color: var(--f-muted);
+}

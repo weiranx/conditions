@@ -1,9 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { fetchApi, readApiErrorMessage } from '../lib/api-client';
 import {
   getLocalPopularSuggestions,
   normalizeSuggestionText,
   rankAndDeduplicateSuggestions,
+  searchRequestPath,
+  type SearchNear,
   type Suggestion,
 } from '../lib/search';
 import { SEARCH_DEBOUNCE_MS } from '../app/constants';
@@ -23,6 +25,8 @@ const MAX_RECENT_SEARCHES = 8;
 export interface UseSearchSuggestionsParams {
   initialSearchQuery: string;
   updateObjectivePosition: (nextPosition: LatLngLiteral, label?: string) => void;
+  /** Where results should lean toward (the current objective); the latest pick otherwise. */
+  searchNear?: SearchNear | null;
 }
 
 export interface UseSearchSuggestionsReturn {
@@ -57,6 +61,7 @@ export interface UseSearchSuggestionsReturn {
 export function useSearchSuggestions({
   initialSearchQuery,
   updateObjectivePosition,
+  searchNear = null,
 }: UseSearchSuggestionsParams): UseSearchSuggestionsReturn {
   const [searchQuery, setSearchQueryState] = useState(initialSearchQuery);
   const [committedSearchQuery, setCommittedSearchQuery] = useState(initialSearchQuery);
@@ -76,6 +81,17 @@ export function useSearchSuggestions({
   const suggestionAbortControllerRef = useRef<AbortController | null>(null);
   const suggestionsQueryRef = useRef<string>('');
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const latestRecent = recentSearches[0];
+  const nearLat = searchNear?.lat ?? (latestRecent ? Number(latestRecent.lat) : Number.NaN);
+  const nearLon = searchNear?.lon ?? (latestRecent ? Number(latestRecent.lon) : Number.NaN);
+  const near = useMemo<SearchNear | null>(
+    () => (Number.isFinite(nearLat) && Number.isFinite(nearLon) ? { lat: Math.round(nearLat), lon: Math.round(nearLon) } : null),
+    [nearLat, nearLon],
+  );
+  const nearKey = near ? `${near.lat},${near.lon}` : null;
+  // Separate components: query text could otherwise spell out another query's area.
+  const cacheKeyFor = useCallback((query: string) => JSON.stringify([normalizeSuggestionText(query), nearKey]), [nearKey]);
 
   const setSearchQuery = useCallback((value: string) => {
     setSearchQueryState(value);
@@ -122,7 +138,7 @@ export function useSearchSuggestions({
       return;
     }
 
-    const cacheKey = normalizeSuggestionText(query);
+    const cacheKey = cacheKeyFor(query);
     const cached = suggestionCacheRef.current.get(cacheKey);
 
     if (cached) {
@@ -142,9 +158,8 @@ export function useSearchSuggestions({
 
     setSearchLoading(true);
     try {
-      const queryParam = query ? `?q=${encodeURIComponent(query)}` : '';
       const { response, payload, requestId: apiRequestId } = await fetchApi(
-        `/api/search${queryParam}`,
+        searchRequestPath(query, near),
         { signal: controller.signal },
       );
       if (!response.ok) {
@@ -192,7 +207,7 @@ export function useSearchSuggestions({
         setSearchLoading(false);
       }
     }
-  }, [getStoredSuggestionsForQuery]);
+  }, [cacheKeyFor, getStoredSuggestionsForQuery, near]);
 
   const selectSuggestion = useCallback(
     (s: Suggestion) => {
@@ -258,7 +273,7 @@ export function useSearchSuggestions({
         return true;
       }
 
-      const cached = suggestionCacheRef.current.get(normalizeSuggestionText(query));
+      const cached = suggestionCacheRef.current.get(cacheKeyFor(query));
       if (cached && cached[0]) {
         setSuggestions(cached);
         selectSuggestion(cached[0]);
@@ -280,10 +295,7 @@ export function useSearchSuggestions({
       setSearchLoading(true);
       const requestId = ++latestSuggestionRequestId.current;
       try {
-        const queryParam = query ? `?q=${encodeURIComponent(query)}` : '';
-        const { response, payload, requestId: apiRequestId } = await fetchApi(
-          `/api/search${queryParam}`,
-        );
+        const { response, payload, requestId: apiRequestId } = await fetchApi(searchRequestPath(query, near));
         if (requestId !== latestSuggestionRequestId.current) {
           return false;
         }
@@ -322,7 +334,7 @@ export function useSearchSuggestions({
         setSearchLoading(false);
       }
     },
-    [getStoredSuggestionsForQuery, recordRecentSuggestion, selectSuggestion, setSearchQuery, updateObjectivePosition],
+    [cacheKeyFor, getStoredSuggestionsForQuery, near, recordRecentSuggestion, selectSuggestion, setSearchQuery, updateObjectivePosition],
   );
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

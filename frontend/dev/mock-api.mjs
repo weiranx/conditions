@@ -347,13 +347,15 @@ export function createMockApi({ databasePath } = {}) {
     }
     if (p === "/api/search")
       return ok(
-        peaks.filter(
-          (peak) =>
-            !q.q ||
-            peak.name
-              .toLowerCase()
-              .includes(q.q.toLowerCase().replace(/^mt\.? /, "mount ")),
-        ),
+        peaks
+          .filter(
+            (peak) =>
+              !q.q ||
+              peak.name
+                .toLowerCase()
+                .includes(q.q.toLowerCase().replace(/^mt\.? /, "mount ")),
+          )
+          .map((peak) => ({ ...peak, kind: "Peak", elevationFt: peak.elevation })),
       );
     if (p === "/api/reverse-geocode") return ok(peaks[0]);
     if (p === "/api/safety") {
