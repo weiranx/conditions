@@ -11,6 +11,7 @@ import { buildCheckpointProfile } from '../src/field/route-planning';
 import { parseGpxText } from '../src/lib/gpx';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
 import { makeReport } from '../dev/mock-data.mjs';
+import { getDefaultUserPreferences } from '../src/app/preferences';
 
 function parseGpx(xml) {
   const dom = new JSDOM('');
@@ -322,7 +323,8 @@ test('without a planned route the chapter cannot analyze a blank name', () => {
 const planWorkspace = (overrides = {}) => ({
   ...workspace(),
   searchWrapperRef: { current: null }, searchInputRef: { current: null },
-  preferences: { elevationUnit: 'ft', defaultActivity: 'hiking' },
+  preferences: { ...getDefaultUserPreferences(), elevationUnit: 'ft', defaultActivity: 'hiking' },
+  formatTempDisplay: (f) => `${f}°F`,
   searchQuery: 'Test mountain', showSuggestions: false, suggestions: [], activeSuggestionIndex: -1,
   hasObjective: true, objectiveDraftDirty: false, featureFlags: { gpxImport: true, routeAnalysis: true },
   todayDate: '2026-09-08', maxForecastDate: '2026-09-15', travelWindowHoursDraft: '4',

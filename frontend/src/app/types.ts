@@ -853,8 +853,28 @@ export interface LinkState {
   travelWindowHours?: number | null;
 }
 
+/** The four weather limits the hourly assessment checks against. */
+export interface ActivityLimits {
+  maxWindGustMph: number;
+  maxPrecipChance: number;
+  minFeelsLikeF: number;
+  maxFeelsLikeF: number;
+}
+
+/** A user-named activity; plans are built as `baseActivity` but checked against its own limits. */
+export interface CustomActivity {
+  id: string;
+  label: string;
+  baseActivity: ActivityType;
+}
+
 export interface UserPreferences {
   defaultActivity: ActivityType;
+  /** Selected custom activity, or null for the built-in `defaultActivity`. */
+  customActivityId: string | null;
+  customActivities: CustomActivity[];
+  /** Saved weather limits per built-in activity type or custom activity id. */
+  activityLimits: Record<string, ActivityLimits>;
   defaultStartTime: string;
   themeMode: ThemeMode;
   temperatureUnit: TemperatureUnit;
