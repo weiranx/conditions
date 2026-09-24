@@ -5,7 +5,6 @@ import React, {
   useCallback,
   useMemo,
   useRef,
-  useLayoutEffect,
 } from "react";
 import type { LatLngLiteral } from "leaflet";
 import {
@@ -196,10 +195,11 @@ export function useWorkspace() {
     ) {
       return parsedInitialLinkState;
     }
+    // Restore the last report's plan behind the requested page; opening `/`
+    // stays on the workspace instead of jumping to the brief.
     const plan = initialPersistedReport.plan;
     return {
       ...parsedInitialLinkState,
-      view: "planner" as const,
       position: { lat: plan.lat, lng: plan.lon },
       hasObjective: true,
       objectiveName: plan.objectiveName,
@@ -391,9 +391,8 @@ export function useWorkspace() {
     clearRouteAnalysis,
     restoreRouteState,
   } = useRouteAnalysis(initialRestoredReport?.route);
-  // Set once the planned-route handler exists below; a new report starts it.
-  const reportGeneratedRef = useRef<() => void>(() => {});
-  const handleReportGenerated = useCallback(() => reportGeneratedRef.current(), []);
+  // A new report drops the previous route analysis; the Route chapter's button runs a new one.
+  const handleReportGenerated = clearRouteAnalysis;
 
   // Limits, units and approach sent with each report, so it comes back
   // evaluated for this plan. Kept current below.
@@ -726,6 +725,12 @@ export function useWorkspace() {
           setSharedReportLoadAttempt((attempt) => attempt + 1);
         if (linkState.view === "trip") {
           initializeTripView(linkState.forecastDate, linkState.alpineStartTime);
+        }
+        // Only the planner and trip URLs carry plan state. The workspace and other
+        // pages omit it, so returning to them keeps the current (or restored) report.
+        if (linkState.view !== "planner" && linkState.view !== "trip") {
+          setError(null);
+          return;
         }
         // Back/forward within the same plan (e.g. report → Settings → Back) should not
         // throw away the generated report — only a genuinely different plan state resets.
@@ -1774,49 +1779,6 @@ export function useWorkspace() {
     alpineStartTime,
     travelWindowHours,
   ]);
-  // A new report analyzes the planned route alongside it. Guests and servers
-  // without route analysis skip it quietly; the Route chapter offers it instead.
-  // While the session is still loading, the decision waits for the account.
-  const [routeAwaitingAccount, setRouteAwaitingAccount] =
-    useState<typeof safetyData>(null);
-  useLayoutEffect(() => {
-    reportGeneratedRef.current = () => {
-      clearRouteAnalysis();
-      setRouteAwaitingAccount(null);
-      const capabilities = safetyData?.capabilities;
-      if (
-        !featureFlags.routeAnalysis ||
-        capabilities?.ai === false ||
-        capabilities?.routeAnalysis === false
-      )
-        return;
-      if (accountLoading) setRouteAwaitingAccount(safetyData);
-      else if (accountUser) handleAnalyzePlannedRoute();
-    };
-  });
-  useEffect(() => {
-    if (!routeAwaitingAccount || accountLoading) return;
-    // Clear the deferral once the account has loaded.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRouteAwaitingAccount(null);
-    // Only for the report it was deferred for, and not if one already started.
-    if (
-      accountUser &&
-      routeAwaitingAccount === safetyData &&
-      !routeAnalysis &&
-      !routeLoading
-    )
-      handleAnalyzePlannedRoute();
-  }, [
-    routeAwaitingAccount,
-    accountLoading,
-    accountUser,
-    safetyData,
-    routeAnalysis,
-    routeLoading,
-    handleAnalyzePlannedRoute,
-  ]);
-
   const prefHandlers = usePreferenceHandlers({
     preferences,
     setPreferences,
