@@ -2,6 +2,22 @@ const { clampTravelWindowHours } = require('./time');
 const { computeFeelsLikeF } = require('./weather-normalizers');
 const { buildSunClock, windowIncludesDark, windowIncludesDaylight } = require('./daylight');
 
+const GEAR_ACTIVITIES = new Set([
+  'backcountry',
+  'hiking',
+  'scrambling',
+  'alpine-climbing',
+  'snow-climbing',
+  'ski-touring',
+  'trail-running',
+]);
+
+// Unknown or missing activities get the general backcountry list.
+const normalizeGearActivity = (value) => {
+  const key = String(value || '').trim().toLowerCase();
+  return GEAR_ACTIVITIES.has(key) ? key : 'backcountry';
+};
+
 const buildLayeringGearSuggestions = ({
   weatherData,
   trailStatus,
@@ -17,9 +33,30 @@ const buildLayeringGearSuggestions = ({
   contingencyData = null,
   solarData = null,
   selectedStartTime = null,
+  activity = null,
 }) => {
   const MAX_GEAR_SUGGESTIONS = 12;
-  const BASELINE_GEAR_IDS = new Set(['backcountry-essentials', 'layering-core']);
+  const gearActivity = normalizeGearActivity(activity);
+  const running = gearActivity === 'trail-running';
+  const skiing = gearActivity === 'ski-touring';
+  const snowClimbing = gearActivity === 'snow-climbing';
+  const alpineClimbing = gearActivity === 'alpine-climbing';
+  const scrambling = gearActivity === 'scrambling';
+  // Activities whose route is on snow whatever the nearby stations report.
+  const snowTravel = skiing || snowClimbing;
+  // Kit that belongs to the activity itself is never trimmed by the item cap.
+  const ACTIVITY_BASELINE_GEAR_IDS = {
+    scrambling: ['helmet-scramble'],
+    'alpine-climbing': ['climbing-kit'],
+    'snow-climbing': ['alpine-hardware'],
+    'ski-touring': ['ski-touring-kit'],
+    'trail-running': ['hydration-run'],
+  };
+  const BASELINE_GEAR_IDS = new Set([
+    'backcountry-essentials',
+    'layering-core',
+    ...(ACTIVITY_BASELINE_GEAR_IDS[gearActivity] || []),
+  ]);
   const TONE_PRIORITY = { nogo: 0, caution: 1, watch: 2, go: 3 };
   const suggestionMap = new Map();
   const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
@@ -147,23 +184,80 @@ const buildLayeringGearSuggestions = ({
     ?? (weatherData?.isDaytime === false || trend.some((row) => row?.isDaytime === false));
   const AVALANCHE_DANGER_LABELS = { 1: 'Low', 2: 'Moderate', 3: 'Considerable', 4: 'High', 5: 'Extreme' };
 
-  addSuggestion(
-    'backcountry-essentials',
-    'Ten Essentials',
-    'Map and compass or offline GPS, headlamp, sun protection, first aid, knife and repair kit, fire starter, emergency shelter, extra food, water, and layers, plus a way to call for help.',
-    'Essentials',
-    'go',
-    8,
-  );
+  if (running) {
+    addSuggestion(
+      'backcountry-essentials',
+      'Running vest essentials',
+      'Phone with an offline map, headlamp, small first aid kit, emergency blanket, and a light layer, plus a way to call for help. Moving light still means carrying enough to wait out an injury.',
+      'Essentials',
+      'go',
+      8,
+    );
+    addSuggestion(
+      'layering-core',
+      'Wicking top and a spare warm layer',
+      'Run in synthetic or wool, and carry a light warm layer in case an injury leaves you walking out slowly.',
+      'Clothing',
+      'go',
+      10,
+    );
+    addSuggestion(
+      'hydration-run',
+      'Water and fuel',
+      'Soft flasks or a hydration vest, and gels or snacks for every hour out. Know where you can refill.',
+      'Essentials',
+      'go',
+      12,
+    );
+  } else {
+    addSuggestion(
+      'backcountry-essentials',
+      'Ten Essentials',
+      'Map and compass or offline GPS, headlamp, sun protection, first aid, knife and repair kit, fire starter, emergency shelter, extra food, water, and layers, plus a way to call for help.',
+      'Essentials',
+      'go',
+      8,
+    );
+    addSuggestion(
+      'layering-core',
+      'Base and mid layers',
+      'Synthetic or wool base layer with a warm midlayer. Skip cotton: it stays wet and chills you at stops.',
+      'Clothing',
+      'go',
+      10,
+    );
+  }
 
-  addSuggestion(
-    'layering-core',
-    'Base and mid layers',
-    'Synthetic or wool base layer with a warm midlayer. Skip cotton: it stays wet and chills you at stops.',
-    'Clothing',
-    'go',
-    10,
-  );
+  if (scrambling) {
+    addSuggestion(
+      'helmet-scramble',
+      'Climbing helmet',
+      'Protects against rockfall from parties above and against falls on loose, hands-on terrain.',
+      'Safety & rescue',
+      'go',
+      12,
+    );
+  }
+  if (alpineClimbing) {
+    addSuggestion(
+      'climbing-kit',
+      'Helmet, harness, and rack',
+      'Rope and protection sized to the route, plus spare slings and rappel gear so you can retreat.',
+      'Safety & rescue',
+      'go',
+      12,
+    );
+  }
+  if (skiing) {
+    addSuggestion(
+      'ski-touring-kit',
+      'Skins and a ski repair kit',
+      'Skins with good glue, ski straps, a multi-tool, and spare binding parts. A broken binding far from the trailhead becomes a long walk out.',
+      'Footwear & traction',
+      'go',
+      12,
+    );
+  }
 
   if (hasWetSignal || hasRainAccumulation) {
     const wetReasons = [
@@ -172,14 +266,18 @@ const buildLayeringGearSuggestions = ({
     ].filter(Boolean);
     addSuggestion(
       'shell-wet',
-      hasSnowSignal ? 'Waterproof jacket and pants' : 'Rain jacket and rain pants',
-      'Waterproof and breathable, with a hood.',
+      running ? 'Light waterproof jacket' : hasSnowSignal ? 'Waterproof jacket and pants' : 'Rain jacket and rain pants',
+      running ? 'A packable, hooded rain shell that fits in your vest.' : 'Waterproof and breathable, with a hood.',
       'Clothing',
       'caution',
       20,
       wetReasons.join('; '),
     );
-    addSuggestion('gaiters-wet', 'Waterproof boots and gaiters', 'Keep feet dry on wet trail and brush, and pack spare socks.', 'Footwear & traction', 'watch', 32, 'Wet trail and brush likely');
+    if (running) {
+      addSuggestion('gaiters-wet', 'Spare dry socks', 'Trail shoes drain but stay wet. Change socks at a break to head off blisters.', 'Footwear & traction', 'watch', 32, 'Wet trail and brush likely');
+    } else if (!skiing) {
+      addSuggestion('gaiters-wet', 'Waterproof boots and gaiters', 'Keep feet dry on wet trail and brush, and pack spare socks.', 'Footwear & traction', 'watch', 32, 'Wet trail and brush likely');
+    }
   } else if (hasSnowSignal || windy) {
     addSuggestion(
       'shell-wind-snow',
@@ -199,8 +297,10 @@ const buildLayeringGearSuggestions = ({
   if (cold || hasSnowSignal || windy) {
     addSuggestion(
       'insulation-stop',
-      'Insulated jacket',
-      'A puffy that fits over your other layers, for breaks and for waiting out a delay.',
+      running ? 'Packable insulated layer' : 'Insulated jacket',
+      running
+        ? 'A light synthetic puffy or vest in your pack. You cool quickly once you stop running.'
+        : 'A puffy that fits over your other layers, for breaks and for waiting out a delay.',
       'Clothing',
       'caution',
       24,
@@ -219,32 +319,85 @@ const buildLayeringGearSuggestions = ({
     );
   }
 
-  if (muddy || hasRainAccumulation) {
+  if ((muddy || hasRainAccumulation) && !skiing) {
     addSuggestion(
       'traction-mud',
-      'Trekking poles and grippy shoes',
-      'Deep lugs and poles for slick, muddy approaches.',
+      running ? 'Lugged trail shoes' : 'Trekking poles and grippy shoes',
+      running ? 'Deep lugs grip slick, muddy trail. Shorten your stride on steep descents.' : 'Deep lugs and poles for slick, muddy approaches.',
       'Footwear & traction',
       'watch',
       34,
       muddy ? 'Trail reported muddy' : `${rain24h} of rain in the last 24 h`,
     );
   }
-  if (icy || snowy || hasSnowSignal || hasFreshSnow || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4)) {
+  const snowUnderfoot = icy || snowy || hasSnowSignal || hasFreshSnow || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4);
+  const snowTractionReason = icy ? 'Icy or firm snow on the trail'
+    : hasFreshSnow && snow24h ? `${snow24h} of new snow in the last 24 h`
+      : snowDepth && maxObservedSnowDepthIn >= 2 ? `Snow depth ~${snowDepth} nearby`
+        : snowy ? 'Snow on the trail' : 'Snow in the forecast';
+  const iceAxeTerrain = icy && (cold || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4));
+  if (snowClimbing) {
+    // Crampons and an axe are the snow climber's baseline; icy conditions only
+    // raise their urgency.
     addSuggestion(
-      'traction-snow',
-      'Microspikes and trekking poles',
-      'Microspikes grip packed snow and ice on trails. They do not replace crampons on steep snow.',
-      'Footwear & traction',
-      'caution',
-      26,
-      icy ? 'Icy or firm snow on the trail'
-        : hasFreshSnow && snow24h ? `${snow24h} of new snow in the last 24 h`
-          : snowDepth && maxObservedSnowDepthIn >= 2 ? `Snow depth ~${snowDepth} nearby`
-            : snowy ? 'Snow on the trail' : 'Snow in the forecast',
+      'alpine-hardware',
+      'Ice axe, crampons, and helmet',
+      'Crampons fitted to your boots and an axe you have practiced self-arrest with. On a glacier, add a rope, harness, and crevasse rescue gear.',
+      'Safety & rescue',
+      iceAxeTerrain ? 'caution' : 'go',
+      iceAxeTerrain ? 15 : 12,
+      iceAxeTerrain ? (cold ? 'Firm, icy snow with cold temperatures' : `Icy snow with depth ~${snowDepth} nearby`) : '',
     );
+  } else if (alpineClimbing && (snowUnderfoot || iceAxeTerrain)) {
+    addSuggestion(
+      'alpine-hardware',
+      'Ice axe and crampons',
+      'Microspikes do not hold on steep snow or ice. Bring crampons that fit your boots and an axe you can self-arrest with.',
+      'Safety & rescue',
+      'caution',
+      15,
+      snowTractionReason,
+    );
+  } else if (skiing) {
+    if (icy) {
+      addSuggestion(
+        'traction-snow',
+        'Ski crampons and boot crampons',
+        'Ski crampons hold on firm, icy skin tracks; boot crampons and an axe if you bootpack steep snow.',
+        'Footwear & traction',
+        'caution',
+        26,
+        'Icy or firm snow on the route',
+      );
+    }
+  } else {
+    if (snowUnderfoot) {
+      addSuggestion(
+        'traction-snow',
+        running ? 'Running traction and poles' : 'Microspikes and trekking poles',
+        running
+          ? 'Running microspikes or studded shoes grip packed snow and ice. They do not replace crampons on steep snow.'
+          : 'Microspikes grip packed snow and ice on trails. They do not replace crampons on steep snow.',
+        'Footwear & traction',
+        'caution',
+        26,
+        snowTractionReason,
+      );
+    }
+    if (iceAxeTerrain) {
+      addSuggestion(
+        'alpine-hardware',
+        'Ice axe, crampons, and helmet',
+        'Only for steep, firm snow, and only if you are trained to self-arrest. Otherwise choose a different route.',
+        'Safety & rescue',
+        'caution',
+        15,
+        cold ? 'Firm, icy snow with cold temperatures' : `Icy trail with snow depth ~${snowDepth} nearby`,
+      );
+    }
   }
-  if ((Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 12) || (Number.isFinite(snow24hIn) && snow24hIn >= 6)) {
+  // Skis are the flotation on a ski tour.
+  if (!skiing && ((Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 12) || (Number.isFinite(snow24hIn) && snow24hIn >= 6))) {
     addSuggestion(
       'snow-flotation',
       'Snowshoes or skis',
@@ -255,15 +408,15 @@ const buildLayeringGearSuggestions = ({
       Number.isFinite(snow24hIn) && snow24hIn >= 6 ? `${snow24h} of new snow in the last 24 h` : `Snow depth ~${snowDepth} nearby`,
     );
   }
-  if (icy && (cold || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4))) {
+  if (skiing && (windy || hasSnowSignal)) {
     addSuggestion(
-      'alpine-hardware',
-      'Ice axe, crampons, and helmet',
-      'Only for steep, firm snow, and only if you are trained to self-arrest. Otherwise choose a different route.',
-      'Safety & rescue',
-      'caution',
-      15,
-      cold ? 'Firm, icy snow with cold temperatures' : `Icy trail with snow depth ~${snowDepth} nearby`,
+      'goggles',
+      'Goggles',
+      'For wind-driven snow and flat light on the descent.',
+      'Clothing',
+      'watch',
+      46,
+      windy ? 'Wind on exposed terrain in your window' : 'Snow in your window',
     );
   }
 
@@ -320,7 +473,9 @@ const buildLayeringGearSuggestions = ({
     }
   }
 
-  if (avalancheEnabled && avalancheData?.relevant !== false && (avyDanger >= 1 || avalancheData?.dangerUnknown)) {
+  // Ski tours and snow climbs travel in avalanche terrain by design, so the kit
+  // stays on the list even without a published rating for the day.
+  if (avalancheEnabled && avalancheData?.relevant !== false && (avyDanger >= 1 || avalancheData?.dangerUnknown || snowTravel)) {
     const dangerLabel = AVALANCHE_DANGER_LABELS[Math.round(avyDanger)];
     addSuggestion(
       'avalanche-kit',
@@ -333,14 +488,15 @@ const buildLayeringGearSuggestions = ({
       14,
       avalancheData?.dangerUnknown
         ? 'No avalanche forecast covers this area'
-        : dangerLabel ? `Avalanche danger ${dangerLabel} (${Math.round(avyDanger)} of 5)` : 'Avalanche terrain on this objective',
+        : dangerLabel ? `Avalanche danger ${dangerLabel} (${Math.round(avyDanger)} of 5)`
+          : snowTravel ? `${skiing ? 'Ski touring' : 'Snow climbing'} in avalanche terrain` : 'Avalanche terrain on this objective',
     );
   }
 
   if (Number.isFinite(windowMaxFeelsLikeF) && windowMaxFeelsLikeF >= 68 && hasDaylightInWindow) {
     addSuggestion('sun-protection', 'Sunscreen, sunglasses, and sun hat', 'UV is stronger on open terrain and at altitude.', 'Sun & heat', 'go', 40, `Feels like up to ${formatWhole(windowMaxFeelsLikeF, 'F')} in daylight`);
-  } else if (snowOnGround && hasDaylightInWindow) {
-    addSuggestion('sun-protection', 'Dark sunglasses and sunscreen', 'Snow reflects most UV, so sunburn and snow blindness happen even on cold days.', 'Sun & heat', 'watch', 40, 'Daylight travel over snow');
+  } else if ((snowOnGround || snowTravel) && hasDaylightInWindow) {
+    addSuggestion('sun-protection', snowClimbing ? 'Glacier glasses and sunscreen' : 'Dark sunglasses and sunscreen', 'Snow reflects most UV, so sunburn and snow blindness happen even on cold days.', 'Sun & heat', 'watch', 40, 'Daylight travel over snow');
   }
   if (Number.isFinite(heatLevel) && heatLevel >= 1) {
     addSuggestion('hydration-heat', 'Extra water', 'Carry more than usual and know where you can refill.', 'Sun & heat', 'watch', 38, heatRiskData?.label ? `Heat risk: ${String(heatRiskData.label).replace(/\.$/, '')}` : 'Heat stress possible in your window');
@@ -434,4 +590,5 @@ const buildLayeringGearSuggestions = ({
 
 module.exports = {
   buildLayeringGearSuggestions,
+  normalizeGearActivity,
 };

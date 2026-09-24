@@ -97,6 +97,7 @@ export function useSafetyData({
     date: string;
     startTime: string;
     travelWindowHours: number;
+    activity: string;
     force: boolean;
     countAsNewReport: boolean;
   } | null>(null);
@@ -210,7 +211,8 @@ export function useSafetyData({
         MIN_TRAVEL_WINDOW_HOURS,
         Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
       );
-      const requestKey = buildSafetyRequestKey(lat, lon, safeDate, safeStartTime, safeTravelWindowHours);
+      const activity = preferences.defaultActivity;
+      const requestKey = buildSafetyRequestKey(lat, lon, safeDate, safeStartTime, safeTravelWindowHours, activity);
       const forceReload = options?.force === true;
       const countAsNewReport = options?.countAsNewReport === true;
 
@@ -228,6 +230,7 @@ export function useSafetyData({
           date: safeDate,
           startTime: safeStartTime,
           travelWindowHours: safeTravelWindowHours,
+          activity,
           force: forceReload,
           countAsNewReport,
         };
@@ -247,7 +250,7 @@ export function useSafetyData({
         const { response, payload, requestId } = await fetchApi(
           `/api/safety?lat=${lat}&lon=${lon}&date=${encodeURIComponent(safeDate)}&start=${encodeURIComponent(
             safeStartTime,
-          )}&travel_window_hours=${safeTravelWindowHours}&name=${encodeURIComponent(objectiveNameRef.current)}${
+          )}&travel_window_hours=${safeTravelWindowHours}&activity=${encodeURIComponent(activity)}&name=${encodeURIComponent(objectiveNameRef.current)}${
             extraQueryRef?.current ? `&${extraQueryRef.current}` : ''
           }`,
           { signal: controller.signal },
@@ -271,6 +274,7 @@ export function useSafetyData({
               pending.date,
               pending.startTime,
               pending.travelWindowHours,
+              pending.activity,
             )
           : null;
         if (!pendingRequestKey || pendingRequestKey === requestKey) {
@@ -328,7 +332,7 @@ export function useSafetyData({
         }
       }
     },
-    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, extraQueryRef, onNewReportGenerated],
+    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, preferences.defaultActivity, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, extraQueryRef, onNewReportGenerated],
   );
 
   useEffect(() => {

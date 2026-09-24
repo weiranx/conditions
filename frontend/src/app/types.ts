@@ -180,6 +180,8 @@ export interface SafetyData {
   forecast?: {
     selectedDate?: string;
     requestedStartTime?: string | null;
+    /** Activity the gear list was tailored for; absent on older reports. */
+    activity?: ActivityType | null;
     selectedStartTime?: string;
     selectedEndTime?: string;
     isFuture?: boolean;

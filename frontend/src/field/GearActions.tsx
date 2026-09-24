@@ -32,7 +32,7 @@ const groups = [
   {
     id: "other",
     label: "Standard kit",
-    note: "Bring these on any trip.",
+    note: "Bring these on every trip like this one.",
   },
 ] as const;
 const groupFor = (tone: string) =>
@@ -54,6 +54,7 @@ export function GearActions({
   decision,
   actionLine,
   onSources,
+  activityLabel = null,
   localize = identity,
 }: {
   hidden: boolean;
@@ -61,6 +62,7 @@ export function GearActions({
   decision: SummitDecision;
   actionLine: string;
   onSources: () => void;
+  activityLabel?: string | null;
   localize?: (text: string) => string;
 }) {
   const id = useId();
@@ -166,7 +168,11 @@ export function GearActions({
             <Backpack size={20} aria-hidden="true" />
             Packing list
           </h2>
-          <p>Based on this forecast and your time window.</p>
+          <p>
+            {activityLabel
+              ? `Based on this forecast, your time window, and ${activityLabel.toLowerCase()}.`
+              : "Based on this forecast and your time window."}
+          </p>
         </div>
         {items.length > 0 ? (
           <>
