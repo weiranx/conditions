@@ -49,7 +49,9 @@ export function verdictCopy({ data, decision, primaryReason, preferences }: {
   // Name the limiting checks when the count alone would leave them unclear;
   // a lone check the reason already states needs no list.
   const limitingSummaries = decision.level === "GO" ? [] : (decision.level === "NO-GO" ? decision.blockers : decision.cautions).map(checkSummary).filter(Boolean);
-  const limitingChecks = limitingSummaries.length > 1 || (bridge && limitingSummaries.length === 1 && !reason.startsWith(limitingSummaries[0])) ? limitingSummaries : [];
+  // Leave out the check the reason already states so it isn't read twice.
+  const unstated = limitingSummaries.filter((summary) => !reason.startsWith(summary));
+  const limitingChecks = limitingSummaries.length > 1 || (bridge && unstated.length === 1) ? unstated : [];
   const scoreValue = !insufficient && Number.isFinite(data.safety.score) ? Number(data.safety.score.toFixed(1)) : null;
   return { insufficient, tone, reason, bridge, limitingChecks, warnings, missing, scoreValue };
 }

@@ -45,6 +45,14 @@
 .sky-limiting li { position: relative; padding-left: 18px; font-size: 15px; line-height: 1.45; }
 .sky-limiting li::before { content: ""; position: absolute; left: 2px; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.75; }
 .sky-hero .sky-limiting { color: rgba(255, 255, 255, 0.92); }
+/* A planned start that has passed, shown before the decision it dates. */
+.sky-passed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 14px 0 4px; padding: 10px 12px; max-width: 62ch; border-radius: 14px; background: rgba(10, 22, 34, 0.55); color: #fff; font-size: 14px; line-height: 1.4; }
+.sky-passed > svg { flex: none; opacity: 0.85; }
+.sky-passed p { flex: 1 1 18ch; margin: 0; }
+.sky-passed-actions { display: flex; gap: 8px; }
+.sky-passed-actions button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.92); color: #0b1a2a; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.sky-passed-actions button:hover { background: #fff; }
+.sky-passed-actions button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 /* Hours checked below the summit. Inherits colour so it reads on the sky and on light cards. */
 .sky-approach-note { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.5; color: inherit; }
 .sky-approach-note svg { flex: none; margin-top: 2px; opacity: 0.85; }
