@@ -865,6 +865,39 @@ test('supplemental sources distinguish unavailable data, probabilities, zero smo
   assert.equal(renderToStaticMarkup(<SupplementalEvidence />), '');
 });
 
+test('supplemental sources lead with trip-relevant evidence for a later start', async () => {
+  const { SupplementalEvidence } = await import('../src/field/SupplementalEvidence');
+  const timing = { checkedTime: '2026-09-16T21:00:00Z', targetTime: '2026-09-19T14:00:00Z' };
+  const html = renderToStaticMarkup(<SupplementalEvidence evidence={{
+    synoptic: { ...timing, source: 'Synoptic Weather', kind: 'observation', available: true, status: 'ok', stations: [{ id: 'RIDGE', name: 'Ridge', distanceKm: 4, readings: { windMph: { value: 20, observedTime: '2026-09-16T20:50:00Z' } } }] },
+    nbm: { ...timing, source: 'NOAA NBM', kind: 'probabilistic_forecast', available: true, status: 'ok', points: [
+      { validTime: '2026-09-19T00:00:00Z', windMph: { p10: 1, p50: 2, p90: 3 } },
+      { validTime: '2026-09-19T12:00:00Z', windMph: { p10: 4, p50: 5, p90: 6 } },
+    ] },
+    hrrrSmoke: { ...timing, source: 'HRRR-Smoke', kind: 'modeled_forecast', available: false, status: 'out_of_range', note: 'Selected time is outside the latest 48-hour HRRR run.' },
+    discussion: { ...timing, source: 'NWS discussion', kind: 'regional_context', available: true, status: 'ok', office: 'SGX', text: 'FULL TEXT', tripDayOffset: 3, sections: [
+      { title: 'KEY MESSAGES', kind: 'key_messages', matchesTrip: null, text: 'Key point.' },
+      { title: 'SHORT TERM', period: 'Tonight through Friday', kind: 'period', matchesTrip: false, text: 'Short stuff.' },
+      { title: 'LONG TERM', period: 'Saturday through Tuesday', kind: 'period', matchesTrip: true, text: 'Long stuff.' },
+      { title: 'AVIATION', kind: 'not_relevant', matchesTrip: null, text: 'Cloud bases.' },
+    ] },
+  }} />);
+  // Forecasts for the trip come before current observations, which are collapsed.
+  assert.ok(html.indexOf('NOAA NBM') < html.indexOf('NWS discussion'));
+  assert.ok(html.indexOf('NWS discussion') < html.indexOf('Synoptic Weather'));
+  assert.match(html, /show conditions now, not during the trip/);
+  assert.match(html, /<details><summary>Show 1 current station reading<\/summary>/);
+  // The NBM row nearest the start is marked and labeled relative to the start.
+  assert.match(html, /<tr class="is-closest"><th scope="row">[^<]*<small>2 h before your start<\/small>/);
+  // Only the matching period is expanded; aviation is left to the full text.
+  assert.match(html, /<h4>Long term · Saturday through Tuesday<span class="supplemental-match">Includes your date<\/span><\/h4><pre>Long stuff.<\/pre>/);
+  assert.match(html, /<summary>Short term · Tonight through Friday \(another period\)<\/summary>/);
+  assert.doesNotMatch(html, /Aviation/);
+  // Unavailable sources are listed compactly after the usable evidence.
+  assert.match(html, /Not available for this report<\/h3><ul><li><strong>HRRR-Smoke<\/strong> · Outside coverage/);
+  assert.doesNotMatch(html, /NaN/);
+});
+
 test('surface outlook exposes coverage, changing footing, and missing evidence', () => {
   const html = renderToStaticMarkup(<SurfacePrediction condition={{
     confidenceReasons: ['Preceding-night refreeze evidence is incomplete.'],

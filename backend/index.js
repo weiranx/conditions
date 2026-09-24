@@ -489,7 +489,7 @@ const safetyHandler = async (req, res) => {
     );
     const scoreFeatures = getFeatureFlags();
     const parallelBatchPromise = Promise.all([
-      settle(fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
+      settle(fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, selectedDate: selectedForecastDate, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
       settle(fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
       settle(fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)),
       settle(fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),

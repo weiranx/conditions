@@ -6,6 +6,14 @@ export interface SupplementalStation {
   elevationDifferenceFt?: number | null;
   readings?: Record<string, { value: number; observedTime: string }>;
 }
+export interface SupplementalDiscussionSection {
+  title: string;
+  period?: string;
+  kind: 'key_messages' | 'period' | 'overview' | 'fire_weather' | 'warnings' | 'hydrology' | 'not_relevant';
+  /** Whether the section's dated heading includes the trip date; null when undated or unreadable. */
+  matchesTrip: boolean | null;
+  text: string;
+}
 export interface SupplementalSource {
   source: string;
   kind: 'observation' | 'probabilistic_forecast' | 'regional_context' | 'modeled_forecast';
@@ -24,6 +32,9 @@ export interface SupplementalSource {
   gridDistanceKm?: number;
   office?: string;
   text?: string;
+  sections?: SupplementalDiscussionSection[];
+  tripDayOffset?: number | null;
+  targetTime?: string;
 }
 
 import type { LatLngLiteral } from 'leaflet';
