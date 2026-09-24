@@ -22,6 +22,16 @@ import { useAccount } from "../hooks/useAccount";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import "./settings.css";
 
+/** Route timing a Settings pick applies; a custom activity uses its base activity's. */
+function routePacePatch(activity: ActivityType): Partial<UserPreferences> {
+  const profile = ACTIVITY_PROFILES[activity].preferencePatch;
+  return {
+    runnerPaceMinutesPerMile: profile.runnerPaceMinutesPerMile,
+    runnerAscentMinutesPer1000Ft: profile.runnerAscentMinutesPer1000Ft,
+    runnerStopBufferMinutes: profile.runnerStopBufferMinutes,
+  };
+}
+
 /**
  * Every activity, built-in or the user's own, as one grid of cards. Choosing
  * a card loads that activity's weather limits into the editor below it; the
@@ -42,7 +52,7 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
     event.preventDefault();
     const patch = createCustomActivityPatch(p, name, base);
     if (!patch) return;
-    w.updatePreferences(patch);
+    w.updatePreferences({ ...patch, ...routePacePatch(base) });
     setName("");
     setCreating(false);
   };
@@ -59,19 +69,12 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
       <div className="field-profile-options sky-profile-grid" role="group" aria-label="Activity">
         {ACTIVITY_PROFILE_ORDER.map((key) => {
           const Icon = ACTIVITY_ICONS[key] || Compass;
-          const profile = ACTIVITY_PROFILES[key].preferencePatch;
           return (
             <button
               key={key}
               type="button"
               aria-pressed={activityKey === key}
-              onClick={() => w.updatePreferences({
-                defaultActivity: key,
-                customActivityId: null,
-                runnerPaceMinutesPerMile: profile.runnerPaceMinutesPerMile,
-                runnerAscentMinutesPer1000Ft: profile.runnerAscentMinutesPer1000Ft,
-                runnerStopBufferMinutes: profile.runnerStopBufferMinutes,
-              })}
+              onClick={() => w.updatePreferences({ defaultActivity: key, customActivityId: null, ...routePacePatch(key) })}
             >
               <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
               <strong>{ACTIVITY_PROFILES[key].label}</strong>
@@ -88,7 +91,11 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
               aria-pressed={activityKey === custom.id}
               onClick={() => {
                 setRenameDraft(null);
-                w.updatePreferences({ defaultActivity: custom.baseActivity, customActivityId: custom.id });
+                w.updatePreferences({
+                  defaultActivity: custom.baseActivity,
+                  customActivityId: custom.id,
+                  ...routePacePatch(custom.baseActivity),
+                });
               }}
             >
               <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
@@ -136,7 +143,8 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
             </select>
           </label>
           <p className="sky-setting-footnote">
-            It starts with the {ACTIVITY_PROFILES[base].label.toLowerCase()} limits. Change them below once it is created.
+            It starts with the {ACTIVITY_PROFILES[base].label.toLowerCase()} limits and route pace. Change them below once it
+            is created.
           </p>
           <div className="sky-toolbar-actions">
             <button type="submit" className="field-button field-button-primary" disabled={!name.trim()}>
