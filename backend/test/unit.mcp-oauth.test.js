@@ -20,6 +20,23 @@ test('bearers isolate users, reject invalid tokens, writes and admin routes', as
  expect((await request(app).post('/api/account/reports').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
  expect((await request(app).get('/api/admin/users').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
 });
+test('bearers reach the report compute routes as their own account user', async()=>{
+ const {app}=setup();
+ const { createAccountAccessGuard } = require('../src/auth/account-access');
+ const ensureAccountAccess=createAccountAccessGuard({service:{available:true,getUserForSession:jest.fn(async()=>null)},usageService:{available:true,assertUserCanGenerate:jest.fn(async()=>({used:1}))}});
+ for (const path of ['/api/ai-brief','/api/route-analysis','/api/snow-vision']) app.post(path,async(req,res)=>{ if(await ensureAccountAccess(req,res)) res.json({user:req.accountUser.id}); });
+ app.post('/api/trip-forecasts',(req,res)=>res.json({user:req.mcpUser?.id}));
+ app.get('/api/start-time-scenarios',(_req,res)=>res.json({ok:true}));
+ for (const path of ['/api/ai-brief','/api/route-analysis','/api/snow-vision','/api/trip-forecasts']) {
+  expect((await request(app).post(path).set('Authorization','Bearer cmcp_bob').send({})).body.user).toBe('bob');
+ }
+ expect((await request(app).get('/api/start-time-scenarios').set('Authorization','Bearer cmcp_alice')).status).toBe(200);
+ expect((await request(app).post('/api/ai-brief').set('Authorization','Bearer cmcp_bad').send({})).status).toBe(401);
+ // Compute routes are POST only; other writes stay closed.
+ expect((await request(app).get('/api/ai-brief').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
+ expect((await request(app).post('/api/report-chat').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
+ expect((await request(app).post('/api/account/objective-watches').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
+});
 test('approval needs browser sign-in, exact origin and unchanged account',async()=>{
  const {app,service}=setup();
  const url='/api/auth/mcp/approve';

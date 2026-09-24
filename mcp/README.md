@@ -7,16 +7,37 @@ No shared owner password, browser session, or static bearer key is accepted by H
 
 ## Tools
 
+Public (also over local stdio):
+
 - `search_objectives`
-- `get_conditions_report`
+- `get_conditions_report` — the `/api/safety` report. Takes the plan the app
+  sends: activity, objective name, approach (`trailhead_ft`, `ascent_min_per_kft`,
+  or an `approach_route` elevation timeline from a GPX track) and weather limits.
 - `compare_conditions_plans`
-- `list_saved_reports`
-- `get_saved_report`
-- `list_objective_watches`
+- `compare_start_times` — the app's departure-time comparison
+- `get_day_over_day` — the plan against the same plan one day earlier
+
+Account (OAuth):
+
+- `list_saved_reports`, `get_saved_report`, `list_objective_watches`
+- `get_multi_day_forecast` — 2–7 day trip forecast; per-day full reports are
+  omitted (use `get_conditions_report` for a day)
+- `get_ai_brief` — fetches the plan's report and asks for the app's AI brief
+  with the report's computed decision
+- `suggest_routes`, `analyze_route` — the app's route suggestions and route analysis
+- `analyze_satellite_snow` — the satellite snow analysis; the analyzed image is
+  returned as MCP image content
+
+The app's plan `evaluation` (its verdict and screen-ready checks) is removed from
+report output. The AI brief, start-time and multi-day tools still carry the
+decision levels the app shows for them.
 
 Private routes use the authenticated user's ID and retain their existing backend
-ownership/feature checks. Missing evidence remains missing. No writes, watch
-creation, emails, or admin operations are authorized by `conditions:read`.
+ownership/feature checks. Missing evidence remains missing. `conditions:read`
+allows GET on the read routes above and POST on `/api/ai-brief`,
+`/api/route-analysis`, `/api/snow-vision` and `/api/trip-forecasts`, which
+store nothing but count against the account's AI and multi-day usage. No
+report, watch or account writes, emails, chat, or admin operations are authorized.
 
 ## Sign-in and connection management
 
@@ -89,7 +110,7 @@ Existing manually configured connections continue to work. Metadata supplies the
 `/api/auth/mcp/authorize`, `/token`, and `/revoke` endpoints. Existing shared-owner
 tokens stop working on cutover and users must reconnect with their own account.
 
-Local stdio (`node src/index.js --stdio`) exposes only the three public tools.
+Local stdio (`node src/index.js --stdio`) exposes only the five public tools.
 The health endpoint tests the MCP process; it does not prove backend availability.
 
 ## Verification

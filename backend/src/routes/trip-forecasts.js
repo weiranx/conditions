@@ -97,7 +97,10 @@ const registerTripForecastRoutes = ({
         code: 'ACCOUNT_VERIFICATION_UNAVAILABLE',
       });
     }
-    if (accountService?.available && typeof accountService.getUserForSession === 'function') {
+    if (req.mcpUser) {
+      // An MCP bearer was already verified by the MCP OAuth middleware.
+      user = req.mcpUser;
+    } else if (accountService?.available && typeof accountService.getUserForSession === 'function') {
       try {
         user = await accountService.getUserForSession(sessionToken);
       } catch (error) {
