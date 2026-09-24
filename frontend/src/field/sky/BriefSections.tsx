@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { Workspace } from "../model/useWorkspace";
 import { durationLabel, knownFeet, plainRule, type CheckStatus } from "./status";
 import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
-import { describeCheckpointBreach, type PlannedRouteSummary } from "../route-planning";
+import { describeCheckpointBreach, describeCheckpointHazard, type PlannedRouteSummary } from "../route-planning";
 import { RouteStrip } from "./RouteStrip";
 import { activityProfile, orderActivityChecks, type ActivityCheck, type ActivityNumber } from "../../app/activity-profiles";
 import type { ActivityType } from "../../app/types";
@@ -94,6 +94,11 @@ function routeCheck(route: PlannedRouteSummary, format: { temp: (f: number) => s
     status: "over" as Status,
     statusText: `${overCount} of ${stops.length} over`,
     caption: `${firstOver.name}${firstOver.eta ? ` at ${format.eta(firstOver.eta)}` : ""}: ${describeCheckpointBreach(firstOver.breach, format)}.${back}`,
+  };
+  if (route.firstHazard) return {
+    status: "over" as Status,
+    statusText: route.hazardCount === 1 ? "1 alert or danger" : `${route.hazardCount} alerts or dangers`,
+    caption: `Within your limits, but ${route.firstHazard.name}${route.firstHazard.eta ? ` at ${format.eta(route.firstHazard.eta)}` : ""} has ${describeCheckpointHazard(route.firstHazard.hazard)}.${back}`,
   };
   if (missingCount) return {
     status: "missing" as Status,

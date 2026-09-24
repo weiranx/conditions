@@ -28,6 +28,8 @@ export interface RouteWaypointSummary {
   leg?: RouteLeg;
   /** Whether the estimated arrival falls between the checkpoint's sunrise and sunset. */
   daylight?: 'day' | 'dark';
+  /** A generated landmark the map search couldn't find, so its location is the AI's estimate. */
+  locationEstimated?: boolean;
   etaDate?: string;
   etaTime?: string;
   offsetMinutes?: number;
@@ -42,6 +44,8 @@ export interface RouteWaypointSummary {
 export interface RouteAnalysisResult {
   /** The route name this analysis was requested for; older saved analyses lack it. */
   routeName?: string;
+  /** The plan this analysis was requested for, to tell when the plan has changed since; older saved analyses lack it. */
+  request?: RouteAnalysisRequest;
   waypoints: Array<{
     name: string;
     lat: number;
@@ -53,6 +57,8 @@ export interface RouteAnalysisResult {
     eta_date?: string;
     eta_time?: string;
     offset_minutes?: number;
+    /** False for a generated landmark the map search couldn't find. */
+    geocodingVerified?: boolean;
   }>;
   summaries: RouteWaypointSummary[];
   analysis: string;
@@ -77,6 +83,14 @@ export interface RouteAnalysisResult {
   timing?: RouteTiming;
 }
 
+export interface RouteAnalysisRequest {
+  lat: number;
+  lon: number;
+  date: string;
+  start: string;
+  travelWindowHours: number;
+}
+
 export interface RoutePace {
   minutesPerMile: number;
   ascentMinutesPer1000Ft: number;
@@ -85,6 +99,12 @@ export interface RoutePace {
 /** How checkpoint arrival times were spread across the planned travel window. */
 export interface RouteTiming {
   basis: 'distance-and-vert' | 'distance' | 'progress' | 'even';
+  /**
+   * "pace": arrivals follow the traveler's pace and stop time from the start.
+   * "window": arrivals are spread across the planned duration because the route's
+   * length isn't known well enough for a pace. Older saved analyses lack it (window).
+   */
+  mode?: 'pace' | 'window';
   roundTrip: boolean;
   /** How a named route runs past its objective: back the same way, around a loop, or on to another finish. */
   routeShape?: 'out-and-back' | 'loop' | 'point-to-point';
@@ -243,8 +263,9 @@ export function useRouteAnalysis(initialState?: {
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
       if (!isCurrentRequest(request.id)) return;
-      // Keep the name with the result, so renaming the route later can't relabel these checkpoints.
-      setRouteAnalysis({ ...(payload as RouteAnalysisResult), routeName: route });
+      // Keep the name and plan with the result, so renaming the route later can't
+      // relabel these checkpoints and a changed plan can be flagged.
+      setRouteAnalysis({ ...(payload as RouteAnalysisResult), routeName: route, request: { lat, lon, date, start, travelWindowHours } });
     } catch (err) {
       if (request.controller.signal.aborted || !isCurrentRequest(request.id)) return;
       setRouteError(err instanceof Error ? err.message : 'Route analysis failed. Try again.');

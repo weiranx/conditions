@@ -517,6 +517,37 @@ test('an unfound landmark placed at the objective keeps its generated elevation'
   expect(fetchElevationFt).toHaveBeenCalledTimes(2);
 });
 
+test('landmarks the map search could not find are marked as estimated locations, return legs included', async () => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints'
+      ? '[{"name":"Found Trailhead","lat":40.0,"lon":-105.1,"elev_ft":8000},{"name":"Lost Lake","lat":40.02,"lon":-105.08,"elev_ft":9500},{"name":"Estimate Peak","lat":40.03,"lon":-105.05,"elev_ft":11000}]'
+      : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45 }, safety: { score: 80 } } }),
+    // Nominatim finds only the trailhead.
+    fetchWithTimeout: jest.fn(async (url) => ({
+      ok: String(url).includes('nominatim') && String(url).includes('Found%20Trailhead'),
+      json: async () => [{ lat: '40.0001', lon: '-105.1001' }],
+    })),
+    fetchHeaders: {},
+    fetchElevationFt: async () => ({ elevationFt: null }),
+  });
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Estimate Peak Location Test', route: 'Lost Lake Trail', lat: 40.03, lon: -105.05, date: '2026-07-12', start: '06:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.summaries.map((summary) => [summary.name, Boolean(summary.locationEstimated)])).toEqual([
+    ['Found Trailhead', false],
+    ['Lost Lake', true],
+    ['Estimate Peak', false],
+    ['Return to Lost Lake', true],
+    ['Return to Found Trailhead', false],
+  ]);
+});
+
 test('an implausible generated elevation at a mislocated landmark is dropped, not kept', async () => {
   const app = express();
   app.use(express.json());

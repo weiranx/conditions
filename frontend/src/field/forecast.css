@@ -28,6 +28,7 @@
 .forecast-readout-status.is-within { color: var(--sky-secondary); }
 .forecast-readout-status.is-over { color: var(--sky-caution); font-weight: 600; }
 .forecast-readout-status.is-missing { color: var(--sky-missing); }
+.forecast-readout-status.is-hazard { color: var(--sky-caution); font-weight: 600; }
 
 @media (max-width: 760px) {
   .forecast-readout { grid-template-columns: 1fr; }

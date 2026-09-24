@@ -610,6 +610,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           ...(wp.distance_miles != null ? { distance_miles: wp.distance_miles } : {}),
           ...(wp.progress_percent != null ? { progress_percent: wp.progress_percent } : {}),
           ...(wp.leg ? { leg: wp.leg } : {}),
+          // A generated landmark the map search couldn't find keeps the AI's coordinates.
+          ...(wp.geocodingVerified === false ? { locationEstimated: true } : {}),
           etaDate: wp.eta_date,
           etaTime: wp.eta_time,
           offsetMinutes: wp.offset_minutes,

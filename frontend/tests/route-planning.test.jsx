@@ -7,7 +7,12 @@ import { createRoot } from 'react-dom/client';
 import { Route } from '../src/field/Route';
 import { WorkspacePlan } from '../src/field/WorkspacePlan';
 import { publishAiAvailability } from '../src/hooks/useAiAvailability';
-import { buildCheckpointProfile } from '../src/field/route-planning';
+import {
+  buildCheckpointProfile,
+  compareCheckpointToObjective,
+  describeStaleRouteAnalysis,
+  objectiveHourAt,
+} from '../src/field/route-planning';
 import { formatClockForStyle } from '../src/app/core';
 import { parseGpxText } from '../src/lib/gpx';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
@@ -119,6 +124,80 @@ test('profile rejects unavailable elevations and handles flat, duplicate and rev
     assert.equal(profile.axis, 'order');
     assert.ok(profile.points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y)));
   }
+});
+
+test('an unknown elevation between known ones is drawn between them and flagged, never given a number', () => {
+  const profile = buildCheckpointProfile([
+    point({ elev_ft: 6000, distance_miles: 0 }),
+    point({ elev_ft: null, distance_miles: 2 }),
+    point({ elev_ft: 9000, distance_miles: 4 }),
+    point({ elev_ft: null, distance_miles: 6 }),
+  ]);
+  assert.deepEqual(profile.points.map((p) => p.estimated), [false, true, false, true]);
+  assert.equal(profile.low, 6000);
+  assert.equal(profile.high, 9000);
+  // Halfway along, halfway up; past the last known elevation, level with it.
+  assert.equal(profile.points[1].y, (profile.points[0].y + profile.points[2].y) / 2);
+  assert.equal(profile.points[3].y, profile.points[2].y);
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: result([
+    point(), point({ name: 'Col', elev_ft: null, distance_miles: 2 }), point({ name: 'Summit', elev_ft: 9000, distance_miles: 4 }),
+  ]) })} />);
+  assert.match(html, /Elevation unknown/);
+  assert.match(html, /Col.*Elevation unavailable/);
+});
+
+test('an alert or Considerable avalanche danger flags a checkpoint that is within every limit', () => {
+  const calm = { temp: 40, feelsLike: 35, windGust: 10, precipChance: 10 };
+  assert.equal(checkpointTone(point({ weather: calm }), limits), 'within');
+  assert.equal(checkpointTone(point({ weather: calm, activeAlerts: 1 }), limits), 'hazard');
+  assert.equal(checkpointTone(point({ weather: calm, avalanche: { risk: 'Considerable', dangerLevel: 3 } }), limits), 'hazard');
+  assert.equal(checkpointTone(point({ weather: calm, avalanche: { risk: 'Moderate', dangerLevel: 2 } }), limits), 'within');
+  // A crossed limit still leads; a missing forecast reports no hazard.
+  assert.equal(checkpointTone(point({ weather: { ...calm, windGust: 45 }, activeAlerts: 2 }), limits), 'over');
+  assert.equal(checkpointTone(point({ dataAvailable: false, activeAlerts: 3 }), limits), 'missing');
+  const html = renderToStaticMarkup(<Route workspace={workspace({ preferences: { elevationUnit: 'ft', ...limits },
+    routeAnalysis: result([point({ weather: calm }), point({ name: 'Summit', weather: calm, elev_ft: 9000, distance_miles: 5,
+      avalanche: { risk: 'High', dangerLevel: 4 } })]) })} />);
+  assert.match(html, /1 checkpoint is under a weather alert or avalanche danger/);
+  assert.match(html, /High avalanche danger/);
+});
+
+test('a checkpoint is compared with the objective at the same local hour', () => {
+  const trend = [
+    { timeIso: '2026-09-08T22:00:00-07:00', temp: 30, gust: 30, precipChance: 20 },
+    { timeIso: '2026-09-08T23:00:00-07:00', temp: 28, gust: 35, precipChance: 20 },
+  ];
+  assert.equal(objectiveHourAt(trend, '2026-09-08', '23:40').temp, 28);
+  assert.equal(objectiveHourAt(trend, '2026-09-09', '23:40'), null);
+  assert.deepEqual(compareCheckpointToObjective(point({ weather: { temp: 34, windGust: 20, precipChance: 20 } }), trend[1]),
+    { temp: 6, gust: -15, precip: 0 });
+  assert.equal(compareCheckpointToObjective(point({ dataAvailable: false }), trend[1]), null);
+  const html = renderToStaticMarkup(<Route workspace={workspace({ preferences: { elevationUnit: 'ft', temperatureUnit: 'f', windSpeedUnit: 'mph' },
+    safetyData: { capabilities: { routeAnalysis: true }, weather: { trend } } })} />);
+  assert.match(html, /Vs\. objective<\/dt><dd>\+4°F · gusts −15 mph · rain −20%/);
+});
+
+test('a changed plan marks the analysis as out of date, except the duration when arrivals follow pace', () => {
+  const plan = { date: '2026-09-08', start: '23:00', travelWindowHours: 4, lat: 46, lon: -121 };
+  const analysis = { ...result([point()]), request: { ...plan } };
+  assert.deepEqual(describeStaleRouteAnalysis(analysis, plan), []);
+  assert.deepEqual(describeStaleRouteAnalysis(analysis, { ...plan, start: '05:00', travelWindowHours: 6 }), ['start time', 'planned duration']);
+  assert.deepEqual(describeStaleRouteAnalysis({ ...analysis, timing: { mode: 'pace' } }, { ...plan, travelWindowHours: 6 }), []);
+  assert.deepEqual(describeStaleRouteAnalysis({ ...analysis, request: undefined }, { ...plan, date: '2026-09-10' }), []);
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: analysis, alpineStartTime: '05:00',
+    plannedRouteName: 'West ridge', customRouteName: 'West ridge' })} />);
+  assert.match(html, /start time changed after this route was analyzed/);
+});
+
+test('unverified generated locations are called out once per place', () => {
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: result([
+    point(),
+    point({ name: 'Lost Lake', locationEstimated: true, distance_miles: 2 }),
+    point({ name: 'Summit', elev_ft: 9000, distance_miles: 4 }),
+    point({ name: 'Lost Lake', locationEstimated: true, leg: 'return', distance_miles: 6 }),
+  ]) })} />);
+  assert.match(html, /One checkpoint wasn(?:'|&#x27;)t found on the map/);
+  assert.match(html, /location estimated/);
 });
 
 test('itinerary keeps every arrival date and route uncertainty visible', () => {
@@ -327,7 +406,7 @@ test('the chapter re-runs the planned GPX route rather than importing another', 
     plannedRouteName: 'Loop', handleAnalyzePlannedRoute: () => { runs += 1; } })} />));
   assert.match(document.querySelector('.sky-route-choose').textContent, /Loop · your GPX track, 3 checkpoints/);
   assert.equal(document.querySelector('.sky-route-choose input'), null);
-  const analyze = document.querySelector('.sky-route-choose button');
+  const analyze = document.querySelector('.sky-route-choose .field-button-primary');
   assert.equal(analyze.textContent, 'Analyze route');
   await act(async () => analyze.click());
   assert.equal(runs, 1);
@@ -336,7 +415,7 @@ test('the chapter re-runs the planned GPX route rather than importing another', 
 test('without a planned route the chapter cannot analyze a blank name', () => {
   const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: null })} />);
   const doc = new JSDOM(html).window.document;
-  assert.equal(doc.querySelector('.sky-route-choose button').disabled, true);
+  assert.equal(doc.querySelector('.sky-route-choose .field-button-primary').disabled, true);
   assert.match(html, /Name a route to check conditions along it/);
 });
 
@@ -361,7 +440,7 @@ test('the plan carries the route: a name, suggestions to pick from, or the impor
   assert.equal(step.querySelector('.sky-plan-route-name input').value, 'West ridge');
   const option = step.querySelector('.sky-plan-route-options button');
   assert.equal(option.getAttribute('aria-pressed'), 'true');
-  assert.match(option.textContent, /West ridge.*Class 2 · 10 mi round trip · \+3000 ft gain/);
+  assert.match(option.textContent, /West ridge.*Class 2 · 10 mi round trip · \+3000 ft gain · about \d+ h at your pace/);
   assert.match(step.textContent, /Sign in to check conditions/);
 
   const gpx = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ customRouteName: '',
@@ -370,7 +449,7 @@ test('the plan carries the route: a name, suggestions to pick from, or the impor
   const gpxStep = gpx.querySelector('.sky-plan-route');
   assert.equal(gpxStep.querySelector('.sky-plan-route-name'), null);
   assert.match(gpxStep.textContent, /Checkpoints come from your GPX track, 2 along the way/);
-  assert.match(gpxStep.textContent, /once your brief is ready/);
+  assert.match(gpxStep.textContent, /Once your brief is ready, analyze the route in its Route chapter/);
 
   const blank = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ customRouteName: '',
     plannedRouteName: '', routeSuggestions: null })} />)).window.document;

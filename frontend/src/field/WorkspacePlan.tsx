@@ -28,6 +28,7 @@ import "./sky/plan.css";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import { liftAboveKeyboard } from "./touch";
 import { useAiAvailability } from "../hooks/useAiAvailability";
+import { RouteSuggestions } from "./RouteSuggestions";
 
 
 export function WorkspacePlan({
@@ -638,37 +639,14 @@ function PlanRoute({ workspace: w, selected }: { workspace: Workspace; selected:
           {w.routeError && (
             <p className="field-feedback" role="alert">{w.routeError}</p>
           )}
-          {!findingRoutes && w.routeSuggestions?.length === 0 && (
-            <p className="field-feedback">No suggestions for this location. Type a route name instead.</p>
-          )}
-          {w.routeSuggestions && w.routeSuggestions.length > 0 && (
-            <div className="sky-plan-route-options" role="group" aria-label="Suggested routes">
-              {w.routeSuggestions.map((route, i) => (
-                <button
-                  type="button"
-                  key={`${route.name}-${i}`}
-                  aria-pressed={w.customRouteName === route.name}
-                  onClick={() => w.setCustomRouteName(route.name)}
-                >
-                  <strong>{route.name}</strong>
-                  <small>
-                    {[
-                      route.class,
-                      `${w.formatDistanceDisplay(route.distance_rt_miles)} round trip`,
-                      `${w.formatElevationDeltaDisplay(route.elev_gain_ft)} gain`,
-                    ].filter(Boolean).join(" · ")}
-                  </small>
-                </button>
-              ))}
-            </div>
-          )}
+          <RouteSuggestions workspace={w} />
         </>
       )}
       <p className="sky-plan-route-hint">
         {!available.routeAnalysis
           ? "Route analysis is unavailable on this server right now."
           : w.accountUser
-            ? "Conditions are checked at timed checkpoints along the route once your brief is ready."
+            ? "Once your brief is ready, analyze the route in its Route chapter to check conditions at timed checkpoints."
             : "Sign in to check conditions at timed checkpoints along the route."}
       </p>
     </details>

@@ -13,7 +13,10 @@
 /* The route planned with the brief, re-run or renamed without leaving the report. */
 .sky-card.sky-route-choose { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
 .sky-route-choose > .field-route-plan-context,
-.sky-route-choose > .field-feedback { flex: 1 1 100%; }
+.sky-route-choose > .field-feedback,
+.sky-route-choose > .sky-route-suggestions { flex: 1 1 100%; }
+.sky-route-suggestions:empty { display: none; }
+.sky-route-suggestions .sky-plan-route-options { margin-top: 0; }
 .sky-route-planned-name { flex: 1 1 260px; display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
 .sky-route-planned-name input {
   min-height: 44px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--sky-fill); color: var(--sky-label); font: inherit; font-size: 16px;
@@ -51,6 +54,8 @@
 .sky-route-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .sky-swatch { width: 14px; height: 10px; border-radius: 3px; }
 .sky-swatch.is-over { background: repeating-linear-gradient(45deg, var(--sky-caution-fill) 0 3px, color-mix(in srgb, var(--sky-caution) 45%, transparent) 3px 5px); }
+.sky-swatch.is-hazard { background: transparent; box-shadow: inset 0 0 0 2px var(--sky-caution); }
+.sky-swatch.is-estimated { background: transparent; border-top: 2px dashed var(--sky-secondary); border-radius: 0; height: 0; align-self: center; }
 .sky-swatch.is-missing { outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; }
 .sky-swatch.is-night { background: var(--sky-night-fill); outline: 1px solid var(--sky-separator); outline-offset: -1px; }
 
@@ -98,6 +103,7 @@
   background: var(--sky-label); color: var(--sky-surface); font-size: 12px; font-weight: 700;
 }
 .field-route-stop-number.is-over { background: var(--sky-caution); color: #fff; }
+.field-route-stop-number.is-hazard { background: var(--sky-surface); color: var(--sky-caution); box-shadow: inset 0 0 0 2px var(--sky-caution); }
 .field-route-stop-number.is-missing { background: var(--sky-surface); color: var(--sky-missing); outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; }
 .field-route-stop-wx { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; padding-top: 1px; }
 .sky-route-pill {
@@ -186,6 +192,12 @@
 .sky-route-profile .rp-stop.is-over .rp-halo { fill: var(--sky-caution); fill-opacity: 0.3; }
 .sky-route-profile .rp-stop.is-missing .rp-dot { stroke: var(--sky-missing); stroke-dasharray: 3 2; }
 .sky-route-profile .rp-stop.is-missing .rp-num { fill: var(--sky-missing); }
+/* An official alert or avalanche danger: a caution ring rather than the filled limit crossing. */
+.sky-route-profile .rp-stop.is-hazard .rp-dot { stroke: var(--sky-caution); stroke-width: 3.5; }
+.sky-route-profile .rp-stop.is-hazard .rp-num { fill: var(--sky-caution); }
+.sky-route-profile .rp-stop.is-hazard .rp-eta { fill: var(--sky-caution); }
+.sky-route-profile .rp-stop.is-estimated .rp-dot { stroke-dasharray: 3 2; }
+.sky-route-profile .rp-crest.is-estimated { stroke: rgba(24, 32, 28, 0.5); stroke-width: 2; stroke-dasharray: 4 4; }
 .sky-route-profile .rp-eta { font-size: 12px; font-weight: 700; fill: var(--sky-label); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--sky-surface); stroke-opacity: 0.85; stroke-width: 4px; stroke-linejoin: round; }
 .sky-route-profile .rp-stop.is-over .rp-eta { fill: var(--sky-caution); }
 .sky-route-profile .rp-stop:hover .rp-dot { r: 12; }

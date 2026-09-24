@@ -36,6 +36,8 @@ const appendReturnCheckpoint = (waypoints) => {
     lat: point.lat,
     lon: point.lon,
     ...(knownNumber(point.elev_ft) !== null ? { elev_ft: knownNumber(point.elev_ft) } : {}),
+    // A landmark the map search couldn't find is just as unverified on the way back.
+    ...(point.geocodingVerified === false ? { geocodingVerified: false } : {}),
     leg: 'return',
     source: point.source,
   }));
