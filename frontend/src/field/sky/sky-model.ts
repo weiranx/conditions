@@ -1,9 +1,16 @@
-import type { TravelWindowRow } from "../../app/types";
+import type { ApproachElevationSource, TravelWindowRow } from "../../app/types";
 import { parseTimeInputMinutes } from "../../app/core";
 import { weatherAppearance } from "../weather-appearance";
 
-/** A planned weather row as produced by buildPlannedReportWeatherRows. */
-export type PlannedRow = TravelWindowRow & { complete: boolean; thermalComplete?: boolean };
+/** How the party's start was found, as the approach notes name it. */
+export const APPROACH_SOURCE_LABEL: Record<ApproachElevationSource, string> = {
+  gpx: "from your GPX track",
+  manual: "from your trailhead",
+  estimated: "trailhead estimated",
+};
+
+/** A planned hour as the backend evaluated it. */
+export type PlannedRow = TravelWindowRow;
 
 export type SkyTone = "within" | "over" | "missing";
 

@@ -8,22 +8,21 @@ import React, {
   useLayoutEffect,
 } from "react";
 import type { LatLngLiteral } from "leaflet";
-import { buildPlannedReportWeatherRows } from "../report-weather";
 import {
   DATE_FMT,
   KM_PER_MILE,
-  MAP_STYLE_OPTIONS,
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
 } from "../../app/constants";
-import { estimateAtElevation } from "../../app/elevation-forecast";
 import {
   type ActivityType,
   type MapStyle,
   type SafetyData,
+  type TravelWindowRow,
   type UserPreferences,
 } from "../../app/types";
 import {
+  addDaysToIsoDate,
   convertDisplayElevationToFeet,
   convertElevationFeetToDisplayValue,
   formatAgeFromNow,
@@ -36,7 +35,6 @@ import {
   formatSweForElevationUnit,
   formatTemperatureForUnit,
   formatWindForUnit,
-  isFiniteNumber,
   localizeDistanceText,
   minutesToTwentyFourHourClock,
   normalizeForecastDate,
@@ -76,60 +74,14 @@ import {
   stringifyRawPayload,
   summarizeText,
   toPlainText,
-  truncateText,
 } from "../../app/text-utils";
-import {
-  buildSnowpackInterpretation,
-  buildSnowpackInsights,
-} from "../../app/snowpack-display";
-import { windDirectionFromDegrees } from "../../app/wind-analysis";
-import { assessCriticalWindowPoint } from "../../app/critical-window";
-import {
-  weatherConditionEmoji,
-  inferWeatherSourceLabel,
-  formatDurationMinutes,
-} from "../../app/weather-display";
-import {
-  type WeatherTrendMetricKey,
-  WEATHER_TREND_METRIC_LABELS,
-  buildWeatherTrendRows,
-  buildWeatherTrendChartData,
-  buildPressureTrend,
-  buildWeatherTrendTempRange,
-  getWeatherTrendLineColor,
-  getWeatherTrendYAxisDomain,
-  buildWeatherTrendMetricOptions,
-  buildWeatherHourQuickOptions,
-  findSelectedWeatherHourIndex,
-  buildWeatherCardValues,
-  buildVisibilityRiskDisplay,
-} from "../../app/weather-card-state";
-import { buildAvalancheDisplayState } from "../../app/avalanche-display";
-import {
-  buildDecisionDisplayState,
-  describeFailedCriticalCheck,
-} from "../../app/decision-display";
-import {
-  buildFireRiskDisplay,
-  buildHeatRiskDisplay,
-  buildTerrainConditionDisplay,
-  buildSnowpackDisplayState,
-  pillClassForLevel,
-} from "../../app/risk-display";
-import {
-  formatTravelWindowSpan,
-  buildTravelWindowInsights,
-  buildTrendWindowFromStart,
-} from "../../app/travel-window";
+import { inferWeatherSourceLabel } from "../../app/weather-display";
 import { sanitizeExternalUrl, parseLinkState } from "../../app/url-state";
 import { readAccountLinkAction } from "../../app/account-links";
 import type { MultiDayUsage } from "../../app/multi-day-usage";
-import { evaluateBackcountryDecision } from "../../app/decision";
-import { buildApproachProfile, buildApproachRequestParams } from "../../app/approach-elevation";
-import { buildReportCardOrder } from "../../app/card-ordering";
-import { buildWindLoadingDisplay } from "../../app/wind-loading-display";
-import { buildRainfallDisplay } from "../../app/rainfall-display";
-import { buildSourceFreshnessDisplay } from "../../app/source-freshness-display";
+import { buildApproachRequestParams } from "../../app/approach-elevation";
+import { buildPlanParams, planParamsQuery, planSettingsParams } from "../../app/plan-evaluation";
+import { usePlanEvaluation } from "../../hooks/usePlanEvaluation";
 import {
   buildPersistedReport,
   clearPersistedReport,
@@ -140,8 +92,6 @@ import {
   type PersistedReportChatMessage,
   type PersistedReportPlan,
 } from "../../app/report-storage";
-import { copyTextToClipboard } from "../../app/clipboard";
-import { parseReportSectionHash } from "../../app/report-sections";
 import { followThemePreference } from "../../app/theme";
 import { useHealthChecks } from "../../hooks/useHealthChecks";
 import { useRouteAnalysis } from "../../hooks/useRouteAnalysis";
@@ -164,7 +114,6 @@ import type { TravelThresholdPresetKey } from "../../hooks/usePreferenceHandlers
 import { useProductFeatureFlags } from "../../contexts/feature-flags";
 import { useAccount } from "../../hooks/useAccount";
 import {
-  buildSavedReportShareUrl,
   getSharedReport,
 } from "../../lib/saved-reports";
 type AccountAccessReason =
@@ -174,20 +123,9 @@ type AccountAccessReason =
   | "account-report-limit"
   | "guest-multi-day-limit"
   | "account-multi-day-limit";
-const TARGET_ELEVATION_STEP_FEET = 1000;
 const ADMIN_ACCOUNT_EMAIL = "weiranxiong@gmail.com";
-function airQualityPillClass(
-  aqi: number | null | undefined,
-): "go" | "caution" | "nogo" {
-  // AQI only uses a three-tier scale (no 'watch' tier); collapsing the
-  // caution/watch thresholds to the same value makes the shared four-tier
-  // helper degenerate into this three-tier mapping.
-  return pillClassForLevel(
-    aqi,
-    { nogo: 101, caution: 51, watch: 51 },
-    "caution",
-  ) as "go" | "caution" | "nogo";
-}
+// Stable while no evaluation is loaded, so memoized views keep their inputs.
+const EMPTY_ROWS: TravelWindowRow[] = [];
 function formatIsoDateLabel(isoDate: string): string {
   if (!DATE_FMT.test(isoDate)) {
     return isoDate;
@@ -239,9 +177,7 @@ export function useWorkspace() {
     useState(loadGuestReportCount);
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
-  const maxForecastDate = formatDateInput(
-    new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
-  );
+  const maxForecastDate = addDaysToIsoDate(todayDate, 7);
   const initialPreferences = React.useMemo(() => loadUserPreferences(), []);
   const initialPersistedReport = React.useMemo(() => loadPersistedReport(), []);
   const parsedInitialLinkState = React.useMemo(
@@ -250,7 +186,7 @@ export function useWorkspace() {
   );
   // Capture account-action tokens before URL synchronization removes query parameters.
   // The account panel is lazy-loaded through SettingsView and may render after cleanup.
-  const initialAccountLinkAction = React.useMemo(readAccountLinkAction, []);
+  const initialAccountLinkAction = React.useMemo(() => readAccountLinkAction(), []);
   const initialLinkState = React.useMemo(() => {
     if (
       !initialPersistedReport ||
@@ -321,6 +257,8 @@ export function useWorkspace() {
         accountUser.preferences,
         { adoptActivityDefaults: true },
       );
+      // Adopt the signed-in account's saved preferences once per account.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreferences(
         initialLinkState.hasObjective
           ? applyPreferencePatch(accountPreferences, {
@@ -458,15 +396,15 @@ export function useWorkspace() {
   const reportGeneratedRef = useRef<() => void>(() => {});
   const handleReportGenerated = useCallback(() => reportGeneratedRef.current(), []);
 
-  // Approach inputs sent with each report so the backend comfort score checks
-  // approach hours at the same elevation as the brief. Kept current below.
-  const approachQueryRef = useRef("");
+  // Limits, units and approach sent with each report, so it comes back
+  // evaluated for this plan. Kept current below.
+  const planQueryRef = useRef("");
   const safetyHook = useSafetyData({
     todayDate,
     preferences,
     isProductionBuild,
     objectiveNameRef,
-    extraQueryRef: approachQueryRef,
+    extraQueryRef: planQueryRef,
     onNewReportGenerated: handleNewReportGenerated,
     initialSafetyData: initialRestoredReport?.safetyData,
     initialAiBriefNarrative: initialRestoredReport?.ai.aiBriefNarrative,
@@ -499,7 +437,7 @@ export function useWorkspace() {
     clearWakeRetry,
     handleRequestAiBrief,
   } = safetyHook;
-  const [previousSafetyData, setPreviousSafetyData] =
+  const [, setPreviousSafetyData] =
     useState<SafetyData | null>(null);
   const [reportChatMessages, setReportChatMessages] = useState<
     PersistedReportChatMessage[]
@@ -507,7 +445,7 @@ export function useWorkspace() {
   const [reportChatSessionKey, setReportChatSessionKey] = useState(0);
   const [viewingHistoryReport, setViewingHistoryReport] = useState(false);
   const [restoredReportSnapshot, setRestoredReportSnapshot] = useState<PersistedReport | null>(null);
-  const [restoredReportSource, setRestoredReportSource] = useState<
+  const [, setRestoredReportSource] = useState<
     "saved" | "shared" | null
   >(null);
   const savedReportSession = useSavedReportSession({ safetyData, accountLoading, accountUserId });
@@ -521,9 +459,6 @@ export function useWorkspace() {
     setViewingHistoryReport(false);
     setRestoredReportSource(null);
   }, [beginSavedReportGeneration]);
-  useEffect(() => {
-    if (!safetyData) setPreviousSafetyData(null);
-  }, [safetyData]);
 
   useEffect(() => {
     if (viewingHistoryReport || !preHistoryPreferencesRef.current) return;
@@ -555,16 +490,10 @@ export function useWorkspace() {
   );
   const [pastStartPrompt, setPastStartPrompt] =
     useState<PastPlannedStart | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedLink] = useState(false);
   const [copiedRawPayload, setCopiedRawPayload] = useState(false);
-  const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
-  const [weatherTrendMetric, setWeatherTrendMetric] =
-    useState<WeatherTrendMetricKey>("temp");
-  const [weatherHourPreviewTime, setWeatherHourPreviewTime] = useState<
-    string | null
-  >(null);
   const [mapStyle, setMapStyle] = useState<MapStyle>("topo");
-  const [mobileMapControlsExpanded, setMobileMapControlsExpanded] = useState(
+  const [, setMobileMapControlsExpanded] = useState(
     () => {
       try {
         const stored = window.localStorage.getItem(
@@ -597,11 +526,9 @@ export function useWorkspace() {
   const [locatingUser, setLocatingUser] = useState(false);
   const hasInitializedHistoryRef = useRef(false);
   const isApplyingPopStateRef = useRef(false);
-  const copyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
   const hasVisitedTripRef = useRef(initialLinkState.view === "trip");
 
   const tripHook = useTripForecast({
@@ -624,6 +551,9 @@ export function useWorkspace() {
     tripDurationDays,
     setTripDurationDays,
     tripForecastRows,
+    tripRanking,
+    tripHighlights,
+    tripChatContext,
     setTripForecastRows: setTripForecastRowsDirect,
     tripForecastLoading,
     tripForecastError,
@@ -656,7 +586,6 @@ export function useWorkspace() {
       setPosition(nextPosition);
       setMapFocusNonce((prev) => prev + 1);
       setHasObjective(true);
-      setTravelWindowExpanded(false);
       setSafetyData(null);
       setError(null);
       setAiBriefNarrative(null);
@@ -888,6 +817,8 @@ export function useWorkspace() {
   useEffect(() => {
     if (view === "planner") return;
     sharedReportResolvedTokenRef.current = null;
+    // Leaving the planner drops the shared report it was showing.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSharedReportToken(null);
     setSharedReportLoading(false);
     setSharedReportError(null);
@@ -918,11 +849,6 @@ export function useWorkspace() {
   const requestAiAccess = useCallback(() => {
     if (accountUser) return true;
     setAccountAccessReason("ai");
-    return false;
-  }, [accountUser]);
-  const requestReportEmailAccess = useCallback(() => {
-    if (accountUser) return true;
-    setAccountAccessReason("report-email");
     return false;
   }, [accountUser]);
   const requestNewReportAccess = useCallback(() => {
@@ -976,6 +902,8 @@ export function useWorkspace() {
     );
     const next = String(Math.round(objectiveElevationDisplay));
     if (targetElevationInput !== next) {
+      // Follow the loaded objective's elevation until the user types a target.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTargetElevationInput(next);
     }
   }, [
@@ -1052,21 +980,11 @@ export function useWorkspace() {
 
   useEffect(() => {
     return () => {
-      if (copyResetTimeout.current) {
-        clearTimeout(copyResetTimeout.current);
-      }
       if (rawCopyResetTimeout.current) {
         clearTimeout(rawCopyResetTimeout.current);
       }
     };
   }, []);
-
-  useEffect(() => {
-    setTravelWindowExpanded(false);
-  }, [
-    safetyData?.forecast?.selectedDate,
-    safetyData?.forecast?.selectedStartTime,
-  ]);
 
   const reportPlan = useMemo(
     () => ({
@@ -1147,9 +1065,6 @@ export function useWorkspace() {
     setReportChatMessages, onReportGenerated: handleReportGenerated, setReportChatSessionKey,
   });
 
-  const handleRecenterMap = () => {
-    setMapFocusNonce((prev) => prev + 1);
-  };
 
   // Direct map interaction (click-to-drop-pin or marker drag) bypasses the search flow, so
   // without this the search box keeps showing the previous query (e.g. "Mount Rainier") while
@@ -1240,12 +1155,6 @@ export function useWorkspace() {
       setter(value);
     };
 
-  const handleWeatherHourSelect = (nextStartTime: string) => {
-    if (nextStartTime === weatherHourPreviewTime) {
-      return;
-    }
-    setWeatherHourPreviewTime(nextStartTime);
-  };
 
   const handleTargetElevationChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -1286,41 +1195,6 @@ export function useWorkspace() {
     setTargetElevationManual(true);
   };
 
-  const handleCopyLink = async () => {
-    if (typeof window === "undefined" || !featureFlags.reportSharing) {
-      return;
-    }
-
-    const shareToken = sharedReportToken || activeSavedReportShareToken;
-    const reportSectionId = parseReportSectionHash(window.location.hash);
-    const link = shareToken
-      ? buildSavedReportShareUrl(
-          shareToken,
-          window.location.origin,
-          reportSectionId,
-        )
-      : window.location.href;
-    try {
-      const copied = await copyTextToClipboard(link);
-      if (!copied) throw new Error("Clipboard unavailable");
-      setCopiedLink(true);
-      if (copyResetTimeout.current) {
-        clearTimeout(copyResetTimeout.current);
-      }
-      copyResetTimeout.current = setTimeout(() => setCopiedLink(false), 1500);
-    } catch {
-      setCopiedLink(false);
-    }
-  };
-
-  const handleRequestAiBriefAction = async () => {
-    if (!safetyData || !decision || aiBriefLoading) return;
-    if (!requestAiAccess()) return;
-    void handleRequestAiBrief({
-      safetyData,
-      decisionLevel: decision.level,
-    });
-  };
 
   const handleRequestSnowVisionAction = () => {
     if (snowVisionLoading) return;
@@ -1385,28 +1259,6 @@ export function useWorkspace() {
     ],
   );
 
-  const handleCopyRawPayload = async () => {
-    if (
-      !rawReportPayload ||
-      typeof navigator === "undefined" ||
-      !navigator.clipboard
-    ) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(rawReportPayload);
-      setCopiedRawPayload(true);
-      if (rawCopyResetTimeout.current) {
-        clearTimeout(rawCopyResetTimeout.current);
-      }
-      rawCopyResetTimeout.current = setTimeout(
-        () => setCopiedRawPayload(false),
-        1500,
-      );
-    } catch {
-      setCopiedRawPayload(false);
-    }
-  };
 
   const parsedTrailheadElevation =
     parseOptionalElevationInput(trailheadElevationInput);
@@ -1420,20 +1272,20 @@ export function useWorkspace() {
             preferences.elevationUnit,
           ),
         );
-  const approachQuery = useMemo(
+  // Where the party starts, so the backend checks approach hours at the
+  // elevation the party is expected to be at.
+  const approachParams = useMemo(
     () =>
-      new URLSearchParams(
-        buildApproachRequestParams({
-          enabled: preferences.approachElevationAdjustment,
-          trailheadElevationFt,
-          gpxRoute: importedGpxRoute,
-          timing: {
-            paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
-            ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
-            stopBufferMinutes: preferences.runnerStopBufferMinutes,
-          },
-        }),
-      ).toString(),
+      buildApproachRequestParams({
+        enabled: preferences.approachElevationAdjustment,
+        trailheadElevationFt,
+        gpxRoute: importedGpxRoute,
+        timing: {
+          paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
+          ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+          stopBufferMinutes: preferences.runnerStopBufferMinutes,
+        },
+      }),
     [
       trailheadElevationFt,
       importedGpxRoute,
@@ -1443,9 +1295,14 @@ export function useWorkspace() {
       preferences.runnerStopBufferMinutes,
     ],
   );
+  // The traveler's settings for every report and comparison of this plan.
+  const planSettingsQuery = useMemo(
+    () => planParamsQuery({ ...planSettingsParams(preferences), ...approachParams }),
+    [preferences, approachParams],
+  );
   useEffect(() => {
-    approachQueryRef.current = approachQuery;
-  }, [approachQuery]);
+    planQueryRef.current = planSettingsQuery;
+  }, [planSettingsQuery]);
   const { handleRetryFetch, handleGenerateReport, pendingAutoGenerate, setPendingAutoGenerate } = useReportGeneration({
     autoGenerateInitially: initialLinkState.hasObjective && !initialRestoredReport,
     hasObjective, forecastDate, alpineStartTime, objectiveTimezone,
@@ -1584,6 +1441,8 @@ export function useWorkspace() {
     )
       return;
     const controller = new AbortController();
+    // Show loading while a shared report link is resolved.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSharedReportLoading(true);
     setSharedReportError(null);
     void getSharedReport(sharedReportToken, controller.signal)
@@ -1759,37 +1618,9 @@ export function useWorkspace() {
       updateObjectivePosition,
     ],
   );
-  const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? " is-nav-pending" : ""}`;
   const liveSearchQuery = searchQuery;
   const trimmedSearchQuery = liveSearchQuery.trim();
 
-  const getScoreColor = (score: number, tier?: string) => {
-    const effectiveTier =
-      tier ||
-      (score >= 85
-        ? "Low"
-        : score >= 70
-          ? "Caution"
-          : score >= 55
-            ? "Elevated"
-            : score >= 40
-              ? "High"
-              : "Extreme");
-    switch (effectiveTier) {
-      case "Low":
-        return "var(--accent-green)";
-      case "Caution":
-        return "var(--accent-teal)";
-      case "Elevated":
-        return "var(--accent-yellow)";
-      case "High":
-        return "var(--accent-orange)";
-      case "Extreme":
-        return "var(--accent-red)";
-      default:
-        return "var(--accent-yellow)";
-    }
-  };
 
   const getDangerText = (lvl: number) => {
     const levels = [
@@ -1801,13 +1632,6 @@ export function useWorkspace() {
       "Extreme",
     ];
     return levels[lvl] || "N/A";
-  };
-  const getDangerGlyph = (lvl: number) => {
-    if (lvl >= 5) return "!!";
-    if (lvl >= 4) return "X";
-    if (lvl >= 3) return "!";
-    if (lvl >= 2) return "•";
-    return "✓";
   };
 
   const useHour12Clock = preferences.timeStyle !== "24h";
@@ -1861,20 +1685,6 @@ export function useWorkspace() {
     return date.toLocaleString([], baseOptions);
   };
 
-  const formatGeneratedAt = (isoString: string | null) => {
-    const parsedMs = isoString ? parseIsoToMs(isoString) : null;
-    if (parsedMs === null) {
-      return "time unavailable";
-    }
-    return new Date(parsedMs).toLocaleString([], {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: useHour12Clock,
-    });
-  };
 
   const formatTempDisplay = (
     value: number | null | undefined,
@@ -2010,6 +1820,8 @@ export function useWorkspace() {
   });
   useEffect(() => {
     if (!routeAwaitingAccount || accountLoading) return;
+    // Clear the deferral once the account has loaded.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRouteAwaitingAccount(null);
     // Only for the report it was deferred for, and not if one already started.
     if (
@@ -2114,143 +1926,6 @@ export function useWorkspace() {
     returnMinutes !== null
       ? minutesToTwentyFourHourClock(returnMinutes % 1440)
       : null;
-  // Where the party is at each planned hour; null scores every hour at the objective.
-  const approachProfile = useMemo(
-    () =>
-      safetyData && preferences.approachElevationAdjustment
-        ? buildApproachProfile({
-            objectiveElevationFt: safetyData.weather.elevation,
-            trailheadElevationFt,
-            gpxRoute: importedGpxRoute,
-            elevationBands: safetyData.weather.elevationForecast,
-            timing: {
-              paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
-              ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
-              stopBufferMinutes: preferences.runnerStopBufferMinutes,
-            },
-          })
-        : null,
-    [
-      safetyData,
-      trailheadElevationFt,
-      importedGpxRoute,
-      preferences.approachElevationAdjustment,
-      preferences.runnerPaceMinutesPerMile,
-      preferences.runnerAscentMinutesPer1000Ft,
-      preferences.runnerStopBufferMinutes,
-    ],
-  );
-  let decision = safetyData
-    ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, {
-        turnaroundTime: returnTimeFormatted ?? undefined,
-        approach: approachProfile,
-      })
-    : null;
-
-  const { dayOverDay, startTimeScenarios } = useReportComparisons({
-    hasObjective, view, safetyData, forecastDate, currentStartTime: alpineStartTime,
-    position: { lat: position.lat, lng: position.lng }, preferences, approach: approachProfile,
-    viewingHistoryReport, loading: loading || reportGenerationPending,
-    startTimeComparisonsEnabled: featureFlags.startTimeComparisons,
-  });
-
-  const decisionDisplay = buildDecisionDisplayState(decision);
-  const {
-    orderedCriticalChecks,
-    topCriticalAttentionChecks,
-    criticalCheckFailCount,
-    criticalCheckTotal,
-    fieldBriefPrimaryReason,
-    fieldBriefTopRisks,
-    decisionFailingChecks,
-    decisionPassingChecksCount,
-    decisionActionLine,
-    decisionKeyDrivers,
-  } = decisionDisplay;
-  const startLabel = "Start time";
-  const avalancheDisplay = buildAvalancheDisplayState(
-    safetyData,
-    localizeUnitText,
-  );
-  const {
-    relevant: avalancheRelevant,
-    expiredForSelectedStart: avalancheExpiredForSelectedStart,
-    unknown: avalancheUnknown,
-    overallLevel: overallAvalancheLevel,
-    notApplicableReason: avalancheNotApplicableReason,
-    elevationRows: avalancheElevationRows,
-  } = avalancheDisplay;
-  const elevationForecastBands = safetyData?.weather.elevationForecast || [];
-  // trendWindow/criticalWindow/travelWindowRows feed several report cards in
-  // PlannerView/RedesignView (both wrapped in React.memo) as direct array
-  // props; each row does nontrivial per-hour work (assessCriticalWindowPoint,
-  // threshold checks + string formatting in buildTravelWindowRows), so these
-  // are memoized to keep stable references across unrelated re-renders and
-  // avoid redoing that work every render.
-  const trendWindow = useMemo(
-    () =>
-      safetyData
-        ? buildTrendWindowFromStart(
-            safetyData.weather.trend || [],
-            alpineStartTime,
-            travelWindowHours,
-          )
-        : [],
-    [safetyData, alpineStartTime, travelWindowHours],
-  );
-  const criticalWindow = useMemo(
-    () =>
-      safetyData
-        ? trendWindow.map((point) => {
-            const assessment = assessCriticalWindowPoint(point);
-            return {
-              ...point,
-              ...assessment,
-            };
-          })
-        : [],
-    [safetyData, trendWindow],
-  );
-  const travelWindowContext = useMemo(
-    () =>
-      safetyData
-        ? {
-            snowDepthIn:
-              safetyData.terrainCondition?.signals?.maxSnowDepthIn ??
-              safetyData.snowpack?.snotel?.snowDepthIn ??
-              safetyData.snowpack?.nohrsc?.snowDepthIn ??
-              null,
-          }
-        : undefined,
-    [safetyData],
-  );
-  const travelWindowRows = useMemo(
-    () =>
-      safetyData
-        ? buildPlannedReportWeatherRows(safetyData, preferences, travelWindowHours, { start: alpineStartTime, date: forecastDate, approach: approachProfile })
-        : [],
-    [safetyData, preferences, travelWindowHours, alpineStartTime, forecastDate, approachProfile],
-  );
-  const travelWindowInsights = buildTravelWindowInsights(
-    travelWindowRows,
-    preferences.timeStyle,
-  );
-  const travelWindowSummary = travelWindowInsights.summary;
-  const peakCriticalWindowIndex = criticalWindow.length
-    ? criticalWindow.reduce(
-        (bestIndex, current, idx, rows) =>
-          current.score > rows[bestIndex].score ? idx : bestIndex,
-        0,
-      )
-    : -1;
-  const peakCriticalWindow =
-    peakCriticalWindowIndex >= 0
-      ? criticalWindow[peakCriticalWindowIndex]
-      : null;
-  const visibleCriticalWindowRows = useMemo(
-    () => (travelWindowExpanded ? criticalWindow : []),
-    [travelWindowExpanded, criticalWindow],
-  );
   const parsedTargetElevation =
     parseOptionalElevationInput(targetElevationInput);
   const targetElevationFt =
@@ -2262,6 +1937,67 @@ export function useWorkspace() {
         );
   const hasTargetElevation =
     Number.isFinite(targetElevationFt) && targetElevationFt >= 0;
+  // The plan the report is checked against; the backend evaluates it. A
+  // target elevation the user typed is estimated too; one that only follows
+  // the objective adds nothing.
+  const evaluatedTargetElevationFt =
+    targetElevationManual && hasTargetElevation ? targetElevationFt : null;
+  const planParams = useMemo(
+    () => buildPlanParams({
+      preferences,
+      date: forecastDate,
+      start: alpineStartTime,
+      travelWindowHours,
+      approach: approachParams,
+      targetElevationFt: evaluatedTargetElevationFt,
+    }),
+    [preferences, forecastDate, alpineStartTime, travelWindowHours, approachParams, evaluatedTargetElevationFt],
+  );
+  const {
+    evaluation,
+    pending: evaluationPending,
+    error: evaluationError,
+    retry: retryEvaluation,
+  } = usePlanEvaluation(safetyData, planParams);
+  const decision = evaluation?.decision ?? null;
+  // Where the backend modeled the party's start; null scores every hour at the objective.
+  const planApproach = evaluation?.plan.approach ?? null;
+
+  const handleRequestAiBriefAction = async () => {
+    if (!safetyData || !decision || aiBriefLoading) return;
+    if (!requestAiAccess()) return;
+    void handleRequestAiBrief({
+      safetyData,
+      decisionLevel: decision.level,
+    });
+  };
+
+  const { dayOverDay, startTimeScenarios } = useReportComparisons({
+    hasObjective, view, safetyData, forecastDate, currentStartTime: alpineStartTime,
+    position: { lat: position.lat, lng: position.lng }, preferences, planSettingsQuery,
+    viewingHistoryReport, loading: loading || reportGenerationPending,
+    startTimeComparisonsEnabled: featureFlags.startTimeComparisons,
+  });
+
+  const decisionSummary = evaluation?.decisionSummary ?? null;
+  const orderedCriticalChecks = decisionSummary?.orderedChecks ?? [];
+  const decisionFailingChecks = orderedCriticalChecks.filter((check) => !check.ok);
+  const topCriticalAttentionChecks = decisionFailingChecks.slice(0, 3);
+  const criticalCheckFailCount = decisionFailingChecks.length;
+  const criticalCheckTotal = orderedCriticalChecks.length;
+  const decisionPassingChecksCount = decisionSummary?.passedCount ?? 0;
+  const fieldBriefPrimaryReason = decisionSummary?.primaryReason ?? "";
+  const fieldBriefTopRisks = decisionSummary?.topRisks ?? [];
+  const decisionActionLine = decisionSummary?.actionLine ?? "";
+  const decisionKeyDrivers = decisionSummary?.keyDrivers ?? [];
+  const startLabel = "Start time";
+  // What each source means for the plan, from the backend's evaluation.
+  const interpretation = evaluation?.interpretation ?? null;
+  const elevationForecastBands = safetyData?.weather.elevationForecast || [];
+  // Hour-by-hour checks at the planned times, from the backend's evaluation.
+  const travelWindowRows = evaluation?.travelWindow.planned.rows ?? EMPTY_ROWS;
+  const travelWindowSummary = evaluation?.travelWindow.planned.insights.summary ?? "";
+  const peakCriticalWindow = evaluation?.criticalWindow.peak ?? null;
   const objectiveElevationFt = Number(safetyData?.weather.elevation);
   const baseTargetElevationFeet = hasTargetElevation
     ? targetElevationFt
@@ -2269,13 +2005,6 @@ export function useWorkspace() {
       ? objectiveElevationFt
       : 0;
   const canDecreaseTargetElevation = baseTargetElevationFeet > 0;
-  const windThresholdDisplay = formatWindDisplay(preferences.maxWindGustMph);
-  const feelsLikeThresholdDisplay = formatTempDisplay(
-    preferences.minFeelsLikeF,
-  );
-  const heatCeilingDisplay = formatTempDisplay(preferences.maxFeelsLikeF);
-  const formatPresetWindDisplay = (valueMph: number) =>
-    formatWindDisplay(valueMph);
   const activeTravelThresholdPreset = (Object.entries(
     TRAVEL_THRESHOLD_PRESETS,
   ).find(([, preset]) => {
@@ -2290,99 +2019,6 @@ export function useWorkspace() {
   const windUnitLabel = preferences.windSpeedUnit;
   const tempUnitLabel = preferences.temperatureUnit.toUpperCase();
   const elevationUnitLabel = preferences.elevationUnit;
-  const weatherTrendMetricOptions = buildWeatherTrendMetricOptions(
-    tempUnitLabel,
-    windUnitLabel,
-  );
-  const weatherTrendRows = buildWeatherTrendRows(
-    trendWindow,
-    preferences.timeStyle,
-  );
-  const weatherTrendChartData = buildWeatherTrendChartData(
-    weatherTrendRows,
-    weatherTrendMetric,
-  );
-  const weatherTrendHasData = weatherTrendChartData.some(
-    (row) => row.value !== null && Number.isFinite(row.value),
-  );
-  const weatherTrendMetricLabel =
-    WEATHER_TREND_METRIC_LABELS[weatherTrendMetric];
-  const weatherTrendTickFormatter = (value: number) => {
-    if (!Number.isFinite(value)) return "";
-    if (
-      weatherTrendMetric === "temp" ||
-      weatherTrendMetric === "feelsLike" ||
-      weatherTrendMetric === "dewPoint"
-    )
-      return formatTempDisplay(value, { includeUnit: false });
-    if (weatherTrendMetric === "wind" || weatherTrendMetric === "gust")
-      return formatWindDisplay(value, { includeUnit: false });
-    if (weatherTrendMetric === "pressure") return `${Number(value).toFixed(0)}`;
-    if (
-      weatherTrendMetric === "precipChance" ||
-      weatherTrendMetric === "humidity" ||
-      weatherTrendMetric === "cloudCover"
-    )
-      return `${Math.round(value)}%`;
-    if (weatherTrendMetric === "windDirection") return `${Math.round(value)}°`;
-    return String(Math.round(value));
-  };
-  const formatWeatherTrendValue = (
-    value: number | null | undefined,
-    directionLabel?: string | null,
-  ): string => {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return "N/A";
-    if (
-      weatherTrendMetric === "temp" ||
-      weatherTrendMetric === "feelsLike" ||
-      weatherTrendMetric === "dewPoint"
-    )
-      return formatTempDisplay(numeric);
-    if (weatherTrendMetric === "wind" || weatherTrendMetric === "gust")
-      return formatWindDisplay(numeric);
-    if (weatherTrendMetric === "pressure") return `${numeric.toFixed(1)} hPa`;
-    if (
-      weatherTrendMetric === "precipChance" ||
-      weatherTrendMetric === "humidity" ||
-      weatherTrendMetric === "cloudCover"
-    )
-      return `${Math.round(numeric)}%`;
-    if (weatherTrendMetric === "windDirection") {
-      const cardinal = directionLabel || windDirectionFromDegrees(numeric);
-      return `${cardinal} (${Math.round(numeric)}°)`;
-    }
-    return String(Math.round(numeric));
-  };
-  const weatherTrendYAxisDomain =
-    getWeatherTrendYAxisDomain(weatherTrendMetric);
-  const weatherTrendLineColor = getWeatherTrendLineColor(weatherTrendMetric);
-  const weatherPressureTrend = buildPressureTrend(
-    weatherTrendRows,
-    travelWindowHoursLabel,
-  );
-  const weatherPressureTrendSummary = weatherPressureTrend?.summary ?? null;
-  const pressureTrendDirection = weatherPressureTrend?.direction ?? null;
-  const pressureDeltaLabel = weatherPressureTrend?.deltaLabel ?? null;
-  const pressureRangeLabel = weatherPressureTrend?.rangeLabel ?? null;
-  const weatherTrendTempRange = buildWeatherTrendTempRange(weatherTrendRows);
-  useEffect(() => {
-    setWeatherHourPreviewTime(null);
-  }, [alpineStartTime, forecastDate, objectiveName]);
-  // Estimating from a missing objective elevation, temperature or wind would
-  // invent a forecast at the target (Number(null) is 0 ft, 0 °F, calm).
-  const targetElevationForecast = (() => {
-    const weather = safetyData?.weather;
-    if (!hasTargetElevation || !weather || !isFiniteNumber(weather.elevation)
-      || !isFiniteNumber(weather.temp) || !isFiniteNumber(weather.windSpeed)) {
-      return null;
-    }
-    const deltaFt = targetElevationFt - weather.elevation;
-    return {
-      ...estimateAtElevation({ temp: weather.temp, wind: weather.windSpeed, gust: weather.windGust ?? Number.NaN }, deltaFt),
-      deltaFt: Math.round(deltaFt),
-    };
-  })();
   const rainfallPayload = React.useMemo(() => {
     if (!safetyData) {
       return null;
@@ -2430,7 +2066,7 @@ export function useWorkspace() {
             ...(safetyData.heatRisk ? { heatRisk: safetyData.heatRisk } : {}),
             pleasantness: safetyData.pleasantness || null,
             safety: safetyData.safety,
-            decision,
+            decision: evaluation?.decision ?? null,
           })
         : "",
     [
@@ -2444,36 +2080,34 @@ export function useWorkspace() {
       returnTimeFormatted,
       hasTargetElevation,
       targetElevationFt,
-      decision,
+      evaluation,
       rainfallPayload,
     ],
   );
-  const deepDiveShareLink =
-    typeof window !== "undefined" ? window.location.href : "";
-  const safeShareLink = sanitizeExternalUrl(deepDiveShareLink);
-  const safeWeatherLink = sanitizeExternalUrl(safetyData?.weather.forecastLink);
-  const weatherLinkHostLabel = (() => {
-    if (!safeWeatherLink) {
-      return null;
+
+  const handleCopyRawPayload = async () => {
+    if (
+      !rawReportPayload ||
+      typeof navigator === "undefined" ||
+      !navigator.clipboard
+    ) {
+      return;
     }
     try {
-      const host = new URL(safeWeatherLink).hostname
-        .toLowerCase()
-        .replace(/^www\./, "");
-      if (host.includes("weather.gov")) {
-        return "WEATHER.GOV";
+      await navigator.clipboard.writeText(rawReportPayload);
+      setCopiedRawPayload(true);
+      if (rawCopyResetTimeout.current) {
+        clearTimeout(rawCopyResetTimeout.current);
       }
-      if (host.includes("open-meteo.com")) {
-        return "OPEN-METEO";
-      }
-      return host.toUpperCase();
+      rawCopyResetTimeout.current = setTimeout(
+        () => setCopiedRawPayload(false),
+        1500,
+      );
     } catch {
-      return null;
+      setCopiedRawPayload(false);
     }
-  })();
-  const weatherLinkCta = weatherLinkHostLabel
-    ? `View full weather forecast at ${weatherLinkHostLabel} →`
-    : "View full weather forecast source →";
+  };
+  const safeWeatherLink = sanitizeExternalUrl(safetyData?.weather.forecastLink);
   const safeAvalancheLink = sanitizeExternalUrl(safetyData?.avalanche?.link);
   const safeRainfallLink = sanitizeExternalUrl(
     rainfallPayload?.link || undefined,
@@ -2487,260 +2121,6 @@ export function useWorkspace() {
   const safeCdecLink = sanitizeExternalUrl(
     safetyData?.snowpack?.cdec?.link || undefined,
   );
-  const rainfallDisplay = buildRainfallDisplay(
-    rainfallPayload,
-    preferences,
-    travelWindowHours,
-  );
-  const {
-    rainfall12hIn,
-    rainfall24hIn,
-    rainfall48hIn,
-    snowfall12hIn,
-    snowfall24hIn,
-    snowfall48hIn,
-    rainfall24hSeverityClass,
-    rainfallWindowSummary,
-    snowfallWindowSummary,
-    rainfall12hDisplay,
-    rainfall24hDisplay,
-    rainfall48hDisplay,
-    snowfall12hDisplay,
-    snowfall24hDisplay,
-    snowfall48hDisplay,
-    expectedTravelWindowHours,
-    expectedRainWindowDisplay,
-    expectedSnowWindowDisplay,
-    expectedPrecipSummaryLine,
-    rainfallModeLabel,
-    rainfallNoteLine,
-    expectedPrecipNoteLine,
-    precipInsightLine,
-    rainfallExpected,
-    expectedSnowWindowIn,
-  } = rainfallDisplay;
-  const snowpackInterpretation = safetyData
-    ? buildSnowpackInterpretation(
-        safetyData.snowpack,
-        safetyData.weather?.elevation,
-        preferences.elevationUnit,
-      )
-    : null;
-  const snowpackInsights = safetyData
-    ? buildSnowpackInsights(
-        safetyData.snowpack,
-        safetyData.weather?.elevation,
-        preferences.elevationUnit,
-      )
-    : null;
-  const snowpackDisplay = buildSnowpackDisplayState(
-    safetyData,
-    formatSweForElevationUnit,
-    formatSnowDepthForElevationUnit,
-    formatDistanceForElevationUnit,
-    formatForecastPeriodLabel,
-    formatIsoDateLabel,
-    preferences.elevationUnit,
-    snowpackInsights,
-    snowfall24hIn,
-    snowfall24hDisplay,
-    rainfall24hIn,
-    rainfall24hDisplay,
-  );
-  const {
-    bestDepthDisplay: snowpackBestDepthDisplay,
-    bestDepthSource: snowpackBestDepthSource,
-    depthConflict: snowpackDepthConflict,
-    depthRangeDisplay: snowpackDepthRangeDisplay,
-    depthConflictCaption: snowpackDepthConflictCaption,
-    bestSweDisplay: snowpackBestSweDisplay,
-    bestSweSource: snowpackBestSweSource,
-    snotelSweDisplay,
-    snotelDepthDisplay,
-    nohrscSweDisplay,
-    nohrscDepthDisplay,
-    cdecSweDisplay,
-    cdecDepthDisplay,
-    cdecDistanceDisplay,
-    snotelDistanceDisplay,
-    pillClass: snowpackPillClass,
-    statusLabel: snowpackStatusLabel,
-    historicalPillClass: snowpackHistoricalPillClass,
-    historicalStatusLabel: snowpackHistoricalStatusLabel,
-    historicalComparisonLine: snowpackHistoricalComparisonLine,
-    takeaways: snowpackTakeaways,
-    observationContext: snowpackObservationContext,
-    depthSignalValues: snowpackDepthSignalValues,
-    sweSignalValues: snowpackSweSignalValues,
-    hasSignal: hasSnowpackSignal,
-  } = snowpackDisplay;
-  const fireRisk = buildFireRiskDisplay(safetyData);
-  const {
-    level: fireRiskLevel,
-    label: fireRiskLabel,
-    pillClass: fireRiskPillClass,
-    alerts: fireRiskAlerts,
-  } = fireRisk;
-  const heatRisk = buildHeatRiskDisplay(safetyData, formatElevationDisplay);
-  const {
-    level: heatRiskLevel,
-    label: heatRiskLabel,
-    pillClass: heatRiskPillClass,
-    guidance: heatRiskGuidance,
-    reasons: heatRiskReasons,
-    metrics: heatRiskMetrics,
-    lowerTerrainLabel: lowerTerrainHeatLabel,
-  } = heatRisk;
-  const mapWeatherEmoji = safetyData
-    ? weatherConditionEmoji(
-        safetyData.weather.description,
-        safetyData.weather.isDaytime,
-      )
-    : "🌤️";
-  const mapWeatherTempLabel = safetyData
-    ? formatTempDisplay(safetyData.weather.temp)
-    : loading
-      ? "Loading…"
-      : "–";
-  const mapWeatherConditionLabel = safetyData
-    ? truncateText(
-        safetyData.weather.description || "Conditions unavailable",
-        34,
-      )
-    : "Fetching forecast";
-  const mapWeatherChipTitle = safetyData
-    ? [
-        `${formatTempDisplay(safetyData.weather.temp)} (feels ${formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)})`,
-        safetyData.weather.description || "Conditions unavailable",
-      ].join(" • ")
-    : "Generate a report to see the forecast";
-  const mapObjectiveElevationFt = safetyData
-    ? Number(safetyData.weather.elevation)
-    : Number.NaN;
-  const hasMapObjectiveElevation =
-    Number.isFinite(mapObjectiveElevationFt) && mapObjectiveElevationFt > 0;
-  const mapElevationLabel = hasMapObjectiveElevation
-    ? formatElevationDisplay(mapObjectiveElevationFt)
-    : loading
-      ? "Loading…"
-      : "–";
-  const mapElevationChipTitle = hasMapObjectiveElevation
-    ? [
-        formatElevationDisplay(mapObjectiveElevationFt),
-        safetyData?.weather.elevationSource || null,
-      ]
-        .filter(Boolean)
-        .join(" • ")
-    : "Elevation appears once you generate a report";
-  const weatherHourQuickOptions = buildWeatherHourQuickOptions(
-    safetyData,
-    preferences.timeStyle,
-    formatTempDisplay,
-    formatWindDisplay,
-  );
-  const activeWeatherHourValue = weatherHourPreviewTime || alpineStartTime;
-  const selectedWeatherHourIndex = findSelectedWeatherHourIndex(
-    weatherHourQuickOptions,
-    activeWeatherHourValue,
-  );
-  const selectedWeatherHour =
-    selectedWeatherHourIndex >= 0
-      ? weatherHourQuickOptions[selectedWeatherHourIndex]
-      : null;
-  const weatherPreviewActive = Boolean(
-    selectedWeatherHour && selectedWeatherHour.value !== alpineStartTime,
-  );
-  const weatherPreviewPoint = selectedWeatherHour?.point || null;
-  const weatherForecastPeriodLabel = safetyData
-    ? formatForecastPeriodLabel(
-        (typeof weatherPreviewPoint?.timeIso === "string" &&
-        weatherPreviewPoint.timeIso.trim()
-          ? weatherPreviewPoint.timeIso
-          : safetyData.weather.forecastStartTime) || null,
-        safetyData.weather.timezone || null,
-      )
-    : "Not available";
-  const weatherCard = buildWeatherCardValues(
-    safetyData,
-    weatherPreviewPoint,
-    selectedWeatherHour?.label,
-    alpineStartTime,
-    preferences.timeStyle,
-    formatElevationDisplay,
-  );
-  const {
-    temp: weatherCardTemp,
-    wind: weatherCardWind,
-    gust: weatherCardGust,
-    feelsLike: weatherCardFeelsLike,
-    description: weatherCardDescription,
-    withEmoji: weatherCardWithEmoji,
-    precip: weatherCardPrecip,
-    humidity: weatherCardHumidity,
-    dewPoint: weatherCardDewPoint,
-    pressureLabel: weatherCardPressureLabel,
-    pressureContextLine: weatherPressureContextLine,
-    windDirection: weatherCardWindDirection,
-    cloudCoverLabel: weatherCardCloudCoverLabel,
-    displayTime: weatherCardDisplayTime,
-  } = weatherCard;
-  const weatherCloudCover = parseOptionalFiniteNumber(
-    safetyData?.weather.cloudCover,
-  );
-  const visibilityDisplay = buildVisibilityRiskDisplay(
-    safetyData,
-    weatherPreviewActive,
-    weatherCard,
-  );
-  const {
-    risk: weatherVisibilityRisk,
-    pill: weatherVisibilityPill,
-    scoreLabel: weatherVisibilityScoreLabel,
-    scoreMeaning: weatherVisibilityScoreMeaning,
-    detail: weatherVisibilityDetail,
-    contextLine: weatherVisibilityContextLine,
-    activeWindowText: weatherVisibilityActiveWindowText,
-  } = visibilityDisplay;
-  const handleWeatherTrendChartClick = (chartState: unknown) => {
-    const parsedState = chartState as {
-      activePayload?: Array<{ payload?: { hourValue?: string | null } }>;
-      activeLabel?: string | number;
-    } | null;
-    if (!parsedState) {
-      return;
-    }
-    const payloadHourValue = parsedState.activePayload?.[0]?.payload?.hourValue;
-    if (payloadHourValue) {
-      handleWeatherHourSelect(payloadHourValue);
-      return;
-    }
-    const activeLabel = String(parsedState.activeLabel || "");
-    if (!activeLabel) {
-      return;
-    }
-    const matchedRow = weatherTrendChartData.find(
-      (row) => row.label === activeLabel && row.hourValue,
-    );
-    if (matchedRow?.hourValue) {
-      handleWeatherHourSelect(matchedRow.hourValue);
-    }
-  };
-  const forecastLeadHoursDisplay = (() => {
-    if (!safetyData?.forecast?.selectedDate) return null;
-    // Prefer the ISO 8601 forecastStartTime (includes timezone) to avoid
-    // device-timezone-dependent parsing of bare date + time strings.
-    const isoStart = safetyData.weather?.forecastStartTime;
-    const forecastMs = isoStart
-      ? Date.parse(isoStart)
-      : Date.parse(
-          `${safetyData.forecast.selectedDate}T${(safetyData.forecast.selectedStartTime || "00:00").slice(0, 5)}:00Z`,
-        );
-    if (!Number.isFinite(forecastMs)) return null;
-    const leadHours = (forecastMs - Date.now()) / (1000 * 60 * 60);
-    if (leadHours <= 24) return null;
-    const rounded = Math.round(leadHours);
-    return `${rounded}h forecast`;
-  })();
   const startMinutesForPlan = parseTimeInputMinutes(alpineStartTime);
   const sunriseMinutesForPlan = safetyData?.solar
     ? parseSolarClockMinutes(safetyData.solar.sunrise)
@@ -2748,37 +2128,6 @@ export function useWorkspace() {
   const sunsetMinutesForPlan = safetyData?.solar
     ? parseSolarClockMinutes(safetyData.solar.sunset)
     : null;
-  const daylightRemainingFromStartMinutes =
-    startMinutesForPlan !== null &&
-    sunriseMinutesForPlan !== null &&
-    sunsetMinutesForPlan !== null
-      ? Math.max(
-          0,
-          sunsetMinutesForPlan -
-            Math.max(startMinutesForPlan, sunriseMinutesForPlan),
-        )
-      : null;
-  const daylightRemainingFromStartLabel =
-    daylightRemainingFromStartMinutes !== null
-      ? startMinutesForPlan !== null &&
-        sunsetMinutesForPlan !== null &&
-        startMinutesForPlan >= sunsetMinutesForPlan
-        ? `${formatDurationMinutes(daylightRemainingFromStartMinutes)} (start is after sunset)`
-        : startMinutesForPlan !== null &&
-            sunriseMinutesForPlan !== null &&
-            startMinutesForPlan < sunriseMinutesForPlan
-          ? `${formatDurationMinutes(daylightRemainingFromStartMinutes)} (start before sunrise)`
-          : formatDurationMinutes(daylightRemainingFromStartMinutes)
-      : "N/A";
-  const precipitationDisplayTimezone =
-    objectiveTimezone || safetyData?.rainfall?.timezone || null;
-  const deviceTimezone =
-    typeof Intl !== "undefined"
-      ? Intl.DateTimeFormat().resolvedOptions().timeZone || null
-      : null;
-  const timezoneMismatch = Boolean(
-    objectiveTimezone && deviceTimezone && objectiveTimezone !== deviceTimezone,
-  );
   const handleUseNowConditions = () => {
     const nowInputs = currentDateTimeInputs(objectiveTimezone);
     const objectiveToday = nowInputs.date;
@@ -2821,75 +2170,35 @@ export function useWorkspace() {
     setForecastDate(getTomorrowDate(objectiveTimezone));
     setAlpineStartTime(preferences.defaultStartTime);
   };
-  const freshness = buildSourceFreshnessDisplay(
-    safetyData,
-    rainfallPayload,
-    avalancheRelevant,
-    travelWindowHours,
-  );
-  const {
-    sourceFreshnessRows,
-    hasFreshnessWarning,
-    freshnessWarningSummary,
-    reportGeneratedAt,
-    airQualityFutureNotApplicable,
-  } = freshness;
   const nwsAlerts = safetyData?.alerts?.alerts || [];
   const nwsAlertCount = safetyData?.alerts?.activeCount ?? nwsAlerts.length;
   const nwsTotalAlertCount =
     safetyData?.alerts?.totalActiveCount ?? nwsAlertCount;
   const nwsTopAlerts = nwsAlerts.slice(0, 3);
-  const weatherFieldSources =
-    safetyData?.weather.sourceDetails?.fieldSources || {};
   const weatherSourceLabel = inferWeatherSourceLabel(safetyData?.weather);
   const weatherSourceDisplay =
     safetyData?.weather.sourceDetails?.blended &&
     weatherSourceLabel === "NOAA / Weather.gov"
       ? "NOAA / Weather.gov + Open-Meteo"
       : weatherSourceLabel;
-  const windLoading = buildWindLoadingDisplay(
-    safetyData,
-    trendWindow,
-    avalancheRelevant,
-    hasSnowpackSignal,
-    formatWindDisplay,
-    preferences.timeStyle,
-  );
-  const {
-    resolvedWindDirection,
-    resolvedWindDirectionSource,
-    trendWindDirections,
-    leewardAspectHints,
-    secondaryWindAspects,
-    aspectOverlapProblems,
-    windGustMph,
-    calmOrVariableSignal,
-    lightWindSignal,
-    trendAgreementRatio,
-    windLoadingLevel,
-    windLoadingConfidence,
-    windLoadingPillClass,
-    windLoadingActiveWindowLabel,
-    windLoadingActiveHoursDetail,
-    windLoadingElevationFocus,
-    windLoadingActionLine,
-    windLoadingSummary,
-    windLoadingNotes,
-    windLoadingApplies,
-    windLoadingHintsRelevant,
-  } = windLoading;
-  if (decision && aspectOverlapProblems.length > 0) {
-    const overlapCaution = `Wind loading aligns with active avalanche problem aspects (${aspectOverlapProblems.join(", ")}). Current winds may be actively building slabs on these aspects.`;
-    if (!decision.cautions.includes(overlapCaution)) {
-      decision = {
-        ...decision,
-        cautions: [...decision.cautions, overlapCaution],
-      };
-    }
-  }
-  const terrainCondition = buildTerrainConditionDisplay(safetyData);
-  const { pillClass: terrainConditionPillClass, ...terrainConditionDetails } =
-    terrainCondition;
+  const windLoading = evaluation?.windLoading ?? null;
+  const resolvedWindDirection = windLoading?.resolvedWindDirection ?? null;
+  const resolvedWindDirectionSource = windLoading?.directionSource ?? "Unavailable";
+  const leewardAspectHints = windLoading?.leewardAspects ?? [];
+  const secondaryWindAspects = windLoading?.secondaryAspects ?? [];
+  const aspectOverlapProblems = windLoading?.aspectOverlapProblems ?? [];
+  const windGustMph = parseOptionalFiniteNumber(safetyData?.weather.windGust);
+  const windLoadingLevel = windLoading?.level ?? "Minimal";
+  const windLoadingConfidence = windLoading?.confidence ?? "Low";
+  const windLoadingPillClass = windLoading?.tone ?? "caution";
+  const windLoadingActiveWindowLabel = windLoading?.activeWindowLabel ?? "N/A";
+  const windLoadingActiveHoursDetail = windLoading?.activeHoursDetail ?? "";
+  const windLoadingElevationFocus = windLoading?.elevationFocus ?? "";
+  const windLoadingActionLine = windLoading?.actionLine ?? "";
+  const windLoadingSummary = windLoading?.summary ?? "Wind loading hints unavailable until a forecast is loaded.";
+  const windLoadingNotes = windLoading?.notes ?? [];
+  const windLoadingApplies = windLoading?.applies ?? false;
+  const windLoadingHintsRelevant = windLoading?.hintsRelevant ?? false;
   const gearRecommendations = Array.isArray(safetyData?.gear)
     ? safetyData.gear
         .map((rawItem) => {
@@ -2904,7 +2213,7 @@ export function useWorkspace() {
             let reasonText = String(rawItem.reason || "").trim();
             // Gear reasons can quote a single snow depth; when the snow sources
             // disagree that number is misleading on its own.
-            if (snowpackDepthConflict && /snow depth/i.test(reasonText)) {
+            if (interpretation?.snowpack.depthConflict && /snow depth/i.test(reasonText)) {
               reasonText = `${reasonText} (snow sources disagree; see Snowpack)`;
             }
             return {
@@ -2969,55 +2278,13 @@ export function useWorkspace() {
         )
     : [];
 
-  const reportCardOrder = buildReportCardOrder({
-    safetyData,
-    decision,
-    preferences,
-    travelWindowRows,
-    criticalWindow,
-    criticalCheckTotal,
-    criticalCheckFailCount,
-    avalancheRelevant,
-    avalancheUnknown,
-    windLoadingHintsRelevant,
-    windLoadingLevel,
-    windLoadingConfidence,
-    resolvedWindDirection,
-    calmOrVariableSignal,
-    lightWindSignal,
-    trendWindDirections,
-    rainfall12hIn,
-    rainfall24hIn,
-    rainfall48hIn,
-    snowfall12hIn,
-    snowfall24hIn,
-    snowfall48hIn,
-    snowpackDepthSignalValues,
-    snowpackSweSignalValues,
-    hasSnowpackSignal,
-    sourceFreshnessRows,
-    gearRecommendations,
-    dayOverDay,
-    fireRiskLevel,
-    heatRiskLevel,
-  });
-  const shouldRenderRankedCard = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    (_key: string): boolean => true,
-    [],
-  );
 
-  const navigateHomeToPlanner = () => {
-    openPlannerView();
-  };
   return {
     setActiveSavedReportId, setActiveSavedReportShareToken, reportSaveIntentRef,
     featureFlags,
     accountLoading,
     refreshAccount,
-    accountReportUsage,
     syncMultiDayUsage,
-    saveAccountPreferences,
     syncGeneratedReportUsage,
     accountUser,
     accountUserId,
@@ -3026,42 +2293,20 @@ export function useWorkspace() {
     handleMultiDayUsageUpdated,
     handleMultiDayUsageLimitReached,
     guestReportCount,
-    setGuestReportCount,
     isProductionBuild,
     todayDate,
     maxForecastDate,
-    initialPreferences,
-    initialPersistedReport,
-    parsedInitialLinkState,
     initialAccountLinkAction,
-    initialLinkState,
     sharedReportToken,
-    setSharedReportToken,
     sharedReportLoading,
-    setSharedReportLoading,
     sharedReportError,
-    setSharedReportError,
-    sharedReportLoadAttempt,
-    setSharedReportLoadAttempt,
-    sharedReportResolvedTokenRef,
     preferences,
     setPreferences,
-    preferencesRef,
-    preHistoryPreferencesRef,
-    historyReportPreferencesRef,
-    accountPreferenceOwnerRef,
-    preferenceSyncTimerRef,
-    scheduleAccountPreferenceSave,
     activity,
     position,
-    setPosition,
     hasObjective,
-    setHasObjective,
     objectiveName,
-    setObjectiveName,
     objectiveNameRef,
-    handleNewReportGenerated,
-    initialRestoredReport,
     importedGpxRoute,
     setImportedGpxRoute,
     healthChecks,
@@ -3085,7 +2330,6 @@ export function useWorkspace() {
     restoreRouteState,
     plannedRouteName,
     handleAnalyzePlannedRoute,
-    safetyHook,
     safetyData,
     setSafetyData,
     loading,
@@ -3110,23 +2354,18 @@ export function useWorkspace() {
     clearLastLoadedKey,
     clearWakeRetry,
     handleRequestAiBrief,
-    previousSafetyData,
     setPreviousSafetyData,
     reportChatMessages,
     setReportChatMessages,
     reportChatSessionKey,
     setReportChatSessionKey,
     viewingHistoryReport,
-    setViewingHistoryReport,
-    restoredReportSource,
-    setRestoredReportSource,
     activeSavedReportId,
     activeSavedReportShareToken,
     saveReportSnapshot,
     reportGenerationPending,
     resetSavedReportTracking,
     beginReportGeneration,
-    coordinateTimezone,
     objectiveTimezone,
     forecastDate,
     setForecastDate,
@@ -3134,36 +2373,17 @@ export function useWorkspace() {
     setAlpineStartTime,
     targetElevationInput,
     setTargetElevationInput,
-    targetElevationManual,
-    setTargetElevationManual,
     pastStartPrompt,
     setPastStartPrompt,
     copiedLink,
-    setCopiedLink,
     copiedRawPayload,
-    setCopiedRawPayload,
-    travelWindowExpanded,
-    setTravelWindowExpanded,
-    weatherTrendMetric,
-    setWeatherTrendMetric,
-    weatherHourPreviewTime,
-    setWeatherHourPreviewTime,
     mapStyle,
     setMapStyle,
-    mobileMapControlsExpanded,
-    setMobileMapControlsExpanded,
     collapseMobilePlanControls,
     mapFocusNonce,
-    setMapFocusNonce,
     locatingUser,
-    setLocatingUser,
     hasInitializedHistoryRef,
     isApplyingPopStateRef,
-    copyResetTimeout,
-    rawCopyResetTimeout,
-    activeBasemap,
-    hasVisitedTripRef,
-    tripHook,
     tripStartDate,
     setTripStartDate,
     tripStartTime,
@@ -3171,18 +2391,16 @@ export function useWorkspace() {
     tripDurationDays,
     setTripDurationDays,
     tripForecastRows,
+    tripRanking,
+    tripHighlights,
+    tripChatContext,
     setTripForecastRowsDirect,
     tripForecastLoading,
     tripForecastError,
-    setTripForecastErrorDirect,
     tripForecastNote,
-    setTripForecastNoteDirect,
     runTripForecast,
-    initializeTripView,
     updateObjectivePosition,
-    searchHook,
     searchQuery,
-    setSearchInputValue,
     committedSearchQuery,
     setCommittedSearchQuery,
     suggestions,
@@ -3204,35 +2422,32 @@ export function useWorkspace() {
     parsedTypedCoordinates,
     objectiveDraftDirty,
     handleImportGpxObjective,
-    urlState,
     view,
     isViewPending,
     navigateToView,
     isAdminAccount,
     showAdminNotFound,
     requestAiAccess,
-    requestReportEmailAccess,
     requestNewReportAccess,
     aiAccessContextValue,
     closeAccountAccessPrompt,
-    reportPlan,
     reportSnapshot,
-    handleRecenterMap,
     handleMapPositionChange,
     handleUseCurrentLocation,
     handleDateChange,
     handlePlannerTimeChange,
-    handleWeatherHourSelect,
     handleTargetElevationChange,
     trailheadElevationInput,
     handleTrailheadElevationChange,
-    approachProfile,
+    planApproach,
+    evaluation,
+    evaluationPending,
+    evaluationError,
+    retryEvaluation,
     handleTargetElevationStep,
-    handleCopyLink,
     handleRequestAiBriefAction,
     handleRequestSnowVisionAction,
     handleFetchRouteSuggestions,
-    handleFetchRouteAnalysis,
     handleCopyRawPayload,
     handleRetryFetch,
     handleGenerateReport,
@@ -3248,16 +2463,10 @@ export function useWorkspace() {
     handleSelectMultiDayForecastDay,
     handleOpenObjectiveWatch,
     handleOpenComparisonPlan: handleOpenObjectiveWatch,
-    appShellClassName,
-    liveSearchQuery,
     trimmedSearchQuery,
-    getScoreColor,
     getDangerText,
-    getDangerGlyph,
-    useHour12Clock,
     formatPubTime,
     formatForecastPeriodLabel,
-    formatGeneratedAt,
     formatTempDisplay,
     formatWindDisplay,
     formatElevationDisplay,
@@ -3268,7 +2477,6 @@ export function useWorkspace() {
     displayStartTime,
     displayDefaultStartTime,
     travelWindowHours,
-    prefHandlers,
     updatePreferences,
     travelWindowHoursDraft,
     maxPrecipChanceDraft,
@@ -3307,12 +2515,10 @@ export function useWorkspace() {
     gpxEstimatedDurationHours,
     returnMinutes,
     returnExtendsPastMidnight,
-    returnTimeFormatted,
     returnTimeDisplay,
     decision,
     dayOverDay,
     startTimeScenarios,
-    decisionDisplay,
     orderedCriticalChecks,
     topCriticalAttentionChecks,
     criticalCheckFailCount,
@@ -3324,210 +2530,45 @@ export function useWorkspace() {
     decisionActionLine,
     decisionKeyDrivers,
     startLabel,
-    avalancheDisplay,
-    avalancheRelevant,
-    avalancheExpiredForSelectedStart,
-    avalancheUnknown,
-    overallAvalancheLevel,
-    avalancheNotApplicableReason,
-    avalancheElevationRows,
     elevationForecastBands,
-    trendWindow,
-    criticalWindow,
-    travelWindowContext,
     travelWindowRows,
-    travelWindowInsights,
     travelWindowSummary,
-    peakCriticalWindowIndex,
     peakCriticalWindow,
-    visibleCriticalWindowRows,
-    parsedTargetElevation,
+    interpretation,
     targetElevationFt,
     hasTargetElevation,
     objectiveElevationFt,
-    baseTargetElevationFeet,
     canDecreaseTargetElevation,
-    windThresholdDisplay,
-    feelsLikeThresholdDisplay,
-    heatCeilingDisplay,
-    formatPresetWindDisplay,
     activeTravelThresholdPreset,
     travelWindowHoursLabel,
     windUnitLabel,
     tempUnitLabel,
     elevationUnitLabel,
-    weatherTrendMetricOptions,
-    weatherTrendRows,
-    weatherTrendChartData,
-    weatherTrendHasData,
-    weatherTrendMetricLabel,
-    weatherTrendTickFormatter,
-    formatWeatherTrendValue,
-    weatherTrendYAxisDomain,
-    weatherTrendLineColor,
-    weatherPressureTrend,
-    weatherPressureTrendSummary,
-    pressureTrendDirection,
-    pressureDeltaLabel,
-    pressureRangeLabel,
-    weatherTrendTempRange,
-    targetElevationForecast,
     rainfallPayload,
     rawReportPayload,
-    deepDiveShareLink,
-    safeShareLink,
     safeWeatherLink,
-    weatherLinkHostLabel,
-    weatherLinkCta,
     safeAvalancheLink,
     safeRainfallLink,
     safeSnotelLink,
     safeNohrscLink,
     safeCdecLink,
-    rainfallDisplay,
-    rainfall12hIn,
-    rainfall24hIn,
-    rainfall48hIn,
-    snowfall12hIn,
-    snowfall24hIn,
-    snowfall48hIn,
-    rainfall24hSeverityClass,
-    rainfallWindowSummary,
-    snowfallWindowSummary,
-    rainfall12hDisplay,
-    rainfall24hDisplay,
-    rainfall48hDisplay,
-    snowfall12hDisplay,
-    snowfall24hDisplay,
-    snowfall48hDisplay,
-    expectedTravelWindowHours,
-    expectedRainWindowDisplay,
-    expectedSnowWindowDisplay,
-    expectedPrecipSummaryLine,
-    rainfallModeLabel,
-    rainfallNoteLine,
-    expectedPrecipNoteLine,
-    precipInsightLine,
-    rainfallExpected,
-    expectedSnowWindowIn,
-    snowpackInterpretation,
-    snowpackInsights,
-    snowpackDisplay,
-    snowpackBestDepthDisplay,
-    snowpackBestDepthSource,
-    snowpackDepthConflict,
-    snowpackDepthRangeDisplay,
-    snowpackDepthConflictCaption,
-    snowpackBestSweDisplay,
-    snowpackBestSweSource,
-    snotelSweDisplay,
-    snotelDepthDisplay,
-    nohrscSweDisplay,
-    nohrscDepthDisplay,
-    cdecSweDisplay,
-    cdecDepthDisplay,
-    cdecDistanceDisplay,
-    snotelDistanceDisplay,
-    snowpackPillClass,
-    snowpackStatusLabel,
-    snowpackHistoricalPillClass,
-    snowpackHistoricalStatusLabel,
-    snowpackHistoricalComparisonLine,
-    snowpackTakeaways,
-    snowpackObservationContext,
-    snowpackDepthSignalValues,
-    snowpackSweSignalValues,
-    hasSnowpackSignal,
-    fireRisk,
-    fireRiskLevel,
-    fireRiskLabel,
-    fireRiskPillClass,
-    fireRiskAlerts,
-    heatRisk,
-    heatRiskLevel,
-    heatRiskLabel,
-    heatRiskPillClass,
-    heatRiskGuidance,
-    heatRiskReasons,
-    heatRiskMetrics,
-    lowerTerrainHeatLabel,
-    mapWeatherEmoji,
-    mapWeatherTempLabel,
-    mapWeatherConditionLabel,
-    mapWeatherChipTitle,
-    mapObjectiveElevationFt,
-    hasMapObjectiveElevation,
-    mapElevationLabel,
-    mapElevationChipTitle,
-    weatherHourQuickOptions,
-    activeWeatherHourValue,
-    selectedWeatherHourIndex,
-    selectedWeatherHour,
-    weatherPreviewActive,
-    weatherPreviewPoint,
-    weatherForecastPeriodLabel,
-    weatherCard,
-    weatherCardTemp,
-    weatherCardWind,
-    weatherCardGust,
-    weatherCardFeelsLike,
-    weatherCardDescription,
-    weatherCardWithEmoji,
-    weatherCardPrecip,
-    weatherCardHumidity,
-    weatherCardDewPoint,
-    weatherCardPressureLabel,
-    weatherPressureContextLine,
-    weatherCardWindDirection,
-    weatherCardCloudCoverLabel,
-    weatherCardDisplayTime,
-    weatherCloudCover,
-    visibilityDisplay,
-    weatherVisibilityRisk,
-    weatherVisibilityPill,
-    weatherVisibilityScoreLabel,
-    weatherVisibilityScoreMeaning,
-    weatherVisibilityDetail,
-    weatherVisibilityContextLine,
-    weatherVisibilityActiveWindowText,
-    handleWeatherTrendChartClick,
-    forecastLeadHoursDisplay,
     startMinutesForPlan,
     sunriseMinutesForPlan,
     sunsetMinutesForPlan,
-    daylightRemainingFromStartMinutes,
-    daylightRemainingFromStartLabel,
-    precipitationDisplayTimezone,
-    deviceTimezone,
-    timezoneMismatch,
     handleUseNowConditions,
-    preparePastStartReplacement,
     handleUseNowAfterPastStart,
     handleUseTomorrowAfterPastStart,
-    freshness,
-    sourceFreshnessRows,
-    hasFreshnessWarning,
-    freshnessWarningSummary,
-    reportGeneratedAt,
-    airQualityFutureNotApplicable,
     nwsAlerts,
     nwsAlertCount,
     nwsTotalAlertCount,
     nwsTopAlerts,
-    weatherFieldSources,
-    weatherSourceLabel,
     weatherSourceDisplay,
-    windLoading,
     resolvedWindDirection,
     resolvedWindDirectionSource,
-    trendWindDirections,
     leewardAspectHints,
     secondaryWindAspects,
     aspectOverlapProblems,
     windGustMph,
-    calmOrVariableSignal,
-    lightWindSignal,
-    trendAgreementRatio,
     windLoadingLevel,
     windLoadingConfidence,
     windLoadingPillClass,
@@ -3539,24 +2580,15 @@ export function useWorkspace() {
     windLoadingNotes,
     windLoadingApplies,
     windLoadingHintsRelevant,
-    terrainCondition,
-    terrainConditionPillClass,
-    terrainConditionDetails,
     gearRecommendations,
-    reportCardOrder,
-    shouldRenderRankedCard,
-    navigateHomeToPlanner,
-    airQualityPillClass,
     formatIsoDateLabel,
     formatClockForStyle,
-    formatTravelWindowSpan,
-    describeFailedCriticalCheck,
+
     formatAgeFromNow,
     getDangerLevelClass,
     normalizeDangerLevel,
     summarizeText,
     toPlainText,
-    TARGET_ELEVATION_STEP_FEET,
   };
 }
 export type Workspace = ReturnType<typeof useWorkspace>;

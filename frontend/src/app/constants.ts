@@ -8,9 +8,6 @@ const localDataPrefix = import.meta.env.DEV && import.meta.env.VITE_MOCK_API ===
 export const USER_PREFERENCES_KEY = `${localDataPrefix}user-preferences:v1`;
 export const PERSISTED_REPORT_KEY = `${localDataPrefix}persisted-report:v1`;
 export const LEGACY_DEFAULT_START_TIME = '04:30';
-export const TEMP_LAPSE_F_PER_1000FT = 3.3;
-export const WIND_INCREASE_MPH_PER_1000FT = 2;
-export const GUST_INCREASE_MPH_PER_1000FT = 2.5;
 export const MIN_TRAVEL_WINDOW_HOURS = 1;
 export const MAX_TRAVEL_WINDOW_HOURS = 24;
 export const SEARCH_DEBOUNCE_MS = 180;

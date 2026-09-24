@@ -1,15 +1,16 @@
-import { summarizeApproachHours } from "../../app/approach-elevation";
+import type { ApproachSummary } from "../../app/types";
 import { isOverHour, skyRuns, spanLabel, type SkyHour } from "./sky-model";
 
 /** A compact version of the Brief's sky, one tile per planned hour. */
-export function DayStrip({ hours, clock, elevation = (ft) => `${ft} ft` }: {
+export function DayStrip({ hours, approach = null, clock, elevation = (ft) => `${ft} ft` }: {
   hours: SkyHour[];
+  /** The hours checked below the objective, as the backend evaluated them. */
+  approach?: ApproachSummary | null;
   clock: (minute: number) => string;
   elevation?: (ft: number) => string;
 }) {
   if (!hours.length) return null;
   const over = skyRuns(hours).filter((run) => run.tone === "over");
-  const approach = summarizeApproachHours(hours);
   const label = `Your day, ${clock(hours[0].minute)} to ${clock(hours[hours.length - 1].minute + 60)}. ` +
     (over.length ? `Over your limits ${over.map((run) => spanLabel(hours, run, clock)).join(" and ")}.` : "No hours over your limits.") +
     (approach ? ` ${approach.adjustedRuns.map((run) => spanLabel(hours, run, clock)).join(" and ")} checked at your estimated elevation, not the summit.` : "");

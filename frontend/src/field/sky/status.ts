@@ -1,23 +1,4 @@
-import type { SafetyData } from "../../app/types";
-
 export type CheckStatus = "ok" | "over" | "missing";
-
-/**
- * Terrain status that matches the trip decision: these surfaces are cautions,
- * and an unavailable assessment is missing evidence rather than a clear surface.
- */
-export function terrainStatus(data: Pick<SafetyData, "terrainCondition">): CheckStatus {
-  const label = data.terrainCondition?.label?.trim();
-  const code = String(data.terrainCondition?.code || "").toLowerCase();
-  if (!label || code === "weather_unavailable") return "missing";
-  if (["snow_ice", "wet_muddy", "cold_slick", "dry_loose"].includes(code) || data.terrainCondition?.impact === "high") return "over";
-  return "ok";
-}
-
-/** A surface label without the leading emoji some providers include. */
-export function surfaceLabel(data: Pick<SafetyData, "terrainCondition">) {
-  return data.terrainCondition?.label?.replace(/^[\p{Extended_Pictographic}️\s]+/u, "") || null;
-}
 
 /**
  * Plain-language wording for a limit breach produced by the travel-window rules,

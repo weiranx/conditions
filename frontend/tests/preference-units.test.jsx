@@ -3,34 +3,12 @@ import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { evaluateBackcountryDecision } from '../src/app/decision';
 import { getDefaultUserPreferences } from '../src/app/preferences';
 import { usePreferenceHandlers } from '../src/hooks/usePreferenceHandlers';
-import { makeReport } from '../dev/mock-data.mjs';
 
+// The decision's hour-window checks are backend tests now
+// (backend/test/unit.plan-evaluation.test.js).
 const preferences = getDefaultUserPreferences();
-const clearDay = () => makeReport({ date: '2026-09-06', start: '07:00', travel_window_hours: 10 }, 'clear');
-
-test('an hour without a temperature reading is not scored as 0 °F', () => {
-  const data = clearDay();
-  data.weather.trend[3].temp = null;
-  const decision = evaluateBackcountryDecision(data, '07:00', preferences);
-  const feelsLike = decision.checks.find((check) => check.key === 'feels-like');
-  assert.equal(feelsLike.ok, true, feelsLike.detail);
-  assert.doesNotMatch(feelsLike.detail, /-\d+°F/);
-  assert.ok(!decision.cautions.some((text) => /Apparent temperature falls/.test(text)));
-});
-
-test('the heat blocker uses the hottest hour of the window, not the coldest', () => {
-  const data = clearDay();
-  data.weather.trend[6].temp = 101;
-  const decision = evaluateBackcountryDecision(data, '07:00', preferences);
-  assert.equal(decision.level, 'NO-GO');
-  assert.ok(decision.blockers.some((text) => /Apparent temperature reaches about 101°F/.test(text)), decision.blockers.join(' | '));
-
-  const cool = evaluateBackcountryDecision(clearDay(), '07:00', preferences);
-  assert.ok(!cool.blockers.some((text) => /Apparent temperature reaches/.test(text)));
-});
 
 async function mountPreferenceHandlers(t, initial) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });

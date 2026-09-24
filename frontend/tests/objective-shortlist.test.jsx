@@ -7,6 +7,8 @@ import { objectiveFrom, readShortlist, rankShortlist, sameChoice, shortlistValid
 import { useObjectiveShortlist } from '../src/field/model/useObjectiveShortlist';
 import ObjectiveShortlist from '../src/field/ObjectiveShortlist';
 import { makeReport } from '../dev/mock-data.mjs';
+import tripDays from '../../backend/src/utils/trip-days.js';
+import planContext from '../../backend/src/utils/plan-context.js';
 // React DOM checks for `input` event support when it loads, so load it with a DOM present.
 const bootstrap = new JSDOM('<html><body></body></html>');
 const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
@@ -30,6 +32,13 @@ const report = (objective = rainier, day = date) => {
   data.forecast.selectedStartTime = data.weather.forecastStartTime;
   data.forecast.selectedEndTime = data.weather.forecastEndTime;
   return data;
+};
+// A day as /api/trip-forecasts returns it: the backend's summary and rank, with the day's report.
+const tripDay = (objective = rainier, day = date, edit = (data) => data) => {
+  const data = edit(report(objective, day));
+  const context = planContext.buildPlanContext({ date: day, start: '07:00', travel_window_hours: '8', approach: 'off' }, data,
+    { withTurnaround: false });
+  return { ...tripDays.buildTripDay(data, context, { requiredHours: 8 }), safetyData: data };
 };
 async function harness(t, initial = state, component = false) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
@@ -87,20 +96,13 @@ test('validation requires 2–5 locations and a complete date range in each loca
   assert.match(shortlistValidation({ ...state, startDate: '2000-01-01' }), /next 7 days/);
   assert.match(shortlistValidation({ ...state, hours: 0 }), /1–24/);
 });
-test('hazard rank precedes score and comfort; partial and missing data never win', () => {
-  const day = { score: 80, decisionLevel: 'GO', partialData: false, travelTotalHours: 8 };
-  const ranked = rankShortlist([{ objectiveId: rainier.id, days: [day, { ...day, score: 100, decisionLevel: 'NO-GO', pleasantness: 100 },
-    { ...day, score: 100, partialData: true }, { ...day, score: null }, { ...day, score: 100, travelTotalHours: 0 }] }]);
-  assert.deepEqual(ranked.map(r => r.day.score), [80, 100]);
-  assert.deepEqual(rankShortlist([{ objectiveId: rainier.id, days: [day] }], 12), [], 'an incomplete hourly window cannot win');
-});
-test('equal hazard and score rank the option with more complete hours within limits first', () => {
-  const day = { score: 80, decisionLevel: 'CAUTION', partialData: false, travelTotalHours: 8 };
+test('options are shown in the backend rank order and unrankable days never win', () => {
+  const day = (rankValue, rankable = true) => ({ rankValue, rankable, date });
   const ranked = rankShortlist([
-    { objectiveId: rainier.id, days: [{ ...day, travelPassHours: 8, travelCompletePassHours: 3 }] },
-    { objectiveId: hood.id, days: [{ ...day, travelPassHours: 7, travelCompletePassHours: 7 }] },
+    { objectiveId: rainier.id, days: [day(200080), day(999999, false)] },
+    { objectiveId: hood.id, days: [day(200095), day(100)] },
   ]);
-  assert.deepEqual(ranked.map(r => r.objectiveId), [hood.id, rainier.id]);
+  assert.deepEqual(ranked.map(r => [r.objectiveId, r.day.rankValue]), [[hood.id, 200095], [rainier.id, 200080], [hood.id, 100]]);
 });
 test('typed coordinates join under their own point and the search clears for the next objective', async t => {
   await harness(t, { ...state, objectives: [rainier] }, true);
@@ -122,21 +124,21 @@ test('comparison is explicit, sequential, and preserves local time, hours and qu
   assert.equal(h.requests.length, 1);
   const body = JSON.parse(h.requests[0].init.body);
   assert.equal(body.startTime, '07:00'); assert.equal(body.travelWindowHours, 8); assert.equal(body.durationDays, 2);
+  assert.equal(body.includeAvalanche, true); assert.equal(body.plan.max_gust_mph, String(preferences.maxWindGustMph));
   assert.ok(h.requests[0].init.headers['Idempotency-Key']);
-  await respond(h.requests[0], { days: [report()] });
+  await respond(h.requests[0], { days: [tripDay()] });
   assert.equal(h.requests.length, 2);
-  await respond(h.requests[1], { days: [report(hood)] });
+  await respond(h.requests[1], { days: [tripDay(hood)] });
   await pending;
   assert.equal(h.current.results.length, 2); assert.equal(h.current.loading, false);
   assert.equal(h.current.results[0].days[0].date, date);
 });
-test('missing dates stay missing and wrong location/duration responses are rejected', async t => {
+test('missing dates stay missing and days for another objective are rejected', async t => {
   const h = await harness(t);
   let pending; await act(async () => { pending = h.current.run(); });
   const next = new Date(`${date}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
   const nextDate = next.toISOString().slice(0, 10);
-  const wrongDuration = report(); wrongDuration.rainfall.expected.travelWindowHours = 12;
-  await respond(h.requests[0], { days: [report(rainier, nextDate), report(hood), wrongDuration, { weather: {} }] });
+  await respond(h.requests[0], { days: [tripDay(rainier, nextDate), tripDay(hood), { weather: {} }] });
   await respond(h.requests[1], { days: [] }); await pending;
   assert.deepEqual(h.current.results[0].days.map(d => d.date), [nextDate]);
   assert.equal(h.current.results[1].days.length, 0);
@@ -150,12 +152,10 @@ test('changing the plan immediately hides results and late responses cannot over
   assert.equal(first.init.signal.aborted, true);
   assert.deepEqual(h.current.results, []);
   let newer; await act(async () => { newer = h.current.run(); });
-  await respond(first, { days: [report()] }); await old;
+  await respond(first, { days: [tripDay()] }); await old;
   assert.equal(h.current.loading, true); assert.deepEqual(h.current.results, []);
-  const sixHours = report(); sixHours.rainfall.expected.travelWindowHours = 6;
-  const sixHoursHood = report(hood); sixHoursHood.rainfall.expected.travelWindowHours = 6;
-  await respond(h.requests[1], { days: [sixHours] });
-  await respond(h.requests[2], { days: [sixHoursHood] }); await newer;
+  await respond(h.requests[1], { days: [tripDay()] });
+  await respond(h.requests[2], { days: [tripDay(hood)] }); await newer;
   assert.equal(h.current.results.length, 2);
 });
 test('stop and unmount abort pending requests and do not request another objective', async t => {
@@ -163,14 +163,14 @@ test('stop and unmount abort pending requests and do not request another objecti
   let pending; await act(async () => { pending = h.current.run(); });
   await act(async () => h.current.cancel());
   assert.equal(h.current.loading, false); assert.equal(h.requests[0].init.signal.aborted, true);
-  await respond(h.requests[0], { days: [report()] }); await pending;
+  await respond(h.requests[0], { days: [tripDay()] }); await pending;
   assert.equal(h.requests.length, 1); assert.deepEqual(h.current.results, []);
 });
 test('Plan A and Plan B save distinct choices and hand the exact saved plan to the planner', async t => {
   const h = await harness(t, state, true);
   await act(async () => document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
-  await respond(h.requests[0], { days: [report()] });
-  await respond(h.requests[1], { days: [report(hood)] });
+  await respond(h.requests[0], { days: [tripDay()] });
+  await respond(h.requests[1], { days: [tripDay(hood)] });
   await click(document.querySelector('.shortlist-cell').getAttribute('aria-label'));
   await click('Save as Plan A');
   await click('Save as Plan B');
@@ -207,17 +207,17 @@ test('unmount aborts pending comparison work', async t => {
   let pending; await act(async () => { pending = h.current.run(); });
   await act(async () => h.root.render(null));
   assert.equal(h.requests[0].init.signal.aborted, true);
-  await respond(h.requests[0], { days: [report()] }); await pending;
+  await respond(h.requests[0], { days: [tripDay()] }); await pending;
   assert.equal(h.requests.length, 1);
 });
 
 test('production forecast-period timestamps are accepted for a non-hour departure', async t => {
   const h = await harness(t, { ...state, startTime: '07:30' });
   let pending; await act(async () => { pending = h.current.run(); });
-  const data = report();
-  assert.match(data.forecast.selectedStartTime, /T07:00:00-07:00$/);
+  const data = tripDay();
+  assert.match(data.safetyData.forecast.selectedStartTime, /T07:00:00-07:00$/);
   await respond(h.requests[0], { days: [data] });
-  await respond(h.requests[1], { days: [report(hood)] }); await pending;
+  await respond(h.requests[1], { days: [tripDay(hood)] }); await pending;
   assert.equal(h.current.results[0].days.length, 1);
   assert.equal(h.current.results[1].days.length, 1);
   assert.equal(JSON.parse(h.requests[0].init.body).startTime, '07:30');
@@ -225,11 +225,10 @@ test('production forecast-period timestamps are accepted for a non-hour departur
 test('unavailable precipitation metadata does not discard the weather forecast', async t => {
   const h = await harness(t);
   let pending; await act(async () => { pending = h.current.run(); });
-  const data = report();
-  data.partialData = true;
-  data.rainfall = { status: 'unavailable', expected: { status: 'unavailable', travelWindowHours: null } };
+  const data = tripDay(rainier, date, (value) => ({ ...value, partialData: true,
+    rainfall: { status: 'unavailable', expected: { status: 'unavailable', travelWindowHours: null } } }));
   await respond(h.requests[0], { days: [data] });
-  const missing = report(hood); delete missing.rainfall;
+  const missing = tripDay(hood, date, (value) => { delete value.rainfall; return value; });
   await respond(h.requests[1], { days: [missing] }); await pending;
   assert.equal(h.current.results[0].days.length, 1);
   assert.equal(h.current.results[0].days[0].partialData, true);

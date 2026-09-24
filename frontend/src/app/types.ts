@@ -778,6 +778,8 @@ export interface SafetyData {
     };
     disclaimer?: string;
   };
+  /** The plan's decision and hour checks, computed by the backend for the params it was requested with. */
+  evaluation?: PlanEvaluation | null;
   safety: {
     /** Scoring model version; bump when thresholds change so logged scores stay comparable. */
     scoreVersion?: string;
@@ -926,15 +928,17 @@ export interface BackendAIStatus {
 
 export type CriticalRiskLevel = 'stable' | 'watch' | 'high';
 
+/** An hour of the travel window scored for storm, precipitation, wind and cold signals. */
 export interface CriticalWindowRow {
   time: string;
   level: CriticalRiskLevel;
   reasons: string[];
   score: number;
-  temp: number;
-  wind: number;
-  gust: number;
-  precipChance?: number;
+  temp: number | null;
+  wind: number | null;
+  gust: number | null;
+  precipChance?: number | null;
+  condition?: string;
 }
 
 export interface TerrainConditionDetails {
@@ -966,6 +970,8 @@ export interface DayOverDayComparison {
   travelWindowHours: number;
   previousScore: number;
   delta: number;
+  /** The score change as the report shows scores: "+3", "-12.6", "0". */
+  deltaLabel: string;
   /** Both days were scored; otherwise the score change is not shown. */
   scoreComparable: boolean;
   changes: string[];
@@ -974,6 +980,10 @@ export interface DayOverDayComparison {
 export interface TravelWindowRow {
   time: string;
   pass: boolean;
+  /** Every reading the checks need exists for the whole hour. */
+  complete: boolean;
+  /** Temperature and wind were measured, whatever else is missing. */
+  thermalComplete?: boolean;
   condition: string;
   reasonSummary: string;
   failedRules: string[];
@@ -1019,4 +1029,414 @@ export interface TravelWindowInsights {
   conditionTrendLabel: string;
   conditionTrendSummary: string;
   summary: string;
+}
+
+export type ApproachElevationSource = 'gpx' | 'manual' | 'estimated';
+
+/** What the approach adjustment changed, for plain-language notes. */
+export interface ApproachSummary {
+  /** Number of hours scored below the objective. */
+  adjustedHours: number;
+  lowFt: number;
+  highFt: number;
+  /** Contiguous index runs of adjusted hours, inclusive. */
+  adjustedRuns: Array<{ start: number; end: number }>;
+  /** Contiguous index runs of hours where an inversion makes the approach colder. */
+  inversionRuns: Array<{ start: number; end: number }>;
+}
+
+/** Where the party starts, as the backend modeled it for the plan. */
+export interface PlanApproach {
+  source: ApproachElevationSource;
+  trailheadElevationFt: number;
+  objectiveElevationFt: number;
+}
+
+export interface EvaluatedTravelRows {
+  /** Missing readings are NaN here (null on the wire). */
+  rows: TravelWindowRow[];
+  insights: TravelWindowInsights;
+  approachSummary: ApproachSummary | null;
+}
+
+/** A plan's evaluation, from /api/safety or /api/evaluate. */
+export interface PlanEvaluation {
+  version: number;
+  evaluatedAt: string;
+  /** The plan params the evaluation was requested with. */
+  params: Record<string, string>;
+  plan: {
+    date: string | null;
+    start: string;
+    travelWindowHours: number;
+    turnaroundTime: string | null;
+    activity: string;
+    limits: ActivityLimits;
+    units: { temperature: TemperatureUnit; wind: WindSpeedUnit; elevation: ElevationUnit; timeStyle: TimeStyle };
+    approach: PlanApproach | null;
+  };
+  decision: SummitDecision;
+  travelWindow: {
+    /** One row per planned hour from the start: the brief, timing and the day strip. */
+    planned: EvaluatedTravelRows;
+    /** One row per hourly reading: the Weather chapter. */
+    readings: EvaluatedTravelRows;
+  };
+  /** The hour that most needs attention, and the time to name it by. */
+  criticalWindow: { peak: CriticalWindowRow | null; peakTime: string | null };
+  /** Checks with failed ones first, and the reason and action that lead. */
+  decisionSummary: DecisionSummary;
+  verdict: Verdict;
+  fieldSignals: FieldSignal[];
+  windLoading: WindLoading;
+  /** Each travel-window reading at the trailhead, when the approach starts well below the summit. */
+  trailheadTemperatures: { trailheadElevationFt: number; objectiveElevationFt: number; temps: Array<number | null> } | null;
+  /** Comfort scored for this plan's approach. */
+  pleasantness: SafetyData['pleasantness'] | null;
+  /** What each source means for this plan, in its units. */
+  interpretation: ReportInterpretation;
+  /** Terrain by elevation, aspect and planned hour. */
+  terrain: TerrainView;
+  /** The elevation bands, and the plan's target elevation, for each planned hour. */
+  elevation: {
+    bandsByHour: ElevationForecastBand[][];
+    target: { elevationFt: number; deltaFt: number; byHour: Array<ElevationEstimate | null> } | null;
+  };
+}
+
+export type RiskTone = 'go' | 'watch' | 'caution' | 'nogo';
+/** A card's reading against the plan: within it, over it, or unavailable. */
+export type CardStatus = 'ok' | 'over' | 'missing';
+
+export interface ElevationEstimate {
+  temp: number;
+  feelsLike: number;
+  windSpeed: number;
+  windGust: number;
+}
+
+export interface AvalancheProblemTerrain {
+  name: string;
+  aspects: string[];
+  /** 'upper', 'middle' or 'lower'; empty when the bulletin does not say. */
+  elevations: Array<'upper' | 'middle' | 'lower'>;
+  description: string;
+}
+
+export interface SourceFreshnessRow {
+  label: string;
+  issued: string | null;
+  staleHours: number;
+  displayValue: string | null;
+  state: FreshnessState;
+}
+
+export interface WeatherTrendRow {
+  time: string;
+  label: string;
+  hourValue: string | null;
+  temp: number | null;
+  feelsLike: number | null;
+  wind: number | null;
+  gust: number | null;
+  pressure: number | null;
+  precipChance: number | null;
+  humidity: number | null;
+  dewPoint: number | null;
+  cloudCover: number | null;
+  /** Degrees; null when calm, variable or unknown. */
+  windDirection: number | null;
+  windDirectionLabel: string | null;
+}
+
+interface PrecipWindows<T> {
+  past12h: T;
+  past24h: T;
+  past48h: T;
+}
+
+export interface ReportInterpretation {
+  avalanche: {
+    relevant: boolean;
+    expiredForSelectedStart: boolean;
+    coverageUnknown: boolean;
+    unknown: boolean;
+    overallLevel: number | null;
+    notApplicableReason: string;
+    elevationRows: Array<{ key: string; label: string; rating: number | null }>;
+    briefCaption: string;
+    problemTerrain: AvalancheProblemTerrain[];
+  };
+  rainfall: {
+    /** Accumulations in inches, null when missing. */
+    rainIn: PrecipWindows<number | null>;
+    snowIn: PrecipWindows<number | null>;
+    rainDisplay: PrecipWindows<string>;
+    snowDisplay: PrecipWindows<string>;
+    expectedTravelWindowHours: number;
+    expectedRainWindowDisplay: string;
+    expectedSnowWindowDisplay: string;
+    modeLabel: string;
+    noteLine: string;
+    expectedNoteLine: string;
+    insightLine: string;
+  };
+  snowpack: {
+    interpretation: SnowpackInterpretation | null;
+    insights: SnowpackSnapshotInsights;
+    bestDepthDisplay: string;
+    bestDepthSource: string | null;
+    bestSweDisplay: string;
+    bestSweSource: string | null;
+    depthConflict: boolean;
+    depthRangeDisplay: string | null;
+    depthConflictCaption: string | null;
+    sources: Record<'snotel' | 'nohrsc' | 'cdec', { depthDisplay: string; sweDisplay: string; distanceDisplay: string }>;
+    statusLabel: string;
+    historicalComparisonLine: string;
+    observationContext: string;
+  };
+  fireRisk: { level: number | null; label: string; tone: RiskTone; status: CardStatus };
+  heatRisk: { level: number; label: string; tone: RiskTone; status: CardStatus; guidance: string };
+  terrainCondition: {
+    summary: string;
+    reasons: string[];
+    confidence: 'high' | 'medium' | 'low' | null;
+    impact: string | null;
+    recommendedTravel: string | null;
+    snowProfile: {
+      label: string;
+      summary: string;
+      reasons: string[];
+      confidence: 'high' | 'medium' | 'low' | null;
+      meltFreeze: MeltFreezeAnalysis | null;
+    } | null;
+    tone: RiskTone;
+    /** Matches the decision's surface check. */
+    status: CardStatus;
+    surfaceLabel: string | null;
+  };
+  sourceFreshness: {
+    rows: SourceFreshnessRow[];
+    hasWarning: boolean;
+    warningSummary: string;
+    airQualityFutureNotApplicable: boolean;
+  };
+  visibility: {
+    score: number | null;
+    level: 'Unknown' | 'Minimal' | 'Low' | 'Moderate' | 'High' | 'Extreme';
+    summary: string;
+    factors: string[];
+    activeHours: number | null;
+    windowHours: number | null;
+    source: string;
+    detail: string;
+    status: CardStatus;
+  };
+  pressureTrend: string | null;
+  weatherTrend: WeatherTrendRow[];
+  /** Share of daylight forecast hours that are clear and dry. */
+  bluebird: { percent: number | null; daylightHours: number; completeHours: number; bluebirdHours: number; reason: string | null };
+  daylightFromStart: { minutes: number | null; label: string };
+}
+
+export type TerrainWindowLevel = 'lower' | 'caution' | 'avoid' | 'unknown';
+
+export interface TerrainWindowCell {
+  level: TerrainWindowLevel;
+  reasons: string[];
+}
+
+export interface TerrainWindowLane {
+  id: string;
+  elevationLabel: string;
+  elevationFt: number;
+  elevationBand: 'upper' | 'middle' | 'lower';
+  aspectLabel: string;
+  aspects: string[];
+  cells: TerrainWindowCell[];
+}
+
+export interface TerrainView {
+  /** Lanes of elevation band and aspect group, one cell per planned hour. */
+  grouped: { lanes: TerrainWindowLane[]; lowerRiskHourIndexes: number[]; explanation: string };
+  /** Each aspect's own cells at each elevation. */
+  byAspect: Record<string, Array<{ elevationFt: number; cells: TerrainWindowCell[] }>>;
+}
+
+export type DecisionCheck = SummitDecision['checks'][number] & {
+  /** Short name of a failed check, for compact lists. */
+  failedLabel?: string;
+};
+
+export interface DecisionSummary {
+  orderedChecks: DecisionCheck[];
+  failedCount: number;
+  passedCount: number;
+  primaryReason: string;
+  topRisks: string[];
+  actionLine: string;
+  keyDrivers: string[];
+}
+
+export interface FieldSignal {
+  key: string;
+  title: string;
+  detail: string;
+  tone: 'attention' | 'unavailable';
+}
+
+export interface Verdict {
+  insufficient: boolean;
+  tone: 'go' | 'watch' | 'stop';
+  reason: string;
+  bridge: string;
+  limitingChecks: string[];
+  warnings: FieldSignal[];
+  missing: FieldSignal[];
+  scoreValue: number | null;
+}
+
+export interface WindLoading {
+  primaryWindDirection: string | null;
+  resolvedWindDirection: string | null;
+  directionSource: string;
+  trendWindDirections: string[];
+  leewardAspects: string[];
+  secondaryAspects: string[];
+  aspectOverlapProblems: string[];
+  calmOrVariable: boolean;
+  lightWind: boolean;
+  transportHours: number;
+  activeHours: number;
+  severeHours: number;
+  agreementRatio: number | null;
+  level: 'Minimal' | 'Localized' | 'Active' | 'Severe';
+  confidence: 'High' | 'Moderate' | 'Low';
+  tone: 'go' | 'watch' | 'caution' | 'nogo';
+  activeWindowLabel: string;
+  activeHoursDetail: string;
+  elevationFocus: string;
+  actionLine: string;
+  summary: string;
+  notes: string[];
+  /** Snow could be moving: an active avalanche context or a measured snowpack. */
+  applies: boolean;
+  hintsRelevant: boolean;
+}
+
+export type StartTimeScenarioRisk = 'Storm / lightning' | 'Wind' | 'Heat' | 'Precipitation' | 'Avalanche' | 'Visibility' | 'Daylight';
+
+/** One departure of a start-time comparison, from /api/start-time-scenarios. */
+export interface StartTimeScenario {
+  startTime: string;
+  summitTime: string;
+  returnTime: string;
+  returnDayOffset: number;
+  daylightRemainingMinutes: number | null;
+  decision: Pick<SummitDecision, 'level' | 'headline'>;
+  score: number;
+  peakGustMph: number | null;
+  peakFeelsLikeF: number | null;
+  peakPrecipChance: number | null;
+  avalancheLevel: number | null;
+  avalancheLabel: string;
+  stormHours: number;
+  cleanHours: number;
+  visibilityHours: number;
+  /** The departure's own planned hours. */
+  planned: Pick<EvaluatedTravelRows, 'rows' | 'approachSummary'>;
+}
+
+export interface StartTimeScenarioComparison {
+  /** Best first: decision, then score, then clean hours and daylight. */
+  scenarios: StartTimeScenario[];
+  /** The departure with the best decision, then score; not necessarily the most daylight. */
+  bestStartTime: string;
+  drivingRisk: StartTimeScenarioRisk;
+  recommendationReason: string;
+  effectivelyTied: boolean;
+  /** Every departure is a no-go, so none is suggested. */
+  allNoGo: boolean;
+  /** Why another start beats the planned one; null when none clearly does. */
+  suggestion: string | null;
+}
+
+/** One day of a multi-day comparison, from /api/trip-forecasts. */
+export interface MultiDayTripForecastDay {
+  date: string;
+  /** The day's full report. */
+  safetyData: SafetyData;
+  decisionLevel: DecisionLevel;
+  decisionHeadline: string;
+  /** Messages that set a CAUTION or NO-GO decision, most limiting first. Empty for GO. */
+  limitingChecks: string[];
+  /** The lead sentence of each limiting check, once each. */
+  concerns: string[];
+  score: number | null;
+  weatherDescription: string;
+  tempHighF: number | null;
+  tempLowF: number | null;
+  /** Departure reading. */
+  windGustMph: number | null;
+  /** Highest reading from departure to the end of the plan, including its final partial hour. */
+  peakGustMph: number | null;
+  windDirection: string | null;
+  /** Departure reading. */
+  precipChance: number | null;
+  /** Highest reading from departure to the end of the plan, including its final partial hour. */
+  peakPrecipChance: number | null;
+  peakFeelsLikeF: number | null;
+  expectedRainIn: number | null;
+  expectedSnowIn: number | null;
+  humidityPct: number | null;
+  cloudCoverPct: number | null;
+  isDaytime: boolean | null;
+  travelSummary: string;
+  /** Hours within the limits. A missing gust or precipitation reading counts as zero here. */
+  travelPassHours: number;
+  /** Hours within the limits whose temperature, wind, gust and precipitation readings all exist. */
+  travelCompletePassHours: number;
+  travelTotalHours: number;
+  /** Longest run of consecutive hours within every limit. */
+  travelBestWindow: TravelWindowSpan | null;
+  sunrise: string | null;
+  sunset: string | null;
+  dayLength: string | null;
+  visibilityLevel: string | null;
+  visibilitySummary: string | null;
+  alertCount: number;
+  airQualityAqi: number | null;
+  airQualityCategory: string | null;
+  comfortScore: number | null;
+  comfortLabel: string | null;
+  partialData: boolean;
+  apiWarning: string | null;
+  sourceIssuedTime: string | null;
+  /** The readings from departure to the end of the plan, including its final partial hour. */
+  hourlyWeather: WeatherTrendPoint[];
+  /** Sorts best first; equal values rank the same. */
+  rankValue: number;
+  /** The day has complete evidence for the whole window, so it can be ranked. */
+  rankable: boolean;
+  deltas?: {
+    score: number | null;
+    tempHighF: number | null;
+    tempLowF: number | null;
+    windGustMph: number | null;
+    precipChance: number | null;
+  } | null;
+}
+
+export interface TripRanking {
+  /** Dates, best first. */
+  order: string[];
+  bestDate: string | null;
+  tiedWithBest: string[];
+}
+
+export interface TripHighlight {
+  key: string;
+  label: string;
+  dates: string[];
 }

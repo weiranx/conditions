@@ -54,8 +54,8 @@ Three parts: React + Vite SPA (`frontend/`), Express API (`backend/`, PostgreSQL
 ### Backend
 
 - **`backend/index.js`** — composition root (~1k lines): wires services, defines the `/api/safety` handler (`safetyHandler`), and registers every route module.
-- **`backend/src/routes/`** — route modules, each exporting a `register*Route(s)` function: `safety`, `search`, `trip-forecasts`, `route-analysis`, `ai-brief`, `report-chat`, `report-logs`, `saved-reports`, `objective-watches`, `objective-watch-checks`, `account`, `mcp-oauth`, `feature-flags`, `health`, `satellite-tile`, `snow-vision`.
-- **`backend/src/utils/`** — domain logic. Notable: `weather-pipeline.js` / `weather-data.js` (NOAA + Open-Meteo), `avalanche-pipeline.js` / `avalanche-orchestration.js` / `avalanche-detail.js` (zone resolution, bulletin parsing, center-specific fixes), `safety-score.js`, `snowpack.js`, `alerts.js`, `precipitation.js`, `fire-risk.js`, `heat-risk.js`, `supplemental-evidence.js`, `ai-client.js`, `http-client.js` (fetch with timeout + circuit breaker).
+- **`backend/src/routes/`** — route modules, each exporting a `register*Route(s)` function: `safety`, `evaluate`, `plan-comparisons` (start-time scenarios, day-over-day), `search`, `trip-forecasts`, `route-analysis`, `ai-brief`, `report-chat`, `report-logs`, `saved-reports`, `objective-watches`, `objective-watch-checks`, `account`, `mcp-oauth`, `feature-flags`, `health`, `satellite-tile`, `snow-vision`.
+- **`backend/src/utils/`** — domain logic. Plan evaluation (everything the app shows about a plan): `plan-evaluation.js` (entry point), `plan-context.js` (plan params → limits, units, approach), `decision.js`, `travel-window.js`, `critical-window.js`, `wind-loading.js`, `verdict.js`, `report-interpretation.js` (precipitation, snowpack, fire/heat, surface, source freshness, visibility, chart rows), `terrain-window.js`, `start-time-scenarios.js`, `day-over-day.js`, `trip-days.js`, `display-format.js` (unit/clock formatting). Upstream data: `weather-pipeline.js` / `weather-data.js` (NOAA + Open-Meteo), `avalanche-pipeline.js` / `avalanche-orchestration.js` / `avalanche-detail.js` (zone resolution, bulletin parsing, center-specific fixes), `safety-score.js`, `snowpack.js`, `alerts.js`, `precipitation.js`, `fire-risk.js`, `heat-risk.js`, `supplemental-evidence.js`, `ai-client.js`, `http-client.js` (fetch with timeout + circuit breaker).
 - **`backend/src/auth/`** — accounts, passwords, Google identity, tiers, usage limits, MCP OAuth.
 - **`backend/src/db/`** — PostgreSQL access (`database.js`, `app-data-store.js`); schema in `backend/migrations/*.sql`. Without `DATABASE_URL`, persistent features are disabled.
 - **`backend/src/services/`** — background jobs: objective-watch checker/scheduler, health monitor.
@@ -67,8 +67,8 @@ Three parts: React + Vite SPA (`frontend/`), Express API (`backend/`, PostgreSQL
 
 - **`frontend/src/main.tsx`** → **`frontend/src/field/FieldApp.tsx`** — the live app. `field/` holds the screens (`Report`, `Compare`, `Library`, `Settings`, `Administration`, `Chat`, …), lazily loaded from `FieldApp`.
 - **`frontend/src/field/model/`** — state hooks: `useWorkspace.ts` (planner state, the `Workspace` object passed to most screens), `useAdministration.ts`, `useReportGeneration.ts`, `useReportComparisons.ts`, `useSavedReportSync.ts`, `useObjectiveShortlist.ts`.
-- **`frontend/src/app/`** — pure helpers shared by screens: `types.ts` (domain interfaces), `constants.ts`, `core.ts`, `preferences.ts`, `decision.ts`, `report-storage.ts`, display helpers (`*-display.ts`), etc.
-- **`frontend/src/hooks/`**, **`frontend/src/contexts/`** — data-fetching hooks (`useSafetyData`, `useTripForecast`, …) and account/feature-flag/AI-access providers.
+- **`frontend/src/app/`** — helpers shared by screens: `types.ts` (domain interfaces, including `PlanEvaluation`), `constants.ts`, `core.ts` (formatting), `preferences.ts`, `plan-evaluation.ts` (plan params, reading evaluations), `report-storage.ts`, etc. The frontend presents: decisions, hourly checks, comparisons and report interpretation come from the backend's evaluation; do not add domain logic here.
+- **`frontend/src/hooks/`**, **`frontend/src/contexts/`** — data-fetching hooks (`useSafetyData`, `usePlanEvaluation`, `useTripForecast`, `useStartTimeScenarios`, …) and account/feature-flag/AI-access providers.
 - **`frontend/src/lib/`** — `api-client.ts` (API calls + retry), `search.ts` (local peak catalog + Nominatim), `gpx.ts`, `saved-reports.ts`, `objective-watches.ts`.
 - **`frontend/dev/`** — mock API used by `dev:mock` and `test:mock`.
 - Styling is plain CSS colocated with the screens (`field/*.css`); there is no Tailwind or component library.
@@ -84,7 +84,10 @@ Three parts: React + Vite SPA (`frontend/`), Express API (`backend/`, PostgreSQL
 7. Evaluate avalanche relevance for objective/time context
 8. Classify terrain/trail surface
 9. Build fire risk + safety score with confidence factors
-10. Return unified payload; on partial upstream failures returns `200` with `partialData: true` + `apiWarning`
+10. Attach `evaluation` (`attachPlanEvaluation`): the decision, hourly checks, verdict, wind loading, report interpretation, terrain window and elevation estimates for the plan params in the query
+11. Return unified payload; on partial upstream failures returns `200` with `partialData: true` + `apiWarning`
+
+When the plan changes after a report loads (limits, units, approach, target elevation) or a stored evaluation is stale, the frontend re-evaluates the report with `POST /api/evaluate { report, plan }` instead of computing anything itself. Plan params are the flat keys in `PLAN_PARAM_KEYS` (`src/utils/plan-context.js`); the evaluation echoes them in `evaluation.params`.
 
 ### Upstream providers
 
@@ -96,7 +99,7 @@ Three parts: React + Vite SPA (`frontend/`), Express API (`backend/`, PostgreSQL
 
 ### User preferences
 
-Persisted in browser local storage under `USER_PREFERENCES_KEY` (`frontend/src/app/constants.ts`, `…user-preferences:v1`). Unit conversions (temp, elevation, wind, time) are display-side only — backend always returns SI-adjacent values.
+Persisted in browser local storage under `USER_PREFERENCES_KEY` (`frontend/src/app/constants.ts`, `…user-preferences:v1`). Report numbers stay imperial (°F, mph, ft, in) and the frontend formats them for display; the evaluation's text (reasons, captions, labels) is written in the units sent as plan params (`temp_unit`, `wind_unit`, `elevation_unit`, `time_style`).
 
 ## Design Constraints
 

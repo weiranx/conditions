@@ -5,6 +5,11 @@ import { SkyHero } from "../src/field/sky/SkyHero";
 import { BriefSections } from "../src/field/sky/BriefSections";
 import { getDefaultUserPreferences } from "../src/app/preferences";
 import { buildSkyHours, skyRuns, sunProgress, shortHour, spanLabel, isOverHour } from "../src/field/sky/sky-model";
+import { evaluate, interpret } from "./evaluation-fixtures";
+
+// Planned rows as the backend evaluates them for a 07:00 start.
+const plannedRows = (data, hours, params = {}) => evaluate({ safety: { score: 80 }, ...data },
+  { start: "07:00", date: "2026-09-23", travel_window_hours: String(hours), ...params }).travelWindow.planned.rows;
 
 const row = (over = {}) => ({
   time: "07:00", pass: true, complete: true, condition: "Clear", reasonSummary: "", failedRules: [], failedRuleLabels: [],
@@ -105,27 +110,29 @@ test("without an hourly forecast the sky is a picture, not a slider", () => {
   assert.doesNotMatch(html, /role="slider"/);
 });
 
-function briefWorkspace(overrides = {}) {
+function briefWorkspace(overrides = {}, dataOverrides = {}) {
   const preferences = getDefaultUserPreferences();
+  const safetyData = {
+    safety: { score: 74, tier: "Low risk", evidenceQuality: null },
+    alerts: { status: "ok", activeCount: 0, alerts: [] },
+    airQuality: { usAqi: 32, category: "Good" },
+    rainfall: { expected: { rainWindowIn: 0.07, snowWindowIn: null } },
+    solar: { sunrise: "06:52", sunset: "19:30" },
+    terrainCondition: { label: "Mostly dry" },
+    avalanche: { relevant: false, relevanceReason: "Off-season" },
+    fireRisk: { level: 1, label: "Low" },
+    ...dataOverrides,
+  };
   return {
     preferences,
-    safetyData: {
-      safety: { score: 74, tier: "Low risk", evidenceQuality: null },
-      alerts: { status: "ok", activeCount: 0, alerts: [] },
-      airQuality: { usAqi: 32, category: "Good" },
-      rainfall: { expected: { rainWindowIn: 0.07, snowWindowIn: null } },
-      solar: { sunrise: "06:52", sunset: "19:30" },
-      terrainCondition: { label: "Mostly dry" },
-    },
+    safetyData,
+    interpretation: interpret(safetyData, { travel_window_hours: "12" }),
     formatWindDisplay: (v) => `${v} mph`, formatTempDisplay: (v) => `${v}°F`, formatElevationDisplay: (v) => `${v} ft`,
     formatClockForStyle: (v) => v || "—", localizeUnitText: (t) => t,
-    expectedTravelWindowHours: 12, expectedRainWindowDisplay: "0.07 in", expectedSnowWindowDisplay: "—",
     sunriseMinutesForPlan: 412, sunsetMinutesForPlan: 1170, startMinutesForPlan: 420, returnMinutes: 1140,
     returnTimeDisplay: "19:00", displayStartTime: "07:00",
-    sourceFreshnessRows: [{ label: "Alerts", issued: null, staleHours: 6 }],
-    nwsAlertCount: 0, nwsTopAlerts: [], overallAvalancheLevel: null, avalancheRelevant: false, avalancheNotApplicableReason: "Off-season",
-    elevationForecastBands: [], fireRiskLabel: "Low", fireRiskLevel: 1, gearRecommendations: [],
-    snowpackBestDepthDisplay: null, hasFreshnessWarning: false, freshnessWarningSummary: "",
+    nwsAlertCount: 0, nwsTopAlerts: [],
+    elevationForecastBands: [], gearRecommendations: [],
     ...overrides,
   };
 }
@@ -137,7 +144,7 @@ test("alerts the feed cannot date are not presented as clear", () => {
   const html = brief(briefWorkspace());
   assert.match(html, /Not confirmed/);
   assert.doesNotMatch(html, /None active/);
-  const clear = brief(briefWorkspace({ sourceFreshnessRows: [{ label: "Alerts", issued: null, staleHours: 6, stateOverride: "fresh" }] }));
+  const clear = brief(briefWorkspace({}, { alerts: { status: "none", activeCount: 0, alerts: [] } }));
   assert.match(clear, /None active/);
 });
 
@@ -164,23 +171,19 @@ test("incomplete weather hours are not described as within limits", () => {
 });
 
 test("terrain status follows the hazard code, not whether a label exists", () => {
-  const status = (terrainCondition) => {
-    const w = briefWorkspace();
-    return checkCard(brief({ ...w, safetyData: { ...w.safetyData, terrainCondition } }), "Terrain &amp; snow");
-  };
+  const status = (terrainCondition) => checkCard(brief(briefWorkspace({}, { terrainCondition })), "Terrain &amp; snow");
   assert.match(status({ code: "snow_ice", label: "Snow and ice" }), /is-over/);
   assert.match(status({ code: "weather_unavailable", label: "Weather unavailable" }), /is-missing/);
   assert.match(status({ code: "dry_firm", label: "Mostly dry" }), /is-ok/);
 });
 
 test("high fire danger is over the limit even when air quality is unavailable", () => {
-  const w = briefWorkspace({ fireRiskLevel: 3, fireRiskLabel: "High" });
-  const card = checkCard(brief({ ...w, safetyData: { ...w.safetyData, airQuality: null } }), "Air &amp; fire");
+  const card = checkCard(brief(briefWorkspace({}, { fireRisk: { level: 3, label: "High" }, airQuality: null })), "Air &amp; fire");
   assert.match(card, /is-over/);
   assert.match(card, /Fire risk high/);
 });
 
-import { plainRule, plainReason, durationLabel, terrainStatus } from "../src/field/sky/status";
+import { plainRule, plainReason, durationLabel } from "../src/field/sky/status";
 import { FreshnessChart } from "../src/field/sky/FreshnessChart";
 
 test("limit breaches read as plain language and unknown text is left alone", () => {
@@ -199,16 +202,9 @@ test("durations switch to hours without losing minutes", () => {
   assert.equal(durationLabel(-120), "2 h");
 });
 
-test("terrain status matches the decision's hazard codes", () => {
-  assert.equal(terrainStatus({ terrainCondition: { code: "snow_ice", label: "Snow and ice" } }), "over");
-  assert.equal(terrainStatus({ terrainCondition: { code: "weather_unavailable", label: "Unavailable" } }), "missing");
-  assert.equal(terrainStatus({ terrainCondition: null }), "missing");
-  assert.equal(terrainStatus({ terrainCondition: { code: "dry_firm", label: "Dry" } }), "ok");
-});
-
-test("a source without a timestamp is drawn as missing, never current", () => {
+test("the freshness chart draws the backend state, and a missing timestamp as missing", () => {
   const html = renderToStaticMarkup(<FreshnessChart
-    rows={[{ label: "Alerts", issued: null, staleHours: 6 }, { label: "Weather", issued: new Date().toISOString(), staleHours: 12 }]}
+    rows={[{ label: "Alerts", issued: null, staleHours: 6, displayValue: null, state: "missing" }, { label: "Weather", issued: new Date().toISOString(), staleHours: 12, displayValue: null, state: "fresh" }]}
     age={() => "just now"} stamp={() => "today"} />);
   assert.match(html, /is-missing[^]*Alerts[^]*Missing/);
   assert.match(html, /Weather[^]*Current/);
@@ -245,19 +241,7 @@ test("MountainSection band labels never overlap when bands are 500 ft apart", ()
   for (let i = 1; i < ys.length; i += 1) assert.ok(ys[i] - ys[i - 1] >= 38, `labels ${ys[i - 1]} and ${ys[i]} overlap`);
 });
 
-test("elevation bands re-derive from a later hour's readings with the start-hour lapse model", async () => {
-  const { rebaseElevationBands, estimateAtElevation } = await import("../src/app/elevation-forecast");
-  const bands = [
-    { label: "Lower Terrain", elevationFt: 7000, deltaFromObjectiveFt: -2000, temp: 40, feelsLike: 36, windSpeed: 6, windGust: 15 },
-    { label: "Objective Elevation", elevationFt: 9000, deltaFromObjectiveFt: 0, temp: 33, feelsLike: 26, windSpeed: 10, windGust: 20 },
-  ];
-  const later = rebaseElevationBands(bands, { temp: 50, wind: 12, gust: 25 });
-  assert.deepEqual(later.map((b) => [b.elevationFt, b.temp, b.windSpeed, b.windGust]), [[7000, 57, 8, 20], [9000, 50, 12, 25]]);
-  assert.equal(later[0].label, "Lower Terrain");
-  assert.equal(rebaseElevationBands(bands, { temp: NaN, wind: 5, gust: 10 }), bands, "missing readings keep the start-hour bands");
-  const above = estimateAtElevation({ temp: 20, wind: 15, gust: NaN }, 1000);
-  assert.deepEqual([above.temp, above.windSpeed, above.windGust], [17, 17, 17]);
-  assert.ok(above.feelsLike < above.temp);
+test("sky hours keep the planned wind reading", () => {
   const [hour] = buildSkyHours([row({ wind: 9 })], plan);
   assert.equal(hour.wind, 9);
 });
@@ -305,13 +289,12 @@ test("MountainSection draws the hour's weather: snow above the snow level, rain 
 });
 
 test("an hour missing only precipitation still has elevation inputs; a missing temperature does not", async () => {
-  const { buildPlannedReportWeatherRows } = await import("../src/field/report-weather");
   const data = { weather: { temp: 40, windSpeed: 5, windGust: 10, trend: [
     { time: "07:00", temp: 40, wind: 5, gust: 10, precipChance: 10, condition: "Clear" },
     { time: "08:00", temp: 42, wind: 6, gust: 12, precipChance: null, condition: "Clear" },
     { time: "09:00", temp: null, wind: 6, gust: 12, precipChance: 10, condition: "Clear" },
   ] } };
-  const rows = buildPlannedReportWeatherRows(data, getDefaultUserPreferences(), 4, { start: "07:00", date: "2026-09-23" });
+  const rows = plannedRows(data, 4);
   const hours = buildSkyHours(rows, plan);
   assert.deepEqual(hours.map((h) => h.tone === "missing"), [false, true, true, true]);
   assert.deepEqual(hours.map((h) => h.thermalComplete), [true, true, false, false]);
@@ -356,12 +339,11 @@ test("a hidden sky keeps its last width instead of drawing at zero width", async
 });
 
 test("missing temperature and rain chance read as unknown, never 0°F or 0%", async () => {
-  const { buildPlannedReportWeatherRows } = await import("../src/field/report-weather");
   const data = { weather: { temp: 40, windSpeed: 5, windGust: 10, trend: [
     { time: "07:00", temp: null, wind: 5, gust: null, precipChance: null, condition: "Clear" },
     { time: "08:00", temp: 42, wind: 6, gust: 12, precipChance: 10, condition: "Clear" },
   ] } };
-  const rows = buildPlannedReportWeatherRows(data, getDefaultUserPreferences(), 2, { start: "07:00", date: "2026-09-23" });
+  const rows = plannedRows(data, 2);
   assert.ok(Number.isNaN(rows[0].temp) && Number.isNaN(rows[0].feelsLike) && Number.isNaN(rows[0].precipChance));
   assert.equal(rows[1].temp, 42);
   const html = hero(buildSkyHours(rows, plan));
@@ -370,10 +352,10 @@ test("missing temperature and rain chance read as unknown, never 0°F or 0%", as
   assert.doesNotMatch(html, />0°</);
 
   // A planned hour that straddles a gap keeps the reading that exists.
-  const straddle = buildPlannedReportWeatherRows({ weather: { trend: [
+  const straddle = plannedRows({ weather: { trend: [
     { time: "07:00", temp: null, wind: null, gust: null, precipChance: 20, condition: "Clear" },
     { time: "08:00", temp: 42, wind: 6, gust: 12, precipChance: 70, condition: "Rain" },
-  ] } }, getDefaultUserPreferences(), 1, { start: "07:30", date: "2026-09-23" })[0];
+  ] } }, 1, { start: "07:30" })[0];
   assert.deepEqual([straddle.temp, straddle.wind, straddle.gust, straddle.precipChance], [42, 6, 12, 70]);
   assert.equal(straddle.complete, false);
 });

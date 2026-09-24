@@ -1,5 +1,3 @@
-import { parseOptionalFiniteNumber } from './core';
-
 export function normalizeElevationInput(rawValue: string | null | undefined): string {
   if (!rawValue) {
     return '';
@@ -25,22 +23,6 @@ export function parseOptionalElevationInput(rawValue: string): number | null {
     return null;
   }
   return numeric;
-}
-
-export function parsePrecipNumericValue(value: unknown): number {
-  const parsed = parseOptionalFiniteNumber(value);
-  if (Number.isFinite(parsed)) {
-    return parsed;
-  }
-  if (typeof value !== 'string') {
-    return Number.NaN;
-  }
-  const match = value.match(/-?\d+(?:\.\d+)?/);
-  if (!match) {
-    return Number.NaN;
-  }
-  const numeric = Number(match[0]);
-  return Number.isFinite(numeric) ? numeric : Number.NaN;
 }
 
 export function computeFeelsLikeF(tempF: number, windMph: number): number {

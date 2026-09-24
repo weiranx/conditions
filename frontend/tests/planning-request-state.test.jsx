@@ -8,6 +8,8 @@ import { useSafetyData } from '../src/hooks/useSafetyData';
 import { getDefaultUserPreferences } from '../src/app/preferences';
 import { BACKEND_WAKE_RETRY_DELAY_MS } from '../src/app/constants';
 import { makeReport } from '../dev/mock-data.mjs';
+import tripDays from '../../backend/src/utils/trip-days.js';
+import planContext from '../../backend/src/utils/plan-context.js';
 
 const preferences = getDefaultUserPreferences();
 const plan = { lat: 46.8523, lon: -121.7603, date: '2026-09-21', start: '07:00', travel_window_hours: 12 };
@@ -58,8 +60,12 @@ async function mountHook(t, hook, input) {
   return { get current() { return current; }, requests, render, unmount };
 }
 
+// A response as /api/trip-forecasts sends it: each day summarized and ranked by the backend.
 function tripPayload(date = plan.date, overrides = {}) {
-  return { days: [makeReport({ ...plan, date }, 'clear')], ...overrides };
+  const report = makeReport({ ...plan, date }, 'clear');
+  const context = planContext.buildPlanContext({ date, start: plan.start, travel_window_hours: String(report.weather.trend.length), approach: 'off' },
+    report, { withTurnaround: false });
+  return { days: [{ ...tripDays.buildTripDay(report, context), safetyData: report }], ...overrides };
 }
 
 test('a late trip forecast cannot overwrite a newer run or its usage', async t => {

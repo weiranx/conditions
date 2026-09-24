@@ -2,10 +2,8 @@ import { SupplementalEvidence } from './SupplementalEvidence';
 import { useEffect, useState } from "react";
 import { Check, TriangleAlert } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
-import { freshnessClass } from "../app/core";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { compareReports, type ReportComparison } from "../app/report-changes";
-import { formatScoreDelta } from "../app/day-over-day";
 import { getReportComparisonBaseline } from "../lib/saved-reports";
 import { parsePersistedReport } from "../app/report-storage";
 import { ScoreExplanation } from "./ScoreExplanation";
@@ -41,15 +39,15 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
   }, [report, w.activeSavedReportId, w.accountUserId]);
   const checks = [...(w.decision?.checks || [])].sort((a, b) => Number(a.ok) - Number(b.ok));
   const review = checks.filter((check) => !check.ok);
-  const states = w.sourceFreshnessRows.map((row) => row.stateOverride || freshnessClass(row.issued, row.staleHours));
-  const current = states.filter((state) => state === "fresh" || state === "aging").length;
-  const missing = w.sourceFreshnessRows.filter((_, i) => states[i] === "missing").map((row) => row.label);
+  const freshness = w.interpretation!.sourceFreshness;
+  const current = freshness.rows.filter((row) => row.state === "fresh" || row.state === "aging").length;
+  const missing = freshness.rows.filter((row) => row.state === "missing").map((row) => row.label);
   return (
     <div className="sky-sources">
       <p className="sky-lead">
         <strong>{checks.length - review.length} of {checks.length} checks</strong> pass
         {review.length > 0 && <>; <strong className="is-over">{review.length} need review</strong></>}.{" "}
-        <strong>{current} of {w.sourceFreshnessRows.length} sources</strong> are current
+        <strong>{current} of {freshness.rows.length} sources</strong> are current
         {missing.length > 0 && <>, and <strong className="is-missing">{missing.join(", ")}</strong> didn't load, so this report can't rule out what {missing.length === 1 ? "it covers" : "they cover"}</>}.{" "}
         <span className="sky-lead-note">Evidence quality: {w.safetyData?.safety.evidenceQuality || "not assessed"}.</span>
       </p>
@@ -89,8 +87,8 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
           <p>When it was issued or observed.</p>
         </div>
         <div className="sky-card">
-          {w.hasFreshnessWarning && <p className="sky-notice is-missing">{w.freshnessWarningSummary}</p>}
-          <FreshnessChart rows={w.sourceFreshnessRows} age={(issued) => w.formatAgeFromNow(issued)} stamp={(issued) => w.formatPubTime(issued)} />
+          {freshness.hasWarning && <p className="sky-notice is-missing">{freshness.warningSummary}</p>}
+          <FreshnessChart rows={freshness.rows} age={(issued) => w.formatAgeFromNow(issued)} stamp={(issued) => w.formatPubTime(issued)} />
           <div className="sky-link-row">
             <SourceLink url={w.safeWeatherLink}>Weather forecast</SourceLink>
             {flags.avalancheDetails && <SourceLink url={w.safeAvalancheLink}>Avalanche center</SourceLink>}
@@ -125,11 +123,11 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
             <section className="sky-card" aria-labelledby="sky-sources-prior">
               <span className="sky-card-head">
                 <span id="sky-sources-prior">Change from the prior day</span>
-                {w.dayOverDay.scoreComparable && <span className="sky-chip">{formatScoreDelta(w.dayOverDay.delta)} pts</span>}
+                {w.dayOverDay.scoreComparable && <span className="sky-chip">{w.dayOverDay.deltaLabel} pts</span>}
               </span>
               <p className="sky-cap is-body">
                 {w.dayOverDay.scoreComparable
-                  ? <>{formatScoreDelta(w.dayOverDay.delta)} score points compared with {dateLabel(w.dayOverDay.previousDate)}.</>
+                  ? <>{w.dayOverDay.deltaLabel} score points compared with {dateLabel(w.dayOverDay.previousDate)}.</>
                   : <>Compared with {dateLabel(w.dayOverDay.previousDate)}. One of the two days lacks the evidence for a score, so only the forecast changes are listed.</>}
               </p>
               <p className="sky-cap">

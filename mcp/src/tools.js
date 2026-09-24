@@ -15,11 +15,14 @@ const annotation = { readOnlyHint: true, destructiveHint: false, idempotentHint:
 const result = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value });
 export const errorResult = error => result({ error: error instanceof ApiError ? error.code : 'REQUEST_FAILED', message: error instanceof ApiError ? error.message : 'The request failed.', ...(error instanceof ApiError ? error.details : {}) });
 
-// Remove capability-bearing share links, including links nested in saved snapshots.
+// Remove capability-bearing share links, including links nested in saved snapshots,
+// and the app's plan evaluation: a verdict against default limits and screen-ready
+// detail, not evidence.
+const OMITTED_KEYS = ['shareToken', 'share_token', 'shareUrl', 'share_url', 'evaluation'];
 function sanitize(value) {
   if (Array.isArray(value)) return value.map(sanitize);
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !['shareToken', 'share_token', 'shareUrl', 'share_url'].includes(key)).map(([key, item]) => [key, sanitize(item)]));
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !OMITTED_KEYS.includes(key)).map(([key, item]) => [key, sanitize(item)]));
 }
 
 export function createServer(api) {

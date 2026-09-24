@@ -9,6 +9,11 @@ import {
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { makeReport, peaks, scenarios } from "./mock-data.mjs";
+import planContext from "../../backend/src/utils/plan-context.js";
+import planEvaluation from "../../backend/src/utils/plan-evaluation.js";
+import startTimeScenarios from "../../backend/src/utils/start-time-scenarios.js";
+import dayOverDay from "../../backend/src/utils/day-over-day.js";
+import tripDays from "../../backend/src/utils/trip-days.js";
 import {
   ACCOUNT_FIXTURES,
   CACHE_FIXTURES,
@@ -365,8 +370,7 @@ export function createMockApi({ databasePath } = {}) {
           500,
           "Simulated forecast failure. Choose a different mock scenario to recover.",
         );
-      const report = makeReport(q, scenario);
-      report.featureFlags = db.flags;
+      const report = planEvaluation.attachPlanEvaluation({ ...makeReport(q, scenario), featureFlags: db.flags }, q);
       db.logs.unshift({
         timestamp: now(),
         lat: report.location.lat,
@@ -385,38 +389,112 @@ export function createMockApi({ databasePath } = {}) {
       persist();
       return ok(report);
     }
+    if (p === "/api/evaluate" && method === "POST") {
+      if (!body.report || typeof body.report !== "object" || !body.report.weather || !body.report.safety)
+        return fail(400, "A report with weather and safety sections is required.");
+      return ok({
+        evaluation: planEvaluation.evaluatePlan(body.report, planContext.buildPlanContext(body.plan || {}, body.report)),
+      });
+    }
+    // A plan's report at another start or date, evaluated for the plan.
+    const planReport = (params) => {
+      const report = planEvaluation.attachPlanEvaluation({ ...makeReport(params, scenario), featureFlags: db.flags }, params);
+      return { report, evaluation: report.evaluation };
+    };
+    if (p === "/api/start-time-scenarios") {
+      if (scenario === "error") return fail(500, "Simulated forecast failure.");
+      const context = planContext.buildPlanContext(q);
+      const presets = q.set === "extended"
+        ? startTimeScenarios.EXTENDED_START_TIME_SCENARIO_TIMES
+        : startTimeScenarios.START_TIME_SCENARIO_TIMES;
+      const times = startTimeScenarios.includeUserStartTimeScenario(presets, context.start);
+      const built = times.map((start) => {
+        const { report, evaluation } = planReport({ ...q, start });
+        return startTimeScenarios.buildStartTimeScenario(start, report, evaluation, context.travelWindowHours);
+      });
+      return ok({
+        comparison: startTimeScenarios.compareStartTimeScenarios(built, { ...context, plannedStart: context.start }),
+        requestedTimes: times,
+        error: null,
+      });
+    }
+    if (p === "/api/day-over-day") {
+      if (scenario === "error") return fail(500, "Simulated forecast failure.");
+      const context = planContext.buildPlanContext(q);
+      const previous = new Date(`${context.date}T12:00:00Z`);
+      previous.setUTCDate(previous.getUTCDate() - 1);
+      const previousDate = previous.toISOString().slice(0, 10);
+      return ok({
+        comparison: dayOverDay.buildDayOverDay({
+          current: planReport(q).report,
+          previous: planReport({ ...q, date: previousDate }).report,
+          previousDate,
+          startTime: context.start,
+          travelWindowHours: context.travelWindowHours,
+          units: context.units,
+        }),
+      });
+    }
     if (p === "/api/trip-forecasts" && method === "POST") {
       if (scenario === "error") return fail(500, "Simulated forecast failure.");
-      const days = Array.from(
-        { length: Math.max(2, Math.min(7, Number(body.durationDays) || 3)) },
-        (_, i) => {
-          const d = new Date(`${body.startDate}T12:00:00Z`);
-          d.setUTCDate(d.getUTCDate() + i);
-          const report = makeReport(
-            {
-              ...body,
-              date: d.toISOString().slice(0, 10),
-              start: body.startTime,
-            },
-            scenario === "mixed"
-              ? ["clear", "rain", "snow"][i % 3]
-              : scenario,
-          );
-          return {
-            ...report,
-            // The production API reports provider period timestamps, not the request clock.
-            forecast: {
-              ...report.forecast,
-              selectedStartTime: report.weather.forecastStartTime,
-              selectedEndTime: report.weather.forecastEndTime,
-            },
-            featureFlags: db.flags,
-          };
-        },
-      );
+      const travelWindowHours = Math.max(1, Math.min(24, Number(body.travelWindowHours) || 12));
+      const durationDays = Math.max(2, Math.min(7, Number(body.durationDays) || 3));
+      // As in the API: each day checked at the objective, against the plan's limits and units.
+      const planSettings = { ...planContext.pickPlanParams(body.plan || {}), approach: "off" };
+      const reports = Array.from({ length: durationDays }, (_, i) => {
+        const d = new Date(`${body.startDate}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + i);
+        const params = {
+          ...planSettings,
+          lat: body.lat,
+          lon: body.lon,
+          activity: body.activity,
+          date: d.toISOString().slice(0, 10),
+          start: body.startTime,
+          travel_window_hours: String(travelWindowHours),
+        };
+        const report = makeReport(params, scenario === "mixed" ? ["clear", "rain", "snow"][i % 3] : scenario);
+        return planEvaluation.attachPlanEvaluation({
+          ...report,
+          // The production API reports provider period timestamps, not the request clock.
+          forecast: {
+            ...report.forecast,
+            selectedStartTime: report.weather.forecastStartTime,
+            selectedEndTime: report.weather.forecastEndTime,
+          },
+          featureFlags: db.flags,
+        }, params);
+      });
+      const days = tripDays.withDayDeltas(reports.map((report) => ({
+        ...tripDays.buildTripDay(report, planContext.buildPlanContext({
+          ...planSettings,
+          date: report.forecast.selectedDate,
+          start: body.startTime,
+          travel_window_hours: String(travelWindowHours),
+          activity: body.activity,
+        }, report, { withTurnaround: false, ignoreAvalancheForDecision: body.includeAvalanche !== true }), { requiredHours: travelWindowHours }),
+        safetyData: report,
+      })));
+      const ranking = tripDays.rankDays(days);
+      const note = tripDays.tripNote({ requestedDays: Number(body.requestedDays) || durationDays, loadedDays: days.length, failedDays: 0 });
       db.usedRuns = (db.usedRuns || 0) + 1;
       persist();
-      return ok({ days, multiDayUsage: usage("Runs") });
+      return ok({
+        days,
+        ranking,
+        highlights: tripDays.buildHighlights(days),
+        note,
+        chatContext: tripDays.buildTripChatContext({
+          days,
+          ranking,
+          note,
+          featureFlags: db.flags,
+          context: planContext.buildPlanContext({ ...planSettings, start: body.startTime, travel_window_hours: String(travelWindowHours) }),
+          objective: { name: body.objectiveName || "Selected objective", latitude: body.lat, longitude: body.lon, timezone: reports[0].weather.timezone },
+        }),
+        failedCount: 0,
+        multiDayUsage: usage("Runs"),
+      });
     }
     if (p === "/api/account/reports/comparison-baseline") {
       const item = db.reports.find(

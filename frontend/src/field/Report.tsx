@@ -31,8 +31,6 @@ import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
 import { BriefSections } from "./sky/BriefSections";
 import { buildSkyHours } from "./sky/sky-model";
-import { verdictCopy } from "./verdict-copy";
-import { buildPlannedReportWeatherRows } from "./report-weather";
 import { minutesToTwentyFourHourClock } from "../app/core";
 import { ACTIVITY_PROFILES } from "../app/activity-profiles";
 import "./sky/sky.css";
@@ -125,7 +123,9 @@ export function Report({
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
-  const decision = w.decision!;
+  // The app shows a report only once the backend has evaluated it for the plan.
+  const evaluation = w.evaluation!;
+  const decision = evaluation.decision;
   const emailNeedsSave = !w.sharedReportToken && !w.activeSavedReportId;
   const passed = getPastPlannedStart(
     report.plan.forecastDate,
@@ -143,19 +143,15 @@ export function Report({
   const fullReport = activeView === "all";
 
   // The planned day, as the sky and day strip draw it.
-  const plannedRows = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, {
-    start: w.alpineStartTime,
-    date: w.forecastDate,
-    approach: w.approachProfile,
-  });
-  const skyHours = buildSkyHours(plannedRows, {
+  const plannedApproach = evaluation.travelWindow.planned.approachSummary;
+  const skyHours = buildSkyHours(evaluation.travelWindow.planned.rows, {
     start: w.alpineStartTime,
     sunriseMinutes: w.sunriseMinutesForPlan,
     sunsetMinutes: w.sunsetMinutesForPlan,
   });
   const clock = (minute: number) =>
     w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
-  const copy = verdictCopy({ data, decision, primaryReason: w.fieldBriefPrimaryReason, preferences: w.preferences });
+  const copy = evaluation.verdict;
 
   useEffect(() => {
     const listener = () => setView(viewFromHash());
@@ -313,12 +309,12 @@ export function Report({
           {feedback}
         </p>
       )}
-      {(data.partialData || data.apiWarning || w.hasFreshnessWarning) && (
+      {(data.partialData || data.apiWarning || evaluation.interpretation.sourceFreshness.hasWarning) && (
         <div className="sky-notice is-missing" role="status">
           <TriangleAlert size={20} aria-hidden="true" />
           <div>
             {data.apiWarning ||
-              w.freshnessWarningSummary ||
+              evaluation.interpretation.sourceFreshness.warningSummary ||
               "Some sources returned incomplete data. Check the official forecasts before committing."}
           </div>
           <button type="button" className="sky-link" onClick={() => go("sources")}>Checks &amp; sources</button>
@@ -391,7 +387,8 @@ export function Report({
   const approachNote = (
     <ApproachNote
       hours={skyHours}
-      source={w.approachProfile?.source ?? null}
+      summary={plannedApproach}
+      source={w.planApproach?.source ?? null}
       clock={clock}
       elevation={(ft) => w.formatElevationDisplay(ft)}
       onEdit={w.viewingHistoryReport ? undefined : () => go("terrain", "sky-terrain-approach")}
@@ -400,7 +397,7 @@ export function Report({
   const chapterContent = (id: Chapter) => {
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
-        <Forecast report={report} approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
+        <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} />
         <Conditions workspace={w} hours={skyHours} />
       </section>
     );
@@ -450,7 +447,7 @@ export function Report({
               <span className="sky-kicker">{report.plan.objectiveName} · {dateLabel(report.plan.forecastDate)}</span>
               <h1 tabIndex={-1}>{fullReport ? "Full report" : activeChapter?.label}</h1>
             </div>
-            <DayStrip hours={skyHours} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} />
+            <DayStrip hours={skyHours} approach={plannedApproach} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} />
           </div>
           {!fullReport && (
             <nav className="sky-chapter-tabs" aria-label="Report sections" ref={tabsRef}>

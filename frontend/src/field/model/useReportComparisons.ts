@@ -1,5 +1,4 @@
 import type { SafetyData, UserPreferences } from '../../app/types';
-import type { ApproachProfile } from '../../app/approach-elevation';
 import { useDayComparisons } from '../../hooks/useDayComparisons';
 import { useStartTimeScenarios } from '../../hooks/useStartTimeScenarios';
 import { comparisonReportMatches } from '../../app/comparison-request';
@@ -7,7 +6,7 @@ import { comparisonReportMatches } from '../../app/comparison-request';
 // Comparisons belong to a completed, current report, never a draft or saved snapshot.
 export function useReportComparisons({
   hasObjective, view, safetyData, forecastDate, currentStartTime, position, preferences,
-  viewingHistoryReport, loading, startTimeComparisonsEnabled, approach = null,
+  viewingHistoryReport, loading, startTimeComparisonsEnabled, planSettingsQuery,
 }: {
   hasObjective: boolean;
   view: string;
@@ -19,7 +18,8 @@ export function useReportComparisons({
   viewingHistoryReport: boolean;
   loading: boolean;
   startTimeComparisonsEnabled: boolean;
-  approach?: ApproachProfile | null;
+  /** The traveler's limits, units and approach, as a query string. */
+  planSettingsQuery: string;
 }) {
   const reportMatchesPlan = comparisonReportMatches(
     safetyData, position.lat, position.lng, forecastDate, currentStartTime, preferences.travelWindowHours,
@@ -30,7 +30,7 @@ export function useReportComparisons({
   });
   const startTimeScenarios = useStartTimeScenarios({
     enabled: enabled && startTimeComparisonsEnabled, sourceReport: safetyData,
-    forecastDate, currentStartTime, position, preferences, approach,
+    forecastDate, currentStartTime, position, travelWindowHours: preferences.travelWindowHours, planSettingsQuery,
   });
   return { dayOverDay, startTimeScenarios };
 }

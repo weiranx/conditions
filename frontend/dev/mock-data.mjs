@@ -3,6 +3,7 @@ import pleasantnessScoring from "../../backend/src/utils/pleasantness-score.js";
 import contingency from "../../backend/src/utils/contingency.js";
 import approachElevation from "../../backend/src/utils/approach-elevation.js";
 import gearSuggestions from "../../backend/src/utils/gear-suggestions.js";
+import planEvaluation from "../../backend/src/utils/plan-evaluation.js";
 export const scenarios = [
   "mixed",
   "clear",
@@ -486,4 +487,9 @@ export function makeReport(params = {}, scenario = "mixed") {
     }),
   });
   return report;
+}
+
+/** A report evaluated for its plan params, as /api/safety returns it. */
+export function makeEvaluatedReport(params = {}, scenario = "mixed") {
+  return planEvaluation.attachPlanEvaluation(makeReport(params, scenario), params);
 }

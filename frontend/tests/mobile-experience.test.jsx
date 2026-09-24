@@ -161,7 +161,8 @@ test('a desktop layout never lifts the search', async (t) => {
 
 test('starting a comparison below the form follows the results', async (t) => {
   const env = setup(t);
-  const w = planWorkspace({ hasObjective: true, objectiveName: 'Test mountain', tripForecastRows: [], tripStartDate: '2026-09-06', tripStartTime: '07:00', tripDurationDays: 3 });
+  const w = planWorkspace({ hasObjective: true, objectiveName: 'Test mountain', tripForecastRows: [], tripRanking: null, tripHighlights: [],
+    tripChatContext: null, tripStartDate: '2026-09-06', tripStartTime: '07:00', tripDurationDays: 3 });
   const below = window.HTMLElement.prototype.getBoundingClientRect;
   window.HTMLElement.prototype.getBoundingClientRect = function () {
     return this.classList.contains('sky-compare-results') ? { top: 1600 } : below.call(this);
