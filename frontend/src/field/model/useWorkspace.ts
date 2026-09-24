@@ -16,7 +16,7 @@ import {
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
 } from "../../app/constants";
-import { estimateAtElevation } from "../../app/elevation-forecast";
+import { bandsFromTrailhead, estimateAtElevation } from "../../app/elevation-forecast";
 import {
   type ActivityType,
   type MapStyle,
@@ -2143,6 +2143,7 @@ export function useWorkspace() {
             objectiveElevationFt: safetyData.weather.elevation,
             trailheadElevationFt,
             gpxRoute: importedGpxRoute,
+            routeCheckpoints: routeAnalysis?.waypoints,
             elevationBands: safetyData.weather.elevationForecast,
             timing: {
               paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
@@ -2155,6 +2156,7 @@ export function useWorkspace() {
       safetyData,
       trailheadElevationFt,
       importedGpxRoute,
+      routeAnalysis,
       preferences.approachElevationAdjustment,
       preferences.runnerPaceMinutesPerMile,
       preferences.runnerAscentMinutesPer1000Ft,
@@ -2201,7 +2203,17 @@ export function useWorkspace() {
     notApplicableReason: avalancheNotApplicableReason,
     elevationRows: avalancheElevationRows,
   } = avalancheDisplay;
-  const elevationForecastBands = safetyData?.weather.elevationForecast || [];
+  // With a known trailhead the bands run from it to the objective; an
+  // estimated one already is the lowest default band.
+  const elevationForecastBands = useMemo(
+    () => {
+      const bands = safetyData?.weather.elevationForecast || [];
+      return approachProfile && approachProfile.source !== "estimated"
+        ? bandsFromTrailhead(bands, approachProfile.trailheadElevationFt)
+        : bands;
+    },
+    [safetyData, approachProfile],
+  );
   // trendWindow/criticalWindow/travelWindowRows feed several report cards in
   // PlannerView/RedesignView (both wrapped in React.memo) as direct array
   // props; each row does nontrivial per-hour work (assessCriticalWindowPoint,
