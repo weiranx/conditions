@@ -63,6 +63,10 @@ const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 // week without background regeneration, which would also reshuffle checkpoints.
 const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 7 * 24 * 60 * 60 * 1000, maxEntries: 100 });
 const waypointCache = createCache({ name: 'waypoints', ttlMs: 7 * 24 * 60 * 60 * 1000, maxEntries: 200 });
+// Mapped trail lookups (NPS, then Overpass) change rarely and Overpass is shared
+// infrastructure; a miss is kept too, so a route without a mapped trail isn't
+// looked up on every analysis.
+const mappedRouteCache = createCache({ name: 'mapped-routes', ttlMs: 24 * 60 * 60 * 1000, maxEntries: 200 });
 const nominatimGeocodeCache = createCache({ name: 'nominatim-geocode', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 500 });
 
 // Number(null) and Number('') are 0, so check for absence before converting.
@@ -650,7 +654,10 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       } else {
         // The mapped lookup and the AI landmarks don't depend on each other.
         const [mappedSettled, landmarksSettled] = await Promise.allSettled([
-          routeDataService.resolveMappedRoute({ peak: safePeak, route: safeRoute, lat: safeLat, lon: safeLon }),
+          mappedRouteCache.getOrFetch(
+            `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`,
+            () => routeDataService.resolveMappedRoute({ peak: safePeak, route: safeRoute, lat: safeLat, lon: safeLon }),
+          ),
           aiFeatureEnabled ? generateLandmarks() : Promise.resolve(null),
         ]);
         const mappedRoute = mappedSettled.status === 'fulfilled' && mappedSettled.value?.waypoints?.length >= 2 ? mappedSettled.value : null;
