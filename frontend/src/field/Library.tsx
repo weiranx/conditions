@@ -360,6 +360,11 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                   {formatClockForStyle(item.plan.alpineStartTime, w.preferences.timeStyle)} · {item.plan.travelWindowHours}h window
                 </span>
                 <h2>{item.title}</h2>
+                {item.route && (
+                  <span className="sky-muted field-watch-route">
+                    Also checks {item.route.checkpointCount} checkpoints along {item.route.name || "the analyzed route"}
+                  </span>
+                )}
               </div>
               <span className={`sky-chip field-watch-state${attention ? " is-over" : ""}`}>{state}</span>
             </div>

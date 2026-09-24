@@ -606,3 +606,101 @@ test('delivers risk-increase emails with the plan and skips queued improvement-o
   const skipped = query.mock.calls.find(([sql]) => sql.includes("SET notification_status = 'not_requested'"));
   expect(skipped[1]).toEqual([1]);
 });
+
+describe('watched routes', () => {
+  const routeReport = {
+    safetyData: safetyPayload(),
+    route: {
+      routeAnalysis: {
+        waypoints: [
+          { name: 'Trailhead', lat: 46.78, lon: -121.74, offset_minutes: 0 },
+          { name: 'Camp Muir', lat: 46.83, lon: -121.73, offset_minutes: 300 },
+          { name: 'Return to Trailhead', lat: 46.78, lon: -121.74, offset_minutes: 600, leg: 'return' },
+        ],
+      },
+    },
+  };
+  const createRouteHarness = (baseline = routeReport) => {
+    const state = { reference: null };
+    const row = {
+      id: 'watch-route', user_id: '8c696be4-e175-4b6a-965b-82bdf3758e0c', title: 'Rainier via Muir', plan: PLAN,
+      baseline_report: baseline, last_snapshot: null, consecutive_failures: 0, notifications_enabled: false, tier_key: 'premium',
+    };
+    const query = jest.fn(async (sql, params) => {
+      if (sql.includes('WITH candidate_watches AS')) return { rows: [{ ...row, reference_signals: state.reference }] };
+      if (sql.includes('last_checked_at = $2')) {
+        if (params[6]) state.reference = JSON.parse(params[6]);
+        return { rows: [{ id: row.id }], rowCount: 1 };
+      }
+      return { rows: [] };
+    });
+    let routeGust = 20;
+    let routeAlerts = [];
+    let routeFails = false;
+    const calls = [];
+    const invokeSafetyHandler = jest.fn(async (queryParams) => {
+      calls.push(queryParams);
+      if (String(queryParams.name).startsWith('Route checkpoint')) {
+        if (routeFails) return { statusCode: 503, payload: { error: 'down' } };
+        return { statusCode: 200, payload: safetyPayload({ gust: queryParams.start === '11:00' ? routeGust : 10, alerts: routeAlerts }) };
+      }
+      return { statusCode: 200, payload: safetyPayload() };
+    });
+    const checker = createObjectiveWatchChecker({
+      database: { configured: true, query }, invokeSafetyHandler, emailService: { available: false },
+      log: { warn: jest.fn() }, now: () => new Date('2026-07-14T00:00:00.000Z'),
+    });
+    return {
+      state, calls,
+      set: (next) => { ({ routeGust = routeGust, routeAlerts = routeAlerts, routeFails = routeFails } = next); },
+      check: async () => { query.mockClear(); calls.length = 0; return { summary: await checker.run(), query }; },
+      changes: (q) => q.mock.calls.filter(([sql]) => sql.includes('INSERT INTO objective_watch_events')).map((call) => JSON.parse(call[1][2])),
+    };
+  };
+
+  test('re-checks the saved route at each checkpoint\'s arrival on the plan and reports worse gusts and new alerts along it', async () => {
+    const harness = createRouteHarness();
+    const first = await harness.check();
+    expect(first.summary).toMatchObject({ checked: 1, changed: 0 });
+    // Arrivals re-timed from the plan's 06:00 start: +0, +5 h, +10 h.
+    expect(harness.calls.filter((call) => call.name.startsWith('Route')).map((call) => [call.date, call.start, call.travel_window_hours]))
+      .toEqual([['2026-07-17', '06:00', '1'], ['2026-07-17', '11:00', '1'], ['2026-07-17', '16:00', '1']]);
+    expect(harness.state.reference).toMatchObject({ routeMaxWindGust: 20, routeAlertKeys: [] });
+
+    harness.set({ routeGust: 42, routeAlerts: [{ event: 'Wind Advisory', severity: 'Moderate' }] });
+    const second = await harness.check();
+    expect(second.summary).toMatchObject({ changed: 1 });
+    const [change] = harness.changes(second.query);
+    expect(change.direction).toBe('worse');
+    expect(change.reasons.map((reason) => reason.label)).toEqual([
+      'New weather alert along the route: Wind Advisory (Moderate).',
+      'Along the route, peak gusts increased from 20 mph to 42 mph.',
+    ]);
+  });
+
+  test('a route checkpoint that fails leaves the route unknown instead of calm', async () => {
+    const harness = createRouteHarness();
+    await harness.check();
+    harness.set({ routeFails: true, routeGust: 60 });
+    const result = await harness.check();
+    expect(result.summary).toMatchObject({ checked: 1, changed: 0 });
+    expect(harness.state.reference.routeMaxWindGust).toBe(20);
+  });
+
+  test('a watch without a route analysis checks only the objective', async () => {
+    const harness = createRouteHarness({ safetyData: safetyPayload() });
+    await harness.check();
+    expect(harness.calls).toHaveLength(1);
+    expect(harness.state.reference.routeMaxWindGust).toBeNull();
+  });
+
+  test('a long route is sampled evenly and keeps its final arrival', () => {
+    const { readWatchRoute } = require('../src/services/objective-watch-checker');
+    const waypoints = Array.from({ length: 13 }, (_, i) => ({ name: `P${i}`, lat: 46 + i * 0.01, lon: -121, offset_minutes: i * 30 }));
+    const points = readWatchRoute({ baseline_report: { route: { routeAnalysis: { waypoints } } } });
+    expect(points).toHaveLength(10);
+    expect(points[0].name).toBe('P0');
+    expect(points.at(-1).name).toBe('P12');
+    expect(points.map((point) => point.offsetMinutes)).toEqual([...points.map((point) => point.offsetMinutes)].sort((a, b) => a - b));
+  });
+});

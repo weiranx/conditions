@@ -22,6 +22,8 @@ export interface ObjectiveWatch {
   title: string;
   plan: PersistedReportPlan;
   baselineReport?: PersistedReport;
+  /** The analyzed route saved with the watched report, whose checkpoints are re-checked too. */
+  route?: { name: string | null; checkpointCount: number };
   lastAttemptedAt: string | null;
   lastCheckedAt: string | null;
   latestCheck?: ObjectiveWatchCheck | null;
@@ -63,6 +65,8 @@ export interface ObjectiveWatchCheck {
     maxWindGust?: number | null;
     maxPrecipChance?: number | null;
     terrainImpact?: string;
+    routeMaxWindGust?: number | null;
+    routeMaxPrecipChance?: number | null;
   } | null;
   change: ObjectiveWatchChange | null;
   error: string | null;

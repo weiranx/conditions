@@ -180,7 +180,8 @@ test('mapped routes reach the objective mid-window and check the return at its o
   const result = await runMapped(harness);
   expect(result.timing).toMatchObject({ basis: 'distance-and-vert', roundTrip: true, travelWindowHours: 10, paceSource: 'default' });
   expect(result.summaries.map((entry) => entry.name)).toEqual([
-    'Test Trail start', 'Test Trail checkpoint 2', 'Test Trail objective', 'Return to Test Trail checkpoint 2', 'Return to Test Trail start',
+    // The objective takes the objective's own name rather than the trail's.
+    'Test Trail start', 'Test Trail checkpoint 2', 'Test Peak', 'Return to Test Trail checkpoint 2', 'Return to Test Trail start',
   ]);
   expect(result.summaries.map((entry) => entry.elev_ft)).toEqual([8000, 8000, 10000, 8000, 8000]);
   expect(result.summaries.map((entry) => entry.progress_percent)).toEqual([0, 25, 50, 75, 100]);

@@ -223,5 +223,6 @@
 }
 .sky-plan-route-options strong { font-size: 15px; font-weight: 600; }
 .sky-plan-route-options small { font-size: 13px; color: var(--sky-secondary, var(--f-muted)); }
+.sky-plan-route-description { font-size: 13px; line-height: 1.45; color: var(--sky-label, var(--f-ink)); }
 .sky-plan-route-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; }
 .sky-plan-route-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--sky-secondary, var(--f-muted)); }

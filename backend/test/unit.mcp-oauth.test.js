@@ -20,6 +20,40 @@ test('bearers isolate users, reject invalid tokens, writes and admin routes', as
  expect((await request(app).post('/api/account/reports').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
  expect((await request(app).get('/api/admin/users').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
 });
+test('bearers reach the report compute routes as their own account user', async()=>{
+ const {app}=setup();
+ const { createAccountAccessGuard } = require('../src/auth/account-access');
+ const ensureAccountAccess=createAccountAccessGuard({service:{available:true,getUserForSession:jest.fn(async()=>null)},usageService:{available:true,assertUserCanGenerate:jest.fn(async()=>({used:1}))}});
+ for (const path of ['/api/ai-brief','/api/route-analysis','/api/snow-vision']) app.post(path,async(req,res)=>{ if(await ensureAccountAccess(req,res)) res.json({user:req.accountUser.id}); });
+ app.post('/api/trip-forecasts',(req,res)=>res.json({user:req.mcpUser?.id}));
+ app.get('/api/start-time-scenarios',(_req,res)=>res.json({ok:true}));
+ for (const path of ['/api/ai-brief','/api/route-analysis','/api/snow-vision','/api/trip-forecasts']) {
+  expect((await request(app).post(path).set('Authorization','Bearer cmcp_bob').send({})).body.user).toBe('bob');
+ }
+ expect((await request(app).get('/api/start-time-scenarios').set('Authorization','Bearer cmcp_alice')).status).toBe(200);
+ expect((await request(app).post('/api/ai-brief').set('Authorization','Bearer cmcp_bad').send({})).status).toBe(401);
+ // Compute routes are POST only; other writes stay closed.
+ expect((await request(app).get('/api/ai-brief').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
+ expect((await request(app).post('/api/account/objective-watches').set('Authorization','Bearer cmcp_alice')).status).toBe(403);
+});
+test('bearers read their own watch history, baseline, usage and service status', async()=>{
+ const {app}=setup();
+ const { registerAccountUsageRoute } = require('../src/routes/account');
+ registerAccountUsageRoute({app,accountService:{available:true,getUserForSession:jest.fn(async()=>null)},describeAccount:async(_req,user)=>({owner:user.id,aiUsage:{used:2}})});
+ const id='d4167c22-61fa-4e49-8d68-0c538752967e';
+ for (const path of [`/api/account/objective-watches/${id}/checks`,`/api/account/objective-watches/${id}/events`,'/api/account/reports/comparison-baseline','/api/feature-flags','/api/healthz']) app.get(path,(req,res)=>res.json({owner:req.mcpUser?.id}));
+ app.post('/api/report-chat',(req,res)=>res.json({owner:req.mcpUser?.id}));
+ const usage=await request(app).get('/api/account/usage').set('Authorization','Bearer cmcp_bob');
+ expect(usage.body).toEqual({owner:'bob',aiUsage:{used:2}});
+ expect((await request(app).get('/api/account/usage')).status).toBe(401);
+ for (const path of [`/api/account/objective-watches/${id}/checks`,`/api/account/objective-watches/${id}/events`,'/api/account/reports/comparison-baseline','/api/feature-flags','/api/healthz']) {
+  expect((await request(app).get(path).set('Authorization','Bearer cmcp_alice')).body.owner).toBe('alice');
+ }
+ expect((await request(app).post('/api/report-chat').set('Authorization','Bearer cmcp_alice')).body.owner).toBe('alice');
+ // Watch actions stay closed.
+ expect((await request(app).post(`/api/account/objective-watches/${id}/refresh`).set('Authorization','Bearer cmcp_alice')).status).toBe(403);
+ expect((await request(app).get(`/api/account/objective-watches/${id}/other`).set('Authorization','Bearer cmcp_alice')).status).toBe(403);
+});
 test('approval needs browser sign-in, exact origin and unchanged account',async()=>{
  const {app,service}=setup();
  const url='/api/auth/mcp/approve';

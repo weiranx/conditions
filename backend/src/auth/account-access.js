@@ -40,7 +40,8 @@ const createAccountAccessGuard = ({ service, tierService, usageService } = {}) =
   }
 
   try {
-    const user = await service.getUserForSession(readSessionToken(req));
+    // An MCP bearer was already verified by the MCP OAuth middleware.
+    const user = req.mcpUser || await service.getUserForSession(readSessionToken(req));
     if (!user) {
       res.status(401).json({
         error: ACCOUNT_REQUIRED_MESSAGE,

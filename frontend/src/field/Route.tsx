@@ -1,9 +1,10 @@
 import { KM_PER_MILE } from "../app/constants";
 import { formatSnowDepthForElevationUnit, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { CircleCheck, CircleDashed, Clock, Eye, Signpost, type LucideIcon, CloudRain, Footprints, Info, Moon, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Wind } from "lucide-react";
 import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
+import type { RouteAnalysisStage, RouteLoadingState, RouteShapeChoice } from "../hooks/useRouteAnalysis";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
 import { dateLabel } from "./data";
@@ -13,21 +14,39 @@ import {
   buildProfileTicks,
   buildRouteLegs,
   checkpointFeelsLike,
+  checkpointHazards,
   checkpointLimitFlags,
   checkpointTone,
+  compareCheckpointToObjective,
+  describeCheckpointHazard,
+  describeStaleRouteAnalysis,
   describeRouteTiming,
   formatEtaDate,
   formatLegDuration,
+  formatRouteHours,
   hasRouteNumber,
+  hoursToFit,
+  objectiveHourAt,
   splitRouteBriefing,
 } from "./route-planning";
 import "./route-planning.css";
 import { RouteWeatherChart } from "./RouteWeatherChart";
+import { RouteSuggestions } from "./RouteSuggestions";
+import "./sky/plan.css";
 import { WeatherSymbol } from "./Forecast";
 import "./forecast.css";
 import { RouteProfile, type ProfileLevel, type ProfileStop } from "./sky/RouteProfile";
 import { knownFeet } from "./sky/status";
 import { skyAt } from "./sky/sky-model";
+
+const RouteMap = lazy(() => import("./RouteMap"));
+
+const SHAPE_CHOICES: { value: RouteShapeChoice; label: string }[] = [
+  { value: "auto", label: "As mapped" },
+  { value: "out-and-back", label: "Out and back" },
+  { value: "loop", label: "Loop" },
+  { value: "point-to-point", label: "One way" },
+];
 
 const BRIEF_ICONS: Record<string, LucideIcon> = {
   "hazard-zones": TriangleAlert,
@@ -35,6 +54,68 @@ const BRIEF_ICONS: Record<string, LucideIcon> = {
   "other-concerns": Eye,
   "decision-points": Signpost,
 };
+
+const STAGES: { stage: RouteAnalysisStage; label: string }[] = [
+  { stage: "route", label: "Finding the route" },
+  { stage: "locating", label: "Placing checkpoints" },
+  { stage: "forecasts", label: "Checkpoint forecasts" },
+  { stage: "briefing", label: "Writing the briefing" },
+];
+
+/** What a running analysis is doing, the checkpoints as their forecasts arrive, and a way to stop it. */
+function RouteProgress({ state, onCancel, clock, temp }: {
+  state: RouteLoadingState;
+  onCancel: () => void;
+  clock: (value: string | undefined) => string;
+  temp: (f: number) => string;
+}) {
+  if (state.kind === "suggestions") {
+    return (
+      <div className="sky-notice is-info sky-route-loading" role="status">
+        <span><strong>Finding route options</strong> for {state.routeName}.</span>
+        <button type="button" className="field-text-button" onClick={onCancel}>Cancel</button>
+      </div>
+    );
+  }
+  const current = STAGES.findIndex((entry) => entry.stage === (state.stage ?? "route"));
+  const checkpoints = state.checkpoints ?? [];
+  const done = checkpoints.filter((checkpoint) => checkpoint.status !== "pending").length;
+  return (
+    <div className="sky-card sky-section sky-route-progress" role="status" aria-live="polite">
+      <div className="sky-route-progress-head">
+        <strong>Checking {state.routeName}</strong>
+        <button type="button" className="field-text-button" onClick={onCancel}>Cancel</button>
+      </div>
+      <ol className="sky-route-steps">
+        {STAGES.map((entry, i) => (
+          <li key={entry.stage} className={i < current ? "is-done" : i === current ? "is-current" : undefined}
+            aria-current={i === current ? "step" : undefined}>
+            {i < current ? <CircleCheck size={15} aria-hidden="true" /> : <CircleDashed size={15} aria-hidden="true" />}
+            {entry.label}
+            {entry.stage === "forecasts" && checkpoints.length > 0 ? ` · ${done} of ${checkpoints.length}` : ""}
+          </li>
+        ))}
+      </ol>
+      {checkpoints.length > 0 && (
+        <ol className="sky-route-progress-stops" aria-label="Checkpoint forecasts so far">
+          {checkpoints.map((checkpoint, i) => (
+            <li key={i} className={`is-${checkpoint.status}`}>
+              <span className="field-route-stop-number" aria-hidden="true">{i + 1}</span>
+              <span>{checkpoint.name}</span>
+              <small>
+                {checkpoint.etaTime ? `${clock(checkpoint.etaTime)} · ` : ""}
+                {checkpoint.status === "pending" ? "waiting"
+                  : checkpoint.status === "missing" ? "no forecast"
+                    : hasRouteNumber(checkpoint.weather?.temp) ? temp(checkpoint.weather.temp) : "in"}
+              </small>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="sky-cap">Live route analysis can take a minute or more.</p>
+    </div>
+  );
+}
 
 export function Route({ workspace: w }: { workspace: Workspace }) {
   const [checkpoint, setCheckpoint] = useState(0);
@@ -70,7 +151,11 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
     dark: p.daylight === "dark",
   }));
   const overStops = stops.filter((stop) => stop.tone === "over").length;
+  const hazardStops = stops.filter((stop) => stop.tone === "hazard").length;
   const missingStops = stops.filter((stop) => stop.tone === "missing").length;
+  // Return checkpoints repeat an outbound location, so count each place once.
+  const estimatedPlaces = new Set((result?.summaries ?? []).filter((p) => p.locationEstimated && p.leg !== "return").map((p) => p.name)).size;
+  const estimatedElevations = points.filter((point) => point.estimated).length;
   const darkStops = stops.filter((stop) => stop.dark).length;
   // -1 when no checkpoint elevation is known, so no stop is named the high point.
   const highIndex = (result?.summaries ?? []).reduce((best, p, i, all) =>
@@ -87,6 +172,41 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const selectedTone = stops[selectedIndex]?.tone ?? "missing";
   const selectedFeelsLike = selected?.dataAvailable ? checkpointFeelsLike(selected) : null;
   const selectedFlags = selected ? checkpointLimitFlags(selected, w.preferences) : { feelsLike: false, gust: false, precip: false };
+  const selectedHazards = selected ? checkpointHazards(selected) : [];
+  const selectedVsObjective = selected
+    ? compareCheckpointToObjective(selected, objectiveHourAt(w.safetyData?.weather?.trend, selected.etaDate, selected.etaTime))
+    : null;
+  const celsius = w.preferences.temperatureUnit === "c";
+  const kph = w.preferences.windSpeedUnit === "kph";
+  const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : "±"}${Math.abs(value)}`;
+  const vsObjective = selectedVsObjective ? [
+    selectedVsObjective.temp !== null ? `${signed(Math.round(selectedVsObjective.temp * (celsius ? 5 / 9 : 1)))}°${celsius ? "C" : "F"}` : null,
+    selectedVsObjective.gust !== null ? `gusts ${signed(Math.round(selectedVsObjective.gust * (kph ? 1.609344 : 1)))} ${kph ? "km/h" : "mph"}` : null,
+    selectedVsObjective.precip !== null ? `rain ${signed(Math.round(selectedVsObjective.precip))}%` : null,
+  ].filter(Boolean).join(" · ") : "";
+  const staleChanges = readOnly ? [] : describeStaleRouteAnalysis(result, {
+    date: w.forecastDate, start: w.alpineStartTime, travelWindowHours: w.travelWindowHours, lat: w.position.lat, lon: w.position.lng,
+    routeShape: w.routeShape,
+    pace: {
+      minutesPerMile: w.preferences.runnerPaceMinutesPerMile,
+      ascentMinutesPer1000Ft: w.preferences.runnerAscentMinutesPer1000Ft,
+      stopBufferMinutes: w.preferences.runnerStopBufferMinutes,
+    },
+  });
+  // The map draws a GPX track or mapped trail as recorded, else straight lines between checkpoints.
+  const mapStops = (result?.waypoints ?? []).map((point, i) => ({
+    name: point.name, lat: point.lat, lon: point.lon, tone: stops[i]?.tone ?? "missing", eta: stops[i]?.eta ?? "",
+    estimated: Boolean(result?.summaries[i]?.locationEstimated),
+  }));
+  const mappedLine: [number, number][] | null = result?.routeSource === "gpx" && gpx?.displayTrack?.length
+    ? gpx.displayTrack.map((point) => [point.lat, point.lon])
+    : result?.routeGeometry?.length ? result.routeGeometry.map((point) => [point.lat, point.lon]) : null;
+  const mapLine = mappedLine ?? (result?.waypoints ?? []).filter((point) => point.leg !== "return").map((point) => [point.lat, point.lon] as [number, number]);
+  const timing = result?.timing;
+  const turnaround = timing?.turnaround;
+  const estimate = timing?.mode === "pace" && hasRouteNumber(timing.estimatedMinutes) ? timing.estimatedMinutes : null;
+  const firstDark = (result?.summaries ?? []).findIndex((p) => p.daylight === "dark");
+  const lastLight = firstDark > 0 && result?.summaries[firstDark - 1]?.daylight === "day" ? result.summaries[firstDark - 1] : null;
   const vert = (feet: number) => (Math.abs(feet) < 10 ? "level" : w.formatElevationDeltaDisplay(feet));
   const profileLegs = legs.map((leg) => {
     const parts = [leg.distanceMiles !== null ? miles(leg.distanceMiles) : null, leg.elevationDeltaFt !== null ? vert(leg.elevationDeltaFt) : null]
@@ -118,7 +238,18 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
       ? [{ label: "Top out", value: clock(result.summaries[highIndex].etaTime) }] : []),
     ...(lastStop?.etaTime
       ? [{ label: returnStop ? "Back at start" : "Finish", value: clock(lastStop.etaTime), ...(lastStop.daylight === "dark" ? { note: "After dark" } : {}) }] : []),
-    { label: "Planned time", value: `${w.travelWindowHours} h` },
+    // The duration this analysis was run with, which the plan may have changed since.
+    { label: "Planned time", value: `${result?.timing?.travelWindowHours ?? w.travelWindowHours} h`,
+      ...(estimate !== null ? { note: `${formatRouteHours(estimate)} at your pace` } : {}) },
+    // When to leave the objective to finish on plan, and before sunset.
+    ...(turnaround ? [{
+      label: "Turn around by", value: clock(turnaround.byPlanEnd),
+      ...(turnaround.marginToPlanEndMinutes < 0 ? { note: "Reached later" } : {}),
+    }] : []),
+    ...(turnaround?.byDark ? [{
+      label: "Daylight turnaround", value: clock(turnaround.byDark),
+      ...(hasRouteNumber(turnaround.marginToDarkMinutes) && turnaround.marginToDarkMinutes < 0 ? { note: "Reached later" } : {}),
+    }] : []),
   ];
   const canAnalyze = !readOnly && !w.routeLoading && available.routeAnalysis && Boolean(w.plannedRouteName);
   function analyze() {
@@ -139,8 +270,13 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                 ? <> and are back at the start around <strong>{clock(returnStop.etaTime)}</strong>{returnStop.daylight === "dark" ? ", after dark" : ""}</>
                 : null}. </>
             )}
+            {lastLight && firstDark >= 0 && result.summaries[firstDark].etaTime && (
+              <>It is dark from {result.summaries[firstDark].name} ({clock(result.summaries[firstDark].etaTime)}); {lastLight.name} is the last checkpoint in daylight. </>
+            )}
             {overStops > 0
               ? <strong className="is-over">{overStops} {overStops === 1 ? "checkpoint crosses" : "checkpoints cross"} your limits.</strong>
+              : hazardStops > 0
+                ? <strong className="is-over">{hazardStops} {hazardStops === 1 ? "checkpoint is" : "checkpoints are"} under a weather alert or avalanche danger.</strong>
               : missingStops > 0
                 ? <strong className="is-missing">{missingStops} checkpoint {missingStops === 1 ? "forecast is" : "forecasts are"} missing or incomplete, so {missingStops === 1 ? "it" : "they"} can't be checked against every limit.</strong>
                 : "Every checkpoint forecast is within your limits."}
@@ -174,9 +310,42 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               />
             </label>
           )}
+          {!gpx && available.routeAnalysis && (
+            <button
+              type="button"
+              className="field-button"
+              disabled={readOnly || w.routeLoading}
+              onClick={() => w.handleFetchRouteSuggestions(w.objectiveName, w.position.lat, w.position.lng, { keepPlan: true })}
+            >
+              {w.routeLoadingState?.kind === "suggestions" ? "Finding routes…" : "Suggest routes"}
+            </button>
+          )}
           <button className="field-button field-button-primary" disabled={!canAnalyze}>
             {result ? "Analyze again" : "Analyze route"}
           </button>
+          {!gpx && (
+            <div className="sky-route-suggestions">
+              <RouteSuggestions workspace={w} />
+            </div>
+          )}
+          <div className="sky-route-shape" role="group" aria-label="Route shape">
+            <span>Shape</span>
+            <div className="sky-segmented">
+              {SHAPE_CHOICES.map((choice) => (
+                <button key={choice.value} type="button" aria-pressed={w.routeShape === choice.value}
+                  onClick={() => w.setRouteShape(choice.value)}>
+                  {choice.value === "auto" && gpx ? "As drawn" : choice.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {gpx?.routeShape === "point-to-point" && w.routeShape === "auto" && (
+            <p className="field-feedback">
+              This track ends away from where it starts. If it only covers the way there, choose
+              {" "}<button type="button" className="field-text-button" onClick={() => w.setRouteShape("out-and-back")}>Out and back</button>{" "}
+              to check the way back too.
+            </p>
+          )}
           <p className="field-route-plan-context">
             {dateLabel(w.forecastDate)} · {w.displayStartTime} start · {w.travelWindowHours} hours
             {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
@@ -190,22 +359,38 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
           )}
         </form>
       )}
-      {w.routeLoading && (
-        <div className="sky-notice is-info sky-route-loading" role="status">
-          <div>
-            <strong>
-              {w.routeLoadingState?.kind === "analysis"
-                ? "Checking route checkpoints"
-                : "Finding route options"}
-            </strong>{" "}
-            {w.routeLoadingState?.routeName} · Live route analysis can take a
-            minute or more.
-          </div>
-        </div>
+      {w.routeLoading && w.routeLoadingState && (
+        <RouteProgress state={w.routeLoadingState} onCancel={w.cancelRouteRequest} clock={clock}
+          temp={(f) => w.formatTempDisplay(f)} />
       )}
       {w.routeError && (
         <p className="sky-notice is-caution" role="alert">
           {w.routeError}
+        </p>
+      )}
+      {result && estimate !== null && timing?.windowFit && timing.windowFit !== "fits" && (
+        <div className={`sky-notice ${timing.windowFit === "longer" ? "is-caution" : "is-info"} sky-route-fit`} role="status">
+          <Clock size={18} aria-hidden="true" />
+          <span>
+            At your pace this outing takes about {formatRouteHours(estimate)}{timing.stopMinutes ? `, ${timing.stopMinutes} min of stops included` : ""};
+            {" "}the plan is {timing.travelWindowHours} h, so {timing.windowFit === "longer"
+              ? "the last checkpoints fall after it ends and its hourly checks miss them"
+              : "you'd finish well before it ends and its hourly checks cover time you're already back"}.
+          </span>
+          {!readOnly && w.travelWindowHours !== hoursToFit(estimate) && (
+            <button type="button" className="field-text-button" onClick={() => w.updatePreferences({ travelWindowHours: hoursToFit(estimate) })}>
+              Plan {hoursToFit(estimate)} h
+            </button>
+          )}
+        </div>
+      )}
+      {result && staleChanges.length > 0 && (
+        <p className="sky-notice is-missing sky-route-stale" role="status">
+          <CircleDashed size={18} aria-hidden="true" />
+          <span>
+            The plan's {staleChanges.join(", ")} changed after this route was analyzed, so these checkpoints are for the earlier plan.
+            {canAnalyze ? " Analyze again to update them." : ""}
+          </span>
         </p>
       )}
       {result && (
@@ -240,6 +425,14 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               {result.routeSource === "generated" && (
                 <p className="sky-notice is-info"><Info size={18} aria-hidden="true" /><span>Estimated checkpoints · Route geometry is generated and has not been verified against a mapped trail.</span></p>
               )}
+              {estimatedPlaces > 0 && (
+                <p className="sky-notice is-missing">
+                  <CircleDashed size={18} aria-hidden="true" />
+                  <span>
+                    {estimatedPlaces === 1 ? "One checkpoint wasn't" : `${estimatedPlaces} checkpoints weren't`} found on the map, so {estimatedPlaces === 1 ? "its location is" : "their locations are"} an estimate and {estimatedPlaces === 1 ? "its forecast" : "their forecasts"} may be for the wrong spot.
+                  </span>
+                </p>
+              )}
               {(result.partialData || returned < result.summaries.length) && (
                 <p className="sky-notice is-missing">
                   <CircleDashed size={18} aria-hidden="true" />
@@ -248,6 +441,12 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     forecast before relying on this analysis.
                   </span>
                 </p>
+              )}
+              {mapStops.length > 0 && (
+                <Suspense fallback={<div className="field-map-loading route-map-loading">Loading map…</div>}>
+                  <RouteMap workspace={w} stops={mapStops} line={mapLine} lineEstimated={!mappedLine}
+                    selected={selectedIndex} onSelect={setCheckpoint} />
+                </Suspense>
               )}
               {profile && (
                 <RouteProfile points={points} stops={stops} selected={selectedIndex} onSelect={setCheckpoint}
@@ -263,6 +462,8 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                   </p>
                   <ul aria-label="Profile key">
                     {overStops > 0 && <li><span className="sky-swatch is-over" aria-hidden="true" />Over your limits</li>}
+                    {hazardStops > 0 && <li><span className="sky-swatch is-hazard" aria-hidden="true" />Alert or avalanche danger</li>}
+                    {estimatedElevations > 0 && <li><span className="sky-swatch is-estimated" aria-hidden="true" />Elevation unknown</li>}
                     {missingStops > 0 && <li><span className="sky-swatch is-missing" aria-hidden="true" />Can't check every limit</li>}
                     {darkStops > 0 && <li><span className="sky-swatch is-night" aria-hidden="true" />After dark</li>}
                   </ul>
@@ -274,7 +475,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     <h3>Weather along the route</h3>
                     <p>Each checkpoint's forecast at your estimated arrival. Hatched checkpoints cross a limit; the strip shows the sky.</p>
                   </div>
-                  <RouteWeatherChart workspace={w} summaries={result.summaries} tones={stops.map((stop) => stop.tone)}
+                  <RouteWeatherChart workspace={w} summaries={result.summaries} tones={stops.map((stop) => (stop.tone === "hazard" ? "within" : stop.tone))}
                     selected={selectedIndex} onSelect={setCheckpoint} />
                 </div>
               )}
@@ -305,6 +506,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                             <small>
                               {hasRouteNumber(point.elev_ft) ? w.formatElevationDisplay(point.elev_ft) : "Elevation unavailable"}
                               {hasRouteNumber(point.distance_miles) && point.distance_miles > 0 ? ` · at ${miles(point.distance_miles)}` : ""}
+                              {point.locationEstimated ? " · location estimated" : ""}
                             </small>
                           </span>
                           <span className="field-route-stop-time">
@@ -320,6 +522,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                                 {hasRouteNumber(point.activeAlerts) && point.activeAlerts > 0 && (
                                   <span className="sky-route-pill is-over"><TriangleAlert size={13} aria-hidden="true" />{point.activeAlerts} {point.activeAlerts === 1 ? "alert" : "alerts"}</span>
                                 )}
+                                {checkpointHazards(point).filter((hazard) => hazard.kind === "avalanche").map((hazard) => (
+                                  <span key="avalanche" className="sky-route-pill is-over"><TriangleAlert size={13} aria-hidden="true" />{describeCheckpointHazard(hazard)}</span>
+                                ))}
                               </>
                             ) : (
                               <span className="sky-route-pill is-missing">Missing forecast</span>
@@ -327,7 +532,11 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                             {point.daylight === "dark" && <span className="sky-route-pill is-night"><Moon size={13} aria-hidden="true" />After dark</span>}
                           </span>
                         </button>
-                        {turnsBack && <p className="field-route-turn" aria-hidden="true">Return by the same route</p>}
+                        {turnsBack && (
+                          <p className="field-route-turn" aria-hidden="true">
+                            Return by the same route{turnaround ? ` · turn around by ${clock(turnaround.byPlanEnd)}` : ""}
+                          </p>
+                        )}
                         {leg && (leg.minutes !== null || leg.elevationDeltaFt !== null || leg.distanceMiles !== null) && (
                           <p className="field-route-leg" aria-label={`To ${result.summaries[i + 1]?.name ?? "the next checkpoint"}`}>
                             {leg.distanceMiles !== null && <span><Footprints size={13} aria-hidden="true" />{miles(leg.distanceMiles)}</span>}
@@ -366,7 +575,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     <div><dt>Rain chance</dt><dd className={selectedFlags.precip ? "is-over" : undefined}>{selected.dataAvailable && hasRouteNumber(selected.weather.precipChance) ? `${selected.weather.precipChance}%` : "—"}</dd></div>
                     <div><dt>Elevation</dt><dd>{hasRouteNumber(selected.elev_ft) ? w.formatElevationDisplay(selected.elev_ft) : "—"}</dd></div>
                     <div><dt>Along route</dt><dd>{hasRouteNumber(selected.distance_miles) ? (selected.distance_miles > 0 ? miles(selected.distance_miles) : "Start") : "—"}</dd></div>
-                    <div><dt>Planning score</dt><dd>{selected.dataAvailable && hasRouteNumber(selected.score) ? `${selected.score}/100` : "—"}</dd></div>
+                    <div><dt>Vs. objective</dt><dd>{vsObjective || "—"}</dd></div>
                     {selected.dataAvailable && selected.avalanche?.risk && <div><dt>Avalanche</dt><dd>{selected.avalanche.risk}</dd></div>}
                     <div><dt>Alerts</dt><dd className={selected.activeAlerts > 0 ? "is-over" : undefined}>{selected.dataAvailable ? (selected.activeAlerts > 0 ? `${selected.activeAlerts} active` : "None") : "—"}</dd></div>
                     {selected.dataAvailable && hasRouteNumber(selected.snowDepthIn) && selected.snowDepthIn > 0 && (
@@ -374,7 +583,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     )}
                   </dl>
                   <p className={`forecast-readout-status is-${selectedTone}`}>
-                    {selectedTone === "over" ? <TriangleAlert size={16} aria-hidden="true" />
+                    {selectedTone === "over" || selectedTone === "hazard" ? <TriangleAlert size={16} aria-hidden="true" />
                       : selectedTone === "missing" ? <CircleDashed size={16} aria-hidden="true" />
                         : <CircleCheck size={16} aria-hidden="true" />}
                     <span>
@@ -384,10 +593,13 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                           selectedFlags.gust ? `gusts ${w.formatWindDisplay(selected.weather.windGust)} (limit ${w.formatWindDisplay(w.preferences.maxWindGustMph)})` : null,
                           selectedFlags.precip ? `rain chance ${selected.weather.precipChance}% (limit ${w.preferences.maxPrecipChance}%)` : null,
                         ].filter(Boolean).join(", ")}.`
+                        : selectedTone === "hazard"
+                          ? `Within your limits, but with ${selectedHazards.map(describeCheckpointHazard).join(" and ")} here.`
                         : selectedTone === "missing"
                           ? "Some readings are missing here, so not every limit can be checked."
                           : "Within your limits at this arrival."}
                       {selected.daylight === "dark" ? " You arrive after dark." : ""}
+                      {selected.locationEstimated ? " This place wasn't found on the map, so the forecast is for an estimated location." : ""}
                     </span>
                   </p>
                 </div>

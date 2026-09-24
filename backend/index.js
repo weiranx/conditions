@@ -49,7 +49,7 @@ const { buildCampNight } = require('./src/utils/camp-night');
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
-const { registerAccountRoutes } = require('./src/routes/account');
+const { createAccountSummary, registerAccountRoutes, registerAccountUsageRoute } = require('./src/routes/account');
 const { registerSavedReportRoutes } = require('./src/routes/saved-reports');
 const { registerObjectiveWatchRoutes } = require('./src/routes/objective-watches');
 const { registerObjectiveWatchCheckRoute } = require('./src/routes/objective-watch-checks');
@@ -942,6 +942,17 @@ const accountService = registerAccountRoutes({
   emailService,
 });
 require('./src/routes/mcp-oauth').registerMcpOAuthRoutes({ app, database, accountService });
+registerAccountUsageRoute({
+  app,
+  accountService,
+  describeAccount: createAccountSummary({
+    database,
+    tierService: accountTierService,
+    usageService: aiUsageLimitService,
+    reportUsageService: reportUsageLimitService,
+    multiDayUsageService: multiDayUsageLimitService,
+  }),
+});
 registerTripForecastRoutes({
   app,
   accountService,

@@ -517,6 +517,37 @@ test('an unfound landmark placed at the objective keeps its generated elevation'
   expect(fetchElevationFt).toHaveBeenCalledTimes(2);
 });
 
+test('landmarks the map search could not find are marked as estimated locations, return legs included', async () => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints'
+      ? '[{"name":"Found Trailhead","lat":40.0,"lon":-105.1,"elev_ft":8000},{"name":"Lost Lake","lat":40.02,"lon":-105.08,"elev_ft":9500},{"name":"Estimate Peak","lat":40.03,"lon":-105.05,"elev_ft":11000}]'
+      : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45 }, safety: { score: 80 } } }),
+    // Nominatim finds only the trailhead.
+    fetchWithTimeout: jest.fn(async (url) => ({
+      ok: String(url).includes('nominatim') && String(url).includes('Found%20Trailhead'),
+      json: async () => [{ lat: '40.0001', lon: '-105.1001' }],
+    })),
+    fetchHeaders: {},
+    fetchElevationFt: async () => ({ elevationFt: null }),
+  });
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Estimate Peak Location Test', route: 'Lost Lake Trail', lat: 40.03, lon: -105.05, date: '2026-07-12', start: '06:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.summaries.map((summary) => [summary.name, Boolean(summary.locationEstimated)])).toEqual([
+    ['Found Trailhead', false],
+    ['Lost Lake', true],
+    ['Estimate Peak', false],
+    ['Return to Lost Lake', true],
+    ['Return to Found Trailhead', false],
+  ]);
+});
+
 test('an implausible generated elevation at a mislocated landmark is dropped, not kept', async () => {
   const app = express();
   app.use(express.json());
@@ -622,4 +653,265 @@ test('GPX elevations are kept rather than replaced by terrain lookups', async ()
   expect(response.status).toBe(200);
   expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([5400, 1]);
   expect(fetchElevationFt).toHaveBeenCalledTimes(1);
+});
+
+// Mapped-trail stubs: an NPS trail, and Nominatim finding only the named trailhead.
+const mappedRouteApp = ({ npsPath, askAI }) => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45, windGust: 10, precipChance: 5 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async (url) => {
+      const text = String(url);
+      if (text.includes('mapservices.nps.gov')) {
+        return { ok: true, json: async () => ({ features: [{ attributes: { TRLNAME: 'Mist Trail' }, geometry: { paths: [npsPath] } }] }) };
+      }
+      if (text.includes('nominatim') && text.includes('Happy%20Isles%20Nature%20Center')) {
+        return { ok: true, json: async () => [{ lat: '37.7330', lon: '-119.5586' }] };
+      }
+      return { ok: false, json: async () => ({}) };
+    }),
+    fetchHeaders: {},
+    fetchElevationFt: async () => ({ elevationFt: null }),
+  });
+  return app;
+};
+const mistTrailLandmarks = async (prompt, options) => (options.feature === 'route-waypoints'
+  ? '[{"name":"Happy Isles Nature Center","lat":37.7329,"lon":-119.5587},{"name":"Vernal Fall Footbridge","lat":37.7275,"lon":-119.5431},{"name":"Half Dome","lat":37.7459,"lon":-119.5332,"objective":true}]'
+  : 'Named route briefing');
+
+test('a mapped trail reaching the objective is used before AI landmarks, which name points along it', async () => {
+  const app = mappedRouteApp({
+    npsPath: [[-119.5587, 37.7329], [-119.5500, 37.7300], [-119.5431, 37.7275], [-119.5380, 37.7380], [-119.5332, 37.7459]],
+    askAI: mistTrailLandmarks,
+  });
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Half Dome Mapped First Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.routeSource).toBe('nps');
+  expect(response.body.timing).toMatchObject({ distanceBasis: 'along-trail', roundTrip: true });
+  const names = response.body.waypoints.map((waypoint) => waypoint.name);
+  expect(names[0]).toBe('Happy Isles Nature Center');
+  expect(names.filter((name) => !name.startsWith('Return')).at(-1)).toBe('Half Dome');
+  expect(names.at(-1)).toBe('Return to Happy Isles Nature Center');
+  // The trailhead stays on the mapped trail rather than moving to the geocoded point.
+  expect(response.body.waypoints[0]).toMatchObject({ lat: 37.7329, lon: -119.5587 });
+  // The return retraces the trail, so the outing is twice the trail's length.
+  const outbound = response.body.waypoints.filter((waypoint) => waypoint.leg !== 'return');
+  const trail = outbound.at(-1).distance_miles;
+  expect(response.body.waypoints.at(-1).distance_miles).toBeCloseTo(trail * 2, 1);
+  expect(response.body.routeGeometry.length).toBeGreaterThanOrEqual(5);
+});
+
+test('a mapped trail that stops far from the objective loses to AI landmarks, but stands in when they fail', async () => {
+  const shortTrail = [[-119.5587, 37.7329], [-119.5550, 37.7310]];
+  const generated = await request(mappedRouteApp({ npsPath: shortTrail, askAI: mistTrailLandmarks }))
+    .post('/api/route-analysis')
+    .send({ peak: 'Half Dome Far Trail Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
+  expect(generated.status).toBe(200);
+  expect(generated.body.routeSource).toBe('generated');
+
+  const failingAI = async (prompt, options) => {
+    if (options.feature === 'route-waypoints') throw new Error('provider down');
+    return 'Named route briefing';
+  };
+  const fallback = await request(mappedRouteApp({ npsPath: shortTrail, askAI: failingAI }))
+    .post('/api/route-analysis')
+    .send({ peak: 'Half Dome Fallback Trail Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
+  expect(fallback.status).toBe(200);
+  expect(fallback.body.routeSource).toBe('nps');
+});
+
+test('GPX checkpoints with only a positional label take the name of a map feature at or near them', async () => {
+  const app = express();
+  app.use(express.json());
+  const places = {
+    // A lake right at the 50% checkpoint, and a peak 300 m from the high point.
+    '46.8100': { name: 'Crystal Lake', category: 'natural', lat: '46.8100', lon: '-121.7000' },
+    '46.8200': { name: 'Pinnacle Peak', category: 'natural', lat: '46.8227', lon: '-121.7000' },
+    // A road is not a useful checkpoint name.
+    '46.8000': { name: 'Forest Road 52', category: 'highway', lat: '46.8000', lon: '-121.7000' },
+  };
+  const reverseCalls = [];
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => 'GPX briefing',
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 40 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async (url) => {
+      const match = /reverse\?.*lat=([\d.-]+)/.exec(String(url));
+      if (!match) return { ok: false };
+      reverseCalls.push(match[1]);
+      const place = places[Number(match[1]).toFixed(4)];
+      return { ok: Boolean(place), json: async () => place };
+    }),
+    fetchHeaders: {},
+  });
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Reverse Name Test Peak', route: 'My track', lat: 46.82, lon: -121.7, date: '2026-07-12', start: '06:00',
+      waypoints: [
+        { name: 'Route start', lat: 46.8, lon: -121.7, elev_ft: 5000, distance_miles: 0 },
+        { name: '50% checkpoint', lat: 46.81, lon: -121.7, elev_ft: 6000, distance_miles: 1 },
+        { name: 'High point', lat: 46.82, lon: -121.7, elev_ft: 7000, distance_miles: 2 },
+        { name: 'Camp Muir', lat: 46.83, lon: -121.7, elev_ft: 6500, distance_miles: 3 },
+      ],
+    });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.name)).toEqual(['Route start', 'Crystal Lake', 'High point near Pinnacle Peak', 'Camp Muir']);
+  // A checkpoint that already has a real name is not looked up. (Lookups are
+  // cached across tests, so only the absence is checked.)
+  expect(reverseCalls).not.toContain('46.83');
+});
+
+const gpxPaceApp = () => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => { throw new Error('no AI in this test'); },
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 40 }, safety: { score: 80 }, solar: { sunrise: '6:30:00 AM', sunset: '7:30:00 PM' } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+  });
+  return app;
+};
+const gpxPaceBody = (overrides = {}) => ({
+  peak: 'Pace Test Peak', route: 'Pace track', lat: 46.84, lon: -121.7, date: '2026-07-12', start: '06:00', travel_window_hours: 4,
+  waypoints: [
+    { name: 'Camp Lot', lat: 46.8, lon: -121.7, elev_ft: 5000, distance_miles: 0 },
+    { name: 'Meadow', lat: 46.82, lon: -121.7, elev_ft: 6000, distance_miles: 2 },
+    { name: 'Pace Test Peak', lat: 46.84, lon: -121.7, elev_ft: 7000, distance_miles: 4 },
+  ],
+  track: [[0, 5000], [1, 5500], [2, 6000], [3, 6500], [4, 7000]],
+  route_metadata: { fileName: 'pace.gpx', routeShape: 'point-to-point' },
+  pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 60, stopBufferMinutes: 30 },
+  ...overrides,
+});
+
+test('a GPX track retraced as an out-and-back gets arrivals from the traveler\'s pace, a fit check and a turnaround', async () => {
+  const response = await request(gpxPaceApp()).post('/api/route-analysis').send(gpxPaceBody({ route_shape: 'out-and-back' }));
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.name)).toEqual([
+    'Camp Lot', 'Meadow', 'Pace Test Peak', 'Return to Meadow', 'Return to Camp Lot',
+  ]);
+  expect(response.body.waypoints.map((waypoint) => waypoint.distance_miles)).toEqual([0, 2, 4, 6, 8]);
+  // Up: 4 mi × 30 + 2,000 ft × 60/1,000 = 240 min; down: 120 + 2,000 × 20/1,000 = 160 min;
+  // 30 min of stops spread over 400 moving minutes.
+  expect(response.body.waypoints.map((waypoint) => waypoint.offset_minutes)).toEqual([0, 129, 258, 344, 430]);
+  expect(response.body.summaries.map((summary) => summary.etaTime)).toEqual(['06:00', '08:09', '10:18', '11:44', '13:10']);
+  expect(response.body.timing).toMatchObject({
+    mode: 'pace', roundTrip: true, routeShape: 'out-and-back', shapeSource: 'traveler', trackTimed: true,
+    stopMinutes: 30, estimatedMinutes: 430, windowFit: 'longer',
+    turnaround: { objectiveName: 'Pace Test Peak', objectiveEta: '10:18', returnMinutes: 172, byPlanEnd: '07:08', byDark: '16:38', sunset: '19:30' },
+  });
+  expect(response.body.timing.turnaround.marginToPlanEndMinutes).toBeLessThan(0);
+  expect(response.body.analysis).toContain('turn around at Pace Test Peak by 07:08');
+});
+
+test('a one-way GPX track is timed by pace as it is, and without a pace the plan\'s window spreads it', async () => {
+  const oneWay = await request(gpxPaceApp()).post('/api/route-analysis').send(gpxPaceBody());
+  expect(oneWay.status).toBe(200);
+  expect(oneWay.body.waypoints).toHaveLength(3);
+  expect(oneWay.body.timing).toMatchObject({ mode: 'pace', roundTrip: false, estimatedMinutes: 270, windowFit: 'fits' });
+  expect(oneWay.body.timing.routeShape).toBeUndefined();
+  expect(oneWay.body.timing.turnaround).toBeUndefined();
+
+  const noPace = await request(gpxPaceApp()).post('/api/route-analysis').send(gpxPaceBody({ pace: undefined }));
+  expect(noPace.body.timing.mode).toBe('window');
+  expect(noPace.body.waypoints.at(-1).offset_minutes).toBe(240);
+  expect(noPace.body.timing.estimatedMinutes).toBeUndefined();
+});
+
+test('the traveler can close a named route as a loop or finish it one way; a loop with an unknown way back is not timed by pace', async () => {
+  const landmarks = JSON.stringify([
+    { name: 'Shape Trailhead', lat: 40.0, lon: -105.1, elev_ft: 8000 },
+    { name: 'Shape Ridge', lat: 40.02, lon: -105.08, elev_ft: 10000 },
+    { name: 'Shape Peak', lat: 40.03, lon: -105.05, elev_ft: 11000, objective: true },
+  ]);
+  const body = { peak: 'Shape Override Peak', route: 'Shape Trail', lat: 40.03, lon: -105.05, date: '2026-07-12', start: '06:00',
+    route_distance_rt_miles: 12, pace: { minutesPerMile: 25, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 20 } };
+
+  const loop = await request(generatedRouteApp(landmarks)).post('/api/route-analysis').send({ ...body, route_shape: 'loop' });
+  expect(loop.status).toBe(200);
+  expect(loop.body.waypoints.map((waypoint) => waypoint.name)).toEqual(['Shape Trailhead', 'Shape Ridge', 'Shape Peak', 'Return to Shape Trailhead']);
+  expect(loop.body.waypoints.every((waypoint) => waypoint.leg === undefined)).toBe(true);
+  expect(loop.body.timing).toMatchObject({ routeShape: 'loop', roundTrip: false, mode: 'window' });
+
+  const oneWay = await request(generatedRouteApp(landmarks)).post('/api/route-analysis').send({ ...body, route_shape: 'point-to-point' });
+  expect(oneWay.body.waypoints.map((waypoint) => waypoint.name)).toEqual(['Shape Trailhead', 'Shape Ridge', 'Shape Peak']);
+  expect(oneWay.body.timing).toMatchObject({ routeShape: 'point-to-point', roundTrip: false });
+
+  // Left to the route, it is retraced, scaled to its listed length and timed by pace.
+  const auto = await request(generatedRouteApp(landmarks)).post('/api/route-analysis').send(body);
+  expect(auto.body.waypoints).toHaveLength(5);
+  expect(auto.body.timing).toMatchObject({ routeShape: 'out-and-back', roundTrip: true, distanceBasis: 'route-length', mode: 'pace' });
+  expect(auto.body.timing.turnaround.objectiveName).toBe('Shape Peak');
+});
+
+test('an NDJSON client gets stages and each checkpoint as it lands, then the result; others get plain JSON', async () => {
+  const compression = require('compression');
+  const app = gpxPaceApp();
+  // The real server compresses responses; the stream must not be buffered by it.
+  const compressed = express();
+  compressed.use(compression());
+  compressed.use(app);
+  const response = await request(compressed)
+    .post('/api/route-analysis')
+    .set('Accept', 'application/x-ndjson')
+    .set('Accept-Encoding', 'gzip')
+    .send(gpxPaceBody({ route_shape: 'out-and-back' }));
+
+  expect(response.status).toBe(200);
+  expect(response.headers['content-type']).toMatch(/application\/x-ndjson/);
+  expect(response.headers['content-encoding']).toBeUndefined();
+  const events = response.text.trim().split('\n').map((line) => JSON.parse(line));
+  expect(events[0]).toMatchObject({ type: 'stage', stage: 'locating', routeSource: 'gpx', checkpointCount: 3 });
+  const plan = events.find((event) => event.stage === 'forecasts');
+  expect(plan.checkpoints.map((checkpoint) => checkpoint.name)).toEqual(['Camp Lot', 'Meadow', 'Pace Test Peak', 'Return to Meadow', 'Return to Camp Lot']);
+  const checkpoints = events.filter((event) => event.type === 'checkpoint');
+  expect(checkpoints.map((event) => event.index).sort()).toEqual([0, 1, 2, 3, 4]);
+  expect(checkpoints[0]).toMatchObject({ dataAvailable: true, weather: { temp: 40 } });
+  expect(events.at(-1).type).toBe('result');
+  expect(events.at(-1).payload.summaries).toHaveLength(5);
+
+  const plain = await request(app).post('/api/route-analysis').send(gpxPaceBody());
+  expect(plain.headers['content-type']).toMatch(/application\/json/);
+  expect(plain.body.summaries).toHaveLength(3);
+
+  // A request that fails before the route is found keeps its status code.
+  const invalid = await request(app).post('/api/route-analysis').set('Accept', 'application/x-ndjson').send(gpxPaceBody({ date: 'soon' }));
+  expect(invalid.status).toBe(400);
+});
+
+test('a mapped trail with unknown elevations is still timed by pace, from distance alone', async () => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => { throw new Error('no AI'); },
+    ensureAIEnabled: () => { throw new Error('AI features are unavailable'); },
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async (url) => (String(url).includes('mapservices.nps.gov')
+      ? { ok: true, json: async () => ({ features: [{ attributes: { TRLNAME: 'Elevationless Trail' }, geometry: { paths: [[[-119.60, 37.70], [-119.59, 37.71], [-119.58, 37.72]]] } }] }) }
+      : { ok: false })),
+    fetchHeaders: {},
+    fetchElevationFt: async () => { throw new Error('elevation service down'); },
+  });
+  const response = await request(app).post('/api/route-analysis').send({
+    peak: 'Elevationless Peak', route: 'Elevationless Trail', lat: 37.72, lon: -119.58, date: '2026-07-12', start: '06:00',
+    travel_window_hours: 12, pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 0 },
+  });
+  expect(response.status).toBe(200);
+  expect(response.body.timing).toMatchObject({ basis: 'distance', distanceBasis: 'along-trail', mode: 'pace' });
+  // 30 min per mile over the out-and-back, not stretched across the 12-hour window.
+  const miles = response.body.waypoints.at(-1).distance_miles;
+  expect(response.body.waypoints.at(-1).offset_minutes).toBeCloseTo(miles * 30, -1);
+  expect(response.body.timing.estimatedMinutes).toBeLessThan(12 * 60);
 });

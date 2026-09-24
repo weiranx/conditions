@@ -9,7 +9,9 @@ import { hasStoredUserPreferences, normalizeUserPreferences } from './preference
 import type { ActivityType, SafetyData, UserPreferences } from './types';
 import { buildSafetyRequestKey } from './url-state';
 import { reportActivity } from './activity-profiles';
-import type { RouteAnalysisResult, RouteOption } from '../hooks/useRouteAnalysis';
+import type { RouteAnalysisResult, RouteOption, RouteShapeChoice } from '../hooks/useRouteAnalysis';
+
+const ROUTE_SHAPE_CHOICES = new Set<string>(['auto', 'out-and-back', 'loop', 'point-to-point']);
 import { MAX_DISPLAY_TRACK_POINTS, type GpxCheckpoint, type GpxTrackPoint, type ParsedGpxRoute } from '../lib/gpx';
 
 const PERSISTED_REPORT_VERSION = 3;
@@ -50,6 +52,8 @@ export interface PersistedReportRouteFields {
   routeAnalysis: RouteAnalysisResult | null;
   customRouteName: string;
   gpxRoute: ParsedGpxRoute | null;
+  /** The traveler's choice of route shape; older reports lack it (auto). */
+  routeShape?: RouteShapeChoice;
 }
 
 export interface PersistedReport {
@@ -263,6 +267,9 @@ export function parsePersistedReport(value: unknown): PersistedReport | null {
         ? value.route.customRouteName
         : '',
       gpxRoute: isRecord(value.route) ? parseGpxRoute(value.route.gpxRoute) : null,
+      ...(isRecord(value.route) && ROUTE_SHAPE_CHOICES.has(value.route.routeShape as string)
+        ? { routeShape: value.route.routeShape as RouteShapeChoice }
+        : {}),
     },
   };
 }

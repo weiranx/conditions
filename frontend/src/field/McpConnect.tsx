@@ -82,7 +82,7 @@ export default function McpConnect() {
         <h2>Allow {reviewedUser === userId ? client?.clientName || "this app" : "this app"} to read your Conditions data?</h2>
         {reviewedUser === userId && client && <p>Return address: <code style={{overflowWrap:"anywhere"}}>{client.callbackUri}</code></p>}
         {reviewedUser === userId && client?.clientName === "Local MCP client" && <p>Approve only if you started this connection in an app on this device. The local app’s identity is not verified.</p>}
-        <ul><li>Search objectives and retrieve forecasts.</li><li>Compare trip plans.</li><li>Read your saved reports and objective watches, including trip locations and dates.</li></ul>
+        <ul><li>Search objectives and retrieve forecasts.</li><li>Compare trip plans, departure times and multi-day forecasts.</li><li>Ask the report assistant and generate AI briefs, route analyses and satellite snow analyses. These count toward your AI and multi-day usage limits.</li><li>Read your saved reports, objective watches and their check history, including trip locations and dates, and your plan’s usage.</li></ul>
         <p>This connection cannot change reports, create watches, or send notifications.</p>
         <p>You can disconnect at any time in Connected apps. Access ends when this Conditions sign-in expires or you sign out.</p>
         <div className="mcp-connect-actions">

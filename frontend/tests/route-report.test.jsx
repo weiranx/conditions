@@ -167,6 +167,28 @@ test("the hero note appears only when a checkpoint crosses a limit and says what
   assert.match(two, /2 of 2 checkpoints cross your limits<\/strong>, first at Trailhead around 06:00/);
 });
 
+test("an official hazard within every limit is reported on the card and in the hero note", () => {
+  const route = summarize({ analysis: analysis([
+    stop(),
+    stop({ name: "Col", etaTime: "09:30", avalanche: { risk: "Considerable", dangerLevel: 3 } }),
+    stop({ name: "Summit", etaTime: "11:00", activeAlerts: 2 }),
+  ]) });
+  assert.equal(route.tone, "hazard");
+  assert.equal(route.hazardCount, 2);
+  assert.equal(route.overCount, 0);
+  assert.deepEqual(route.firstHazard, { name: "Col", eta: "09:30", hazard: { kind: "avalanche", level: 3, risk: "Considerable" } });
+  const card = routeCard(brief(route));
+  assert.match(card, /sky-status is-over[^>]*>.*2 alerts or dangers/);
+  assert.match(card, /Within your limits, but Col at @09:30 has Considerable avalanche danger\./);
+  const format = { temp: (f) => `${f}°F`, wind: (mph) => `${mph} mph`, eta: (t) => t };
+  const note = renderToStaticMarkup(<RouteNote route={route} format={format} />);
+  assert.match(note, /2 of 3 checkpoints have an official hazard<\/strong>, first at Col around 09:30: Considerable avalanche danger\./);
+  // A crossing still leads the note when both are present.
+  const both = summarize({ analysis: analysis([stop({ activeAlerts: 1 }), stop({ name: "Col", weather: { ...calm, windGust: 50 } })]) });
+  assert.equal(both.tone, "over");
+  assert.match(renderToStaticMarkup(<RouteNote route={both} format={format} />), /crosses your limits/);
+});
+
 test("the AI report context keeps unknowns null and omits readings a checkpoint didn't return", () => {
   assert.equal(buildRouteReportContext("East Ridge", null), null);
   const context = buildRouteReportContext(" ", analysis([

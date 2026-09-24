@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { Cloud } from "./MountainSection";
 import type { SkyHour } from "./sky-model";
 import { useWidth } from "./useWidth";
+import type { CheckpointTone } from "../route-planning";
 
 /** The sky and forecast at a checkpoint's arrival, drawn above it. */
 export type ProfileSky = {
@@ -16,7 +17,7 @@ export type ProfileSky = {
 export type ProfileStop = {
   name: string;
   eta: string;
-  tone: "within" | "over" | "missing";
+  tone: CheckpointTone;
   dark?: boolean;
   sky?: ProfileSky | null;
 };
@@ -65,9 +66,10 @@ function SkyGlyph({ x, y, sky }: { x: number; y: number; sky: ProfileSky }) {
  * the sky above it. Points come from buildCheckpointProfile (x 20–980, y 30–155
  * in a 1000×180 frame) and are rescaled to the real width so labels stay legible.
  * Sections leading into a checkpoint over a limit are drawn in the caution colour.
+ * A checkpoint with no known elevation sits between its neighbours, dashed.
  */
 export function RouteProfile({ points, stops, selected, onSelect, caption, ticks = [], levels = [], distanceTicks = [], legs = [] }: {
-  points: { x: number; y: number }[];
+  points: { x: number; y: number; estimated?: boolean }[];
   stops: ProfileStop[];
   selected: number;
   onSelect: (index: number) => void;
@@ -116,7 +118,7 @@ export function RouteProfile({ points, stops, selected, onSelect, caption, ticks
     to: i === pts.length - 1 ? width : (pts[i][0] + pts[i + 1][0]) / 2,
   });
   const skyX = (x: number) => Math.max(m.l + 20, Math.min(plotR - 34, x));
-  const describe = stops.map((stop, i) => `${i + 1}. ${stop.name}${stop.eta ? ` at ${stop.eta}` : ""}${stop.sky?.temp ? `, ${stop.sky.temp}` : ""}${stop.tone === "over" ? ", over your limits" : ""}`).join(". ");
+  const describe = stops.map((stop, i) => `${i + 1}. ${stop.name}${stop.eta ? ` at ${stop.eta}` : ""}${stop.sky?.temp ? `, ${stop.sky.temp}` : ""}${stop.tone === "over" ? ", over your limits" : stop.tone === "hazard" ? ", alert or avalanche danger" : ""}${points[i]?.estimated ? ", elevation unknown" : ""}`).join(". ");
   return (
     <div className="sky-route-profile sky-mountain" ref={ref}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${caption}. ${describe}.`}
@@ -179,6 +181,10 @@ export function RouteProfile({ points, stops, selected, onSelect, caption, ticks
         {pts.slice(1).map((p, i) => stops[i + 1]?.tone === "over" && (
           <line key={i} x1={pts[i][0]} y1={pts[i][1]} x2={p[0]} y2={p[1]} className="rp-crest is-over" />
         ))}
+        {/* The height of a section touching an unknown elevation is a guess. */}
+        {pts.slice(1).map((p, i) => (points[i]?.estimated || points[i + 1]?.estimated) && (
+          <line key={`est-${i}`} x1={pts[i][0]} y1={pts[i][1]} x2={p[0]} y2={p[1]} className="rp-crest is-estimated" aria-hidden="true" />
+        ))}
         {pts.slice(1).map((p, i) => {
           const leg = legs[i];
           const span = p[0] - pts[i][0];
@@ -201,7 +207,7 @@ export function RouteProfile({ points, stops, selected, onSelect, caption, ticks
         )}
         {pts.map(([x, y], i) => (
           <g key={i} role="button" tabIndex={0} aria-label={`Select ${stops[i]?.name}`} aria-pressed={i === selected}
-            className={`rp-stop is-${stops[i]?.tone}${i === selected ? " is-selected" : ""}`}
+            className={`rp-stop is-${stops[i]?.tone}${points[i]?.estimated ? " is-estimated" : ""}${i === selected ? " is-selected" : ""}`}
             onClick={() => onSelect(i)}
             onMouseEnter={() => setHovered(i)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(i); } }}>
