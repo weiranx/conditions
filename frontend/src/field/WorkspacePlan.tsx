@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import {
   ArrowRight,
   Check,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   Compass,
   LoaderCircle,
@@ -44,8 +46,28 @@ export function WorkspacePlan({
   const tapped = useRef(false);
   const [error, setError] = useState("");
   const [selectingLocation, setSelectingLocation] = useState(false);
+  const [showAllActivities, setShowAllActivities] = useState(false);
   const busy = comparison ? w.tripForecastLoading : w.loading;
   const selected = w.hasObjective && !w.objectiveDraftDirty;
+  const activities = [
+    ...ACTIVITY_PROFILE_ORDER.map((key) => ({
+      key,
+      label: ACTIVITY_PROFILES[key].label,
+      icon: key,
+      patch: { defaultActivity: key, customActivityId: null },
+    })),
+    ...w.preferences.customActivities.map((custom) => ({
+      key: custom.id,
+      label: custom.label,
+      icon: custom.baseActivity,
+      patch: { defaultActivity: custom.baseActivity, customActivityId: custom.id },
+    })),
+  ];
+  const activeKey = activeActivityKey(w.preferences);
+  // Only the chosen activity shows until the list is opened; with no
+  // match (a deleted custom activity) every choice shows.
+  const hasChoice = activities.some((option) => option.key === activeKey);
+  const expanded = showAllActivities || !hasChoice;
   function setDuration(hours: number) {
     if (!Number.isFinite(hours)) return;
     if (!comparison && w.safetyData) w.handleEditPlan();
@@ -441,23 +463,15 @@ export function WorkspacePlan({
         </div>
         <fieldset className="sky-plan-activities">
           <legend className="sky-plan-step"><span aria-hidden="true">3</span>How</legend>
-          <div className="sky-activity-grid" role="radiogroup" aria-label="Activity">
-            {[
-              ...ACTIVITY_PROFILE_ORDER.map((key) => ({
-                key,
-                label: ACTIVITY_PROFILES[key].label,
-                icon: key,
-                patch: { defaultActivity: key, customActivityId: null },
-              })),
-              ...w.preferences.customActivities.map((custom) => ({
-                key: custom.id,
-                label: custom.label,
-                icon: custom.baseActivity,
-                patch: { defaultActivity: custom.baseActivity, customActivityId: custom.id },
-              })),
-            ].map((option) => {
+          <div
+            id={`${id}-activities`}
+            className="sky-activity-grid"
+            role="radiogroup"
+            aria-label="Activity"
+          >
+            {activities.filter((option) => expanded || option.key === activeKey).map((option) => {
               const Icon = ACTIVITY_ICONS[option.icon] || Compass;
-              const checked = activeActivityKey(w.preferences) === option.key;
+              const checked = activeKey === option.key;
               return (
                 <label key={option.key} className={`sky-activity${checked ? " is-checked" : ""}`}>
                   <input
@@ -471,6 +485,11 @@ export function WorkspacePlan({
                       if (comparison) w.setTripForecastRowsDirect([]);
                       w.updatePreferences(option.patch);
                     }}
+                    onClick={(event) => {
+                      // A pointer pick closes the list; arrow keys also fire
+                      // click (detail 0) and keep it open to move through.
+                      if (event.detail > 0) setShowAllActivities(false);
+                    }}
                   />
                   <Icon size={24} strokeWidth={1.7} aria-hidden="true" />
                   <span>{option.label}</span>
@@ -478,6 +497,27 @@ export function WorkspacePlan({
               );
             })}
           </div>
+          {hasChoice && (
+            <button
+              type="button"
+              className="sky-activity-toggle"
+              aria-expanded={expanded}
+              aria-controls={`${id}-activities`}
+              onClick={() => setShowAllActivities(!expanded)}
+            >
+              {expanded ? (
+                <>
+                  Show less
+                  <ChevronUp size={16} aria-hidden="true" />
+                </>
+              ) : (
+                <>
+                  Change activity
+                  <ChevronDown size={16} aria-hidden="true" />
+                </>
+              )}
+            </button>
+          )}
           <details className="sky-plan-limits">
             <summary>
               <span className="sky-plan-limits-title">
