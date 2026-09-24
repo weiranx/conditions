@@ -5,8 +5,17 @@ const rateLimit = require('express-rate-limit');
 const { createMcpOAuthService } = require('../auth/mcp-oauth');
 const { readSessionToken } = require('../auth/account-access');
 const allowedReadPath = path => path === '/api/auth/mcp/identity' || path === '/api/search' || path === '/api/safety'
+  || path === '/api/start-time-scenarios' || path === '/api/day-over-day' || path === '/api/route-suggestions'
   || path === '/api/account/reports' || /^\/api\/account\/reports\/[0-9a-f-]{36}$/iu.test(path)
-  || path === '/api/account/objective-watches';
+  || path === '/api/account/objective-watches'
+  || /^\/api\/account\/objective-watches\/[0-9a-f-]{36}\/(?:checks|events)$/iu.test(path)
+  || path === '/api/account/reports/comparison-baseline' || path === '/api/account/usage'
+  || path === '/api/feature-flags' || path === '/api/healthz';
+// Report sections the app computes by POST. They store nothing for the user,
+// but they count against the account's AI and multi-day usage like the app does.
+const REPORT_COMPUTE_PATHS = new Set(['/api/ai-brief', '/api/report-chat', '/api/route-analysis', '/api/snow-vision', '/api/trip-forecasts']);
+const allowedMcpRequest = (method, path) => (method === 'GET' && allowedReadPath(path))
+  || (method === 'POST' && REPORT_COMPUTE_PATHS.has(path));
 function registerMcpOAuthRoutes({ app, database, accountService, env = process.env, service }) {
   const issuer = env.MCP_PUBLIC_URL, frontendOrigin = env.MCP_FRONTEND_ORIGIN;
   if (!issuer && !service) return;
@@ -64,7 +73,7 @@ function registerMcpOAuthRoutes({ app, database, accountService, env = process.e
   // OAuth bearer credentials never grant writes or access to arbitrary API routes.
   app.use(wrap(async(req,res,next)=>{
     if (!req.headers.authorization?.startsWith('Bearer cmcp_')) return next();
-    if (req.method !== 'GET' || !allowedReadPath(req.path)) return res.status(403).json({error:'insufficient_scope'});
+    if (!allowedMcpRequest(req.method, req.path)) return res.status(403).json({error:'insufficient_scope'});
     const token = req.headers.authorization.slice(7);
     const user = await auth.userForToken(token);
     if (!user) return res.status(401).json({error:'invalid_token'});
@@ -73,4 +82,4 @@ function registerMcpOAuthRoutes({ app, database, accountService, env = process.e
   app.get('/api/auth/mcp/identity', (req,res)=> req.mcpUser ? res.json({userId:req.mcpUser.id}) : res.status(401).json({error:'invalid_token'}));
   return auth;
 }
-module.exports = { registerMcpOAuthRoutes, allowedReadPath };
+module.exports = { registerMcpOAuthRoutes, allowedReadPath, allowedMcpRequest };
