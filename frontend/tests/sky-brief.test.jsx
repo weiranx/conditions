@@ -136,9 +136,10 @@ function briefWorkspace(overrides = {}, dataOverrides = {}) {
     ...overrides,
   };
 }
-const brief = (w, hours = buildSkyHours([row()], plan), activity = "backcountry") => renderToStaticMarkup(
+const SECTIONS = ["forecast", "timing", "terrain", "route", "sources", "gear"];
+const brief = (w, hours = buildSkyHours([row()], plan), activity = "backcountry", sections = SECTIONS) => renderToStaticMarkup(
   <BriefSections w={w} hours={hours} clock={fmt.clock} scoreValue={74} insufficient={false} bridge=""
-    onOpen={() => {}} onReadAll={() => {}} routeEnabled gearEnabled activity={activity} />);
+    onOpen={() => {}} onReadAll={() => {}} sections={sections} gearEnabled activity={activity} />);
 const checkOrder = (html) => [...html.matchAll(/sky-check[^"]*"><span class="sky-card-head"><span>([^<]+)</g)].map((m) => m[1]);
 
 test("the checks read in the activity's order and say so", () => {
@@ -176,7 +177,7 @@ test("peak gust is unavailable rather than calm when no gust was measured", () =
   assert.doesNotMatch(html, /0 mph/);
 });
 
-const checkCard = (html, title) => html.slice(html.indexOf(`<span>${title}</span>`), html.indexOf("sky-chev", html.indexOf(`<span>${title}</span>`)));
+const checkCard = (html, title) => html.slice(html.indexOf(`<span>${title}</span>`), html.indexOf("sky-open", html.indexOf(`<span>${title}</span>`)));
 
 test("incomplete weather hours are not described as within limits", () => {
   const html = brief(briefWorkspace(), buildSkyHours([row(), row({ time: "08:00", complete: false, pass: false, gust: NaN })], plan));
@@ -196,6 +197,97 @@ test("high fire danger is over the limit even when air quality is unavailable", 
   const card = checkCard(brief(briefWorkspace({}, { fireRisk: { level: 3, label: "High" }, airQuality: null })), "Air &amp; fire");
   assert.match(card, /is-over/);
   assert.match(card, /Fire risk high/);
+});
+
+const numberTitles = (html) => [...html.matchAll(/sky-number[^"]*"><span class="sky-card-head"><span>([^<]+)/g)].map((m) => m[1]);
+const numberCard = (html, title) => html.slice(html.indexOf(`<span>${title}</span>`), html.indexOf("sky-open", html.indexOf(`<span>${title}</span>`)));
+
+test("the headline numbers follow the activity", () => {
+  const w = briefWorkspace();
+  assert.deepEqual(numberTitles(brief(w)), ["Peak gust", "Rain and snow", "Safety score"]);
+  assert.deepEqual(numberTitles(brief(w, undefined, "ski-touring")), ["Snow and rain", "Peak gust", "Safety score"]);
+  assert.deepEqual(numberTitles(brief(w, undefined, "mountaineering")), ["Peak gust", "Coldest feels-like", "Safety score"]);
+  assert.deepEqual(numberTitles(brief(w, undefined, "trail-running")), ["Warmest feels-like", "Rain and snow", "Safety score"]);
+  assert.deepEqual(numberTitles(brief(w, undefined, "snow-climbing")), ["Overnight refreeze", "Snow and rain", "Safety score"]);
+  assert.match(brief(w, undefined, "ski-touring"), /New snow and wind load the slopes/);
+  // Snow leads the precipitation gauges on a snow trip.
+  const ski = brief(w, undefined, "ski-touring");
+  assert.ok(ski.indexOf("Expected snow") < ski.indexOf("Expected rain"));
+});
+
+test("feels-like numbers are checked against the matching limit", () => {
+  const w = briefWorkspace();
+  const { minFeelsLikeF, maxFeelsLikeF } = w.preferences;
+  const hot = buildSkyHours([row({ feelsLike: maxFeelsLikeF + 6 }), row({ time: "08:00", feelsLike: 60 })], plan);
+  const heat = numberCard(brief(briefWorkspace({}, { heatRisk: { level: 2, label: "Elevated" } }), hot, "trail-running"), "Warmest feels-like");
+  assert.doesNotMatch(numberCard(brief(w, hot, "trail-running"), "Warmest feels-like"), /Heat risk/, "no assessment, no heat label");
+  assert.match(heat, /is-over/);
+  assert.match(heat, new RegExp(`${maxFeelsLikeF + 6}°F`));
+  assert.match(heat, /Heat risk elevated/);
+  const cold = buildSkyHours([row({ feelsLike: minFeelsLikeF - 4 }), row({ time: "08:00", feelsLike: 30 })], plan);
+  const card = numberCard(brief(w, cold, "mountaineering"), "Coldest feels-like");
+  assert.match(card, /Below floor/);
+  assert.match(card, /at 7:00/);
+  const missing = numberCard(brief(w, buildSkyHours([row({ temp: NaN, feelsLike: NaN, complete: false, pass: false })], plan), "mountaineering"), "Coldest feels-like");
+  assert.match(missing, /Unavailable/);
+  assert.doesNotMatch(missing, /NaN|Within/);
+});
+
+test("the refreeze number never reads firm without a measured night", () => {
+  const withSignals = (signals) => {
+    return numberCard(brief(briefWorkspace({}, { terrainCondition: { code: "snow_ice", label: "Snow", signals } }), undefined, "snow-climbing"), "Overnight refreeze");
+  };
+  const weak = withSignals({ refreezeQuality: "weak", freezeThawMinTempF: 36 });
+  assert.match(weak, /is-over/);
+  assert.match(weak, /low 36°F/);
+  assert.match(weak, /stays above freezing/);
+  assert.match(withSignals({ refreezeQuality: "strong", freezeThawMinTempF: 20 }), /sky-big">Strong/);
+  const unknown = withSignals({});
+  assert.match(unknown, /Unavailable/);
+  assert.doesNotMatch(unknown, /sky-big">Strong|Firm/);
+});
+
+test("the brief lists every report section in reading order, with its state", () => {
+  const w = briefWorkspace({ returnMinutes: 1200, nwsAlertCount: 2 });
+  const html = brief(w, undefined, "ski-touring", ["terrain", "forecast", "timing", "route", "sources", "gear"]);
+  const nav = html.slice(html.indexOf('class="sky-sections"'), html.indexOf("</nav>"));
+  assert.deepEqual([...nav.matchAll(/<strong>([^<]+)<\/strong>/g)].map((m) => m[1]),
+    ["Terrain &amp; snow", "Weather", "Timing", "Route", "Checks &amp; sources", "Gear &amp; actions", "Full report"]);
+  assert.match(nav, /is-over"[^]*?<strong>Timing<\/strong><small>Back 30 min after sunset/);
+  assert.match(nav, /<strong>Checks &amp; sources<\/strong><small>2 active alerts/);
+  assert.match(html, /Ordered for ski touring\. Open one for the full evidence/);
+  const full = renderToStaticMarkup(<BriefSections w={w} hours={buildSkyHours([row()], plan)} clock={fmt.clock} scoreValue={74}
+    insufficient={false} bridge="" onOpen={() => {}} onReadAll={() => {}} sections={SECTIONS} gearEnabled activity="hiking" showMore={false} />);
+  assert.doesNotMatch(full, /sky-sections/, "the full report already contains every section");
+});
+
+test("a section never reads clear over a check it cannot confirm", () => {
+  const w = briefWorkspace();
+  const weather = (html) => html.slice(html.indexOf("<strong>Weather</strong>"), html.indexOf("</button>", html.indexOf("<strong>Weather</strong>")));
+  assert.match(weather(brief(w)), /Within limits/);
+  const noAqi = weather(brief(briefWorkspace({}, { airQuality: null })));
+  assert.match(noAqi, /Air quality unavailable/);
+  assert.doesNotMatch(noAqi, /Within limits/);
+});
+
+test("the freezing level is not compared with an unknown objective elevation", () => {
+  const card = (elevation) => numberCard(brief(briefWorkspace({}, { weather: { elevation }, atmosphere: { freezingLevelFt: 11000 },
+    terrainCondition: { code: "snow_ice", signals: { refreezeQuality: "weak", freezeThawMinTempF: 30 } } }), undefined, "snow-climbing"), "Overnight refreeze");
+  assert.match(card(9000), /freezing level sits above the objective/);
+  assert.doesNotMatch(card(null), /freezing level/);
+});
+
+test("every brief card names the section it opens", () => {
+  const w = briefWorkspace({ sourceFreshnessRows: [{ label: "Alerts", issued: null, staleHours: 6, stateOverride: "fresh" }] });
+  const html = brief(w);
+  const opens = (title) => (checkCard(html, title) + html.slice(html.indexOf("sky-open", html.indexOf(`<span>${title}</span>`))).slice(0, 400))
+    .match(/sky-open">Open ([^<]+)/)[1];
+  assert.equal(opens("Weather"), "Weather");
+  assert.equal(opens("Alerts"), "Checks &amp; sources");
+  assert.equal(opens("Daylight"), "Timing");
+  assert.equal(opens("Avalanche"), "Terrain &amp; snow");
+  assert.equal(opens("Peak gust"), "Weather");
+  assert.equal(opens("Safety score"), "Checks &amp; sources");
 });
 
 import { plainRule, plainReason, durationLabel } from "../src/field/sky/status";

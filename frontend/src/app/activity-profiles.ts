@@ -4,6 +4,8 @@ import type { ActivityType, SafetyData, UserPreferences } from './types';
 export type ActivityChapter = 'forecast' | 'timing' | 'terrain' | 'route';
 /** The check cards on the report brief. */
 export type ActivityCheck = 'weather' | 'alerts' | 'daylight' | 'terrain' | 'avalanche' | 'air';
+/** Headline numbers the brief can lead with, beside the safety score. */
+export type ActivityNumber = 'gust' | 'precip' | 'cold' | 'heat' | 'refreeze';
 
 /**
  * How a report reads for an activity. Order only: every chapter and check is
@@ -15,6 +17,9 @@ export interface ActivityReportLens {
   checks: ActivityCheck[];
   /** Short phrase for what leads the report, e.g. "avalanche and snowpack". */
   leads: string | null;
+  /** The two headline numbers on the brief, and the line that introduces them. */
+  numbers: [ActivityNumber, ActivityNumber];
+  numbersNote: string;
 }
 
 export interface ActivityProfile {
@@ -55,6 +60,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['forecast', 'timing', 'terrain', 'route'],
       checks: ['weather', 'daylight', 'alerts', 'terrain', 'air', 'avalanche'],
       leads: 'storms and daylight',
+      numbers: ['gust', 'precip'],
+      numbersNote: 'Wind and rain against your limits.',
     },
     preferencePatch: {
       defaultActivity: 'hiking', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5, maxFeelsLikeF: 95,
@@ -69,6 +76,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['forecast', 'timing', 'terrain', 'route'],
       checks: ['weather', 'alerts', 'terrain', 'daylight', 'air', 'avalanche'],
       leads: 'wind, storms and wet rock',
+      numbers: ['gust', 'precip'],
+      numbersNote: 'Wind and rain decide how the rock feels.',
     },
     preferencePatch: {
       defaultActivity: 'scrambling', maxWindGustMph: 20, maxPrecipChance: 45, minFeelsLikeF: 10, maxFeelsLikeF: 90,
@@ -83,6 +92,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['forecast', 'timing', 'terrain', 'route'],
       checks: ['weather', 'daylight', 'terrain', 'alerts', 'avalanche', 'air'],
       leads: 'wind, storms and daylight',
+      numbers: ['gust', 'cold'],
+      numbersNote: 'Wind and cold on exposed ground.',
     },
     preferencePatch: {
       defaultActivity: 'alpine-climbing', maxWindGustMph: 18, maxPrecipChance: 35, minFeelsLikeF: 10, maxFeelsLikeF: 85,
@@ -97,6 +108,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['forecast', 'terrain', 'timing', 'route'],
       checks: ['weather', 'avalanche', 'terrain', 'daylight', 'alerts', 'air'],
       leads: 'wind, cold and snow conditions',
+      numbers: ['gust', 'cold'],
+      numbersNote: 'Wind and cold up high.',
     },
     preferencePatch: {
       defaultActivity: 'mountaineering', maxWindGustMph: 20, maxPrecipChance: 35, minFeelsLikeF: -5, maxFeelsLikeF: 85,
@@ -111,6 +124,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['terrain', 'timing', 'forecast', 'route'],
       checks: ['terrain', 'avalanche', 'daylight', 'weather', 'alerts', 'air'],
       leads: 'snow, refreeze and timing',
+      numbers: ['refreeze', 'precip'],
+      numbersNote: 'The overnight freeze and new snow set the snow.',
     },
     preferencePatch: {
       defaultActivity: 'snow-climbing', maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: 0, maxFeelsLikeF: 85,
@@ -125,6 +140,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['terrain', 'forecast', 'timing', 'route'],
       checks: ['avalanche', 'terrain', 'weather', 'alerts', 'daylight', 'air'],
       leads: 'avalanche and snowpack',
+      numbers: ['precip', 'gust'],
+      numbersNote: 'New snow and wind load the slopes.',
     },
     preferencePatch: {
       defaultActivity: 'ski-touring', maxWindGustMph: 25, maxPrecipChance: 50, minFeelsLikeF: -5, maxFeelsLikeF: 90,
@@ -139,6 +156,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['forecast', 'timing', 'route', 'terrain'],
       checks: ['weather', 'air', 'daylight', 'alerts', 'terrain', 'avalanche'],
       leads: 'heat, air quality and daylight',
+      numbers: ['heat', 'precip'],
+      numbersNote: 'Heat and rain against a running pace.',
     },
     preferencePatch: {
       defaultActivity: 'trail-running', maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25, maxFeelsLikeF: 85,
@@ -153,6 +172,8 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
       chapters: ['forecast', 'timing', 'terrain', 'route'],
       checks: ['weather', 'alerts', 'daylight', 'terrain', 'avalanche', 'air'],
       leads: null,
+      numbers: ['gust', 'precip'],
+      numbersNote: 'What your limits are up against.',
     },
     preferencePatch: {
       defaultActivity: 'backcountry', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5, maxFeelsLikeF: 95,

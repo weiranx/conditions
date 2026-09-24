@@ -323,6 +323,9 @@ export function makeReport(params = {}, scenario = "mixed") {
         maxSnowDepthIn: snowy ? 16 : 0,
         rain24hIn: 0.12,
         tempF: first.temp,
+        // The night before the start (backend surface-evidence.js).
+        freezeThawMinTempF: snowy ? 27 : 41,
+        refreezeQuality: snowy ? "fair" : "weak",
       },
     },
     heatRisk: {
