@@ -99,6 +99,38 @@ describe('provider raw-payload caches', () => {
     expect(second.weatherData.dailyTempLowF).toBe(40);
   });
 
+  test('Open-Meteo weather prefetch is joined by the later fallback request', async () => {
+    let respond;
+    const fetchWithTimeout = jest.fn(() => new Promise((resolve) => { respond = resolve; }));
+    const { fetchOpenMeteoWeatherFallback, prefetchOpenMeteoWeather } = createWeatherDataService({
+      fetchWithTimeout,
+      requestTimeoutMs: 100,
+    });
+
+    prefetchOpenMeteoWeather({ lat: 45.3736, lon: -121.696, fetchOptions: {} });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+
+    const fallback = fetchOpenMeteoWeatherFallback({
+      lat: 45.3736,
+      lon: -121.696,
+      selectedDate: '2026-07-10',
+      startClock: '01:00',
+      fetchOptions: {},
+      trendHours: 1,
+    });
+    respond({
+      ...okJsonResponse({
+        timezone: 'UTC',
+        hourly: { time: ['2026-07-10T00:00', '2026-07-10T01:00'], temperature_2m: [40, 50] },
+      }),
+      headers: { get: () => null },
+    });
+
+    expect((await fallback).weatherData.temp).toBe(50);
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+  });
+
   test('Open-Meteo weather stops host retries when the request signal is aborted', async () => {
     const fetchWithTimeout = jest.fn(async () => {
       throw new Error('aborted weather request');

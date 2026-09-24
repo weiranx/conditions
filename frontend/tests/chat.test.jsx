@@ -37,6 +37,9 @@ async function mount(t, props = {}, allowed = true) {
 
 test('full screen preserves the composer node, scroll, and returns focus on Escape', async t => {
   const h = await mount(t);
+  // The conversation, and the AI SDK it needs, loads when the chat first opens.
+  assert.equal(document.querySelector('textarea'), null);
+  await act(async () => document.querySelector('.field-chat-toggle').click());
   const composer = document.querySelector('textarea');
   const messages = document.querySelector('.field-chat-messages');
   await act(async () => {
@@ -59,6 +62,10 @@ test('full screen preserves the composer node, scroll, and returns focus on Esca
   assert.equal(messages.scrollTop, 230);
   assert.equal(document.body.style.overflow, '');
   assert.equal(document.activeElement.getAttribute('aria-label'), 'Open chat full screen');
+  await act(async () => document.querySelector('.field-chat-toggle').click());
+  assert.equal(document.querySelector('dialog').open, false);
+  assert.equal(document.querySelector('textarea'), composer);
+  assert.equal(composer.value, 'A draft still being written');
 });
 
 test('saved conversations expand without AI access and never show a composer', async t => {
