@@ -6,6 +6,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Route } from '../src/field/Route';
 import { WorkspacePlan } from '../src/field/WorkspacePlan';
+import { publishAiAvailability } from '../src/hooks/useAiAvailability';
 import { buildCheckpointProfile } from '../src/field/route-planning';
 import { parseGpxText } from '../src/lib/gpx';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
@@ -359,4 +360,19 @@ test('the plan carries the route: a name, suggestions to pick from, or the impor
   const comparison = renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ tripStartDate: '2026-09-08',
     tripStartTime: '07:00', tripDurationDays: 3 })} comparison />);
   assert.doesNotMatch(comparison, /sky-plan-route/);
+});
+
+// Last in the file: the published availability is shared module state.
+test('the plan does not offer route suggestions when the server has no route AI', () => {
+  const previous = globalThis.window;
+  globalThis.window = { dispatchEvent: () => true };
+  try {
+    publishAiAvailability({ available: true, features: { routeAnalysis: { available: false } } });
+  } finally {
+    globalThis.window = previous;
+  }
+  const doc = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ accountUser: { id: 'u1' } })} />)).window.document;
+  const suggest = [...doc.querySelectorAll('.sky-plan-route button')].find((b) => b.textContent === 'Suggest routes');
+  assert.equal(suggest.disabled, true);
+  assert.match(doc.querySelector('.sky-plan-route-hint').textContent, /unavailable on this server/);
 });

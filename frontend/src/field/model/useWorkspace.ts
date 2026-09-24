@@ -2009,20 +2009,44 @@ export function useWorkspace() {
   ]);
   // A new report analyzes the planned route alongside it. Guests and servers
   // without route analysis skip it quietly; the Route chapter offers it instead.
+  // While the session is still loading, the decision waits for the account.
+  const [routeAwaitingAccount, setRouteAwaitingAccount] =
+    useState<typeof safetyData>(null);
   useLayoutEffect(() => {
     reportGeneratedRef.current = () => {
       clearRouteAnalysis();
+      setRouteAwaitingAccount(null);
       const capabilities = safetyData?.capabilities;
       if (
         !featureFlags.routeAnalysis ||
-        !accountUser ||
         capabilities?.ai === false ||
         capabilities?.routeAnalysis === false
       )
         return;
-      handleAnalyzePlannedRoute();
+      if (accountLoading) setRouteAwaitingAccount(safetyData);
+      else if (accountUser) handleAnalyzePlannedRoute();
     };
   });
+  useEffect(() => {
+    if (!routeAwaitingAccount || accountLoading) return;
+    setRouteAwaitingAccount(null);
+    // Only for the report it was deferred for, and not if one already started.
+    if (
+      accountUser &&
+      routeAwaitingAccount === safetyData &&
+      !routeAnalysis &&
+      !routeLoading
+    )
+      handleAnalyzePlannedRoute();
+  }, [
+    routeAwaitingAccount,
+    accountLoading,
+    accountUser,
+    safetyData,
+    routeAnalysis,
+    routeLoading,
+    handleAnalyzePlannedRoute,
+  ]);
 
   const prefHandlers = usePreferenceHandlers({
     preferences,

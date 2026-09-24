@@ -23,6 +23,7 @@ import { parseGpxFile } from "../lib/gpx";
 import "./sky/plan.css";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import { liftAboveKeyboard } from "./touch";
+import { useAiAvailability } from "../hooks/useAiAvailability";
 
 
 export function WorkspacePlan({
@@ -41,9 +42,6 @@ export function WorkspacePlan({
   const tapped = useRef(false);
   const [error, setError] = useState("");
   const [selectingLocation, setSelectingLocation] = useState(false);
-  const [routeOpen, setRouteOpen] = useState(Boolean(w.plannedRouteName));
-  const routeStep = !comparison && w.featureFlags.routeAnalysis;
-  const findingRoutes = w.routeLoadingState?.kind === "suggestions";
   const busy = comparison ? w.tripForecastLoading : w.loading;
   const selected = w.hasObjective && !w.objectiveDraftDirty;
   function setDuration(hours: number) {
@@ -464,83 +462,8 @@ export function WorkspacePlan({
             })}
           </div>
         </fieldset>
-        {routeStep && (
-          <details
-            className="sky-plan-route"
-            open={routeOpen}
-            onToggle={(event) => setRouteOpen(event.currentTarget.open)}
-          >
-            <summary>
-              <span className="sky-plan-step"><span aria-hidden="true">4</span>Route</span>
-              <small>{w.plannedRouteName || "Optional"}</small>
-            </summary>
-            {w.importedGpxRoute ? (
-              <p className="sky-plan-route-note">
-                <RouteIcon size={15} aria-hidden="true" />
-                Checkpoints come from your GPX track, {w.importedGpxRoute.checkpoints.length} along the way.
-              </p>
-            ) : (
-              <>
-                <div className="sky-plan-route-name">
-                  <label>
-                    Route name
-                    <input
-                      value={w.customRouteName}
-                      onChange={(event) => w.setCustomRouteName(event.target.value)}
-                      placeholder="Enter a named route"
-                      maxLength={250}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="field-button"
-                    disabled={!selected || w.routeLoading}
-                    onClick={() =>
-                      w.handleFetchRouteSuggestions(
-                        w.objectiveName,
-                        w.position.lat,
-                        w.position.lng,
-                      )
-                    }
-                  >
-                    {findingRoutes ? "Finding routes…" : "Suggest routes"}
-                  </button>
-                </div>
-                {w.routeError && (
-                  <p className="field-feedback" role="alert">{w.routeError}</p>
-                )}
-                {!findingRoutes && w.routeSuggestions?.length === 0 && (
-                  <p className="field-feedback">No suggestions for this location. Type a route name instead.</p>
-                )}
-                {w.routeSuggestions && w.routeSuggestions.length > 0 && (
-                  <div className="sky-plan-route-options" role="group" aria-label="Suggested routes">
-                    {w.routeSuggestions.map((route, i) => (
-                      <button
-                        type="button"
-                        key={`${route.name}-${i}`}
-                        aria-pressed={w.customRouteName === route.name}
-                        onClick={() => w.setCustomRouteName(route.name)}
-                      >
-                        <strong>{route.name}</strong>
-                        <small>
-                          {[
-                            route.class,
-                            `${w.formatDistanceDisplay(route.distance_rt_miles)} round trip`,
-                            `${w.formatElevationDeltaDisplay(route.elev_gain_ft)} gain`,
-                          ].filter(Boolean).join(" · ")}
-                        </small>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-            <p className="sky-plan-route-hint">
-              {w.accountUser
-                ? "Conditions are checked at timed checkpoints along the route once your brief is ready."
-                : "Sign in to check conditions at timed checkpoints along the route."}
-            </p>
-          </details>
+        {!comparison && w.featureFlags.routeAnalysis && (
+          <PlanRoute workspace={w} selected={selected} />
         )}
         {comparison ? (
           <label className="field-activity">
@@ -583,5 +506,94 @@ export function WorkspacePlan({
         </p>
       )}
     </form>
+  );
+}
+
+/** Optional fourth step: a route to check at timed checkpoints once the brief is ready. */
+function PlanRoute({ workspace: w, selected }: { workspace: Workspace; selected: boolean }) {
+  const [routeOpen, setRouteOpen] = useState(Boolean(w.plannedRouteName));
+  // Offered until the health check says route AI is off; the request itself
+  // still reports any failure.
+  const available = useAiAvailability({ ai: true });
+  const findingRoutes = w.routeLoadingState?.kind === "suggestions";
+  return (
+    <details
+      className="sky-plan-route"
+      open={routeOpen}
+      onToggle={(event) => setRouteOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <span className="sky-plan-step"><span aria-hidden="true">4</span>Route</span>
+        <small>{w.plannedRouteName || "Optional"}</small>
+      </summary>
+      {w.importedGpxRoute ? (
+        <p className="sky-plan-route-note">
+          <RouteIcon size={15} aria-hidden="true" />
+          Checkpoints come from your GPX track, {w.importedGpxRoute.checkpoints.length} along the way.
+        </p>
+      ) : (
+        <>
+          <div className="sky-plan-route-name">
+            <label>
+              Route name
+              <input
+                value={w.customRouteName}
+                onChange={(event) => w.setCustomRouteName(event.target.value)}
+                placeholder="Enter a named route"
+                maxLength={250}
+              />
+            </label>
+            <button
+              type="button"
+              className="field-button"
+              disabled={!selected || w.routeLoading || !available.routeAnalysis}
+              onClick={() =>
+                w.handleFetchRouteSuggestions(
+                  w.objectiveName,
+                  w.position.lat,
+                  w.position.lng,
+                )
+              }
+            >
+              {findingRoutes ? "Finding routes…" : "Suggest routes"}
+            </button>
+          </div>
+          {w.routeError && (
+            <p className="field-feedback" role="alert">{w.routeError}</p>
+          )}
+          {!findingRoutes && w.routeSuggestions?.length === 0 && (
+            <p className="field-feedback">No suggestions for this location. Type a route name instead.</p>
+          )}
+          {w.routeSuggestions && w.routeSuggestions.length > 0 && (
+            <div className="sky-plan-route-options" role="group" aria-label="Suggested routes">
+              {w.routeSuggestions.map((route, i) => (
+                <button
+                  type="button"
+                  key={`${route.name}-${i}`}
+                  aria-pressed={w.customRouteName === route.name}
+                  onClick={() => w.setCustomRouteName(route.name)}
+                >
+                  <strong>{route.name}</strong>
+                  <small>
+                    {[
+                      route.class,
+                      `${w.formatDistanceDisplay(route.distance_rt_miles)} round trip`,
+                      `${w.formatElevationDeltaDisplay(route.elev_gain_ft)} gain`,
+                    ].filter(Boolean).join(" · ")}
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <p className="sky-plan-route-hint">
+        {!available.routeAnalysis
+          ? "Route analysis is unavailable on this server right now."
+          : w.accountUser
+            ? "Conditions are checked at timed checkpoints along the route once your brief is ready."
+            : "Sign in to check conditions at timed checkpoints along the route."}
+      </p>
+    </details>
   );
 }
