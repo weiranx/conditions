@@ -1,8 +1,10 @@
-// Backend twin of frontend/src/app/approach-elevation.ts. The hourly forecast
-// describes the objective, but the first hours of a trip are spent on the
-// approach, often thousands of feet lower. This estimates where the party is
-// at each planned hour and shifts that hour's temperature and wind to it.
-// Keep the constants and rules here in step with the frontend module.
+// The hourly forecast describes the objective, but the first hours of a trip
+// are spent on the approach, often thousands of feet lower. This estimates
+// where the party is at each planned hour and shifts that hour's temperature
+// and wind to it. Precipitation and storm signals are never adjusted: a storm
+// cell does not care how high you are.
+
+const { clockMinutes } = require('./display-format');
 
 const TEMP_LAPSE_F_PER_1000FT = 3.3;
 const WIND_INCREASE_MPH_PER_1000FT = 2;
@@ -193,8 +195,65 @@ const resolveApproach = ({ approachRequest, weatherData, solarData }) => {
   } : null;
 };
 
+/**
+ * Minutes after the planned start that an hourly reading covers, clipped to
+ * the trip. A 05:30 start makes the 05:00 reading cover minutes 0–30 and the
+ * 06:00 reading 30–90; the reading's own clock time decides, not its position
+ * in the trend. Falls back to the position when either time is unreadable.
+ */
+const readingMinutesAfterStart = (pointTime, startTime, index) => {
+  const startMinute = clockMinutes(startTime);
+  const pointMinute = clockMinutes(pointTime);
+  if (startMinute === null || pointMinute === null) return { from: index * 60, to: index * 60 + 60 };
+  let diff = pointMinute - startMinute;
+  // Past midnight on an overnight trip. A whole hour before the start is the
+  // next-day reading of a 24-hour plan: the trend opens with the start's hour.
+  if (diff <= -60) diff += 1440;
+  const from = Math.max(0, diff);
+  return { from, to: Math.max(from, diff + 60) };
+};
+
+/** Shift a trend reading to where the party is during the part of the trip it covers. */
+const adjustReadingForApproach = (point, index, profile, plan) => {
+  const { from, to } = readingMinutesAfterStart(point?.time, plan.start, index);
+  const startMinute = clockMinutes(plan.start);
+  return adjustPointToElevation(point, profile.objectiveElevationFt, highestElevationBetween(profile, from, to), {
+    minuteOfDay: startMinute !== null ? startMinute + from : clockMinutes(point?.time) ?? from,
+    sunriseMinutes: plan.sunriseMinutes,
+    sunsetMinutes: plan.sunsetMinutes,
+  });
+};
+
+const indexRuns = (flags) => {
+  const runs = [];
+  flags.forEach((flag, index) => {
+    if (!flag) return;
+    const last = runs[runs.length - 1];
+    if (last && last.end === index - 1) last.end = index;
+    else runs.push({ start: index, end: index });
+  });
+  return runs;
+};
+
+/** What the approach adjustment changed, for plain-language notes; null when nothing was adjusted. */
+const summarizeApproachHours = (hours) => {
+  const adjusted = hours.map((hour) => Boolean(hour?.approachAdjusted && finite(hour.elevationFt)));
+  const elevations = hours.filter((_, index) => adjusted[index]).map((hour) => hour.elevationFt);
+  if (!elevations.length) return null;
+  return {
+    adjustedHours: elevations.length,
+    lowFt: Math.min(...elevations),
+    highFt: Math.max(...elevations),
+    adjustedRuns: indexRuns(adjusted),
+    inversionRuns: indexRuns(hours.map((hour, index) => adjusted[index] && Boolean(hour.inversionRisk))),
+  };
+};
+
 module.exports = {
   resolveApproach,
+  readingMinutesAfterStart,
+  adjustReadingForApproach,
+  summarizeApproachHours,
   TEMP_LAPSE_F_PER_1000FT,
   MAX_APPROACH_WARMING_F,
   INVERSION_COOLING_F_PER_1000FT,

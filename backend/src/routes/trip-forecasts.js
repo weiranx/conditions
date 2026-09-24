@@ -5,6 +5,15 @@ const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const { parseCookies, readSessionToken } = require('../auth/account-access');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
 const { toFiniteOrNull } = require('../utils/numbers');
+const { buildPlanContext, pickPlanParams } = require('../utils/plan-context');
+const {
+  buildHighlights,
+  buildTripChatContext,
+  buildTripDay,
+  rankDays,
+  tripNote,
+  withDayDeltas,
+} = require('../utils/trip-days');
 
 const GUEST_MULTI_DAY_COOKIE_NAME = 'bc_trip_guest';
 const MIN_TRIP_DAYS = 2;
@@ -48,6 +57,16 @@ const registerTripForecastRoutes = ({
     const objectiveName = String(req.body?.objectiveName || '').trim().slice(0, 200);
     // Tailors each day's gear list; the safety handler falls back to backcountry.
     const activity = typeof req.body?.activity === 'string' ? req.body.activity.trim().slice(0, 40) : '';
+    // The traveler's limits and units; each day is checked against them at the
+    // objective, since an approach belongs to one objective and route.
+    const planSettings = {
+      ...pickPlanParams(req.body?.plan && typeof req.body.plan === 'object' ? req.body.plan : {}),
+      approach: 'off',
+    };
+    // Compare days is a weather comparison; Compare objectives keeps avalanche danger in the decision.
+    const includeAvalanche = req.body?.includeAvalanche === true;
+    // Days the traveler asked for, before the forecast range cut the request short.
+    const requestedDays = Math.max(durationDays, Math.round(Number(req.body?.requestedDays)) || 0);
     const idempotencyKey = String(req.headers['idempotency-key'] || '').trim();
 
     if (
@@ -128,6 +147,7 @@ const registerTripForecastRoutes = ({
       const results = await Promise.all(dates.map(async (date) => {
         try {
           const result = await invokeSafetyHandler({
+            ...planSettings,
             lat: String(lat),
             lon: String(lon),
             date,
@@ -143,8 +163,11 @@ const registerTripForecastRoutes = ({
           return null;
         }
       }));
-      const days = results.filter(Boolean);
-      if (days.length === 0) {
+      // One report per requested date; a report for another date is not that day's forecast.
+      const reports = [...new Map(results
+        .filter((report) => report && dates.includes(report.forecast?.selectedDate))
+        .map((report) => [report.forecast.selectedDate, report])).values()];
+      if (reports.length === 0) {
         // A replayed key belongs to a run that already succeeded; keep it counted.
         if (!reservation.duplicate) {
           await usageService.finish({
@@ -164,7 +187,41 @@ const registerTripForecastRoutes = ({
         tierKey: accountTier.key,
         succeeded: true,
       });
-      return res.json({ days, failedCount: durationDays - days.length, multiDayUsage });
+      const days = withDayDeltas(reports.map((report) => ({
+        ...buildTripDay(report, buildPlanContext({
+          ...planSettings,
+          date: report.forecast.selectedDate,
+          start: startTime,
+          travel_window_hours: String(travelWindowHours),
+          activity,
+        }, report, { withTurnaround: false, ignoreAvalancheForDecision: !includeAvalanche }), { requiredHours: travelWindowHours }),
+        safetyData: report,
+      })));
+      const ranking = rankDays(days);
+      const failedCount = durationDays - days.length;
+      const note = tripNote({ requestedDays, loadedDays: days.length, failedDays: failedCount });
+      const context = buildPlanContext({ ...planSettings, start: startTime, travel_window_hours: String(travelWindowHours), activity });
+      return res.json({
+        days,
+        ranking,
+        highlights: buildHighlights(days),
+        note,
+        chatContext: buildTripChatContext({
+          days,
+          ranking,
+          context,
+          note,
+          featureFlags: reports[0].featureFlags || {},
+          objective: {
+            name: objectiveName || 'Selected objective',
+            latitude: lat,
+            longitude: lon,
+            timezone: reports[0].weather?.timezone || null,
+          },
+        }),
+        failedCount,
+        multiDayUsage,
+      });
     } catch (error) {
       if (reservation?.reservationId && !reservation.duplicate) {
         await usageService.finish({
