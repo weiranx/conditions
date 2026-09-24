@@ -262,10 +262,11 @@ export function useWorkspace() {
     ) {
       return parsedInitialLinkState;
     }
+    // Restore the last report's plan behind the requested page; opening `/`
+    // stays on the workspace instead of jumping to the brief.
     const plan = initialPersistedReport.plan;
     return {
       ...parsedInitialLinkState,
-      view: "planner" as const,
       position: { lat: plan.lat, lng: plan.lon },
       hasObjective: true,
       objectiveName: plan.objectiveName,
@@ -799,6 +800,12 @@ export function useWorkspace() {
           setSharedReportLoadAttempt((attempt) => attempt + 1);
         if (linkState.view === "trip") {
           initializeTripView(linkState.forecastDate, linkState.alpineStartTime);
+        }
+        // Only the planner and trip URLs carry plan state. The workspace and other
+        // pages omit it, so returning to them keeps the current (or restored) report.
+        if (linkState.view !== "planner" && linkState.view !== "trip") {
+          setError(null);
+          return;
         }
         // Back/forward within the same plan (e.g. report → Settings → Back) should not
         // throw away the generated report — only a genuinely different plan state resets.
