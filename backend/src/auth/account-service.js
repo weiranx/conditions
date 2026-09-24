@@ -179,6 +179,28 @@ const validateActivityLimits = (value, customIds) => {
   return result;
 };
 
+// Route timing saved per built-in activity or custom activity id.
+const validateActivityRouteTiming = (value, customIds) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AccountValidationError('Provide valid activity route timing.', 'preferences.activityRouteTiming');
+  }
+  const result = {};
+  for (const [key, timing] of Object.entries(value)) {
+    if (!ACTIVITIES.has(key) && !customIds.has(key)) {
+      throw new AccountValidationError('Route timing refers to an unknown activity.', 'preferences.activityRouteTiming');
+    }
+    if (!timing || typeof timing !== 'object' || Array.isArray(timing)) {
+      throw new AccountValidationError('Provide valid activity route timing.', 'preferences.activityRouteTiming');
+    }
+    result[key] = {
+      runnerPaceMinutesPerMile: validatePreferenceNumber(timing, 'runnerPaceMinutesPerMile', 5, 90, { integer: true }),
+      runnerAscentMinutesPer1000Ft: validatePreferenceNumber(timing, 'runnerAscentMinutesPer1000Ft', 0, 120, { integer: true }),
+      runnerStopBufferMinutes: validatePreferenceNumber(timing, 'runnerStopBufferMinutes', 0, 240, { integer: true }),
+    };
+  }
+  return result;
+};
+
 const validateActivityPreferences = (preferences) => {
   // Optional so clients from before per-activity limits keep saving.
   const customActivities = preferences.customActivities === undefined
@@ -195,6 +217,9 @@ const validateActivityPreferences = (preferences) => {
     ...(preferences.activityLimits === undefined
       ? {}
       : { activityLimits: validateActivityLimits(preferences.activityLimits, customIds) }),
+    ...(preferences.activityRouteTiming === undefined
+      ? {}
+      : { activityRouteTiming: validateActivityRouteTiming(preferences.activityRouteTiming, customIds) }),
   };
 };
 

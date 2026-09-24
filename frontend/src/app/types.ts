@@ -861,6 +861,13 @@ export interface ActivityLimits {
   maxFeelsLikeF: number;
 }
 
+/** How fast an activity moves; used to spread GPX checkpoint and approach ETAs. */
+export interface ActivityRouteTiming {
+  runnerPaceMinutesPerMile: number;
+  runnerAscentMinutesPer1000Ft: number;
+  runnerStopBufferMinutes: number;
+}
+
 /** A user-named activity; plans are built as `baseActivity` but checked against its own limits. */
 export interface CustomActivity {
   id: string;
@@ -875,6 +882,8 @@ export interface UserPreferences {
   customActivities: CustomActivity[];
   /** Saved weather limits per built-in activity type or custom activity id. */
   activityLimits: Record<string, ActivityLimits>;
+  /** Saved route timing per built-in activity type or custom activity id. */
+  activityRouteTiming: Record<string, ActivityRouteTiming>;
   defaultStartTime: string;
   themeMode: ThemeMode;
   temperatureUnit: TemperatureUnit;
