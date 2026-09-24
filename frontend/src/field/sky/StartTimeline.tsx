@@ -49,10 +49,16 @@ function DepartureSky({ rows, lo, hi, sunrise, sunset, clock }: {
   const stops: { offset: number; color: string }[] = [];
   for (let m = lo; m <= hi; m += 15) stops.push({ offset: (m - lo) / (hi - lo), color: light(m) });
   const sunTop = 14;
-  const arcAt = (m: number) => {
-    const t = (m - (sunrise as number)) / ((sunset as number) - (sunrise as number));
+  // Height of the sun at minute m on the day whose midnight is `day`.
+  const arcAt = (day: number) => (m: number) => {
+    const t = (m - day - (sunrise as number)) / ((sunset as number) - (sunrise as number));
     return horizon - Math.sin(Math.PI * t) * (horizon - sunTop);
   };
+  // Overnight trips span more than one day, so draw each day's sun that falls in view.
+  const days: number[] = [];
+  if (known) for (let day = Math.floor(lo / 1440) * 1440; day < hi; day += 1440) {
+    if (day + sunset! > lo && day + sunrise! < hi) days.push(day);
+  }
   const sample = (from: number, to: number, f: (m: number) => number) => {
     const pts: string[] = [];
     const n = Math.max(2, Math.ceil((to - from) / 10));
@@ -76,17 +82,17 @@ function DepartureSky({ rows, lo, hi, sunrise, sunset, clock }: {
           <mask id={`${id}-mask`}><rect width={width} height={height} fill={`url(#${id}-fade)`} /></mask>
         </defs>
         <rect width={width} height={horizon} rx="10" fill={`url(#${id}-sky)`} mask={`url(#${id}-mask)`} className="tl-sky" />
-        {known && sunset! > lo && sunrise! < hi && (
-          <>
-            <polyline className="tl-sun-arc" points={sample(Math.max(lo, sunrise!), Math.min(hi, sunset!), arcAt)} />
-            {(() => {
-              const noon = (sunrise! + sunset!) / 2;
-              return noon > lo && noon < hi ? <circle className="tl-sun" cx={x(noon)} cy={arcAt(noon)} r="9" /> : null;
-            })()}
-            {sunrise! > lo && <text className="tl-sun-label" x={x(sunrise!)} y={horizon - 5} textAnchor="middle">↑ {clock(sunrise!)}</text>}
-            {sunset! < hi && <text className="tl-sun-label" x={x(sunset!)} y={horizon - 5} textAnchor="middle">↓ {clock(sunset!)}</text>}
-          </>
-        )}
+        {days.map((day) => {
+          const rise = day + sunrise!, set = day + sunset!, noon = (rise + set) / 2;
+          return (
+            <g key={day}>
+              <polyline className="tl-sun-arc" points={sample(Math.max(lo, rise), Math.min(hi, set), arcAt(day))} />
+              {noon > lo && noon < hi && <circle className="tl-sun" cx={x(noon)} cy={arcAt(day)(noon)} r="9" />}
+              {rise > lo && <text className="tl-sun-label" x={x(rise)} y={horizon - 5} textAnchor="middle">↑ {clock(rise)}</text>}
+              {set < hi && <text className="tl-sun-label" x={x(set)} y={horizon - 5} textAnchor="middle">↓ {clock(set)}</text>}
+            </g>
+          );
+        })}
         {[...rows].sort((a, b) => Number(Boolean(a.current || a.best)) - Number(Boolean(b.current || b.best))).map((row) => {
           const end = row.start + row.hours.length * 60;
           const trip = (m: number) => horizon - Math.sin(Math.PI * ((m - row.start) / Math.max(60, end - row.start))) * tripHeight;

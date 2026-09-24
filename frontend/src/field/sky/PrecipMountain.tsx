@@ -30,7 +30,9 @@ export function PrecipMountain({ hours, objectiveFt, trailheadFt, levels, format
   const index = picked !== null && picked < hours.length ? picked : wettest;
   const hour = hours[index];
   if (!hour) return null;
-  const base = trailheadFt !== null && trailheadFt < objectiveFt - 300 ? trailheadFt : objectiveFt - 3000;
+  const trailheadKnown = trailheadFt !== null && trailheadFt < objectiveFt - 300;
+  // Without a known trailhead the ridge starts at an illustrative 3,000 ft below the objective.
+  const base = trailheadKnown ? trailheadFt : objectiveFt - 3000;
   const phase = levels.find((l) => l.tone === "snow") ?? levels.find((l) => l.tone === "cold") ?? null;
   const inView = levels.filter((l) => l.ft > base - 2500 && l.ft < objectiveFt + 3000);
   const lo = Math.min(base, ...inView.map((l) => l.ft)) - 500;
@@ -43,11 +45,11 @@ export function PrecipMountain({ hours, objectiveFt, trailheadFt, levels, format
   const wet = hour.kind === "rain" || hour.kind === "snow" || hour.kind === "storm" || (chance ?? 0) >= 50;
   const phaseText = phase === null
     ? "No snow or freezing level is forecast, so rain and snow can't be separated."
-    : phase.ft <= base
+    : phase.ft <= base && trailheadKnown
       ? `At ${format.elevation(phase.ft)} the ${phase.label.toLowerCase()} is at or below your trailhead: anything that falls on your route is likely snow.`
       : phase.ft >= objectiveFt
         ? `The ${phase.label.toLowerCase()} is above your objective at ${format.elevation(phase.ft)}: anything that falls on your route is likely rain.`
-        : `Snow above about ${format.elevation(phase.ft)}, rain below it.`;
+        : `Snow above about ${format.elevation(phase.ft)}, rain below it.${trailheadKnown ? "" : " Set your trailhead to see where your approach sits."}`;
   const summary = `${format.clock(hour.minute)}: ${chance === null ? "precipitation chance unavailable" : `${Math.round(chance)}% chance of precipitation`}${hour.condition ? `, ${hour.condition.toLowerCase()}` : ""}.`;
   return (
     <div className="sky-precip-mountain">
@@ -92,7 +94,7 @@ export function PrecipMountain({ hours, objectiveFt, trailheadFt, levels, format
             <circle cx={ridgeX(objectiveFt)} cy={y(objectiveFt)} r="7" />
             <text x={ridgeX(objectiveFt) - 12} y={y(objectiveFt) - 12} textAnchor="end">Objective</text>
           </g>
-          {trailheadFt !== null && base === trailheadFt && (
+          {trailheadKnown && (
             <g className="mt-target">
               <circle cx={Math.max(8, ridgeX(base))} cy={y(base)} r="5" />
               {/* Below the point: level labels run along the left edge above it. */}

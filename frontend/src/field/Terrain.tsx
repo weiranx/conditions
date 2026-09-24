@@ -2,7 +2,7 @@ import { SurfacePrediction } from "./SurfacePrediction";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
-import { buildTerrainWindow } from "../app/terrain-window";
+import { buildTerrainWindow, buildTerrainWindowByAspect } from "../app/terrain-window";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { planFromReport } from "./data";
@@ -28,9 +28,9 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
   const [selection, setSelection] = useState<{ lane: number; hour: number; aspect: RoseAspect | null }>({ lane: 0, hour: 0, aspect: null });
   // Without snow to move, lee aspects are no more hazardous than any other.
   const showWindLoading = flags.windLoadingDetails && w.windLoadingApplies;
-  const model = useMemo(
-    () =>
-      buildTerrainWindow({
+  const { model, byAspect } = useMemo(
+    () => {
+      const input = {
         travelRows: w.travelWindowRows,
         elevationBands: w.elevationForecastBands,
         avalancheProblems: flags.avalancheDetails
@@ -44,7 +44,10 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
         leewardAspects: showWindLoading ? w.leewardAspectHints : [],
         secondaryAspects: showWindLoading ? w.secondaryWindAspects : [],
         preferences: w.preferences,
-      }),
+      };
+      // The rose draws each aspect on its own; the table keeps the grouped lanes.
+      return { model: buildTerrainWindow(input), byAspect: buildTerrainWindowByAspect(input) };
+    },
     [
       w.travelWindowRows,
       w.elevationForecastBands,
@@ -59,19 +62,23 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
       showWindLoading,
     ],
   );
-  const lane = model.lanes[selection.lane] || model.lanes[0];
-  const cell = lane?.cells[selection.hour];
   // Rings of the rose, highest elevation innermost.
   const rings = Array.from(new Map(model.lanes.map((l) => [l.elevationFt, l.elevationLabel])).entries())
     .sort((a, b) => b[0] - a[0]);
+  const aspectLane = (aspect: RoseAspect, ring: number) =>
+    byAspect.get(aspect)?.lanes.find((l) => l.elevationFt === rings[ring]?.[0] && l.aspects.includes(aspect));
   const laneAt = (aspect: RoseAspect, ring: number) =>
     model.lanes.findIndex((l) => l.elevationFt === rings[ring]?.[0] && l.aspects.includes(aspect));
+  // A slope picked on the rose reads its own aspect's cell; a table cell reads the grouped lane.
+  const lane = model.lanes[selection.lane] || model.lanes[0];
+  const roseRing = lane ? rings.findIndex(([ft]) => ft === lane.elevationFt) : -1;
+  const cell = selection.aspect && roseRing >= 0
+    ? aspectLane(selection.aspect, roseRing)?.cells[selection.hour]
+    : lane?.cells[selection.hour];
   const levelWord = (level: string) =>
     level === "lower" ? "Lower" : level === "avoid" ? "Avoid" : level === "unknown" ? "Unknown" : "Caution";
   const hourText = (i: number) => w.formatClockForStyle(model.hours[i]?.time, w.preferences.timeStyle);
-  const roseSelected = selection.aspect && lane
-    ? { aspect: selection.aspect, ring: rings.findIndex(([ft]) => ft === lane.elevationFt) }
-    : null;
+  const roseSelected = selection.aspect && roseRing >= 0 ? { aspect: selection.aspect, ring: roseRing } : null;
   return (
     <section className="sky-section" aria-labelledby="sky-terrain-day">
       <div className="sky-sh">
@@ -99,11 +106,11 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
               rings={rings.map(([, label]) => label)}
               label={`Terrain at ${hourText(selection.hour)} by aspect and elevation`}
               cellClass={(aspect, ring) => {
-                const l = model.lanes[laneAt(aspect, ring)];
+                const l = aspectLane(aspect, ring);
                 return `is-${l?.cells[selection.hour]?.level ?? "unknown"}`;
               }}
               cellLabel={(aspect, ring) => {
-                const l = model.lanes[laneAt(aspect, ring)];
+                const l = aspectLane(aspect, ring);
                 return `${aspect}, ${rings[ring]?.[1]}, ${hourText(selection.hour)}: ${levelWord(l?.cells[selection.hour]?.level ?? "unknown")}`;
               }}
               selected={roseSelected}

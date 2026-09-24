@@ -94,6 +94,13 @@ test("the precipitation mountain opens on the wettest hour and says where rain t
   );
   assert.match(unknown, /rain and snow can(’|&#x27;|')t be separated/);
   assert.doesNotMatch(unknown, />Trailhead</, "no trailhead is invented when none is known");
+  // A snow level below the illustrative base says nothing about an unknown, possibly lower, trailhead.
+  const lowLevel = renderToStaticMarkup(
+    <PrecipMountain hours={hours} objectiveFt={12000} trailheadFt={null}
+      levels={[{ label: "Snow level", ft: 8000, tone: "snow" }]} format={format} timeStyle="ampm" />,
+  );
+  assert.doesNotMatch(lowLevel, /trailhead: anything that falls on your route is likely snow/);
+  assert.match(lowLevel, /Snow above about 8000 ft, rain below it\. Set your trailhead/);
 });
 
 test("a day's mini sky hatches the hours over your limits and names them for screen readers", () => {
@@ -137,4 +144,14 @@ test("start times are drawn as arcs under the day's sky, with over-limit hours m
   assert.match(html, /tl-trip is-current/);
   assert.equal((html.match(/tl-trip-over/g) || []).length, 1);
   assert.match(html, /tl-sun-arc/);
+});
+
+test("an overnight departure draws the next morning's sunrise and sun arc", () => {
+  const night = buildSkyHours(Array.from({ length: 10 }, (_, i) => row({ time: `${String((23 + i) % 24).padStart(2, "0")}:00` })), { ...plan, start: "23:00" });
+  const html = renderToStaticMarkup(
+    <StartTimeline sunrise={412} sunset={1170} clock={(m) => `m${m % 1440}`} caption="Overnight"
+      rows={[{ key: "n", label: "23:00", start: 1380, hours: night, summit: 1680, current: true, note: "", noteTone: "ok" }]} />,
+  );
+  assert.equal((html.match(/class="tl-sun-arc"/g) || []).length, 1, "the next day's arc is drawn");
+  assert.match(html, /↑ m412</, "with that day's sunrise");
 });
