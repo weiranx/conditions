@@ -118,7 +118,18 @@
 .sky-chapter-head .field-report-actions > button.is-prominent:hover:not(:disabled) { background: var(--sky-accent-fill-hover); }
 .sky-report .field-report-actions button:disabled { opacity: 0.6; cursor: default; }
 .sky-report .report-actions-menu { position: relative; }
-.sky-report .report-actions-popover { color: var(--f-ink); }
+.sky-report .report-actions-popover {
+  display: grid; gap: 2px; width: 232px; padding: 6px; color: var(--f-ink);
+  border-radius: 14px; box-shadow: 0 16px 40px -12px rgba(24, 40, 61, 0.28), 0 2px 6px rgba(24, 40, 61, 0.06);
+}
+.sky-report .report-actions-popover button {
+  display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 12px;
+  font: inherit; font-size: 14px; color: var(--f-ink); border-radius: 9px; cursor: pointer;
+}
+.sky-report .report-actions-popover button > svg { flex: none; color: var(--f-muted); }
+.sky-report .report-actions-popover button:hover:not(:disabled),
+.sky-report .report-actions-popover button:focus-visible { background: var(--f-soft); }
+.sky-report .report-actions-popover button:hover:not(:disabled) > svg { color: var(--f-ink); }
 
 .sky-readout {
   padding: 14px 16px; border-radius: 18px;

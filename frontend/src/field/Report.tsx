@@ -12,6 +12,7 @@ import {
   Link,
   Mail,
   Ellipsis,
+  Printer,
   RefreshCw,
   Sparkles,
   Info,
@@ -302,7 +303,10 @@ export function Report({
             <ArrowDown size={16} />
             Export report data
           </button>
-          <button onClick={() => window.print()}>Print current view</button>
+          <button onClick={() => window.print()}>
+            <Printer size={16} />
+            Print current view
+          </button>
         </div>
       </details>
       <button className="is-prominent" onClick={onEdit}>
