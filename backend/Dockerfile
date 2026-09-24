@@ -30,7 +30,9 @@ RUN mkdir -p /app/data && chown appuser:appgroup /app/data
 USER appuser
 
 # Use the installed versioned library without Debian development tooling.
-ENV ECMWFLIBS_USED_INSTALLED=1
+# The migration step runs through npm; skip its update check in production.
+ENV ECMWFLIBS_USED_INSTALLED=1 \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN python3 -c "import eccodes; print(eccodes.codes_get_api_version())"
 
 EXPOSE 3001

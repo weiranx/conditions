@@ -27,6 +27,7 @@ function fixture(t) {
   const env = {
     ...gitEnv, PATH: `${bin}:${process.env.PATH}`, SUMMITSAFE_APP_DIR: host,
     TEST_BUILD_EXIT: '0', TEST_MIGRATION_EXIT: '0', TEST_HEALTH_EXIT: '0',
+    TEST_IMAGE_EXISTS: '1', TEST_ROLLBACK_HEALTHY: '0',
   };
   // macOS lacks the flock CLI. Use the same OS flock primitive for local tests;
   // Ubuntu CI and production use util-linux flock, including the contention test.
@@ -65,9 +66,17 @@ fi
 if [ "$*" = 'compose run --rm --no-deps backend npm run db:migrate' ]; then
   exit "$TEST_MIGRATION_EXIT"
 fi
+if [ "$*" = 'image inspect summitsafe-backend:latest' ]; then
+  test "$TEST_IMAGE_EXISTS" = 1
+fi
 `);
   writeFileSync(join(bin, 'curl'), `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$SUMMITSAFE_APP_DIR/health-calls.txt"
+if [ "$TEST_ROLLBACK_HEALTHY" = 1 ] \\
+  && grep -qx 'image tag summitsafe-backend:rollback summitsafe-backend:latest' "$SUMMITSAFE_APP_DIR/docker-calls.txt"; then
+  printf '%s\\n' '{"ok":true}'
+  exit 0
+fi
 if [ "$TEST_HEALTH_EXIT" != 0 ]; then exit "$TEST_HEALTH_EXIT"; fi
 printf '%s\\n' '{"ok":true}'
 `);
@@ -109,6 +118,9 @@ test('fast-forwards to the tested SHA and holds the shared lock through the real
   assert.match(f.calls(), /compose build --pull backend/);
   assert.match(f.calls(), /compose up -d --force-recreate --no-deps backend/);
   assert.doesNotMatch(result.stdout, /Pulling latest/);
+  assert.match(f.calls(), /image tag summitsafe-backend:latest summitsafe-backend:rollback\ncompose build --pull backend/);
+  assert.match(f.calls(), /image prune --force/);
+  assert.match(f.calls(), /builder prune --force --filter until=168h/);
 });
 
 test('can retry the current tested commit', (t) => {
@@ -203,7 +215,7 @@ test('migration failures stop the release before restarting the backend', (t) =>
 
 test('unhealthy releases fail with diagnostics after bounded readiness attempts', (t) => {
   const f = fixture(t);
-  const result = f.run(f.initial, { TEST_HEALTH_EXIT: '28' });
+  const result = f.run(f.initial, { TEST_HEALTH_EXIT: '28', TEST_IMAGE_EXISTS: '0' });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Backend did not become healthy after 30 attempts/);
   assert.match(f.calls(), /compose logs --tail 50 backend/);
@@ -211,6 +223,38 @@ test('unhealthy releases fail with diagnostics after bounded readiness attempts'
   const probes = readFileSync(join(f.host, 'health-calls.txt'), 'utf8').trim().split('\n');
   assert.equal(probes.length, 30);
   assert.ok(probes.every((probe) => probe.includes('--connect-timeout 2 --max-time 5')));
+  assert.doesNotMatch(f.calls(), /rollback/);
+  assert.doesNotMatch(f.calls(), /prune/);
+});
+
+test('an unhealthy release restores the previous image and still fails', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.initial, { TEST_HEALTH_EXIT: '28', TEST_ROLLBACK_HEALTHY: '1' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /Rolling back to the previous backend image/);
+  assert.match(result.stderr, /Previous backend image restored and healthy/);
+  const calls = f.calls();
+  assert.match(calls, /image tag summitsafe-backend:rollback summitsafe-backend:latest\ncompose up -d --force-recreate --no-deps backend\n?$/);
+  assert.doesNotMatch(calls, /health-monitor|prune/);
+  assert.doesNotMatch(result.stdout, /Deploy complete/);
+});
+
+test('reports when the rollback image is also unhealthy', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.initial, { TEST_HEALTH_EXIT: '28' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /Rollback image is also unhealthy/);
+  const probes = readFileSync(join(f.host, 'health-calls.txt'), 'utf8').trim().split('\n');
+  assert.equal(probes.length, 60);
+});
+
+test('--no-build releases do not replace the rollback image', (t) => {
+  const f = fixture(t);
+  const result = spawnSync('bash', [join(f.host, 'scripts', 'deploy.sh'), '--no-pull', '--no-build', '--no-nginx'], {
+    cwd: f.host, env: { ...f.env, DEPLOY_SHA: f.initial }, encoding: 'utf8', timeout: 10_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(f.calls(), /image tag|compose build/);
 });
 
 test('rejects a competing release and releases the lock when the owner exits', { timeout: 10_000 }, async (t) => {

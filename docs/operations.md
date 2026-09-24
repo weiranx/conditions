@@ -210,6 +210,21 @@ migrations, restart, and readiness checks. Detached branches, tracked edits,
 divergent history, and commits present only on the server fail without resetting
 the checkout. Active deployments are never cancelled by a newer CI run.
 
+Before building, `deploy.sh` tags the running image as
+`summitsafe-backend:rollback`. If the new backend fails its 30 readiness
+probes, the script prints diagnostics, restores that image, recreates the
+backend, and re-checks health; the release still exits non-zero so the failed
+commit stays visible in Actions. Migrations are not reverted, so they must stay
+compatible with the previous release (additive changes only). `--no-build`
+releases keep the existing rollback image. After a healthy release, dangling
+images and build cache older than seven days are pruned so repeated releases do
+not fill the droplet's disk.
+
+To pin the droplet's SSH host key, add a `DO_SSH_FINGERPRINT` repository secret
+containing the `SHA256:...` value from
+`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the droplet. Without it,
+the deploy action connects without host-key verification.
+
 To retry a failed release, rerun its **Deploy to DigitalOcean** workflow. A retry
 is eligible only while its tested SHA remains the tip of `main`; if `main` has
 moved, wait for that commit's successful CI and deployment. The Actions log
