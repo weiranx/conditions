@@ -1977,8 +1977,9 @@ test('clampTravelWindowHours clamps to [1, 24] range', () => {
 });
 
 test('clampTravelWindowHours uses fallback for non-numeric input', () => {
-  // null coerces to 0 via Number(), then clamps to minimum 1 — not the fallback path
-  expect(clampTravelWindowHours(null)).toBe(1);
+  // A missing value is not 0 hours, even though Number(null) === 0
+  expect(clampTravelWindowHours(null)).toBe(12);
+  expect(clampTravelWindowHours('')).toBe(12);
   expect(clampTravelWindowHours(undefined)).toBe(12);
   expect(clampTravelWindowHours('eight')).toBe(12);
   expect(clampTravelWindowHours(undefined, 8)).toBe(8);
@@ -2265,8 +2266,8 @@ test('celsiusToF converts known reference points', () => {
 test('celsiusToF returns null for non-numeric input', () => {
   // 'warm' is not a number — Number('warm') = NaN, so returns null
   expect(celsiusToF('warm')).toBeNull();
-  // null coerces to 0 via Number(null), so celsiusToF(null) = 32 (0°C = 32°F)
-  expect(celsiusToF(null)).toBe(32);
+  // A missing reading is not 0°C, even though Number(null) === 0
+  expect(celsiusToF(null)).toBeNull();
 });
 
 // --- inferNoaaCloudCoverFromIcon ---
@@ -2347,8 +2348,9 @@ test('normalizeNoaaDewPointF passes through Fahrenheit values rounded', () => {
 });
 
 test('normalizeNoaaDewPointF returns null for missing/invalid value', () => {
-  // null field object: Number(null.value) = 0, which is finite, so returns 0 (not null)
-  expect(normalizeNoaaDewPointF({ value: null })).toBe(0);
+  // NOAA's missing quantity ({ value: null }) stays missing rather than reading 0°C = 32°F
+  expect(normalizeNoaaDewPointF({ value: null })).toBeNull();
+  expect(normalizeNoaaDewPointF({ value: null, unitCode: 'wmoUnit:degC' })).toBeNull();
   // null input: accessing null.value throws, but the function checks field?.value
   // Number(undefined) = NaN → not finite → returns null
   expect(normalizeNoaaDewPointF(null)).toBeNull();
@@ -2375,8 +2377,8 @@ test('normalizeNoaaPressureHpa handles numeric input directly (large value → P
 
 test('normalizeNoaaPressureHpa returns null for invalid input', () => {
   expect(normalizeNoaaPressureHpa(null)).toBeNull();
-  // { value: null }: Number(null) = 0, isFinite → returns 0.0 (not null)
-  expect(normalizeNoaaPressureHpa({ value: null })).toBe(0);
+  // NOAA's missing quantity ({ value: null }) stays missing rather than reading 0 hPa
+  expect(normalizeNoaaPressureHpa({ value: null, unitCode: 'wmoUnit:Pa' })).toBeNull();
 });
 
 // --- clampPercent ---
@@ -2395,8 +2397,8 @@ test('clampPercent rounds to integer', () => {
 });
 
 test('clampPercent returns null for non-numeric input', () => {
-  // null → Number(null) = 0, which is finite → clamped to 0
-  expect(clampPercent(null)).toBe(0);
+  // null is a missing reading, not 0%
+  expect(clampPercent(null)).toBeNull();
   // 'high' → NaN → not finite → null
   expect(clampPercent('high')).toBeNull();
   // undefined → NaN → not finite → null
@@ -2463,9 +2465,7 @@ test('buildPrecipitationSummaryForAi uses past24hIn legacy alias when rainPast24
 // --- buildVisibilityRisk ---
 
 test('buildVisibilityRisk returns Unknown when description signals unavailability and numeric fields are absent', () => {
-  // The Unknown path requires all numeric fields to be undefined (not null).
-  // null coerces to 0 via toFiniteNumberOrNull, so null-valued fields are NOT treated as absent.
-  // Omitting fields entirely leaves them as undefined, which toFiniteNumberOrNull returns as null.
+  // The Unknown path requires every numeric field to be missing (omitted or null).
   const result = buildVisibilityRisk({
     description: 'Weather data unavailable',
     // precipChance, humidity, cloudCover, windSpeed, windGust are intentionally omitted
@@ -2475,8 +2475,8 @@ test('buildVisibilityRisk returns Unknown when description signals unavailabilit
   expect(result.level).toBe('Unknown');
 });
 
-test('buildVisibilityRisk returns Minimal score 0 for empty description with all null signals', () => {
-  // Empty string description is not 'unavailable' — the scoring path runs and returns 0/Minimal
+test('buildVisibilityRisk returns Unknown when the description and every signal are missing', () => {
+  // null fields are missing readings, not 0% / 0 mph evidence of clear visibility
   const result = buildVisibilityRisk({
     description: '',
     precipChance: null,
@@ -2486,8 +2486,8 @@ test('buildVisibilityRisk returns Minimal score 0 for empty description with all
     windGust: null,
     trend: [],
   });
-  expect(result.score).toBe(0);
-  expect(result.level).toBe('Minimal');
+  expect(result.score).toBeNull();
+  expect(result.level).toBe('Unknown');
 });
 
 test('buildVisibilityRisk scores high for blizzard/whiteout description', () => {

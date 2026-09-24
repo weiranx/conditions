@@ -344,7 +344,9 @@ export function readingMinutesAfterStart(pointTime: string, startTime: string, i
   const pointMinute = clockMinutes(pointTime);
   if (startMinute === null || pointMinute === null) return { from: index * 60, to: index * 60 + 60 };
   let diff = pointMinute - startMinute;
-  if (diff < -60) diff += 1440; // past midnight on an overnight trip
+  // Past midnight on an overnight trip. A whole hour before the start is the
+  // next-day reading of a 24-hour plan: the trend opens with the start's hour.
+  if (diff <= -60) diff += 1440;
   const from = Math.max(0, diff);
   return { from, to: Math.max(from, diff + 60) };
 }

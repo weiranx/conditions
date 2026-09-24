@@ -12,6 +12,7 @@ import {
 } from '../app/start-time-scenarios';
 import { comparisonReportMatches, comparisonRequestUrl, comparisonTravelHours, reportRequestedStartTime } from '../app/comparison-request';
 import { fetchApi } from '../lib/api-client';
+import { minutesToTwentyFourHourClock } from '../app/core';
 
 interface UseStartTimeScenariosParams {
   enabled: boolean;
@@ -130,8 +131,9 @@ export function useStartTimeScenarios({
 
   const scenarios = useMemo<StartTimeScenario[]>(() => (currentResult?.payloads ?? []).map(({ startTime, data }) => {
     const startMinutes = (Number.parseInt(startTime.slice(0, 2), 10) * 60) + Number.parseInt(startTime.slice(3, 5), 10);
-    const returnMinutes = startMinutes + travelWindowHours * 60;
-    const turnaroundTime = `${String(Math.floor((returnMinutes % 1440) / 60)).padStart(2, '0')}:${String(returnMinutes % 60).padStart(2, '0')}`;
+    // Like the main report, a return after midnight is checked as 23:59 on the
+    // start day; wrapping it to the next morning would pass the daylight check.
+    const turnaroundTime = minutesToTwentyFourHourClock(startMinutes + travelWindowHours * 60);
     const decision = evaluateBackcountryDecision(data, startTime, preferences, { turnaroundTime, approach });
     return buildStartTimeScenario(startTime, data, decision, preferences);
   }), [currentResult, preferences, travelWindowHours, approach]);

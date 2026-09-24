@@ -316,3 +316,64 @@ test("an hour missing only precipitation still has elevation inputs; a missing t
   assert.deepEqual(hours.map((h) => h.tone === "missing"), [false, true, true, true]);
   assert.deepEqual(hours.map((h) => h.thermalComplete), [true, true, false, false]);
 });
+
+test("a hidden sky keeps its last width instead of drawing at zero width", async () => {
+  const { JSDOM } = await import("jsdom");
+  const { act } = await import("react");
+  const { createRoot } = await import("react-dom/client");
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
+  // Reduced motion skips the sun's requestAnimationFrame entrance.
+  dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+  const previous = { window: globalThis.window, document: globalThis.document, ResizeObserver: globalThis.ResizeObserver };
+  let resize = null;
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.ResizeObserver = class { constructor(callback) { resize = (width) => callback([{ contentRect: { width } }]); } observe() {} disconnect() {} };
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const root = createRoot(document.getElementById("root"));
+  try {
+    const hours = buildSkyHours(Array.from({ length: 12 }, (_, i) =>
+      row({ time: `${String(7 + i).padStart(2, "0")}:00`, condition: "Rain showers", precipChance: 60 })), plan);
+    await act(async () => root.render(
+      <SkyHero hours={hours} sunrise={412} sunset={1170} kicker="Conditions report" title="Test Peak" subtitle="Wed"
+        level="CAUTION" headline="Adjust timing" reason="Rain at noon" format={fmt} />));
+    await act(async () => resize(640));
+    const svg = () => document.querySelector("svg.sky-canvas");
+    assert.match(svg().getAttribute("viewBox"), /^0 0 640 /);
+    // display: none (or a zero-size viewport) reports a 0-wide content box.
+    await act(async () => resize(0));
+    assert.match(svg().getAttribute("viewBox"), /^0 0 640 /);
+    const offsets = [...svg().querySelectorAll("linearGradient stop")].map((stop) => stop.getAttribute("offset"));
+    assert.ok(offsets.every((offset) => Number.isFinite(Number(offset))), offsets.join(" "));
+    const radii = [...svg().querySelectorAll("ellipse")].map((ellipse) => Number(ellipse.getAttribute("rx")));
+    assert.ok(radii.length > 0 && radii.every((rx) => rx > 0), radii.join(" "));
+  } finally {
+    await act(async () => root.unmount());
+    dom.window.close();
+    Object.assign(globalThis, previous);
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  }
+});
+
+test("missing temperature and rain chance read as unknown, never 0°F or 0%", async () => {
+  const { buildPlannedReportWeatherRows } = await import("../src/field/report-weather");
+  const data = { weather: { temp: 40, windSpeed: 5, windGust: 10, trend: [
+    { time: "07:00", temp: null, wind: 5, gust: null, precipChance: null, condition: "Clear" },
+    { time: "08:00", temp: 42, wind: 6, gust: 12, precipChance: 10, condition: "Clear" },
+  ] } };
+  const rows = buildPlannedReportWeatherRows(data, getDefaultUserPreferences(), 2, { start: "07:00", date: "2026-09-23" });
+  assert.ok(Number.isNaN(rows[0].temp) && Number.isNaN(rows[0].feelsLike) && Number.isNaN(rows[0].precipChance));
+  assert.equal(rows[1].temp, 42);
+  const html = hero(buildSkyHours(rows, plan));
+  assert.match(html, /<div class="sky-readout-big">—<\/div>/);
+  assert.match(html, /7:00: temperature unavailable, gust unavailable, rain chance unavailable/);
+  assert.doesNotMatch(html, />0°</);
+
+  // A planned hour that straddles a gap keeps the reading that exists.
+  const straddle = buildPlannedReportWeatherRows({ weather: { trend: [
+    { time: "07:00", temp: null, wind: null, gust: null, precipChance: 20, condition: "Clear" },
+    { time: "08:00", temp: 42, wind: 6, gust: 12, precipChance: 70, condition: "Rain" },
+  ] } }, getDefaultUserPreferences(), 1, { start: "07:30", date: "2026-09-23" })[0];
+  assert.deepEqual([straddle.temp, straddle.wind, straddle.gust, straddle.precipChance], [42, 6, 12, 70]);
+  assert.equal(straddle.complete, false);
+});

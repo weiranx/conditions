@@ -411,16 +411,6 @@ async function fetchWeatherPipeline({
         logger.warn({ err: supplementError }, 'NOAA weather supplement from Open-Meteo failed');
       }
     }
-
-    // 2.5 Resolve Solar Data (cached 7d per coord+date). Reuse the request
-    // started above when NOAA selected the same date; date-less API callers
-    // retain the previous behavior and fetch after the forecast picks a date.
-    const solarDate =
-      selectedForecastDate || requestedDate || new Date().toISOString().slice(0, 10);
-    const cachedSolar = prefetchedSolarPromise && prefetchedSolarDate === solarDate
-      ? await prefetchedSolarPromise
-      : await fetchSolarData(solarDate);
-    if (cachedSolar) solarData = cachedSolar;
   } catch (weatherError) {
     // Re-throw date range errors so the caller can return 400
     if (weatherError instanceof ForecastDateOutOfRangeError) {
@@ -476,6 +466,17 @@ async function fetchWeatherPipeline({
       trailStatus = terrainConditionData.label;
     }
   }
+
+  // 2.5 Resolve Solar Data (cached 7d per coord+date). Sun times do not depend
+  // on the weather provider, so this also runs when NOAA failed. Reuse the
+  // request started above when the forecast kept the requested date; date-less
+  // API callers fetch after the forecast picks a date.
+  const solarDate =
+    selectedForecastDate || requestedDate || new Date().toISOString().slice(0, 10);
+  const cachedSolar = prefetchedSolarPromise && prefetchedSolarDate === solarDate
+    ? await prefetchedSolarPromise
+    : await fetchSolarData(solarDate);
+  if (cachedSolar) solarData = cachedSolar;
 
   return {
     weatherData,

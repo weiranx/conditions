@@ -7,6 +7,8 @@ import { createRoot } from 'react-dom/client';
 import { Route } from '../src/field/Route';
 import { buildCheckpointProfile } from '../src/field/route-planning';
 import { parseGpxText } from '../src/lib/gpx';
+import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
+import { makeReport } from '../dev/mock-data.mjs';
 
 function parseGpx(xml) {
   const dom = new JSDOM('');
@@ -31,6 +33,24 @@ test('GPX skips missing and blank coordinates instead of inventing zero coordina
   assert.deepEqual(route.checkpoints, baseline.checkpoints);
   assert.throws(() => parseGpx(`<rte><rtept lon="1"/><rtept lat="1"/></rte>`), /at least two valid/);
   assert.equal(parseGpx('<rte><rtept lat="0" lon="0"/><rtept lat="0" lon="0.01"/></rte>').pointCount, 2);
+});
+
+test('GPX display tracks stay within the saved-report limit and survive a round trip', () => {
+  for (const count of [999, 1000, 1500, 2000]) {
+    const points = Array.from({ length: count }, (_, i) =>
+      `<trkpt lat="${(34 + i * 0.0001).toFixed(5)}" lon="-117"><ele>${1000 + i}</ele></trkpt>`).join('');
+    const route = parseGpx(`<trk><trkseg>${points}</trkseg></trk>`);
+    assert.ok(route.displayTrack.length <= 500, `${count} points gave ${route.displayTrack.length}`);
+    assert.equal(route.displayTrack[0].progress_percent, 0);
+    assert.equal(route.displayTrack.at(-1).progress_percent, 100);
+    const snapshot = buildPersistedReport(
+      { lat: 34, lon: -117, objectiveName: 'Loop', searchQuery: '', forecastDate: '2026-09-06', alpineStartTime: '07:00', targetElevationInput: '', travelWindowHours: 10 },
+      makeReport({ lat: 34, lon: -117 }, 'clear'),
+      { aiBriefNarrative: null, snowVisionAnalysis: null, snowVisionImage: null, reportChatMessages: [] },
+      { route: { routeSuggestions: null, routeAnalysis: null, customRouteName: '', gpxRoute: route } },
+    );
+    assert.deepEqual(parsePersistedReport(JSON.parse(JSON.stringify(snapshot))).route.gpxRoute, route);
+  }
 });
 
 test('GPX route elements do not add distance or ascent across disconnected routes', () => {

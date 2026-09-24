@@ -112,6 +112,21 @@ test('marks a comparison failed when no forecast day succeeds', async () => {
   expect(usageService.finish).toHaveBeenCalledWith(expect.objectContaining({ succeeded: false }));
 });
 
+test('a failed replay of an already-counted request leaves that run counted', async () => {
+  const usageService = {
+    available: true,
+    reserve: jest.fn().mockResolvedValue({ reservationId: 'reservation-id', duplicate: true, usage: USAGE }),
+    finish: jest.fn().mockResolvedValue({ ...USAGE, usedRuns: 0 }),
+  };
+  const response = await validRequest(request(makeApp({
+    usageService,
+    invokeSafetyHandler: jest.fn().mockResolvedValue({ statusCode: 502, payload: null }),
+  })));
+
+  expect(response.status).toBe(502);
+  expect(usageService.finish).not.toHaveBeenCalled();
+});
+
 test('rejects a duration outside the supported 2–7 day range', async () => {
   const response = await request(makeApp())
     .post('/api/trip-forecasts')
