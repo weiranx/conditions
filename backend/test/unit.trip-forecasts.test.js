@@ -180,3 +180,23 @@ test('rejects new multi-day forecasts when trip planning is disabled', async () 
   expect(response.body.code).toBe('FEATURE_DISABLED');
   expect(usageService.reserve).not.toHaveBeenCalled();
 });
+
+test('passes the planned activity to every day so gear matches it', async () => {
+  const invokeSafetyHandler = jest.fn(async (query) => ({
+    statusCode: 200,
+    payload: { forecast: { selectedDate: query.date } },
+  }));
+  const response = await request(makeApp({ invokeSafetyHandler }))
+    .post('/api/trip-forecasts')
+    .set('Idempotency-Key', 'multi-day-activity')
+    .send({
+      lat: 47.4, lon: -121.4, startDate: '2026-07-14', startTime: '07:00',
+      durationDays: 2, travelWindowHours: 12, activity: 'ski-touring',
+    });
+
+  expect(response.status).toBe(200);
+  expect(invokeSafetyHandler).toHaveBeenCalledTimes(2);
+  for (const [query] of invokeSafetyHandler.mock.calls) {
+    expect(query.activity).toBe('ski-touring');
+  }
+});

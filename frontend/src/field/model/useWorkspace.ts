@@ -413,6 +413,7 @@ export function useWorkspace() {
       forecastDate: initialLinkState.forecastDate,
       alpineStartTime: initialLinkState.alpineStartTime,
       travelWindowHours,
+      activity: initialLinkState.activity,
     })
       ? initialPersistedReport
       : null;

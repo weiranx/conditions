@@ -450,6 +450,8 @@ export function WorkspacePlan({
                     checked={checked}
                     onChange={() => {
                       if (!comparison && w.safetyData) w.handleEditPlan();
+                      // Loaded days carry the previous activity's gear list.
+                      if (comparison) w.setTripForecastRowsDirect([]);
                       w.updatePreferences({ defaultActivity: key });
                     }}
                   />
