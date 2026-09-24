@@ -93,4 +93,4 @@ const parseDiscussionSections = (text, { selectedDate } = {}) => {
   return { tripDayOffset, sections };
 };
 
-module.exports = { parseDiscussionSections, periodDayRange, localIssuanceDate };
+module.exports = { SECTION_TEXT_LIMIT, parseDiscussionSections, periodDayRange, localIssuanceDate };

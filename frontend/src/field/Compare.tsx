@@ -9,14 +9,14 @@ import { buildPersistedReport } from "../app/report-storage";
 import { emptyAi, dateLabel, ageLabel, sentenceCase } from "./data";
 import { Chat } from "./Chat";
 import { useAiAvailability } from "../hooks/useAiAvailability";
-import type { MultiDayTripForecastDay } from "../hooks/useTripForecast";
+import type { MultiDayTripForecastDay, TimeStyle } from "../app/types";
 import "./compare.css";
 import "./sky/sky.css";
 import "./sky/parts.css";
 import "./sky/chapters.css";
 import { MiniSky } from "./sky/MiniSky";
 import { buildSkyHours } from "./sky/sky-model";
-import { buildPlannedReportWeatherRows } from "./report-weather";
+import { readPlanEvaluation } from "../app/plan-evaluation";
 import {
   formatClockForStyle,
   formatRainAmountForElevationUnit,
@@ -24,11 +24,9 @@ import {
   minutesToTwentyFourHourClock,
   parseSolarClockMinutes,
 } from "../app/core";
-import { compareTripDays, sameTripRank } from "../app/trip-forecast";
-import type { TimeStyle } from "../app/types";
 import ObjectiveShortlist from "./ObjectiveShortlist";
 import { revealStart } from "./page-scroll";
-import { buildTripChatContext, dayConcerns, longestStretch } from "./trip-days";
+import { longestStretch } from "./trip-days";
 
 const isNumber = (value: number | null | undefined): value is number =>
   value != null && Number.isFinite(value);
@@ -78,35 +76,30 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
     () => w.tripForecastLoading ? [] : w.tripForecastRows,
     [w.tripForecastLoading, w.tripForecastRows],
   );
-  const ordered = [...days].sort(compareTripDays);
+  // Best first, as the backend ranked the days.
+  const byDate = new Map(days.map((day) => [day.date, day]));
+  const ordered = (w.tripRanking?.order ?? days.map((day) => day.date))
+    .map((date) => byDate.get(date))
+    .filter((day): day is MultiDayTripForecastDay => Boolean(day));
   const best = ordered[0];
-  const tiedWithBest = best ? ordered.filter((day) => day !== best && sameTripRank(day, best)) : [];
+  const tiedWithBest = (w.tripRanking?.tiedWithBest ?? [])
+    .map((date) => byDate.get(date))
+    .filter((day): day is MultiDayTripForecastDay => Boolean(day));
   const selected = days.find((day) => day.date === selectedDate) || best;
   const [copyStatus, setCopyStatus] = useState("");
   const timeStyle = w.preferences.timeStyle;
   const departure = formatClockForStyle(w.tripStartTime, timeStyle);
   const wind = (value: number | null) => isNumber(value) ? w.formatWindDisplay(value) : "Unavailable";
-  const extremes = [
-    {
-      label: "Calmest day",
-      metric: (d: MultiDayTripForecastDay) => isNumber(d.peakGustMph) ? -d.peakGustMph : null,
-      format: (d: MultiDayTripForecastDay) => `Gusts peak at ${wind(d.peakGustMph)}`,
-    },
-    {
-      label: "Lowest rain / snow chance",
-      metric: (d: MultiDayTripForecastDay) => isNumber(d.peakPrecipChance) ? -d.peakPrecipChance : null,
-      format: (d: MultiDayTripForecastDay) => `Chance peaks at ${percent(d.peakPrecipChance)}`,
-    },
-    {
-      label: "Most hours within limits",
-      metric: (d: MultiDayTripForecastDay) => d.travelTotalHours > 0 ? d.travelPassHours : null,
-      format: (d: MultiDayTripForecastDay) => `${d.travelPassHours} hours within limits`,
-    },
-  ].map((item) => {
-    const measured = days.filter((day) => item.metric(day) !== null);
-    const maximum = Math.max(...measured.map((day) => item.metric(day)!));
-    return { ...item, days: measured.filter((day) => item.metric(day) === maximum) };
-  });
+  const highlightText: Record<string, (d: MultiDayTripForecastDay) => string> = {
+    calmest: (d) => `Gusts peak at ${wind(d.peakGustMph)}`,
+    driest: (d) => `Chance peaks at ${percent(d.peakPrecipChance)}`,
+    "within-limits": (d) => `${d.travelPassHours} hours within limits`,
+  };
+  const extremes = w.tripHighlights.map((highlight) => ({
+    label: highlight.label,
+    format: highlightText[highlight.key] ?? (() => ""),
+    days: highlight.dates.map((date) => byDate.get(date)).filter((day): day is MultiDayTripForecastDay => Boolean(day)),
+  }));
   const amount = (value: number | null, snow = false) =>
     !isNumber(value)
       ? "Unavailable"
@@ -118,7 +111,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
       w.objectiveName,
       `${w.tripStartDate} · ${departure} daily start · ${w.travelWindowHours} hours`,
       ...days.map((day) => {
-        const concerns = dayConcerns(day);
+        const concerns = day.concerns;
         return `${day.date}: ${day.decisionLevel}, ${isNumber(day.score) ? `${day.score}/100` : "score unavailable"}. ${day.decisionHeadline}${concerns.length ? ` ${concerns.join("; ")}.` : ""} ${day.weatherDescription}. Gusts peak at ${wind(day.peakGustMph)}; rain / snow chance peaks at ${percent(day.peakPrecipChance)}; ${hoursLabel(day, timeStyle)}. ${day.partialData ? "Partial data. " : ""}Forecast issued: ${ageLabel(day.sourceIssuedTime)}.`;
       }),
       "Weather comparison only. Verify official sources and current avalanche information before departure.",
@@ -149,40 +142,20 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
       )
     : null;
   const payload = useMemo(
-    () =>
-      available.reportChat && days.length
-        ? JSON.stringify(buildTripChatContext(days, {
-            objectiveName: w.objectiveName,
-            position: w.position,
-            timezone: w.objectiveTimezone,
-            startTime: w.tripStartTime,
-            travelWindowHours: w.travelWindowHours,
-            preferences: w.preferences,
-            note: w.tripForecastNote,
-          }))
-        : "",
-    [
-      available.reportChat,
-      days,
-      w.objectiveName,
-      w.objectiveTimezone,
-      w.position,
-      w.preferences,
-      w.travelWindowHours,
-      w.tripForecastNote,
-      w.tripStartTime,
-    ],
+    () => available.reportChat && days.length && w.tripChatContext ? JSON.stringify(w.tripChatContext) : "",
+    [available.reportChat, days.length, w.tripChatContext],
   );
   const skyHours = useMemo(() => new Map(days.map((day) => [day.date, buildSkyHours(
-    buildPlannedReportWeatherRows(day.safetyData, w.preferences, w.travelWindowHours, { start: w.tripStartTime, date: day.date }),
+    readPlanEvaluation(day.safetyData.evaluation)?.travelWindow.planned.rows ?? [],
     {
       start: w.tripStartTime,
       sunriseMinutes: parseSolarClockMinutes(day.safetyData.solar?.sunrise),
       sunsetMinutes: parseSolarClockMinutes(day.safetyData.solar?.sunset),
     },
-  )])), [days, w.preferences, w.travelWindowHours, w.tripStartTime]);
-  const bestConcerns = best ? dayConcerns(best) : [];
-  const selectedConcerns = selected ? dayConcerns(selected) : [];
+  )])), [days, w.tripStartTime]);
+  const bestConcerns = best ? best.concerns : [];
+  const selectedEvaluation = selected ? readPlanEvaluation(selected.safetyData.evaluation) : null;
+  const selectedConcerns = selected ? selected.concerns : [];
   const clock = (minute: number) =>
     formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   const pick = (date: string) => {
@@ -284,7 +257,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                 <div className="sky-card sky-days">
                   {days.map((day) => {
                     const hours = skyHours.get(day.date) ?? [];
-                    const concerns = dayConcerns(day);
+                    const concerns = day.concerns;
                     return (
                       <button key={day.date} type="button" className={`sky-day-row${selected?.date === day.date ? " is-selected" : ""}${day === best ? " is-best" : ""}${concerns.length ? " has-note" : ""}`}
                         aria-pressed={selected?.date === day.date} onClick={() => pick(day.date)}>
@@ -364,7 +337,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                         <tr>
                           <th scope="row">Main concerns</th>
                           {days.map((day) => {
-                            const concerns = dayConcerns(day);
+                            const concerns = day.concerns;
                             const outside = day.travelTotalHours - day.travelPassHours;
                             return (
                               <td key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>
@@ -489,7 +462,9 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
       {snapshot && w.featureFlags.hourlyWeatherCharts && (
         <section className="sky-section sky-compare-hourly" aria-label={`Hourly detail for ${dateLabel(selected.date)}`}>
           <h2 className="sky-chapter-name">Hourly detail · {dateLabel(selected.date)}</h2>
-          <Forecast key={selected.date} report={snapshot} approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
+          {selectedEvaluation && (
+            <Forecast key={selected.date} report={snapshot} evaluation={selectedEvaluation} elevation={(ft) => w.formatElevationDisplay(ft)} />
+          )}
         </section>
       )}
       {payload && (

@@ -50,7 +50,9 @@ const lonLatToTile = (lon, lat, zoom) => {
 // as part of the cache key.
 const MAX_SNOWPACK_LENGTH = 4000;
 
-const snowVisionCache = createCache({ name: 'snow-vision', ttlMs: 12 * 60 * 60 * 1000, staleTtlMs: 24 * 60 * 60 * 1000, maxEntries: 300 });
+// No stale-while-revalidate: a background refresh would pay for a vision call
+// whose result only a later request might see. Imagery is a 30-day mosaic.
+const snowVisionCache = createCache({ name: 'snow-vision', ttlMs: 24 * 60 * 60 * 1000, maxEntries: 300 });
 
 const registerSnowVisionRoute = ({
   app,

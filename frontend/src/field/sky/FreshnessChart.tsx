@@ -1,14 +1,5 @@
 import { useState } from "react";
-import type { FreshnessState } from "../../app/types";
-import { freshnessClass } from "../../app/core";
-
-export type FreshnessInput = {
-  label: string;
-  issued: string | null;
-  staleHours: number;
-  displayValue?: string;
-  stateOverride?: FreshnessState;
-};
+import type { FreshnessState, SourceFreshnessRow } from "../../app/types";
 
 const STATE_LABEL: Record<FreshnessState, string> = { fresh: "Current", aging: "Aging", stale: "Stale", missing: "Missing" };
 
@@ -16,9 +7,10 @@ const STATE_LABEL: Record<FreshnessState, string> = { fresh: "Current", aging: "
  * How old each source is, on one axis running from older (left) to now
  * (right). Each row shades the part of the axis where that source would count
  * as stale; a source with no timestamp is drawn as missing, never as current.
+ * Each row's state is the backend's.
  */
 export function FreshnessChart({ rows, age, stamp }: {
-  rows: FreshnessInput[];
+  rows: SourceFreshnessRow[];
   age: (issued: string | null) => string;
   stamp: (issued: string) => string;
 }) {
@@ -36,7 +28,7 @@ export function FreshnessChart({ rows, age, stamp }: {
     <div className="sky-fresh">
       <ul className="sky-fresh-rows">
         {rows.map((row) => {
-          const state = row.stateOverride || freshnessClass(row.issued, row.staleHours);
+          const state = row.state;
           const hours = hoursOld(row.issued);
           return (
             <li key={row.label} className={`sky-fresh-row is-${state}`}>

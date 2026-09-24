@@ -227,10 +227,13 @@ test("multi-day results preserve selected dates, coordinates and duration", asyn
     travelWindowHours: 6,
   });
   assert.deepEqual(
-    payload.days.map((day) => day.forecast.selectedDate),
-    ["2026-09-05", "2026-09-06", "2026-09-07"],
+    payload.days.map((day) => [day.date, day.safetyData.forecast.selectedDate]),
+    [["2026-09-05", "2026-09-05"], ["2026-09-06", "2026-09-06"], ["2026-09-07", "2026-09-07"]],
   );
-  assert.equal(payload.days[0].weather.trend.length, 6);
+  assert.equal(payload.days[0].safetyData.weather.trend.length, 6);
+  assert.equal(payload.days[0].travelTotalHours, 6);
+  assert.deepEqual([...payload.ranking.order].sort(), ["2026-09-05", "2026-09-06", "2026-09-07"]);
+  assert.equal(payload.chatContext.contextType, "multi-day-trip-plan");
   assert.equal(payload.multiDayUsage.unlimited, true);
 });
 
@@ -261,11 +264,36 @@ test("multi-day responses use production forecast-period timestamp fields", asyn
   });
   assert.equal(result.status, 200);
   assert.equal(result.payload.days.length, 2);
-  for (const day of result.payload.days) {
+  for (const { safetyData: day } of result.payload.days) {
     assert.match(day.forecast.selectedStartTime, /^2026-09-0[56]T07:30:00-07:00$/);
     assert.equal(day.forecast.selectedStartTime, day.weather.forecastStartTime);
     assert.equal(day.forecast.selectedEndTime, day.weather.forecastEndTime);
   }
+});
+
+test("reports come back evaluated for the plan, and can be re-evaluated for another", async () => {
+  const api = createMockApi();
+  const plan = { lat: "46.8523", lon: "-121.7603", date: "2026-09-05", start: "07:00", travel_window_hours: "8", approach: "off" };
+  const { payload: report } = await api.handle(`/api/safety?${new URLSearchParams({ ...plan, max_gust_mph: "40" })}`);
+  assert.equal(report.evaluation.params.max_gust_mph, "40");
+  assert.equal(report.evaluation.travelWindow.planned.rows.length, 8);
+  assert.match(report.evaluation.decision.level, /^(GO|CAUTION|NO-GO)$/);
+  const { payload } = await api.handle("/api/evaluate", "POST", { report, plan: { ...plan, max_gust_mph: "10", wind_unit: "kph" } });
+  assert.equal(payload.evaluation.plan.limits.maxWindGustMph, 10);
+  assert.equal(payload.evaluation.decision.checks.find((check) => check.key === "wind-gust").label, "Wind gusts are at or below 16 km/h");
+  assert.equal((await api.handle("/api/evaluate", "POST", { plan })).status, 400);
+});
+
+test("departure and prior-day comparisons are computed like the API", async () => {
+  const api = createMockApi();
+  const plan = new URLSearchParams({ lat: "46.8523", lon: "-121.7603", date: "2026-09-05", start: "07:00", travel_window_hours: "8" });
+  const { payload: departures } = await api.handle(`/api/start-time-scenarios?${plan}`);
+  assert.deepEqual(departures.requestedTimes, ["04:00", "07:00", "08:00"]);
+  assert.equal(departures.comparison.scenarios.length, 3);
+  assert.ok(departures.comparison.scenarios.every((scenario) => scenario.planned.rows.length === 8));
+  const { payload: prior } = await api.handle(`/api/day-over-day?${plan}`);
+  assert.equal(prior.comparison.previousDate, "2026-09-04");
+  assert.ok(Array.isArray(prior.comparison.changes));
 });
 
 test('history endpoint filters all AI sections and pages beyond 100 without repeats', async () => {

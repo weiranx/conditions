@@ -5,6 +5,7 @@ import { BriefSections } from "../src/field/sky/BriefSections";
 import { RouteNote } from "../src/field/sky/RouteNote";
 import { buildSkyHours } from "../src/field/sky/sky-model";
 import { getDefaultUserPreferences } from "../src/app/preferences";
+import { interpret } from "./evaluation-fixtures";
 import {
   buildRouteReportContext,
   checkpointBreaches,
@@ -89,25 +90,26 @@ const row = (over = {}) => ({
 });
 const hours = buildSkyHours([row()], { start: "07:00", sunriseMinutes: 412, sunsetMinutes: 1170 });
 function workspace() {
+  const safetyData = {
+    safety: { score: 74, tier: "Low risk", evidenceQuality: null },
+    alerts: { status: "ok", activeCount: 0, alerts: [] },
+    airQuality: { usAqi: 32, category: "Good" },
+    rainfall: { expected: { rainWindowIn: 0.07, snowWindowIn: null } },
+    solar: { sunrise: "06:52", sunset: "19:30" },
+    terrainCondition: { label: "Mostly dry" },
+    fireRisk: { level: 1, label: "Low" },
+  };
   return {
     preferences: { ...getDefaultUserPreferences(), timeStyle: "24h" },
-    safetyData: {
-      safety: { score: 74, tier: "Low risk", evidenceQuality: null },
-      alerts: { status: "ok", activeCount: 0, alerts: [] },
-      airQuality: { usAqi: 32, category: "Good" },
-      rainfall: { expected: { rainWindowIn: 0.07, snowWindowIn: null } },
-      solar: { sunrise: "06:52", sunset: "19:30" },
-      terrainCondition: { label: "Mostly dry" },
-    },
+    safetyData,
+    interpretation: interpret(safetyData, { travel_window_hours: "12" }),
     formatWindDisplay: (v) => `${v} mph`, formatTempDisplay: (v) => `${v}°F`, formatElevationDisplay: (v) => `${v} ft`,
     formatDistanceDisplay: (v) => `${v} mi`, formatElevationDeltaDisplay: (v) => `+${v} ft`,
     formatClockForStyle: (v) => (v ? `@${v}` : "—"), localizeUnitText: (t) => t,
-    expectedTravelWindowHours: 12, expectedRainWindowDisplay: "0.07 in", expectedSnowWindowDisplay: "—",
     sunriseMinutesForPlan: 412, sunsetMinutesForPlan: 1170, startMinutesForPlan: 420, returnMinutes: 1140,
     returnTimeDisplay: "19:00", displayStartTime: "07:00",
-    sourceFreshnessRows: [], nwsAlertCount: 0, nwsTopAlerts: [], overallAvalancheLevel: null, avalancheRelevant: false,
-    elevationForecastBands: [], fireRiskLabel: "Low", fireRiskLevel: 1, gearRecommendations: [],
-    snowpackBestDepthDisplay: null, hasFreshnessWarning: false, freshnessWarningSummary: "",
+    nwsAlertCount: 0, nwsTopAlerts: [],
+    elevationForecastBands: [], gearRecommendations: [],
   };
 }
 const brief = (route) => renderToStaticMarkup(

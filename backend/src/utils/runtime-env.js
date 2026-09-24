@@ -17,6 +17,7 @@ const RUNTIME_ENV_DEFINITIONS = Object.freeze([
 
   { key: 'AI_PRIMARY_TIMEOUT_MS', label: 'Primary AI timeout', category: 'AI', description: 'Maximum duration for primary-model requests.', type: 'integer', min: 1000, max: 120000 },
   { key: 'AI_FAST_TIMEOUT_MS', label: 'Fast AI timeout', category: 'AI', description: 'Maximum duration for latency-sensitive model requests.', type: 'integer', min: 1000, max: 120000 },
+  { key: 'AI_REASONING_EFFORT', label: 'AI reasoning effort', category: 'AI', description: 'Reasoning effort for OpenAI and Gemini reasoning models; hidden reasoning is billed as output. "default" uses the provider default.', type: 'enum', options: ['default', 'none', 'minimal', 'low', 'medium', 'high'] },
   { key: 'OPENAI_API_KEY', label: 'OpenAI API key', category: 'Credentials', description: 'Credential used for OpenAI model requests.', type: 'secret' },
   { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', category: 'Credentials', description: 'Credential used for Anthropic model requests.', type: 'secret' },
   { key: 'GEMINI_API_KEY', label: 'Gemini API key', category: 'Credentials', description: 'Credential used for Google Gemini model requests.', type: 'secret' },

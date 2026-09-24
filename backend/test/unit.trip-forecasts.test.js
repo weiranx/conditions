@@ -200,3 +200,39 @@ test('passes the planned activity to every day so gear matches it', async () => 
     expect(query.activity).toBe('ski-touring');
   }
 });
+
+test('each day is checked against the plan and the days come back ranked', async () => {
+  const { attachPlanEvaluation } = require('../src/utils/plan-evaluation');
+  const { makeReport } = require('./fixtures/plan-report');
+  // Current forecasts, so the sources read as fresh.
+  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+  const [first, second] = [day(1), day(2)];
+  const invokeSafetyHandler = jest.fn(async (query) => {
+    const report = makeReport({ date: query.date, start: query.start, hours: 12, scenario: query.date === second ? 'storm' : 'clear' });
+    return { statusCode: 200, payload: attachPlanEvaluation(report, query) };
+  });
+  const response = await request(makeApp({ invokeSafetyHandler }))
+    .post('/api/trip-forecasts')
+    .set('Idempotency-Key', 'multi-day-request-plan')
+    .send({
+      lat: 47.4,
+      lon: -121.4,
+      startDate: first,
+      startTime: '07:00',
+      durationDays: 2,
+      requestedDays: 3,
+      travelWindowHours: 12,
+      objectiveName: 'Mailbox Peak',
+      plan: { max_gust_mph: '30', wind_unit: 'kph', trailhead_ft: '5000', lat: '1' },
+    });
+
+  expect(response.status).toBe(200);
+  // Days are compared at the objective: an approach belongs to one route.
+  expect(invokeSafetyHandler.mock.calls[0][0]).toMatchObject({ max_gust_mph: '30', wind_unit: 'kph', approach: 'off', lat: '47.4' });
+  expect(response.body.days.map((day) => [day.date, day.decisionLevel])).toEqual([[first, 'GO'], [second, 'NO-GO']]);
+  expect(response.body.days[1].concerns).toContain('Wind gusts reach about 87 km/h');
+  expect(response.body.days[0].safetyData.evaluation.travelWindow.planned.rows).toHaveLength(12);
+  expect(response.body.ranking).toEqual({ order: [first, second], bestDate: first, tiedWithBest: [] });
+  expect(response.body.note).toBe('Only 2 days are available inside the current forecast range.');
+  expect(response.body.chatContext).toMatchObject({ contextType: 'multi-day-trip-plan', objective: { name: 'Mailbox Peak' } });
+});

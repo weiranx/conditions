@@ -8,8 +8,8 @@ import {
   formatWindForUnit,
   localizeUnitText,
 } from "../src/app/core";
-import { buildTravelWindowRows } from "../src/app/travel-window";
-import { getDefaultUserPreferences } from "../src/app/preferences";
+import travelWindow from "../../backend/src/utils/travel-window.js";
+import planContext from "../../backend/src/utils/plan-context.js";
 import { plainRule } from "../src/field/sky/status";
 import { SurfacePrediction } from "../src/field/SurfacePrediction";
 
@@ -89,8 +89,9 @@ test("a count followed by the word 'in' is left alone", () => {
 });
 
 test("the deep-snow rule reads in the viewer's depth unit", () => {
-  const preferences = { ...getDefaultUserPreferences(), elevationUnit: "m" };
-  const [row] = buildTravelWindowRows([{ time: "7:00 AM", temp: 30, wind: 5, gust: 10, precipChance: 0, condition: "Clear" }], preferences, { snowDepthIn: 20 });
+  // The backend writes the rule; the app turns it into plain words.
+  const context = planContext.buildPlanContext({ elevation_unit: "m", approach: "off" }, null);
+  const [row] = travelWindow.buildTravelWindowRows([{ time: "7:00 AM", temp: 30, wind: 5, gust: 10, precipChance: 0, condition: "Clear" }], context, { snowDepthIn: 20 });
   const rule = row.failedRules.find((item) => item.startsWith("snow depth"));
   assert.equal(rule, "snow depth 51 cm");
   assert.equal(plainRule(rule), "51 cm of snow on the ground");

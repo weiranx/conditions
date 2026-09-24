@@ -4,13 +4,11 @@ import { DaylightChart } from "./DaylightChart";
 import { ContingencyCard } from "./ContingencyCard";
 import { Thresholds } from "./Thresholds";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
-import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
-import { buildPlannedReportWeatherRows } from "./report-weather";
+import { minutesToTwentyFourHourClock, parseTimeInputMinutes } from "../app/core";
 import { buildSkyHours, isOverHour, type SkyHour } from "./sky/sky-model";
 import { StartTimeline, type TimelineRow } from "./sky/StartTimeline";
 import { durationLabel } from "./sky/status";
-import { summarizeApproachHours, type ApproachSummary } from "../app/approach-elevation";
-import { decisionLevelRank } from "../app/decision";
+import type { ApproachSummary } from "../app/types";
 
 const LEVEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
@@ -35,13 +33,13 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
 
   // Each departure drawn from its own forecast, not the planned one shifted in time.
   const rowFor = (startTime: string, rowHours: SkyHour[], opts: {
-    daylight: number | null; decision?: string; best?: boolean; current?: boolean; key?: string;
+    daylight: number | null; approach: ApproachSummary | null; decision?: string; best?: boolean; current?: boolean; key?: string;
   }): TimelineRow => {
     const start = parseTimeInputMinutes(startTime) ?? 0;
     const over = rowHours.filter(isOverHour).length;
     const missing = rowHours.filter((h) => h.tone === "missing").length;
     const dark = rowHours.filter((h) => h.night).length;
-    const approach = summarizeApproachHours(rowHours);
+    const { approach } = opts;
     const daylightText = opts.daylight === null ? "daylight at return unknown"
       : opts.daylight < 0 ? `back ${duration(-opts.daylight)} after sunset` : `back ${duration(opts.daylight)} before sunset`;
     return {
@@ -77,11 +75,12 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
     ? comparison.scenarios.map((scenario) => {
       const current = scenario.startTime === w.alpineStartTime;
       const rowHours = current ? hours : buildSkyHours(
-        buildPlannedReportWeatherRows(scenario.data, w.preferences, w.travelWindowHours, { start: scenario.startTime, date: w.forecastDate, approach: w.approachProfile }),
+        scenario.planned.rows,
         { start: scenario.startTime, sunriseMinutes: sunrise, sunsetMinutes: sunset },
       );
       return rowFor(scenario.startTime, rowHours, {
         daylight: scenario.daylightRemainingMinutes,
+        approach: current ? w.evaluation?.travelWindow.planned.approachSummary ?? null : scenario.planned.approachSummary,
         decision: scenario.decision.level,
         best: scenario.startTime === comparison.bestStartTime && !comparison.allNoGo,
         current,
@@ -91,29 +90,22 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
   const planDaylight = sunset !== null && Number.isFinite(w.returnMinutes) ? sunset - (w.returnMinutes as number) : null;
   const rows = scenarioRows.some((r) => r.current)
     ? scenarioRows
-    : [...scenarioRows, rowFor(w.alpineStartTime, hours, { daylight: planDaylight, current: true, key: "plan" })]
+    : [...scenarioRows, rowFor(w.alpineStartTime, hours, {
+      daylight: planDaylight,
+      approach: w.evaluation?.travelWindow.planned.approachSummary ?? null,
+      current: true,
+      key: "plan",
+    })]
       .sort((a, b) => a.start - b.start);
 
   const overPlan = hours.filter(isOverHour).length;
   const daylightLength = sunrise !== null && sunset !== null && sunset > sunrise ? sunset - sunrise : null;
   const best = comparison?.scenarios.find((s) => s.startTime === comparison.bestStartTime);
-  const planScenario = comparison?.scenarios.find((s) => s.startTime === w.alpineStartTime);
-  // Suggest another start only when it is clearly better: a better decision,
-  // or a score more than a point higher. The top-ranked departure need not
-  // have the most daylight, so do not call it the best margin.
-  const suggestion = !best || !comparison || comparison.allNoGo || comparison.effectivelyTied || best.startTime === w.alpineStartTime
-    ? null
-    : planScenario && decisionLevelRank(best.decision.level) > decisionLevelRank(planScenario.decision.level)
-      ? `changes the decision to ${LEVEL[best.decision.level] || best.decision.level}`
-      : planScenario ? `scores higher (${Math.round(best.score)} vs ${Math.round(planScenario.score)})` : "has the best decision and score of these departures";
-  // A peak only means something when an hour carries a risk signal; the
-  // first reading can open before an off-the-hour start.
-  const peak = w.peakCriticalWindow && w.peakCriticalWindow.score > 0 ? w.peakCriticalWindow : null;
-  const peakMinute = peak ? parseTimeInputMinutes(peak.time) ?? parseHourLabelToMinutes(peak.time) : null;
-  const planStartMinute = parseTimeInputMinutes(w.alpineStartTime);
-  const peakTime = peak && peakMinute !== null && planStartMinute !== null && planStartMinute - peakMinute > 0 && planStartMinute - peakMinute < 60
-    ? w.alpineStartTime
-    : peak?.time;
+  // Another start is suggested only when it is clearly better than the plan.
+  const suggestion = comparison?.suggestion ?? null;
+  // The hour that most needs attention, when any hour carries a risk signal.
+  const peak = w.peakCriticalWindow;
+  const peakTime = w.evaluation?.criticalWindow.peakTime ?? null;
   const limits = [
     { label: "Gusts up to", value: w.formatWindDisplay(w.preferences.maxWindGustMph) },
     { label: "Rain chance up to", value: `${w.preferences.maxPrecipChance}%` },
@@ -240,7 +232,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
                   {w.returnExtendsPastMidnight && " (+1 day)"}
                 </dd>
               </div>
-              <div><dt>Daylight remaining at start</dt><dd>{w.daylightRemainingFromStartLabel}</dd></div>
+              <div><dt>Daylight remaining at start</dt><dd>{w.interpretation?.daylightFromStart.label ?? "N/A"}</dd></div>
               <div><dt>Sunrise</dt><dd>{w.safetyData?.solar?.sunrise || "Unavailable"}</dd></div>
               <div><dt>Sunset</dt><dd>{w.safetyData?.solar?.sunset || "Unavailable"}</dd></div>
             </dl>
@@ -257,7 +249,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
           {peak && peakTime && (
             <p className="sky-cap">
               Most severe weather: {clockText(peakTime)} · {peak.condition}
-              {peak.reasons.length > 0 && <> ({w.localizeUnitText(peak.reasons.join(", "))})</>}
+              {peak.reasons.length > 0 && <> ({peak.reasons.join(", ")})</>}
             </p>
           )}
           <details className="sky-details report-threshold-disclosure">

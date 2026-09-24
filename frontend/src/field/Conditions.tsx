@@ -16,7 +16,6 @@ import {
   ConditionScale,
   AccumulationBars,
 } from "./ConditionCharts";
-import { fieldSignals } from "./field-signals";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { Details, SourceLink } from "./Details";
@@ -24,8 +23,7 @@ import { ComfortScore } from "./ComfortScore";
 import { shortHour, type SkyHour } from "./sky/sky-model";
 import { PrecipMountain } from "./sky/PrecipMountain";
 import { knownFeet } from "./sky/status";
-import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
-import { adjustPointToElevation } from "../app/approach-elevation";
+import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
 
 /** US EPA AQI categories. */
 const AQI_BANDS = [
@@ -63,15 +61,11 @@ function ExposureCard({ icon, title, value, tone = "ok", status, children, note,
   );
 }
 
-const levelTone = (label: string | null | undefined): "ok" | "over" | "missing" => {
-  const text = String(label || "").toLowerCase();
-  if (!text || /unavailable|unknown/.test(text)) return "missing";
-  return /high|extreme|elevated|poor|unhealthy|severe/.test(text) ? "over" : "ok";
-};
-
 export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: Workspace; hours?: SkyHour[] }) {
   const data = w.safetyData!;
-  const signals = fieldSignals(data.localConditions, w.preferences);
+  const signals = w.evaluation?.fieldSignals ?? [];
+  // Comfort as scored for the plan's current approach.
+  const comfort = w.evaluation?.pleasantness ?? data.pleasantness ?? null;
   const unusual = signals.filter((signal) => signal.tone === "attention");
   const missing = signals.filter((signal) => signal.tone === "unavailable");
   const flags = resolveReportFeatureFlags(data.featureFlags);
@@ -85,14 +79,8 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
   const percent = (value: number) => `${Math.round(value)}%`;
   const hourMinutes = hours.map((hour) => parseTimeInputMinutes(hour.time) ?? parseHourLabelToMinutes(hour.time) ?? NaN);
   // Heat builds lowest on the route, so the heat card leads with the trailhead and keeps the summit for reference.
-  const approach = w.approachProfile;
-  const trailheadTemps = approach && approach.trailheadElevationFt < approach.objectiveElevationFt - 500
-    ? hours.map((hour, i) => adjustPointToElevation(hour, approach.objectiveElevationFt, approach.trailheadElevationFt, {
-      minuteOfDay: Number.isFinite(hourMinutes[i]) ? hourMinutes[i] : 720,
-      sunriseMinutes: parseSolarClockMinutes(data.solar?.sunrise),
-      sunsetMinutes: parseSolarClockMinutes(data.solar?.sunset),
-    }).temp)
-    : null;
+  const trailhead = w.evaluation?.trailheadTemperatures ?? null;
+  const trailheadTemps = trailhead?.temps ?? null;
   const hourTicks = hourMinutes.map((minute) => shortHour(minute, w.preferences.timeStyle === "24h" ? "24h" : "12h"));
   const uvDisplay = (value: number | null | undefined) =>
     typeof value === "number" && Number.isFinite(value) && value >= 0
@@ -102,8 +90,8 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
   const hasPeakUv = typeof peakUv === "number" && Number.isFinite(peakUv) && peakUv >= 0;
   const aqi = data.airQuality?.usAqi;
   const aqiKnown = typeof aqi === "number" && Number.isFinite(aqi);
-  const visibility = w.weatherVisibilityRisk?.level || data.weather.visibilityRisk?.level || null;
-  const fireLevel = Number(w.fireRiskLevel);
+  const { rainfall, heatRisk, fireRisk, visibility, sourceFreshness } = w.interpretation!;
+  const airQualityFutureNotApplicable = sourceFreshness.airQualityFutureNotApplicable;
   const objectiveFt = knownFeet(data.weather.elevation);
   const freezingFt = knownFeet(data.atmosphere?.freezingLevelFt);
   const snowLevelFt = knownFeet(data.atmosphere?.snowLevelFt);
@@ -118,7 +106,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
       <section className="sky-section" aria-labelledby="sky-precip-title">
         <div className="sky-sh">
           <h2 id="sky-precip-title">Rain and snow</h2>
-          <p>{w.expectedTravelWindowHours}-hour window and the days before it.</p>
+          <p>{rainfall.expectedTravelWindowHours}-hour window and the days before it.</p>
         </div>
         {objectiveFt !== null && skyHours.length > 0 && (
           <section className="sky-card sky-precip-card" aria-label="Rain and snow on the mountain">
@@ -129,7 +117,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
             <PrecipMountain
               hours={skyHours}
               objectiveFt={objectiveFt}
-              trailheadFt={w.approachProfile?.trailheadElevationFt ?? null}
+              trailheadFt={w.planApproach?.trailheadElevationFt ?? null}
               levels={precipLevels}
               format={{ elevation: (ft) => w.formatElevationDisplay(ft), clock: skyClock }}
               timeStyle={w.preferences.timeStyle}
@@ -145,36 +133,36 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
             <div className="sky-stat-row">
               <div>
                 <span className="sky-muted">Rain</span>
-                <span className="sky-big">{w.expectedRainWindowDisplay}</span>
+                <span className="sky-big">{rainfall.expectedRainWindowDisplay}</span>
               </div>
               <div>
                 <span className="sky-muted"><Snowflake size={13} aria-hidden="true" /> Snow</span>
-                <span className="sky-big">{w.expectedSnowWindowDisplay}</span>
+                <span className="sky-big">{rainfall.expectedSnowWindowDisplay}</span>
               </div>
             </div>
-            <p className="sky-cap is-body">{w.precipInsightLine}</p>
+            <p className="sky-cap is-body">{rainfall.insightLine}</p>
             <details className="sky-details">
               <summary>What these totals mean</summary>
-              <p>{w.rainfallNoteLine} {w.expectedPrecipNoteLine}</p>
+              <p>{rainfall.noteLine} {rainfall.expectedNoteLine}</p>
             </details>
           </section>
           <section className="sky-card" aria-label="Recent precipitation">
-            <span className="sky-card-head"><span>Recently fallen</span><span className="sky-muted">{w.rainfallModeLabel}</span></span>
+            <span className="sky-card-head"><span>Recently fallen</span><span className="sky-muted">{rainfall.modeLabel}</span></span>
             <div className="report-precip-charts">
               <AccumulationBars
                 label="Rain"
                 rows={[
-                  { label: "12 hours", value: w.rainfall12hIn, display: w.rainfall12hDisplay },
-                  { label: "24 hours", value: w.rainfall24hIn, display: w.rainfall24hDisplay },
-                  { label: "48 hours", value: w.rainfall48hIn, display: w.rainfall48hDisplay },
+                  { label: "12 hours", value: rainfall.rainIn.past12h, display: rainfall.rainDisplay.past12h },
+                  { label: "24 hours", value: rainfall.rainIn.past24h, display: rainfall.rainDisplay.past24h },
+                  { label: "48 hours", value: rainfall.rainIn.past48h, display: rainfall.rainDisplay.past48h },
                 ]}
               />
               <AccumulationBars
                 label="Snow"
                 rows={[
-                  { label: "12 hours", value: w.snowfall12hIn, display: w.snowfall12hDisplay },
-                  { label: "24 hours", value: w.snowfall24hIn, display: w.snowfall24hDisplay },
-                  { label: "48 hours", value: w.snowfall48hIn, display: w.snowfall48hDisplay },
+                  { label: "12 hours", value: rainfall.snowIn.past12h, display: rainfall.snowDisplay.past12h },
+                  { label: "24 hours", value: rainfall.snowIn.past24h, display: rainfall.snowDisplay.past24h },
+                  { label: "48 hours", value: rainfall.snowIn.past48h, display: rainfall.snowDisplay.past48h },
                 ]}
               />
             </div>
@@ -193,14 +181,14 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
         <div className="sky-exposure-grid field-condition-grid">
           {flags.heatRiskDetails && (
             <ExposureCard className="is-heat" icon={<ThermometerSun size={16} aria-hidden="true" />} title="Heat exposure"
-              value={w.heatRiskLabel || "Unavailable"} tone={levelTone(w.heatRiskLabel)}
-              note={w.heatRiskGuidance}
+              value={heatRisk.label || "Unavailable"} tone={heatRisk.status}
+              note={heatRisk.guidance}
               evidence={<Details title="Heat-stress measurements" value={data.heatRisk} />}>
               <ConditionTrend label={trailheadTemps ? "Temperature, trailhead to summit" : "Temperature at the summit"}
                 values={trailheadTemps ?? hours.map((hour) => hour.temp)} format={w.formatTempDisplay} start={start} end={end}
-                compare={trailheadTemps && approach ? {
-                  primaryLabel: `Trailhead ${w.formatElevationDisplay(Math.round(approach.trailheadElevationFt / 100) * 100)}`,
-                  label: `Summit ${w.formatElevationDisplay(approach.objectiveElevationFt)}`,
+                compare={trailhead ? {
+                  primaryLabel: `Trailhead ${w.formatElevationDisplay(Math.round(trailhead.trailheadElevationFt / 100) * 100)}`,
+                  label: `Summit ${w.formatElevationDisplay(trailhead.objectiveElevationFt)}`,
                   values: hours.map((hour) => hour.temp),
                 } : undefined}
                 hours={hourTicks} bands={[{ from: 85, to: 200, label: "hot", tone: "caution" }, { from: -100, to: 32, label: "freezing", tone: "cold" }]} />
@@ -208,8 +196,8 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
           )}
           {flags.fireRiskDetails && (
             <ExposureCard className="is-fire" icon={<Flame size={16} aria-hidden="true" />} title="Fire risk"
-              value={w.fireRiskLabel || "Unavailable"} tone={Number.isFinite(fireLevel) && fireLevel >= 3 ? "over" : levelTone(w.fireRiskLabel) === "missing" ? "missing" : "ok"}
-              note={fireLevel >= 1 && data.fireRisk?.reasons?.[0]
+              value={fireRisk.label || "Unavailable"} tone={fireRisk.status}
+              note={(fireRisk.level ?? 0) >= 1 && data.fireRisk?.reasons?.[0]
                 ? `${w.localizeUnitText(data.fireRisk.reasons[0])} ${data.fireRisk.guidance || ""}`.trim()
                 : data.fireRisk?.guidance}
               evidence={<Details title="What sets the fire risk" value={data.fireRisk} />}>
@@ -219,19 +207,19 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
           )}
           {flags.airQualityDetails && (
             <ExposureCard className="is-air" icon={<Wind size={16} aria-hidden="true" />} title="Air quality"
-              value={w.airQualityFutureNotApplicable ? "Current only" : aqiKnown ? <>{aqi}<span className="sky-big-unit"> AQI</span></> : "Unavailable"}
-              tone={w.airQualityFutureNotApplicable || !aqiKnown ? "missing" : aqi > 100 ? "over" : "ok"}
-              status={w.airQualityFutureNotApplicable ? "Not for your date" : data.airQuality?.category || undefined}
-              note={w.airQualityFutureNotApplicable ? "Current AQI does not represent the selected future date." : !aqiKnown ? "Unavailable" : undefined}
+              value={airQualityFutureNotApplicable ? "Current only" : aqiKnown ? <>{aqi}<span className="sky-big-unit"> AQI</span></> : "Unavailable"}
+              tone={airQualityFutureNotApplicable || !aqiKnown ? "missing" : aqi > 100 ? "over" : "ok"}
+              status={airQualityFutureNotApplicable ? "Not for your date" : data.airQuality?.category || undefined}
+              note={airQualityFutureNotApplicable ? "Current AQI does not represent the selected future date." : !aqiKnown ? "Unavailable" : undefined}
               evidence={<Details title="Air-quality sources, timing, and pollutants" value={data.airQuality} />}>
-              {!w.airQualityFutureNotApplicable && (
+              {!airQualityFutureNotApplicable && (
                 <ConditionScale label="US air-quality index" value={data.airQuality?.usAqi} maximum={500} bands={AQI_BANDS} />
               )}
             </ExposureCard>
           )}
           <ExposureCard className="is-visibility" icon={<Eye size={16} aria-hidden="true" />} title="Visibility"
-            value={visibility || "Unavailable"} tone={levelTone(visibility)}
-            note={w.weatherVisibilityDetail}
+            value={visibility.level === "Unknown" ? "Unavailable" : visibility.level} tone={visibility.status}
+            note={visibility.detail}
             evidence={<Details title="Visibility risk and active hours" value={data.weather.visibilityRisk} />}>
             <ConditionTrend label="Cloud cover" values={hours.map((hour) => hour.cloudCover)} format={percent} start={start} end={end} domain={[0, 100]}
               hours={hourTicks} kind="bars" />
@@ -252,13 +240,13 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
                 <div><dt>UV near your start</dt><dd>{uvDisplay(data.atmosphere?.uvIndex)}</dd></div>
                 <div><dt>Freezing level</dt><dd>{w.formatElevationDisplay(data.atmosphere?.freezingLevelFt)}</dd></div>
                 <div><dt>Snow level</dt><dd>{w.formatElevationDisplay(data.atmosphere?.snowLevelFt)}</dd></div>
-                <div><dt>Pressure</dt><dd>{w.weatherPressureTrendSummary || "Trend unavailable"}</dd></div>
+                <div><dt>Pressure</dt><dd>{w.interpretation!.pressureTrend || "Trend unavailable"}</dd></div>
               </dl>
             </ExposureCard>
           )}
-          {data.pleasantness && (
-            <ComfortScore comfort={data.pleasantness} localize={w.localizeUnitText}
-              approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
+          {comfort && (
+            <ComfortScore comfort={comfort} localize={w.localizeUnitText}
+              elevation={(ft) => w.formatElevationDisplay(ft)} />
           )}
         </div>
       </section>

@@ -1,6 +1,6 @@
 import { Mountain } from "lucide-react";
-import { APPROACH_SOURCE_LABEL, summarizeApproachHours, type ApproachElevationSource } from "../../app/approach-elevation";
-import { spanLabel, type SkyHour } from "./sky-model";
+import type { ApproachElevationSource, ApproachSummary } from "../../app/types";
+import { APPROACH_SOURCE_LABEL, spanLabel, type SkyHour } from "./sky-model";
 
 const roundTo100 = (ft: number) => Math.round(ft / 100) * 100;
 
@@ -8,14 +8,15 @@ const roundTo100 = (ft: number) => Math.round(ft / 100) * 100;
  * Plain-language note for hours checked below the objective, so a changed
  * verdict never comes from an adjustment the reader cannot see.
  */
-export function ApproachNote({ hours, source, clock, elevation, onEdit }: {
+export function ApproachNote({ hours, summary, source, clock, elevation, onEdit }: {
   hours: SkyHour[];
+  /** The hours checked below the objective, as the backend evaluated them. */
+  summary: ApproachSummary | null;
   source: ApproachElevationSource | null;
   clock: (minute: number) => string;
   elevation: (ft: number) => string;
   onEdit?: () => void;
 }) {
-  const summary = summarizeApproachHours(hours);
   if (!summary || !source) return null;
   const spans = summary.adjustedRuns.map((run) => spanLabel(hours, run, clock)).filter(Boolean).join(" and ");
   const low = roundTo100(summary.lowFt);

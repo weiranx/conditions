@@ -36,8 +36,9 @@ test('public tools are read-only and account tools are absent without a session'
 });
 test('report preserves nulls, zeroes, partial evidence and requested timing', async t => {
   let query;
-  const c = await pair(t, { hasAccount: false, get: async (path, args) => { assert.equal(path, '/api/safety'); query = args; return { weather: { temperature: null, precipitation: 0 }, partialData: true, apiWarning: 'Forecast missing', generatedAt: '2026-09-16T12:00:00Z' }; } });
+  const c = await pair(t, { hasAccount: false, get: async (path, args) => { assert.equal(path, '/api/safety'); query = args; return { weather: { temperature: null, precipitation: 0 }, partialData: true, apiWarning: 'Forecast missing', generatedAt: '2026-09-16T12:00:00Z', evaluation: { decision: { level: 'GO' } } }; } });
   const r = await c.callTool({ name: 'get_conditions_report', arguments: plan });
+  assert.equal(r.structuredContent.data.evaluation, undefined, 'the app evaluation is not evidence');
   assert.equal(r.structuredContent.data.weather.temperature, null); assert.equal(r.structuredContent.data.weather.precipitation, 0);
   assert.equal(r.structuredContent.data.partialData, true); assert.equal(query.start, '06:00'); assert.equal(query.travel_window_hours, 12);
 });

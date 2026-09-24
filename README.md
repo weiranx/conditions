@@ -113,6 +113,7 @@ The backend runs against free public data sources out of the box. A couple of fe
 | `NPS_API_KEY` | The **Access & Closures** sub-section of the Local Conditions card — nearest national-park alerts and closures via the National Park Service API. Without it the section is hidden; the rest of the report is unaffected. | Free, instant — request at [nps.gov developer get-started](https://www.nps.gov/subjects/developer/get-started.htm). |
 | `AI_PROVIDER` | Selects the preferred provider (`openai` by default); use `openai`, `anthropic`, or `gemini`. Failures retry through other configured providers. | — |
 | `AI_PRIMARY_TIMEOUT_MS` / `AI_FAST_TIMEOUT_MS` | Per-provider attempt limits before failover; defaults to 28000/8000 ms. | — |
+| `AI_REASONING_EFFORT` | Reasoning effort for OpenAI/Gemini reasoning models; defaults to `low` to limit billed reasoning tokens. `default` keeps the provider default. | — |
 | `OPENAI_API_KEY` | Enables OpenAI as the preferred provider or automatic fallback. | [OpenAI API keys](https://platform.openai.com/api-keys) |
 | `OPENAI_MODEL` / `OPENAI_FAST_MODEL` | OpenAI primary and extraction models; defaults to Terra and Luna. | — |
 | `ANTHROPIC_API_KEY` | Enables Anthropic as the preferred provider or automatic fallback. | [Anthropic Console](https://console.anthropic.com/) |

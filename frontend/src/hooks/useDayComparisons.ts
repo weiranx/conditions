@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { fetchApi } from '../lib/api-client';
 import type { DayOverDayComparison, SafetyData, UserPreferences } from '../app/types';
 import { DATE_FMT } from '../app/constants';
-import { addDaysToIsoDate, parseOptionalFiniteNumber } from '../app/core';
-import { buildDayOverDayChanges, scoresComparable } from '../app/day-over-day';
-import { comparisonReportMatches, comparisonRequestUrl, comparisonTravelHours, reportRequestedStartTime } from '../app/comparison-request';
+import { parseOptionalFiniteNumber } from '../app/core';
+import { comparisonTravelHours, reportRequestedStartTime } from '../app/comparison-request';
 
 export interface UseDayComparisonsParams {
   hasObjective: boolean;
@@ -20,6 +19,7 @@ export interface UseDayComparisonsReturn {
   dayOverDay: DayOverDayComparison | null;
 }
 
+/** The plan against the same plan a day earlier, compared by the backend. */
 export function useDayComparisons({
   hasObjective,
   view,
@@ -38,87 +38,37 @@ export function useDayComparisons({
     hasObjective && view === 'planner' && safetyData && DATE_FMT.test(selectedDate)
       && Number.isFinite(parseOptionalFiniteNumber(safetyData.safety?.score)),
   );
-  const comparisonKey = comparisonEnabled && safetyData
-    ? JSON.stringify([
-        selectedDate,
-        startTime,
-        travelWindowHours,
-        position.lat,
-        position.lng,
-        temperatureUnit,
-        windSpeedUnit,
-        safetyData.safety.score,
-        safetyData.avalanche?.dangerLevel,
-        safetyData.weather.windGust,
-        safetyData.weather.feelsLike,
-        safetyData.weather.temp,
-        safetyData.weather.precipChance,
-        safetyData.weather.description,
-      ])
+  const comparisonKey = comparisonEnabled
+    ? JSON.stringify([selectedDate, startTime, travelWindowHours, position.lat, position.lng, temperatureUnit, windSpeedUnit])
     : null;
 
   useEffect(() => {
-    if (!comparisonKey || !safetyData) {
-      return;
-    }
-
-    const previousDate = addDaysToIsoDate(selectedDate, -1);
+    if (!comparisonKey || !safetyData) return;
     const controller = new AbortController();
-
+    const query = new URLSearchParams({
+      lat: String(position.lat),
+      lon: String(position.lng),
+      date: selectedDate,
+      start: startTime,
+      travel_window_hours: String(travelWindowHours),
+      temp_unit: temperatureUnit,
+      wind_unit: windSpeedUnit,
+    });
     (async () => {
+      let comparison: DayOverDayComparison | null = null;
       try {
-        const { response, payload } = await fetchApi(
-          comparisonRequestUrl(position.lat, position.lng, previousDate, startTime, travelWindowHours),
-          { signal: controller.signal },
-        );
-        if (!response.ok || !payload || typeof payload !== 'object') {
-          if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison: null });
-          return;
-        }
-
-        const previousPayload = payload as SafetyData;
-        const prevScore = parseOptionalFiniteNumber(previousPayload?.safety?.score);
-        if (!Number.isFinite(prevScore) || !comparisonReportMatches(
-          previousPayload, position.lat, position.lng, previousDate, startTime, travelWindowHours,
-        )) {
-          if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison: null });
-          return;
-        }
-
-        if (!controller.signal.aborted) {
-          setResult({
-            key: comparisonKey,
-            source: safetyData,
-            comparison: {
-              previousDate,
-              startTime,
-              travelWindowHours,
-              previousScore: prevScore,
-              delta: Number((safetyData.safety.score - prevScore).toFixed(1)),
-              scoreComparable: scoresComparable(safetyData, previousPayload),
-              changes: buildDayOverDayChanges(safetyData, previousPayload, { temperatureUnit, windSpeedUnit }),
-            },
-          });
-        }
+        const { response, payload } = await fetchApi(`/api/day-over-day?${query}`, { signal: controller.signal });
+        const value = response.ok && payload && typeof payload === 'object'
+          ? (payload as { comparison?: DayOverDayComparison | null }).comparison
+          : null;
+        comparison = value && typeof value === 'object' && Array.isArray(value.changes) ? value : null;
       } catch {
-        if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison: null });
+        comparison = null;
       }
+      if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison });
     })();
-
-    return () => {
-      controller.abort();
-    };
-  }, [
-    comparisonKey,
-    selectedDate,
-    startTime,
-    travelWindowHours,
-    safetyData,
-    position.lat,
-    position.lng,
-    temperatureUnit,
-    windSpeedUnit,
-  ]);
+    return () => controller.abort();
+  }, [comparisonKey, selectedDate, startTime, travelWindowHours, safetyData, position.lat, position.lng, temperatureUnit, windSpeedUnit]);
 
   return { dayOverDay: result?.key === comparisonKey && result?.source === safetyData ? result.comparison : null };
 }

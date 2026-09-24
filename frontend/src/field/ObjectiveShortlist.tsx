@@ -9,8 +9,8 @@ import { SHORTLIST_KEY, objectiveFrom, readShortlist, shortlistDates, shortlistV
 import { resolveObjectiveTimeZone } from '../app/planned-start';
 import { addDaysToIsoDate, formatClockForStyle } from '../app/core';
 import { dateLabel, ageLabel } from './data';
-import { sameTripRank, type MultiDayTripForecastDay } from '../app/trip-forecast';
-import { dayConcerns, longestStretch } from './trip-days';
+import type { MultiDayTripForecastDay } from '../app/types';
+import { longestStretch, sameTripRank } from './trip-days';
 import './shortlist.css';
 
 const finite = (value: number | null | undefined): value is number => value != null && Number.isFinite(value);
@@ -57,14 +57,14 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
   const { searchWrapperRef, searchInputRef } = search;
   const dates = shortlistDates(state);
   const validation = shortlistValidation(state);
-  const ranked = rankShortlist(comparison.results, state.hours);
+  const ranked = rankShortlist(comparison.results);
   const best = ranked[0];
   const bestObjective = state.objectives.find(o => o.id === best?.objectiveId);
   const tied = best ? ranked.filter(r => r !== best && sameTripRank(r.day, best.day)) : [];
-  const bestConcerns = best ? dayConcerns(best.day) : [];
+  const bestConcerns = best ? best.day.concerns : [];
   const selectedObjective = state.objectives.find(o => o.id === selected?.objectiveId);
   const selectedDay = comparison.results.find(r => r.objectiveId === selected?.objectiveId)?.days.find(d => d.date === selected?.date);
-  const selectedConcerns = selectedDay ? dayConcerns(selectedDay) : [];
+  const selectedConcerns = selectedDay ? selectedDay.concerns : [];
   const selectedStretch = selectedDay ? longestStretch(selectedDay, w.preferences.timeStyle) : null;
   const clockText = (value: string) => formatClockForStyle(value, w.preferences.timeStyle);
   function open(objective: ShortlistObjective, choice: ShortlistChoice) {
@@ -213,7 +213,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
                 return <tr key={objective.id}><th scope="row">{objective.name}<small>{resolveObjectiveTimeZone(objective.lat, objective.lon)}</small></th>
                   {dates.map(date => {
                     const day = result?.days.find(d => d.date === date);
-                    const concerns = day ? dayConcerns(day) : [];
+                    const concerns = day ? day.concerns : [];
                     const choice = choiceFor(objective.id, date);
                     return <td key={date} className={selected?.objectiveId === objective.id && selected.date === date ? 'is-selected' : ''}>
                       {day ? <button className="shortlist-cell" aria-pressed={selected?.objectiveId === objective.id && selected.date === date} aria-label={`Review ${objective.name}, ${dateLabel(date)}`} onClick={() => setSelected({ objectiveId: objective.id, date })}>
@@ -223,7 +223,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
                         <span>Peak gust {finite(day.peakGustMph) ? w.formatWindDisplay(day.peakGustMph) : 'unavailable'}</span><span>Peak rain / snow {finite(day.peakPrecipChance) ? `${day.peakPrecipChance}%` : 'unavailable'}</span>
                         <span>{day.travelTotalHours > 0 ? `${day.travelPassHours}/${day.travelTotalHours} forecast hours within limits` : 'Hourly forecast unavailable'}</span>
                         <span>Cloud cover {finite(day.cloudCoverPct) ? `${day.cloudCoverPct}%` : 'unavailable'}</span>
-                        <span>Comfort {finite(day.safetyData.pleasantness?.score) ? `${day.safetyData.pleasantness!.score}/100` : 'unavailable'}</span>
+                        <span>Comfort {finite(day.comfortScore) ? `${day.comfortScore}/100` : 'unavailable'}</span>
                         {day.partialData && <small className="compare-data-warning">Partial data</small>}
                         <small>Issued {ageLabel(day.sourceIssuedTime)}</small>
                         {sameChoice(state.planA, choice) && <span className="compare-selection">Plan A</span>}
@@ -249,7 +249,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               <div><dt>Weather window</dt><dd>{selectedDay.travelTotalHours ? `${selectedDay.travelPassHours} of ${selectedDay.travelTotalHours} forecast hours within your limits` : 'Hourly forecast unavailable'}{selectedStretch && ` · ${selectedStretch.toLowerCase()}`}</dd></div>
               <div><dt>Wind and rain / snow</dt><dd>Gusts peak at {finite(selectedDay.peakGustMph) ? w.formatWindDisplay(selectedDay.peakGustMph) : 'unavailable'} · chance peaks at {finite(selectedDay.peakPrecipChance) ? `${selectedDay.peakPrecipChance}%` : 'unavailable'}</dd></div>
               <div><dt>Views</dt><dd>{selectedDay.visibilitySummary || 'Visibility outlook unavailable'}{finite(selectedDay.cloudCoverPct) && ` · ${selectedDay.cloudCoverPct}% cloud cover at departure`}</dd></div>
-              <div><dt>Comfort · separate from hazards</dt><dd>{finite(selectedDay.safetyData.pleasantness?.score) ? `${selectedDay.safetyData.pleasantness!.score}/100 · ${selectedDay.safetyData.pleasantness!.label}` : 'Comfort unavailable'}</dd></div>
+              <div><dt>Comfort · separate from hazards</dt><dd>{finite(selectedDay.comfortScore) ? `${selectedDay.comfortScore}/100 · ${selectedDay.comfortLabel}` : 'Comfort unavailable'}</dd></div>
               <div><dt>Source confidence</dt><dd>{finite(selectedDay.safetyData.safety.confidence) ? `${Math.round(selectedDay.safetyData.safety.confidence!)}%` : 'Unavailable'}{selectedDay.partialData ? ' · Partial data' : ''}</dd></div>
               <div><dt>Weather issued</dt><dd>{selectedDay.sourceIssuedTime ? new Date(selectedDay.sourceIssuedTime).toLocaleString() : 'Unavailable'}</dd></div>
               <div><dt>Active alerts</dt><dd>{selectedDay.alertCount}</dd></div>

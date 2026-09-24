@@ -1,10 +1,8 @@
 import { BookOpen, Check, ChevronRight, CircleHelp, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Workspace } from "../model/useWorkspace";
-import { freshnessClass } from "../../app/core";
-import { durationLabel, knownFeet, plainRule, surfaceLabel, terrainStatus, type CheckStatus } from "./status";
+import { durationLabel, knownFeet, plainRule, type CheckStatus } from "./status";
 import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
-import { avalancheBriefCaption } from "../../app/avalanche-display";
 import { describeCheckpointBreach, type PlannedRouteSummary } from "../route-planning";
 import { RouteStrip } from "./RouteStrip";
 import { activityProfile, orderActivityChecks, type ActivityCheck, type ActivityNumber } from "../../app/activity-profiles";
@@ -125,6 +123,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   activity: ActivityType;
 }) {
   const data = w.safetyData!;
+  const { avalanche, fireRisk, heatRisk, rainfall, snowpack, sourceFreshness, terrainCondition } = w.interpretation!;
   const prefs = w.preferences;
   const gustLimit = prefs.maxWindGustMph;
   const precipLimit = prefs.maxPrecipChance;
@@ -150,23 +149,22 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const daylightStatus: Status = !daylightKnown ? "missing" : spare! < 0 ? "over" : "ok";
 
   // Alerts: an active alert needs attention; an unavailable feed cannot confirm clear conditions.
-  // Use the same freshness rule as Checks & sources, so the two never disagree.
-  const alertRow = (w.sourceFreshnessRows || []).find((row) => row.label === "Alerts");
-  const alertState = alertRow ? alertRow.stateOverride || freshnessClass(alertRow.issued, alertRow.staleHours) : "missing";
+  // The same freshness state as Checks & sources, so the two never disagree.
+  const alertState = sourceFreshness.rows.find((row) => row.label === "Alerts")?.state ?? "missing";
   const alertsMissing = !data.alerts || alertState === "missing" || alertState === "stale";
   const alertCount = w.nwsAlertCount || 0;
 
   const aqi = data.airQuality?.usAqi;
   const aqiCategory = data.airQuality?.category;
-  const avalancheLevel = w.overallAvalancheLevel as number | null;
+  const avalancheLevel = avalanche.overallLevel;
   const bands = [...(w.elevationForecastBands || [])].filter((b) => measured(b.elevationFt) && measured(b.temp))
     .sort((a, b) => a.elevationFt - b.elevationFt);
-  const surface = surfaceLabel(data);
-  const terrain = terrainStatus(data);
-  const fireHigh = Number(w.fireRiskLevel) >= 3;
+  const surface = terrainCondition.surfaceLabel;
+  const terrain = terrainCondition.status;
+  const fireHigh = (fireRisk.level ?? 0) >= 3;
   // What sets an elevated fire level, in a few words; the full reason is in Weather.
   const fireDriver = data.fireRisk?.primaryDriver;
-  const fireCause = Number(w.fireRiskLevel) >= 2 && fireDriver
+  const fireCause = (fireRisk.level ?? 0) >= 2 && fireDriver
     ? ({ fire: "fire nearby", weather: "fire weather", smoke: "smoke" } as const)[fireDriver]
     : "";
   const eta = (time: string) => w.formatClockForStyle(time, prefs.timeStyle);
@@ -246,7 +244,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     { key: "terrain", over: terrain === "over", card: (
       <CheckCard key="terrain" title="Terrain & snow" to="terrain" onOpen={onOpen} status={terrain}
         statusText={surface || "Unavailable"}
-        caption={bands.length > 1 ? "Temperature by elevation at your start." : w.snowpackBestDepthDisplay ? `Best snow depth estimate: ${w.snowpackBestDepthDisplay}.` : "Surface and snow assessment."}>
+        caption={bands.length > 1 ? "Temperature by elevation at your start." : snowpack.bestDepthDisplay ? `Best snow depth estimate: ${snowpack.bestDepthDisplay}.` : "Surface and snow assessment."}>
         {bands.length > 1 && (
           <ol className="sky-ladder" aria-label="Temperature by elevation at your planned time">
             {[...bands].reverse().slice(0, 3).map((b) => (
@@ -261,9 +259,9 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     ) },
     { key: "avalanche", over: avalancheLevel !== null && avalancheLevel >= 3, card: (
       <CheckCard key="avalanche" title="Avalanche" to="terrain" onOpen={onOpen}
-        status={w.avalancheRelevant && avalancheLevel === null ? "missing" : avalancheLevel !== null && avalancheLevel >= 3 ? "over" : "ok"}
-        statusText={avalancheLevel !== null && avalancheLevel > 0 ? ["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel] || `Level ${avalancheLevel}` : w.avalancheRelevant ? "No rating" : "Not relevant"}
-        caption={avalancheBriefCaption(data.avalanche, w.avalancheDisplay)}>
+        status={avalanche.relevant && avalancheLevel === null ? "missing" : avalancheLevel !== null && avalancheLevel >= 3 ? "over" : "ok"}
+        statusText={avalancheLevel !== null && avalancheLevel > 0 ? ["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel] || `Level ${avalancheLevel}` : avalanche.relevant ? "No rating" : "Not relevant"}
+        caption={avalanche.briefCaption}>
         <svg className="sky-viz" viewBox="0 0 240 40" role="img" aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5.` : "No avalanche danger rating."}>
           {["Low", "Mod", "Consid", "High", "Extreme"].map((label, i) => (
             <g key={label}>
@@ -277,8 +275,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     { key: "air", over: fireHigh || (measured(aqi) && aqi > 100), card: (
       <CheckCard key="air" title="Air & fire" to="forecast" onOpen={onOpen}
         status={fireHigh || (measured(aqi) && aqi > 100) ? "over" : !measured(aqi) ? "missing" : "ok"}
-        statusText={fireHigh && !(measured(aqi) && aqi > 100) ? `Fire risk ${String(w.fireRiskLabel || "high").toLowerCase()}` : measured(aqi) ? `AQI ${aqi}` : "AQI unavailable"}
-        caption={`${aqiCategory || "Air quality unavailable"} · fire risk ${String(w.fireRiskLabel || "unavailable").toLowerCase()}${fireCause ? ` (${fireCause})` : ""}.`}>
+        statusText={fireHigh && !(measured(aqi) && aqi > 100) ? `Fire risk ${String(fireRisk.label || "high").toLowerCase()}` : measured(aqi) ? `AQI ${aqi}` : "AQI unavailable"}
+        caption={`${aqiCategory || "Air quality unavailable"} · fire risk ${String(fireRisk.label || "unavailable").toLowerCase()}${fireCause ? ` (${fireCause})` : ""}.`}>
         {measured(aqi) && (
           <svg className="sky-viz" viewBox="0 0 240 70" role="img" aria-label={`Air quality index ${aqi}, ${aqiCategory || "category unavailable"}.`}>
             <path d="M64 64 A56 56 0 0 1 176 64" fill="none" className="s-okfill" strokeWidth="10" strokeLinecap="round" />
@@ -330,12 +328,12 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     ),
     precip: (
       <SectionCard key="precip" to="forecast" onOpen={onOpen} className="sky-number">
-        <span className="sky-card-head"><span>{snowFirst ? "Snow and rain" : "Rain and snow"}</span><span className="sky-muted">{w.expectedTravelWindowHours}-hour totals</span></span>
+        <span className="sky-card-head"><span>{snowFirst ? "Snow and rain" : "Rain and snow"}</span><span className="sky-muted">{rainfall.expectedTravelWindowHours}-hour totals</span></span>
         <span className="sky-gauges">
           {(snowFirst ? ["snow", "rain"] as const : ["rain", "snow"] as const).map((label) => {
             const g = label === "rain"
-              ? { value: rainIn, scale: 0.5, display: w.expectedRainWindowDisplay }
-              : { value: snowIn, scale: 4, display: w.expectedSnowWindowDisplay };
+              ? { value: rainIn, scale: 0.5, display: rainfall.expectedRainWindowDisplay }
+              : { value: snowIn, scale: 4, display: rainfall.expectedSnowWindowDisplay };
             return (
               <span key={label} className="sky-gauge">
                 <svg viewBox="0 0 26 72" className="sky-viz" role="img"
@@ -379,7 +377,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
             limitLabel="your limit" note={`at ${clock(warmest.minute)}`}
             label={`Warmest feels-like ${w.formatTempDisplay(warmest.feelsLike)} at ${clock(warmest.minute)}; your limit is ${w.formatTempDisplay(ceiling)}.`} />
         )}
-        {w.heatRiskLabel && <span className="sky-cap">Heat risk {String(w.heatRiskLabel).toLowerCase()}.</span>}
+        {/* The interpretation falls back to "Low" without an assessment; only show a measured one. */}
+        {data.heatRisk && (measured(data.heatRisk.level) || data.heatRisk.label) && <span className="sky-cap">Heat risk {heatRisk.label.toLowerCase()}.</span>}
       </SectionCard>
     ),
     refreeze: (
@@ -408,11 +407,11 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const weatherOver = overCount > 0;
   const airOver = fireHigh || (measured(aqi) && aqi > 100);
   const avalancheOver = avalancheLevel !== null && avalancheLevel >= 3;
-  const avalancheMissing = w.avalancheRelevant && avalancheLevel === null;
+  const avalancheMissing = avalanche.relevant && avalancheLevel === null;
   const routeState = route ? routeCheck(route, routeFormat) : null;
   const sectionState: Record<BriefChapter, { status: Status | "none"; text: string }> = {
     forecast: weatherOver ? { status: "over", text: overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : `${overCount} hours over` }
-      : airOver ? { status: "over", text: fireHigh ? `Fire risk ${String(w.fireRiskLabel || "high").toLowerCase()}` : `AQI ${aqi}` }
+      : airOver ? { status: "over", text: fireHigh ? `Fire risk ${String(fireRisk.label || "high").toLowerCase()}` : `AQI ${aqi}` }
         : missingCount ? { status: "missing", text: `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` }
           : !hours.length ? { status: "missing", text: "Hourly forecast unavailable" }
             : !measured(aqi) ? { status: "missing", text: "Air quality unavailable" } : { status: "ok", text: "Within limits" },
@@ -425,7 +424,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     route: routeState ? { status: routeState.status, text: routeState.statusText } : { status: "none", text: "Check a route’s checkpoints" },
     sources: alertCount > 0 ? { status: "over", text: `${alertCount} active ${alertCount === 1 ? "alert" : "alerts"}` }
       : alertsMissing ? { status: "missing", text: "Alerts not confirmed" }
-        : w.hasFreshnessWarning ? { status: "missing", text: "Review source freshness" } : { status: "ok", text: "Sources current" },
+        : sourceFreshness.hasWarning ? { status: "missing", text: "Review source freshness" } : { status: "ok", text: "Sources current" },
     gear: { status: "none", text: gearTotal ? `${gearTotal} recommendations` : "What to settle first" },
   };
 

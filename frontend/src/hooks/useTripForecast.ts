@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { fetchApi } from '../lib/api-client';
-import type { UserPreferences } from '../app/types';
-import { buildTripForecastDays, type MultiDayTripForecastDay } from '../app/trip-forecast';
-export type { MultiDayTripForecastDay } from '../app/trip-forecast';
+import type { MultiDayTripForecastDay, TripHighlight, TripRanking, UserPreferences } from '../app/types';
+import { planSettingsParams, readTripDays } from '../app/plan-evaluation';
+export type { MultiDayTripForecastDay } from '../app/types';
 import { DATE_FMT, MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS } from '../app/constants';
 import { addDaysToIsoDate, normalizeForecastDate } from '../app/core';
 import { parseTimeInputMinutes } from '../app/core';
@@ -30,6 +30,12 @@ export interface UseTripForecastReturn {
   setTripDurationDays: (value: number) => void;
   tripForecastRows: MultiDayTripForecastDay[];
   setTripForecastRows: (value: MultiDayTripForecastDay[]) => void;
+  /** The backend's ranking of the days, best first. */
+  tripRanking: TripRanking | null;
+  /** Days that stand out on one measurement. */
+  tripHighlights: TripHighlight[];
+  /** What the trip chat reads about these days. */
+  tripChatContext: unknown;
   tripForecastLoading: boolean;
   tripForecastError: string | null;
   setTripForecastError: (value: string | null) => void;
@@ -53,7 +59,15 @@ export function useTripForecast({
   const [tripStartDate, setTripStartDate] = useState(initialStartDate);
   const [tripStartTime, setTripStartTime] = useState(initialStartTime);
   const [tripDurationDays, setTripDurationDays] = useState(7);
-  const [tripForecastRows, setTripForecastRowsState] = useState<MultiDayTripForecastDay[]>([]);
+  const [tripComparison, setTripComparison] = useState<{
+    days: MultiDayTripForecastDay[];
+    ranking: TripRanking | null;
+    highlights: TripHighlight[];
+    chatContext: unknown;
+  }>({ days: [], ranking: null, highlights: [], chatContext: null });
+  const setTripForecastRowsState = useCallback((days: MultiDayTripForecastDay[]) => {
+    setTripComparison({ days, ranking: null, highlights: [], chatContext: null });
+  }, []);
   const [tripForecastLoading, setTripForecastLoading] = useState(false);
   const [tripForecastError, setTripForecastError] = useState<string | null>(null);
   const [tripForecastNote, setTripForecastNote] = useState<string | null>(null);
@@ -70,7 +84,7 @@ export function useTripForecast({
   const setTripForecastRows = useCallback((rows: MultiDayTripForecastDay[]) => {
     cancelTripForecast();
     setTripForecastRowsState(rows);
-  }, [cancelTripForecast]);
+  }, [cancelTripForecast, setTripForecastRowsState]);
 
   useEffect(() => () => {
     activeRequestRef.current?.abort();
@@ -140,9 +154,11 @@ export function useTripForecast({
           startDate: safeStartDate,
           startTime: safeStartTime,
           durationDays: dates.length,
+          requestedDays: safeDurationDays,
           travelWindowHours: safeTravelWindowHours,
           activity: preferences.defaultActivity,
           objectiveName,
+          plan: planSettingsParams(preferences),
         }),
       });
       if (activeRequestRef.current !== controller) return;
@@ -165,32 +181,20 @@ export function useTripForecast({
         setTripForecastNote(null);
         return;
       }
-      const serverDays = Array.isArray(responseRecord?.days) ? responseRecord.days : [];
-      const rows = buildTripForecastDays(serverDays, dates, safeStartTime, safeTravelWindowHours, preferences);
-      const failedCount = dates.length - rows.length;
-      if (rows.length === 0) {
+      const days = readTripDays(responseRecord?.days);
+      if (days.length === 0) {
         setTripForecastRowsState([]);
         setTripForecastError('Could not load multi-day forecasts right now. Try again in a moment.');
         setTripForecastNote(null);
         return;
       }
-
-      setTripForecastRowsState(rows);
-      if (failedCount > 0) {
-        setTripForecastNote(
-          failedCount === 1
-            ? '1 day could not be loaded and was skipped.'
-            : `${failedCount} days could not be loaded and were skipped.`,
-        );
-      } else if (rows.length < safeDurationDays) {
-        setTripForecastNote(
-          rows.length === 1
-            ? 'Only 1 day is available inside the current forecast range.'
-            : `Only ${rows.length} days are available inside the current forecast range.`,
-        );
-      } else {
-        setTripForecastNote(null);
-      }
+      setTripComparison({
+        days,
+        ranking: (responseRecord?.ranking as TripRanking | undefined) ?? null,
+        highlights: Array.isArray(responseRecord?.highlights) ? responseRecord.highlights as TripHighlight[] : [],
+        chatContext: responseRecord?.chatContext ?? null,
+      });
+      setTripForecastNote(typeof responseRecord?.note === 'string' ? responseRecord.note : null);
     } catch {
       if (activeRequestRef.current !== controller) return;
       setTripForecastRowsState([]);
@@ -216,6 +220,7 @@ export function useTripForecast({
     onUsageLimitReached,
     onUsageUpdated,
     cancelTripForecast,
+    setTripForecastRowsState,
   ]);
 
   return {
@@ -225,8 +230,11 @@ export function useTripForecast({
     setTripStartTime,
     tripDurationDays,
     setTripDurationDays,
-    tripForecastRows,
+    tripForecastRows: tripComparison.days,
     setTripForecastRows,
+    tripRanking: tripComparison.ranking,
+    tripHighlights: tripComparison.highlights,
+    tripChatContext: tripComparison.chatContext,
     tripForecastLoading,
     tripForecastError,
     setTripForecastError,

@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ContingencyCard } from "../src/field/ContingencyCard";
-import { buildFieldBrief } from "../src/app/field-brief";
-import { evaluateBackcountryDecision } from "../src/app/decision";
-import { getDefaultUserPreferences } from "../src/app/preferences";
-import { makeReport } from "../dev/mock-data.mjs";
 
 const clock = (minute) => {
   const m = ((minute % 1440) + 1440) % 1440;
@@ -81,22 +77,4 @@ test("the delay card says so when the buffer adds nothing", () => {
 test("the delay card renders nothing without a usable assessment", () => {
   assert.equal(render({ contingency: null }), "");
   assert.equal(render({ contingency: { ...contingency, status: "unavailable" } }), "");
-});
-
-test("the field brief carries the late-return scenarios unless the feature is off", () => {
-  const preferences = getDefaultUserPreferences();
-  const data = makeReport({ start: "09:00", travel_window_hours: 9 }, "mixed");
-  assert.equal(data.contingency?.status, "ok");
-  const input = {
-    objectiveName: "Test", forecastDate: "2026-09-23", startTime: "09:00", returnTime: "18:00", travelWindowHours: 9,
-    activity: "hiking", safetyData: data, decision: evaluateBackcountryDecision(data, "18:00", preferences), actionLine: "",
-  };
-  const brief = buildFieldBrief(input);
-  assert.match(brief.text, /IF YOU'RE DELAYED/);
-  assert.ok(brief.text.includes(data.contingency.overnight.summary));
-  assert.match(brief.html, /If you(&#39;|&#x27;|')re delayed/);
-
-  const disabled = { ...data, featureFlags: { ...data.featureFlags, contingencyPlanning: false } };
-  const off = buildFieldBrief({ ...input, safetyData: disabled });
-  assert.doesNotMatch(off.text, /IF YOU'RE DELAYED/);
 });
