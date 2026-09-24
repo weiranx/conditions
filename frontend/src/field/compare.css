@@ -97,7 +97,7 @@
   .sky-day-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label fact" "strip strip"; gap: 6px 10px; }
   .sky-day-label { grid-area: label; }
   .sky-day-fact { grid-area: fact; }
-  .sky-day-row .sky-daystrip { grid-area: strip; }
+  .sky-day-row .sky-daystrip, .sky-day-row .sky-minisky { grid-area: strip; }
   .sky-day-row.has-note { grid-template-areas: "label fact" "strip strip" "note note"; }
   .sky-day-note { grid-area: note; margin-top: 0; }
   .sky-compare-best h2 { font-size: 26px; }
@@ -105,3 +105,9 @@
 @media print {
   .field-compare-layout > .field-plan-form, .compare-export, .sky-days { display: none; }
 }
+/* A day's sky in miniature. */
+.sky-minisky { position: relative; width: 100%; min-width: 0; padding-bottom: 16px; }
+.sky-minisky svg { display: block; }
+.sky-minisky .minisky-ridge { fill: #17221d; }
+.sky-minisky span { position: absolute; bottom: 0; left: 0; font-size: 10px; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.sky-minisky span.is-end { left: auto; right: 0; }

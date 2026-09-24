@@ -187,3 +187,10 @@
 @media (prefers-reduced-motion: reduce) {
   .field-route-stop, .sky-route-profile .rp-dot { transition: none; }
 }
+.sky-route-profile .rp-snow { fill: color-mix(in srgb, var(--sky-cold) 22%, var(--sky-surface)); }
+.sky-route-profile .rp-level line { stroke-width: 1.5; }
+.sky-route-profile .rp-level text { font-size: 11px; font-weight: 650; paint-order: stroke; stroke: var(--sky-surface); stroke-width: 4px; stroke-linejoin: round; }
+.sky-route-profile .rp-level.is-cold line { stroke: var(--sky-cold); }
+.sky-route-profile .rp-level.is-cold text { fill: var(--sky-cold); }
+.sky-route-profile .rp-level.is-snow line { stroke: var(--sky-secondary); }
+.sky-route-profile .rp-level.is-snow text { fill: var(--sky-label); }

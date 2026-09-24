@@ -208,11 +208,28 @@ export function makeReport(params = {}, scenario = "mixed") {
         ? "Wind-drifted snow on exposed slopes."
         : "No avalanche terrain in this dry-trail fixture.",
       relevanceReason: "Synthetic regional assessment.",
-      problems: [],
+      problems: snowy
+        ? [
+            {
+              name: "Wind slab",
+              likelihood: "Possible",
+              size: ["1", "2"],
+              location: ["north upper", "northeast upper", "east upper", "north middle", "northeast middle"],
+              discussion: "Fresh drifts on lee slopes near ridgelines. Look for cracking and hollow-sounding snow.",
+            },
+            {
+              name: "Loose wet",
+              likelihood: "Likely",
+              size: ["1"],
+              location: ["south lower", "southeast lower", "southwest lower", "south middle"],
+              discussion: "Sun-warmed slopes shed small wet sluffs by early afternoon.",
+            },
+          ]
+        : [],
       elevations: {
         below: { level: 1 },
         at: { level: snowy ? 2 : 1 },
-        above: { level: snowy ? 2 : 1 },
+        above: { level: snowy ? 3 : 1 },
       },
     },
     alerts: {

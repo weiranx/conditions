@@ -18,7 +18,8 @@ import {
   splitRouteBriefing,
 } from "./route-planning";
 import "./route-planning.css";
-import { RouteProfile, type ProfileStop } from "./sky/RouteProfile";
+import { RouteProfile, type ProfileLevel, type ProfileStop } from "./sky/RouteProfile";
+import { knownFeet } from "./sky/status";
 
 export function Route({ workspace: w }: { workspace: Workspace }) {
   const upload = useRef<HTMLInputElement>(null);
@@ -56,6 +57,15 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const legs = buildRouteLegs(result?.summaries ?? []);
   const profileTicks = profile
     ? buildProfileTicks(profile.low, profile.high).map((tick) => ({ y: tick.y, label: w.formatElevationDisplay(tick.feet) }))
+    : [];
+  // Freezing and snow levels in the profile's frame, when the report has them.
+  const profileLevels: ProfileLevel[] = profile
+    ? [
+      { ft: knownFeet(w.safetyData?.atmosphere?.freezingLevelFt), label: "Freezing level", tone: "cold" as const },
+      { ft: knownFeet(w.safetyData?.atmosphere?.snowLevelFt), label: "Snow level", tone: "snow" as const },
+    ].flatMap(({ ft, label, tone }) => ft !== null && ft > 0
+      ? [{ y: 155 - ((ft - profile.low) / Math.max(100, profile.high - profile.low)) * 125, label: `${label} ${w.formatElevationDisplay(ft)}`, tone }]
+      : [])
     : [];
   const briefing = splitRouteBriefing(result?.analysis);
   const bottomLine = briefing?.find((part) => part.key === "bottom-line");
@@ -337,7 +347,8 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               )}
               {profile && (
                 <RouteProfile points={points} stops={stops} selected={selectedIndex} onSelect={setCheckpoint}
-                  ticks={profileTicks} caption="Elevation profile across route checkpoints" />
+                  ticks={profileTicks} levels={profileLevels}
+                  caption={`Elevation profile across route checkpoints${profileLevels.length ? `. ${profileLevels.map((l) => l.label).join(". ")}` : ""}`} />
               )}
               {profile && (
                 <div className="sky-route-legend">

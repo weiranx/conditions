@@ -21,8 +21,10 @@ import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { Details, SourceLink } from "./Details";
 import { ComfortScore } from "./ComfortScore";
-import { shortHour } from "./sky/sky-model";
-import { parseHourLabelToMinutes, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
+import { shortHour, type SkyHour } from "./sky/sky-model";
+import { PrecipMountain } from "./sky/PrecipMountain";
+import { knownFeet } from "./sky/status";
+import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
 import { adjustPointToElevation } from "../app/approach-elevation";
 
 /** US EPA AQI categories. */
@@ -67,7 +69,7 @@ const levelTone = (label: string | null | undefined): "ok" | "over" | "missing" 
   return /high|extreme|elevated|poor|unhealthy|severe/.test(text) ? "over" : "ok";
 };
 
-export function Conditions({ workspace: w }: { workspace: Workspace }) {
+export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: Workspace; hours?: SkyHour[] }) {
   const data = w.safetyData!;
   const signals = fieldSignals(data.localConditions, w.preferences);
   const unusual = signals.filter((signal) => signal.tone === "attention");
@@ -102,6 +104,15 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
   const aqiKnown = typeof aqi === "number" && Number.isFinite(aqi);
   const visibility = w.weatherVisibilityRisk?.level || data.weather.visibilityRisk?.level || null;
   const fireLevel = Number(w.fireRiskLevel);
+  const objectiveFt = knownFeet(data.weather.elevation);
+  const freezingFt = knownFeet(data.atmosphere?.freezingLevelFt);
+  const snowLevelFt = knownFeet(data.atmosphere?.snowLevelFt);
+  const precipLevels = [
+    ...(freezingFt !== null && freezingFt > 0 ? [{ label: "Freezing level", ft: freezingFt, tone: "cold" as const }] : []),
+    ...(snowLevelFt !== null && snowLevelFt > 0 ? [{ label: "Snow level", ft: snowLevelFt, tone: "snow" as const }] : []),
+  ];
+  const skyClock = (minute: number) =>
+    w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   return (
     <div className="field-conditions sky-conditions">
       <section className="sky-section" aria-labelledby="sky-precip-title">
@@ -109,6 +120,22 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
           <h2 id="sky-precip-title">Rain and snow</h2>
           <p>{w.expectedTravelWindowHours}-hour window and the days before it.</p>
         </div>
+        {objectiveFt !== null && skyHours.length > 0 && (
+          <section className="sky-card sky-precip-card" aria-label="Rain and snow on the mountain">
+            <span className="sky-card-head">
+              <span className="sky-exposure-title"><Snowflake size={16} aria-hidden="true" />Rain or snow on your route</span>
+              <span className="sky-muted">Heights to scale · ridge illustrative</span>
+            </span>
+            <PrecipMountain
+              hours={skyHours}
+              objectiveFt={objectiveFt}
+              trailheadFt={w.approachProfile?.trailheadElevationFt ?? null}
+              levels={precipLevels}
+              format={{ elevation: (ft) => w.formatElevationDisplay(ft), clock: skyClock }}
+              timeStyle={w.preferences.timeStyle}
+            />
+          </section>
+        )}
         <div className="sky-duo">
           <section className="sky-card report-precip-panel" aria-label="Expected precipitation">
             <span className="sky-card-head">

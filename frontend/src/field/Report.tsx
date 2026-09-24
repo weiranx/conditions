@@ -400,7 +400,7 @@ export function Report({
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
         <Forecast report={report} approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
-        <Conditions workspace={w} />
+        <Conditions workspace={w} hours={skyHours} />
       </section>
     );
     if (id === "timing") return <Timing key="timing" workspace={w} hours={skyHours} />;
