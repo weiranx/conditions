@@ -34,6 +34,21 @@ test('public tools are read-only and account tools are absent without a session'
   assert.equal(tools.length, 7);
   assert.ok(tools.every(x => x.annotations.readOnlyHint && !x.annotations.destructiveHint));
 });
+test('tools that spend account usage are not marked read-only', async t => {
+  const c = await pair(t, { hasAccount: true }); const { tools } = await c.listTools();
+  const spending = ['get_multi_day_forecast', 'get_ai_brief', 'ask_report_assistant', 'suggest_routes', 'analyze_route', 'analyze_satellite_snow'];
+  for (const tool of tools) {
+    assert.equal(tool.annotations.readOnlyHint, !spending.includes(tool.name), tool.name);
+    assert.equal(tool.annotations.destructiveHint, false, tool.name);
+  }
+});
+test('plan units and approach=off reach the comparison routes', async t => {
+  let query;
+  const c = await pair(t, { hasAccount: false, get: async (_path, args) => { query = args; return { comparison: null }; } });
+  await c.callTool({ name: 'get_day_over_day', arguments: { ...plan, temp_unit: 'c', wind_unit: 'kph', elevation_unit: 'm', time_style: '24h', approach: 'off' } });
+  assert.deepEqual([query.temp_unit, query.wind_unit, query.elevation_unit, query.time_style, query.approach], ['c', 'kph', 'm', '24h', 'off']);
+  assert.equal((await c.callTool({ name: 'get_day_over_day', arguments: { ...plan, approach: 'on' } })).isError, true);
+});
 test('report preserves nulls, zeroes, partial evidence and requested timing', async t => {
   let query;
   const c = await pair(t, { hasAccount: false, get: async (path, args) => { assert.equal(path, '/api/safety'); query = args; return { weather: { temperature: null, precipitation: 0 }, partialData: true, apiWarning: 'Forecast missing', generatedAt: '2026-09-16T12:00:00Z', evaluation: { decision: { level: 'GO' } } }; } });
@@ -188,11 +203,11 @@ test('POST requests send JSON, extra headers and the account bearer, and surface
 test('evaluate_plan returns the app evaluation, with display units, and only there', async t => {
   let query;
   const c = await pair(t, { hasAccount: false, get: async (_path, args) => { query = args; return { generatedAt: 'g', evaluation: { decision: { level: 'NO-GO' }, shareUrl: 'x' } }; } });
-  const r = await c.callTool({ name: 'evaluate_plan', arguments: { ...plan, activity: 'hiking', max_gust_mph: 25, target_elevation_ft: 12000, units: { temperature: 'c', time_style: '24h' } } });
+  const r = await c.callTool({ name: 'evaluate_plan', arguments: { ...plan, activity: 'hiking', max_gust_mph: 25, target_elevation_ft: 12000, temp_unit: 'c', time_style: '24h', approach: 'off' } });
   assert.equal(query.temp_unit, 'c'); assert.equal(query.time_style, '24h'); assert.equal(query.max_gust_mph, 25); assert.equal(query.target_elevation_ft, 12000);
   assert.equal(r.structuredContent.data.evaluation.decision.level, 'NO-GO');
   assert.equal(r.structuredContent.data.evaluation.shareUrl, undefined, 'share links are still removed');
-  assert.equal(r.structuredContent.data.requestedPlan.units, undefined);
+  assert.equal(query.approach, 'off'); assert.equal(r.structuredContent.data.requestedPlan.temp_unit, 'c');
 });
 test('service status trims health and keeps each part failure explicit', async t => {
   const c = await pair(t, { hasAccount: false, get: async path => {

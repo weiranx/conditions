@@ -24,10 +24,14 @@ const planFields = {
   approach_route: z.array(z.object({ minute: z.number().min(0).max(2880), elevation_ft: elevationFt }).strict()).min(2).max(64).optional()
     .describe('Elevation over time along the route (e.g. from a GPX track), minutes after departure in ascending order. Takes precedence over trailhead_ft.'),
   target_elevation_ft: elevationFt.optional().describe('Elevation the plan is judged at (e.g. a high point short of the summit). Defaults to the objective.'),
+  approach: z.literal('off').optional().describe('off judges every hour at the objective, ignoring any approach inputs.'),
   max_gust_mph: z.number().min(10).max(80).optional(),
   max_precip_chance: z.number().min(0).max(100).optional(),
   min_feels_like_f: z.number().min(-40).max(60).optional(),
   max_feels_like_f: z.number().min(70).max(120).optional(),
+  // Display units for the app's formatted text (evaluation, comparisons); report values stay imperial.
+  temp_unit: z.enum(['f', 'c']).optional(), wind_unit: z.enum(['mph', 'kph']).optional(),
+  elevation_unit: z.enum(['ft', 'm']).optional(), time_style: z.enum(['ampm', '24h']).optional(),
 };
 const plan = z.object(planFields).strict();
 const units = z.object({
@@ -40,8 +44,9 @@ export function planQuery({ approach_route, ...rest }) {
 }
 
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
-// Generated text differs between calls and uses account AI or multi-day usage.
-const generated = { ...readOnly, idempotentHint: false };
+// Generated output differs between calls, and each call spends account AI or
+// multi-day usage: not read-only, though nothing is deleted or overwritten.
+const generated = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 const result = (value, extra = []) => ({ content: [{ type: 'text', text: JSON.stringify(value) }, ...extra], structuredContent: value });
 export const errorResult = error => result({ error: error instanceof ApiError ? error.code : 'REQUEST_FAILED', message: error instanceof ApiError ? error.message : 'The request failed.', ...(error instanceof ApiError ? error.details : {}) });
 
@@ -94,13 +99,8 @@ export function createServer(api) {
     ({ extended, ...args }) => api.get('/api/start-time-scenarios', { ...planQuery(args), ...(extended ? { set: 'extended' } : {}) }, false, { timeout: COMPARISON_TIMEOUT_MS }));
   register('get_day_over_day', 'How the forecast for this plan changed against the same plan one day earlier (the app’s day-over-day comparison). comparison is null when either day could not be loaded.', planFields,
     args => api.get('/api/day-over-day', planQuery(args), false, { timeout: COMPARISON_TIMEOUT_MS }));
-  register('evaluate_plan', 'The app’s own evaluation of a plan’s report: its GO / CAUTION / NO-GO decision with reasons, hour-by-hour checks against the plan’s activity and weather limits, the verdict, and elevation by hour. This is the app’s judgment against those limits, not additional evidence; present it as such alongside the report. units sets the units of its display text.', {
-    ...planFields,
-    units: z.object({
-      temperature: z.enum(['f', 'c']).optional(), wind: z.enum(['mph', 'kph']).optional(), elevation: z.enum(['ft', 'm']).optional(), time_style: z.enum(['ampm', '24h']).optional(),
-    }).strict().optional(),
-  }, async ({ units: evalUnits = {}, ...args }) => {
-    const report = await getReport({ ...args, temp_unit: evalUnits.temperature, wind_unit: evalUnits.wind, elevation_unit: evalUnits.elevation, time_style: evalUnits.time_style });
+  register('evaluate_plan', 'The app’s own evaluation of a plan’s report: its GO / CAUTION / NO-GO decision with reasons, hour-by-hour checks against the plan’s activity and weather limits, the verdict, and elevation by hour. This is the app’s judgment against those limits, not additional evidence; present it as such alongside the report. temp_unit, wind_unit, elevation_unit and time_style set the units of its display text.', planFields, async args => {
+    const report = await getReport(args);
     if (!report?.evaluation) throw new ApiError('EVALUATION_UNAVAILABLE', 'The report could not be evaluated for this plan.');
     return new WithEvaluation({ requestedPlan: args, reportGeneratedAt: report.generatedAt ?? null, partialData: report.partialData === true, apiWarning: report.apiWarning ?? null, evaluation: report.evaluation });
   });

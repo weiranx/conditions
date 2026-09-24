@@ -12,7 +12,9 @@ Public (also over local stdio):
 - `search_objectives`
 - `get_conditions_report` — the `/api/safety` report. Takes the plan the app
   sends: activity, objective name, approach (`trailhead_ft`, `ascent_min_per_kft`,
-  or an `approach_route` elevation timeline from a GPX track) and weather limits.
+  or an `approach_route` elevation timeline from a GPX track, or `approach=off`),
+  weather limits, target elevation, and display units (`temp_unit`, `wind_unit`,
+  `elevation_unit`, `time_style`) for the app's formatted text.
 - `compare_conditions_plans`
 - `compare_start_times` — the app's departure-time comparison
 - `get_day_over_day` — the plan against the same plan one day earlier
@@ -20,7 +22,8 @@ Public (also over local stdio):
   verdict), the one tool that returns `evaluation`
 - `get_service_status` — trimmed health and the feature flags
 
-Account (OAuth):
+Account (OAuth). Tools that spend AI or multi-day usage are annotated
+`readOnlyHint: false` (non-destructive), so clients can ask before calling them:
 
 - `list_saved_reports`, `get_saved_report`, `list_objective_watches`
 - `get_watch_history` — a watch's checks and change events
