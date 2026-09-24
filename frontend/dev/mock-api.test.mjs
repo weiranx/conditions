@@ -100,6 +100,28 @@ test("mock admin dashboard has a week of traffic and simulated account actions",
   assert.equal(run.payload.manualRun.alreadyRunning, false);
   assert.ok(run.payload.lastCompletedAt);
 });
+test("resetting the mock owner's usage clears the meter and keeps saved reports", async () => {
+  const api = createMockApi();
+  const owner = async () =>
+    (await api.handle("/api/admin/users")).payload.users.find((user) => user.isOwner);
+  await api.handle("/api/account/reports", "POST", { report: snapshot() });
+  assert.equal((await owner()).savedReports, 1);
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  const reset = await api.handle("/api/admin/users/mock-admin/reset-usage", "POST");
+  assert.equal(reset.status, 200);
+  assert.equal((await owner()).savedReports, 0);
+  const session = (await api.handle("/api/auth/session")).payload;
+  assert.equal(session.reportCount, 1);
+  assert.equal(session.reportUsage.usedReports, 0);
+
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  await api.handle("/api/account/reports", "POST", { report: snapshot() });
+  assert.equal((await owner()).savedReports, 1);
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  await api.handle("/api/admin/users/reset-usage", "POST");
+  assert.equal((await owner()).savedReports, 0);
+  assert.equal((await api.handle("/api/auth/session")).payload.reportCount, 2);
+});
 test("saved reports, watches, preferences and mock outbox persist across server restarts", async () => {
   const dir = mkdtempSync(join(tmpdir(), "conditions-mock-"));
   try {

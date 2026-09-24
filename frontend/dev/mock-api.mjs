@@ -99,12 +99,19 @@ export function createMockApi({ databasePath } = {}) {
     renameSync(`${databasePath}.tmp`, databasePath);
   }
   persist();
+  // The owner's monthly report usage counts saved reports since its last usage
+  // reset, so an admin reset clears the meter without deleting any reports.
+  const ownerMonthlyReports = () => {
+    const resetAt = Date.parse(db.ownerUsageResetAt ?? "") || 0;
+    return db.reports.filter((report) => Date.parse(report.createdAt) > resetAt)
+      .length;
+  };
   const usage = (kind) => ({
     tierKey: "premium",
     unlimited: true,
     [`used${kind}`]:
       kind === "Reports"
-        ? db.reports.length
+        ? ownerMonthlyReports()
         : kind === "Runs"
           ? db.usedRuns || 0
           : 0,
@@ -166,7 +173,7 @@ export function createMockApi({ databasePath } = {}) {
         updatedAt: now(),
         lastActivityAt: now(),
         activeSessions: 1,
-        savedReports: db.reports.length,
+        savedReports: ownerMonthlyReports(),
         aiCalls: 0,
         aiTokens: 0,
         aiTokenLimitOverride: null,
@@ -676,6 +683,7 @@ export function createMockApi({ databasePath } = {}) {
     if (p === "/api/admin/users/reset-usage" && method === "POST") {
       for (const state of Object.values(accountState()))
         Object.assign(state, { savedReports: 0, aiCalls: 0, aiTokens: 0 });
+      db.ownerUsageResetAt = now();
       audit({
         action: "users.usage.reset-all",
         category: "accounts",
@@ -703,8 +711,8 @@ export function createMockApi({ databasePath } = {}) {
       const id = decodeURIComponent(userRoute[1]);
       const action = userRoute[2] || "status";
       const account = ACCOUNT_FIXTURES.find((fixture) => fixture.id === id);
-      // The owner is Premium, so there is no metered usage to reset.
       if (id === db.user.id && action === "reset-usage") {
+        db.ownerUsageResetAt = now();
         audit({
           action: "users.reset-usage.updated",
           category: "accounts",

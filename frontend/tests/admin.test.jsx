@@ -379,6 +379,7 @@ test("AI usage breaks down by model and feature with readable names", () => {
         aiModels: [
           { provider: "openai", model: "gpt-demo", calls: 3, tokens: 4500, estimatedCostUsd: 0.12, pricedCalls: 3 },
           { provider: "gemini", model: "gemini-demo", calls: 1, tokens: 10, estimatedCostUsd: 0, pricedCalls: 0 },
+          { provider: "anthropic", model: "mixed-demo", calls: 4, tokens: 900, estimatedCostUsd: 0.05, pricedCalls: 1 },
         ],
         aiFeatures: [
           { feature: "report-brief", calls: 3, errors: 1, tokens: 4500, estimatedCostUsd: 0.12, pricedCalls: 3, averageDurationMs: 2400 },
@@ -393,6 +394,9 @@ test("AI usage breaks down by model and feature with readable names", () => {
   assert.match(html, /\$0\.12/);
   // An unpriced model shows no cost rather than a measured $0.00.
   assert.match(html, /gemini-demo[^]*?<td class="is-num">—<\/td>/);
+  // A partly priced total is a lower bound and says how much was priced.
+  assert.match(html, /mixed-demo[^]*?<td class="is-num">≥ \$0\.05<small>1 of 4 calls priced<\/small><\/td>/);
+  assert.doesNotMatch(html, /gpt-demo[^<]*<\/strong>[^]*?≥ \$0\.12/);
   assert.match(html, /Field briefing/);
   assert.match(html, /class="is-num is-over">1</);
   assert.match(html, /Report chat/);

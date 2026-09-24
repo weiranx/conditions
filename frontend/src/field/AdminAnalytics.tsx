@@ -88,6 +88,27 @@ const bucketTick =
 
 const RECENT_AI_REQUESTS = 10;
 
+/**
+ * An estimated cost cell. When only some calls could be priced, the sum is a
+ * lower bound, so it is marked as one and the pricing coverage is shown.
+ */
+function CostCell({ a, value, priced, calls }: {
+  a: Administration;
+  value: number;
+  priced: number;
+  calls: number;
+}) {
+  if (!priced) return <td className="is-num">—</td>;
+  const partial = priced < calls;
+  return (
+    <td className="is-num">
+      {partial && "≥ "}
+      {a.formatEstimatedCost(value)}
+      {partial && <small>{priced} of {calls} calls priced</small>}
+    </td>
+  );
+}
+
 export function AdminAnalytics({ a }: { a: Administration }) {
   const { requestActivityRef, aiUsageRef } = a;
   const period = a.selectedRange.label.toLowerCase();
@@ -110,8 +131,6 @@ export function AdminAnalytics({ a }: { a: Administration }) {
     (a.AI_PROVIDERS as readonly string[]).includes(provider)
       ? a.aiProviderLabel(provider as AIProvider)
       : provider;
-  const cost = (value: number, pricedCalls: number) =>
-    pricedCalls ? a.formatEstimatedCost(value) : "—";
   return (
     <>
       <AdminStats a={a} />
@@ -431,7 +450,7 @@ export function AdminAnalytics({ a }: { a: Administration }) {
                       </td>
                       <td className="is-num">{m.calls.toLocaleString()}</td>
                       <td className="is-num">{a.formatTokenCount(m.tokens)}</td>
-                      <td className="is-num">{cost(m.estimatedCostUsd, m.pricedCalls)}</td>
+                      <CostCell a={a} value={m.estimatedCostUsd} priced={m.pricedCalls} calls={m.calls} />
                     </tr>
                   ))}
                 </tbody>
@@ -458,7 +477,7 @@ export function AdminAnalytics({ a }: { a: Administration }) {
                       <td className={`is-num${f.errors ? " is-over" : ""}`}>{f.errors.toLocaleString()}</td>
                       <td className="is-num">{a.formatTokenCount(f.tokens)}</td>
                       <td className="is-num">{a.formatDuration(f.averageDurationMs)}</td>
-                      <td className="is-num">{cost(f.estimatedCostUsd, f.pricedCalls)}</td>
+                      <CostCell a={a} value={f.estimatedCostUsd} priced={f.pricedCalls} calls={f.calls} />
                     </tr>
                   ))}
                 </tbody>
