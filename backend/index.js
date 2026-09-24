@@ -43,7 +43,7 @@ const {
   extractUtahAvalancheAdvisory,
 } = require('./src/utils/avalanche-detail');
 const { deriveTerrainCondition, deriveTrailStatus } = require('./src/utils/terrain-condition');
-const { buildLayeringGearSuggestions } = require('./src/utils/gear-suggestions');
+const { buildLayeringGearSuggestions, normalizeGearActivity } = require('./src/utils/gear-suggestions');
 const { buildContingencyAssessment, isWinterTerrain } = require('./src/utils/contingency');
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
@@ -242,6 +242,7 @@ const buildSafetyResponsePayload = ({
   parsedLon,
   selectedDate,
   requestedStartClock,
+  requestedActivity = null,
   selectedForecastPeriod,
   weatherData,
   forecastDateRange,
@@ -287,6 +288,7 @@ const buildSafetyResponsePayload = ({
     forecast: {
       selectedDate,
       requestedStartTime: requestedStartClock || null,
+      activity: requestedActivity,
       selectedStartTime: selectedForecastPeriod?.startTime || weatherData?.forecastStartTime || null,
       selectedEndTime: selectedForecastPeriod?.endTime || weatherData?.forecastEndTime || null,
       isFuture: selectedDate > todayDate,
@@ -325,7 +327,7 @@ const buildSafetyResponsePayload = ({
 
 const safetyHandler = async (req, res) => {
   const startedAt = Date.now();
-  const { lat, lon, date, start, travel_window_hours: travelWindowHoursRaw, travelWindowHours, name } = req.query;
+  const { lat, lon, date, start, travel_window_hours: travelWindowHoursRaw, travelWindowHours, name, activity } = req.query;
   const logName = typeof name === 'string' ? name.trim() || null : null;
   const logIp = req.ip || null;
   const logUserAgent = req.headers['user-agent'] || null;
@@ -362,6 +364,8 @@ const safetyHandler = async (req, res) => {
     typeof travelWindowHoursRaw === 'string' ? travelWindowHoursRaw : typeof travelWindowHours === 'string' ? travelWindowHours : null,
     12,
   );
+  // Optional: the planned activity tailors the gear list; general backcountry otherwise.
+  const requestedActivity = normalizeGearActivity(typeof activity === 'string' ? activity : null);
   // Optional: where the party starts, so comfort scores the approach hours there.
   const approachRequest = parseApproachQuery(req.query);
 
@@ -485,7 +489,7 @@ const safetyHandler = async (req, res) => {
     );
     const scoreFeatures = getFeatureFlags();
     const parallelBatchPromise = Promise.all([
-      settle(fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
+      settle(fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, selectedDate: selectedForecastDate, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
       settle(fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
       settle(fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)),
       settle(fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),
@@ -619,6 +623,7 @@ const safetyHandler = async (req, res) => {
       contingencyData,
       solarData,
       selectedStartTime: alertTargetTimeIso,
+      activity: requestedActivity,
     });
 
     const analysis = calculateSafetyScore({
@@ -657,6 +662,7 @@ const safetyHandler = async (req, res) => {
       parsedLon,
       selectedDate: selectedForecastDate,
       requestedStartClock,
+      requestedActivity,
       selectedForecastPeriod,
       weatherData,
       forecastDateRange,
@@ -787,6 +793,7 @@ const safetyHandler = async (req, res) => {
       contingencyData: safeContingencyData,
       solarData,
       selectedStartTime: fallbackStartTime,
+      activity: requestedActivity,
     });
 
     const fallbackGeneratedAt = new Date().toISOString();
@@ -797,6 +804,7 @@ const safetyHandler = async (req, res) => {
       parsedLon,
       selectedDate: fallbackSelectedDate,
       requestedStartClock,
+      requestedActivity,
       selectedForecastPeriod,
       weatherData: safeWeatherData,
       forecastDateRange,

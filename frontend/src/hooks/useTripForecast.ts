@@ -141,6 +141,7 @@ export function useTripForecast({
           startTime: safeStartTime,
           durationDays: dates.length,
           travelWindowHours: safeTravelWindowHours,
+          activity: preferences.defaultActivity,
           objectiveName,
         }),
       });

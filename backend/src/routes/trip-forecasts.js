@@ -46,6 +46,8 @@ const registerTripForecastRoutes = ({
     const durationDays = Math.round(Number(req.body?.durationDays));
     const travelWindowHours = Math.round(Number(req.body?.travelWindowHours));
     const objectiveName = String(req.body?.objectiveName || '').trim().slice(0, 200);
+    // Tailors each day's gear list; the safety handler falls back to backcountry.
+    const activity = typeof req.body?.activity === 'string' ? req.body.activity.trim().slice(0, 40) : '';
     const idempotencyKey = String(req.headers['idempotency-key'] || '').trim();
 
     if (
@@ -131,6 +133,7 @@ const registerTripForecastRoutes = ({
             date,
             start: startTime,
             travel_window_hours: String(travelWindowHours),
+            activity: activity || undefined,
             name: objectiveName || undefined,
           }, { suppressReportLog: true });
           return result.statusCode >= 200 && result.statusCode < 300 && result.payload && typeof result.payload === 'object'

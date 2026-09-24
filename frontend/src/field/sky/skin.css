@@ -144,6 +144,8 @@
 .field-app .sky-report .supplemental-evidence article { padding: 14px 0; border-top: 1px solid var(--sky-separator); }
 .field-app .sky-report .supplemental-evidence-heading > span { display: inline-flex; align-items: center; min-height: 22px; padding: 0 9px; border-radius: 999px; background: var(--sky-fill); font-size: 12px; font-weight: 600; }
 .field-app .sky-report .supplemental-evidence :is(th, td) { border-color: var(--sky-separator); }
+.field-app .sky-report .supplemental-missing { border-top-color: var(--sky-separator); }
+.field-app .sky-report .supplemental-match { background: var(--sky-fill); }
 
 /* ---------- Insights ---------- */
 .field-app .sky-report .report-insights { margin: 36px 0 0; }

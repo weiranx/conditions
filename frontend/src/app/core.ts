@@ -28,6 +28,7 @@ export function normalizeActivity(rawActivity: string | null): ActivityType {
   if (cleaned === 'hiking' || cleaned === 'hike' || cleaned === 'mountain-hiking') return 'hiking';
   if (cleaned === 'scrambling' || cleaned === 'scramble' || cleaned === 'exposed-scrambling') return 'scrambling';
   if (cleaned === 'alpine-climbing' || cleaned === 'alpine_climbing' || cleaned === 'alpine') return 'alpine-climbing';
+  if (cleaned === 'mountaineering' || cleaned === 'mountaineer' || cleaned === 'glacier') return 'mountaineering';
   if (cleaned === 'snow-climbing' || cleaned === 'snow_climbing' || cleaned === 'snow-climb') return 'snow-climbing';
   if (cleaned === 'ski-touring' || cleaned === 'ski_touring' || cleaned === 'ski-tour' || cleaned === 'skimo') return 'ski-touring';
   if (cleaned === 'trail-running' || cleaned === 'trail_running' || cleaned === 'trail-runner' || cleaned === 'trail_runner' || cleaned === 'runner' || cleaned === 'running') {

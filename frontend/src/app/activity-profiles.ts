@@ -21,6 +21,7 @@ export const ACTIVITY_PROFILE_ORDER: ActivityType[] = [
   'hiking',
   'scrambling',
   'alpine-climbing',
+  'mountaineering',
   'snow-climbing',
   'ski-touring',
   'trail-running',
@@ -52,6 +53,15 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
     description: 'Long, exposed objectives with technical transitions and limited retreat options.',
     preferencePatch: {
       defaultActivity: 'alpine-climbing', maxWindGustMph: 18, maxPrecipChance: 35, minFeelsLikeF: 10, maxFeelsLikeF: 85,
+      runnerPaceMinutesPerMile: 40, runnerAscentMinutesPer1000Ft: 65, runnerStopBufferMinutes: 90,
+    },
+  },
+  mountaineering: {
+    label: 'Mountaineering',
+    shortLabel: 'Mountaineer',
+    description: 'Glaciated and high peaks on snow, ice, and rock, with rope teams, altitude, and long summit days.',
+    preferencePatch: {
+      defaultActivity: 'mountaineering', maxWindGustMph: 20, maxPrecipChance: 35, minFeelsLikeF: -5, maxFeelsLikeF: 85,
       runnerPaceMinutesPerMile: 40, runnerAscentMinutesPer1000Ft: 65, runnerStopBufferMinutes: 90,
     },
   },

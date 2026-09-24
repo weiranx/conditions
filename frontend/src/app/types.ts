@@ -6,6 +6,14 @@ export interface SupplementalStation {
   elevationDifferenceFt?: number | null;
   readings?: Record<string, { value: number; observedTime: string }>;
 }
+export interface SupplementalDiscussionSection {
+  title: string;
+  period?: string;
+  kind: 'key_messages' | 'period' | 'overview' | 'fire_weather' | 'warnings' | 'hydrology' | 'not_relevant';
+  /** Whether the section's dated heading includes the trip date; null when undated or unreadable. */
+  matchesTrip: boolean | null;
+  text: string;
+}
 export interface SupplementalSource {
   source: string;
   kind: 'observation' | 'probabilistic_forecast' | 'regional_context' | 'modeled_forecast';
@@ -24,12 +32,15 @@ export interface SupplementalSource {
   gridDistanceKm?: number;
   office?: string;
   text?: string;
+  sections?: SupplementalDiscussionSection[];
+  tripDayOffset?: number | null;
+  targetTime?: string;
 }
 
 import type { LatLngLiteral } from 'leaflet';
 
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
-export type ActivityType = 'backcountry' | 'hiking' | 'scrambling' | 'alpine-climbing' | 'snow-climbing' | 'ski-touring' | 'trail-running';
+export type ActivityType = 'backcountry' | 'hiking' | 'scrambling' | 'alpine-climbing' | 'mountaineering' | 'snow-climbing' | 'ski-touring' | 'trail-running';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type MapStyle = 'topo' | 'street' | 'satellite';
 export type TemperatureUnit = 'f' | 'c';
@@ -180,6 +191,8 @@ export interface SafetyData {
   forecast?: {
     selectedDate?: string;
     requestedStartTime?: string | null;
+    /** Activity the gear list was tailored for; absent on older reports. */
+    activity?: ActivityType | null;
     selectedStartTime?: string;
     selectedEndTime?: string;
     isFuture?: boolean;

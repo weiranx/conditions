@@ -145,3 +145,21 @@ export function buildTerrainWindow({
       : 'Cells combine your hourly thresholds with forecast elevation estimates and wind-exposure aspects.',
   };
 }
+
+/**
+ * One terrain model per aspect, for drawing each slope on its own. The grouped
+ * model puts every affected aspect in one lane, so a north avalanche problem and
+ * a south lee slope would share a cell; here each aspect sees only the problems
+ * and wind signals that reach it (or that name no aspect at all).
+ */
+export function buildTerrainWindowByAspect(input: Parameters<typeof buildTerrainWindow>[0]) {
+  return new Map(ASPECT_ROSE_ORDER.map((aspect) => [aspect, buildTerrainWindow({
+    ...input,
+    avalancheProblems: input.avalancheProblems.filter((problem) => {
+      const { aspects } = parseTerrainFromLocation(problem.location);
+      return aspects.size === 0 || aspects.has(aspect);
+    }),
+    leewardAspects: input.leewardAspects.filter((a) => a === aspect),
+    secondaryAspects: input.secondaryAspects.filter((a) => a === aspect),
+  })]));
+}

@@ -10,30 +10,21 @@
 .field-route-plan-context { margin: 0; }
 .field-route-profile-caption { margin: 0; }
 
-.sky-route-choose { gap: 12px; }
-.sky-route-choose .field-panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin: 0; }
-.sky-card-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
-.sky-route-choose .field-inline-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0; }
-.sky-route-choose .field-inline-form label { flex: 1 1 260px; display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
-.sky-route-choose .field-inline-form input {
+/* The route planned with the brief, re-run or renamed without leaving the report. */
+.sky-card.sky-route-choose { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+.sky-route-choose > .field-route-plan-context,
+.sky-route-choose > .field-feedback { flex: 1 1 100%; }
+.sky-route-planned-name { flex: 1 1 260px; display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
+.sky-route-planned-name input {
   min-height: 44px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--sky-fill); color: var(--sky-label); font: inherit; font-size: 16px;
 }
-.sky-route-choose .field-text-button { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.sky-route-planned { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; font-size: 15px; }
+.sky-route-planned > svg { flex: none; color: var(--sky-secondary); }
+.sky-route-choose .field-button { min-height: 44px; }
 .field-route-import { padding: 12px 14px; border-radius: 14px; background: var(--sky-fill); }
 .field-route-import p { margin: 2px 0 10px; font-size: 14px; color: var(--sky-secondary); }
 .sky-route-loading { margin-top: 20px; }
 
-.field-route-alternatives > summary {
-  display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; list-style: none;
-  font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
-}
-.field-route-alternatives > summary::-webkit-details-marker { display: none; }
-.field-route-alternatives > summary::after { content: ""; width: 8px; height: 8px; margin-left: 4px; border: solid var(--sky-secondary); border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); }
-.field-route-alternatives[open] > summary::after { transform: rotate(-135deg); }
-.field-route-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 8px; }
-.field-route-options .field-panel-heading { display: flex; justify-content: space-between; gap: 10px; margin: 0; }
-.field-route-options h3 { margin: 2px 0 0; font-size: 17px; font-weight: 650; }
-.field-route-options p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
 
 /* Only known facts are shown, so the strip reflows from 2 to 6 cells. Hairlines come from the 1px gap. */
 .sky-stat-strip {
@@ -120,8 +111,7 @@
 .field-route-stop[aria-pressed="true"] { background: var(--sky-fill); }
 .field-route-stop:hover { background: color-mix(in srgb, var(--sky-fill) 60%, transparent); }
 .field-route-stop[aria-pressed="true"]:hover { background: var(--sky-fill); }
-.field-route-stop:focus-visible,
-.field-route-alternatives > summary:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
+.field-route-stop:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
 .field-route-stop strong,
 .field-route-stop small { display: block; overflow-wrap: anywhere; }
 .field-route-stop strong { font-size: 15px; font-weight: 600; line-height: 1.35; font-variant-numeric: tabular-nums; }
@@ -187,3 +177,10 @@
 @media (prefers-reduced-motion: reduce) {
   .field-route-stop, .sky-route-profile .rp-dot { transition: none; }
 }
+.sky-route-profile .rp-snow { fill: color-mix(in srgb, var(--sky-cold) 22%, var(--sky-surface)); }
+.sky-route-profile .rp-level line { stroke-width: 1.5; }
+.sky-route-profile .rp-level text { font-size: 11px; font-weight: 650; paint-order: stroke; stroke: var(--sky-surface); stroke-width: 4px; stroke-linejoin: round; }
+.sky-route-profile .rp-level.is-cold line { stroke: var(--sky-cold); }
+.sky-route-profile .rp-level.is-cold text { fill: var(--sky-cold); }
+.sky-route-profile .rp-level.is-snow line { stroke: var(--sky-secondary); }
+.sky-route-profile .rp-level.is-snow text { fill: var(--sky-label); }

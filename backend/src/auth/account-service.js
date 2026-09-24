@@ -23,6 +23,7 @@ const ACTIVITIES = new Set([
   'hiking',
   'scrambling',
   'alpine-climbing',
+  'mountaineering',
   'snow-climbing',
   'ski-touring',
   'trail-running',

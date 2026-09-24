@@ -136,6 +136,8 @@ export interface UseRouteAnalysisReturn {
     options?: RouteAnalysisOptions,
   ) => Promise<void>;
   resetRouteState: () => void;
+  /** Drops the analysis for a new report but keeps the planned route and its options. */
+  clearRouteAnalysis: () => void;
   restoreRouteState: (state: {
     routeSuggestions: RouteOption[] | null;
     routeAnalysis: RouteAnalysisResult | null;
@@ -252,6 +254,15 @@ export function useRouteAnalysis(initialState?: {
     setCustomRouteName('');
   }, []);
 
+  const clearRouteAnalysis = useCallback(() => {
+    activeRequestRef.current?.controller.abort();
+    activeRequestRef.current = null;
+    nextRequestIdRef.current += 1;
+    setRouteLoadingState(null);
+    setRouteAnalysis(null);
+    setRouteError(null);
+  }, []);
+
   const restoreRouteState = useCallback((state: {
     routeSuggestions: RouteOption[] | null;
     routeAnalysis: RouteAnalysisResult | null;
@@ -280,6 +291,7 @@ export function useRouteAnalysis(initialState?: {
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,
+    clearRouteAnalysis,
     restoreRouteState,
   };
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildWindLoadingDisplay } from "../src/app/wind-loading-display";
-import { buildTerrainWindow } from "../src/app/terrain-window";
+import { buildTerrainWindow, buildTerrainWindowByAspect } from "../src/app/terrain-window";
 import { getDefaultUserPreferences } from "../src/app/preferences";
 import { buildSnowpackDisplayState } from "../src/app/risk-display";
 
@@ -51,4 +51,30 @@ test("a CDEC-only snow reading counts as a snowpack signal", () => {
   );
   assert.equal(snowpack({ snowDepthIn: 4, sweIn: null }).hasSignal, true);
   assert.equal(snowpack({ snowDepthIn: 0, sweIn: 0 }).hasSignal, false);
+});
+
+test("per-aspect terrain keeps a north avalanche problem and a south lee slope apart", () => {
+  const input = {
+    // Strong enough to load the lee slope (55% of the limit), below the 70% caution for every slope.
+    travelRows: [{ time: "07:00", pass: true, gust: 24, reasonSummary: "" }],
+    elevationBands: [{ label: "Objective", elevationFt: 11000 }],
+    // No elevation stated, so the problem reaches every band on its aspect.
+    avalancheProblems: [{ name: "Wind slab", location: ["north"] }],
+    avalancheRelevant: true,
+    avalancheUnknown: false,
+    avalancheDanger: 2,
+    leewardAspects: ["S"],
+    secondaryAspects: [],
+    preferences: { ...getDefaultUserPreferences(), maxWindGustMph: 40 },
+  };
+  const byAspect = buildTerrainWindowByAspect(input);
+  const cell = (aspect) => byAspect.get(aspect).lanes.find((lane) => lane.aspects.includes(aspect)).cells[0];
+  assert.match(cell("N").reasons.join(" "), /Wind slab/);
+  assert.doesNotMatch(cell("N").reasons.join(" "), /wind-loading/);
+  assert.match(cell("S").reasons.join(" "), /wind-loading/);
+  assert.doesNotMatch(cell("S").reasons.join(" "), /Wind slab/);
+  assert.equal(cell("E").level, "lower");
+  // The grouped model, by contrast, puts N and S in one lane with both reasons.
+  const shared = buildTerrainWindow(input).lanes.find((lane) => lane.aspects.includes("N"));
+  assert.ok(shared.aspects.includes("S"));
 });

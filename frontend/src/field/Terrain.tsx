@@ -2,7 +2,7 @@ import { SurfacePrediction } from "./SurfacePrediction";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
-import { buildTerrainWindow } from "../app/terrain-window";
+import { buildTerrainWindow, buildTerrainWindowByAspect } from "../app/terrain-window";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { planFromReport } from "./data";
@@ -10,6 +10,13 @@ import { WindCompass } from "./WindCompass";
 import { Details, SourceLink } from "./Details";
 import { AiExplanationSkeleton, SnowAnalysis } from "./AiExplanation";
 import { MountainSection } from "./sky/MountainSection";
+import { AvalancheMountain, type AvalancheBandKey } from "./sky/AvalancheMountain";
+import { AspectRose, type RoseAspect } from "./sky/AspectRose";
+import { SnowColumns } from "./sky/SnowColumns";
+import { parseTerrainFromLocation } from "../utils/avalanche";
+import { parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
+
+const parseClock = (time: string) => parseTimeInputMinutes(time) ?? parseHourLabelToMinutes(time) ?? NaN;
 import { StatusTag } from "./sky/BriefSections";
 import { knownFeet, surfaceLabel, terrainStatus } from "./sky/status";
 import { shortHour, type SkyHour } from "./sky/sky-model";
@@ -18,12 +25,12 @@ const FieldMap = lazy(() => import("./FieldMap"));
 
 function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
   const flags = resolveReportFeatureFlags(w.safetyData?.featureFlags);
-  const [selection, setSelection] = useState({ lane: 0, hour: 0 });
+  const [selection, setSelection] = useState<{ lane: number; hour: number; aspect: RoseAspect | null }>({ lane: 0, hour: 0, aspect: null });
   // Without snow to move, lee aspects are no more hazardous than any other.
   const showWindLoading = flags.windLoadingDetails && w.windLoadingApplies;
-  const model = useMemo(
-    () =>
-      buildTerrainWindow({
+  const { model, byAspect } = useMemo(
+    () => {
+      const input = {
         travelRows: w.travelWindowRows,
         elevationBands: w.elevationForecastBands,
         avalancheProblems: flags.avalancheDetails
@@ -37,7 +44,10 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
         leewardAspects: showWindLoading ? w.leewardAspectHints : [],
         secondaryAspects: showWindLoading ? w.secondaryWindAspects : [],
         preferences: w.preferences,
-      }),
+      };
+      // The rose draws each aspect on its own; the table keeps the grouped lanes.
+      return { model: buildTerrainWindow(input), byAspect: buildTerrainWindowByAspect(input) };
+    },
     [
       w.travelWindowRows,
       w.elevationForecastBands,
@@ -52,13 +62,28 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
       showWindLoading,
     ],
   );
+  // Rings of the rose, highest elevation innermost.
+  const rings = Array.from(new Map(model.lanes.map((l) => [l.elevationFt, l.elevationLabel])).entries())
+    .sort((a, b) => b[0] - a[0]);
+  const aspectLane = (aspect: RoseAspect, ring: number) =>
+    byAspect.get(aspect)?.lanes.find((l) => l.elevationFt === rings[ring]?.[0] && l.aspects.includes(aspect));
+  const laneAt = (aspect: RoseAspect, ring: number) =>
+    model.lanes.findIndex((l) => l.elevationFt === rings[ring]?.[0] && l.aspects.includes(aspect));
+  // A slope picked on the rose reads its own aspect's cell; a table cell reads the grouped lane.
   const lane = model.lanes[selection.lane] || model.lanes[0];
-  const cell = lane?.cells[selection.hour];
+  const roseRing = lane ? rings.findIndex(([ft]) => ft === lane.elevationFt) : -1;
+  const cell = selection.aspect && roseRing >= 0
+    ? aspectLane(selection.aspect, roseRing)?.cells[selection.hour]
+    : lane?.cells[selection.hour];
+  const levelWord = (level: string) =>
+    level === "lower" ? "Lower" : level === "avoid" ? "Avoid" : level === "unknown" ? "Unknown" : "Caution";
+  const hourText = (i: number) => w.formatClockForStyle(model.hours[i]?.time, w.preferences.timeStyle);
+  const roseSelected = selection.aspect && roseRing >= 0 ? { aspect: selection.aspect, ring: roseRing } : null;
   return (
     <section className="sky-section" aria-labelledby="sky-terrain-day">
       <div className="sky-sh">
         <h2 id="sky-terrain-day">Terrain through the day</h2>
-        <p>By elevation and aspect. Select a cell for the reasons.</p>
+        <p>Slopes from above: aspects around, elevation as rings with the highest innermost. Select a slope for the reasons.</p>
       </div>
       <div className="sky-card sky-terrain-window">
       <details className="sky-details">
@@ -67,6 +92,58 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
       </details>
       {model.lanes.length ? (
         <>
+          <div className="sky-segmented sky-mountain-hours" role="group" aria-label="Terrain time">
+            {model.hours.map((hour, i) => (
+              <button key={i} type="button" aria-pressed={i === selection.hour}
+                aria-label={hourText(i)} onClick={() => setSelection({ ...selection, hour: i })}>
+                {shortHour(parseClock(hour.time), w.preferences.timeStyle)}
+              </button>
+            ))}
+          </div>
+          <div className="sky-terrain-rose">
+            <AspectRose
+              size={236}
+              rings={rings.map(([, label]) => label)}
+              label={`Terrain at ${hourText(selection.hour)} by aspect and elevation`}
+              cellClass={(aspect, ring) => {
+                const l = aspectLane(aspect, ring);
+                return `is-${l?.cells[selection.hour]?.level ?? "unknown"}`;
+              }}
+              cellLabel={(aspect, ring) => {
+                const l = aspectLane(aspect, ring);
+                return `${aspect}, ${rings[ring]?.[1]}, ${hourText(selection.hour)}: ${levelWord(l?.cells[selection.hour]?.level ?? "unknown")}`;
+              }}
+              selected={roseSelected}
+              onSelect={(aspect, ring) => {
+                const index = laneAt(aspect, ring);
+                if (index >= 0) setSelection({ ...selection, lane: index, aspect });
+              }}
+            />
+            <div className="sky-terrain-rose-side">
+              <ul className="sky-legend" aria-label="Legend">
+                <li><i className="is-lower" />Lower</li>
+                <li><i className="is-caution" />Caution</li>
+                <li><i className="is-avoid" />Avoid</li>
+                <li><i className="is-unknown" />Unknown</li>
+              </ul>
+              <ol className="sky-rose-rings" aria-label="Rings, inside to outside">
+                {rings.map(([ft, label]) => <li key={ft}>{label} <small>{w.formatElevationDisplay(ft)}</small></li>)}
+              </ol>
+              {cell && (
+                <div className={`sky-terrain-reason is-${cell.level}`} aria-live="polite">
+                  <strong>
+                    {lane.elevationLabel} · {selection.aspect ?? lane.aspectLabel} · {hourText(selection.hour)} · {levelWord(cell.level)}
+                  </strong>
+                  <p>
+                    {cell.reasons.join(" ") ||
+                      "Nothing here crosses a terrain-specific limit in the available data. This is not a slope-stability assessment."}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          <details className="sky-details">
+          <summary>Every hour as a table</summary>
           <div className="field-table-scroll">
             <table className="sky-table sky-terrain-matrix">
               <thead>
@@ -100,7 +177,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
                             selection.lane === i && selection.hour === j
                           }
                           aria-label={`${lane.elevationLabel}, ${lane.aspectLabel}, ${w.formatClockForStyle(model.hours[j].time, w.preferences.timeStyle)}: ${cell.level}`}
-                          onClick={() => setSelection({ lane: i, hour: j })}
+                          onClick={() => setSelection({ lane: i, hour: j, aspect: null })}
                         >
                           {cell.level === "lower"
                             ? "Lower"
@@ -117,17 +194,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
               </tbody>
             </table>
           </div>
-          {cell && (
-            <div className={`sky-terrain-reason is-${cell.level}`} aria-live="polite">
-              <strong>
-                {lane.elevationLabel} · {lane.aspectLabel} · {w.formatClockForStyle(model.hours[selection.hour]?.time, w.preferences.timeStyle)}
-              </strong>
-              <p>
-                {cell.reasons.join(" ") ||
-                  "Nothing here crosses a terrain-specific limit in the available data. This is not a slope-stability assessment."}
-              </p>
-            </div>
-          )}
+          </details>
         </>
       ) : (
         <p className="sky-empty">
@@ -180,6 +247,29 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
   ];
   const objectiveBand = bands.find((b) => objectiveFt !== null && Math.abs(b.elevationFt - objectiveFt) < 150);
   const avalancheLevel = w.overallAvalancheLevel as number | null;
+  const problemTerrain = (data.avalanche?.problems ?? []).map((problem) => {
+    const { aspects, elevations } = parseTerrainFromLocation(problem.location);
+    // Rose rings, inside out: above, near and below treeline. An empty set means the bulletin didn't say.
+    const ringBands = ["upper", "middle", "lower"] as const;
+    const bands: AvalancheBandKey[] = elevations.size
+      ? (["above", "at", "below"] as const).filter((_, r) => elevations.has(ringBands[r]))
+      : [];
+    const aspectText = aspects.size === 8 ? "All aspects" : aspects.size ? [...aspects].join(", ") : "Aspects not stated";
+    const bandText = elevations.size === 3 ? "all elevations"
+      : elevations.size ? bands.map((b) => ({ above: "above", at: "near", below: "below" })[b]).join(", ") + " treeline"
+      : "elevations not stated";
+    return {
+      name: problem.name || "Avalanche problem",
+      bands,
+      describe: `${aspectText} · ${bandText}`,
+      // "maybe" where the bulletin leaves aspect or elevation unstated, so an unknown is never drawn as affected.
+      covers: (aspect: RoseAspect, ring: number) => {
+        const aspectHit = aspects.size === 0 ? "maybe" : aspects.has(aspect) ? "yes" : "no";
+        const bandHit = elevations.size === 0 ? "maybe" : elevations.has(ringBands[ring]) ? "yes" : "no";
+        return aspectHit === "no" || bandHit === "no" ? "no" : aspectHit === "yes" && bandHit === "yes" ? "yes" : "maybe";
+      },
+    };
+  });
   const snowDepth = data.snowpack?.snotel?.snowDepthIn == null
     ? "Unavailable"
     : w.preferences.elevationUnit === "m"
@@ -383,23 +473,31 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                   {data.avalanche?.bottomLine || data.avalanche?.relevanceReason}
                 </p>
                 {w.avalancheElevationRows.length > 0 && (
-                  <dl className="sky-list">
-                    {w.avalancheElevationRows.map((band) => (
-                      <div key={band.key}>
-                        <dt>{band.label}</dt>
-                        <dd>{band.rating === null ? "No rating" : w.getDangerText(band.rating)}</dd>
-                      </div>
-                    ))}
-                  </dl>
+                  <AvalancheMountain
+                    rows={w.avalancheElevationRows}
+                    problems={problemTerrain.map((p) => ({ name: p.name, bands: p.bands }))}
+                    dangerText={w.getDangerText}
+                  />
                 )}
                 {data.avalanche?.problems?.map((problem, i) => (
-                  <article className="sky-problem" key={i}>
-                    <h3>{problem.name}</h3>
+                  <article className="sky-problem has-rose" key={i}>
+                    <AspectRose
+                      compact
+                      size={76}
+                      rings={["Above treeline", "Near treeline", "Below treeline"]}
+                      label={problemTerrain[i].describe}
+                      cellClass={(aspect, ring) => ({ yes: "is-affected", maybe: "is-unstated", no: "" })[problemTerrain[i].covers(aspect, ring)]}
+                      cellLabel={(aspect, ring) => `${aspect} ${ring}`}
+                    />
+                    <div>
+                    <h3><span className="sky-problem-num" aria-hidden="true">{i + 1}</span>{problem.name}</h3>
+                    <p className="sky-problem-where">{problemTerrain[i].describe}</p>
                     <p>{problem.discussion || problem.problem_description}</p>
                     <Details
                       title="Affected aspects, elevations, size, and likelihood"
                       value={{ likelihood: problem.likelihood, size: problem.size, location: problem.location }}
                     />
+                    </div>
                   </article>
                 ))}
                 {data.avalanche?.advice && <p className="sky-cap is-body">{data.avalanche.advice}</p>}
@@ -430,6 +528,31 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               <div><span className="sky-muted">Best depth estimate</span><span className="sky-big">{w.snowpackBestDepthDisplay}</span><small>{w.snowpackBestDepthSource}</small></div>
               <div><span className="sky-muted">Snow water equivalent</span><span className="sky-big">{w.snowpackBestSweDisplay}</span><small>{w.snowpackBestSweSource}</small></div>
             </div>
+            <SnowColumns
+              metric={w.preferences.elevationUnit === "m"}
+              columns={[
+                {
+                  label: "SNOTEL station",
+                  sub: [data.snowpack?.snotel?.stationName, knownFeet(data.snowpack?.snotel?.elevationFt) !== null ? w.formatElevationDisplay(data.snowpack!.snotel!.elevationFt!) : null, w.snotelDistanceDisplay]
+                    .filter((part) => part && part !== "N/A" && part !== "Unavailable").join(" · ") || "No station",
+                  depthIn: knownFeet(data.snowpack?.snotel?.snowDepthIn),
+                  sweIn: knownFeet(data.snowpack?.snotel?.sweIn),
+                },
+                {
+                  label: "NOHRSC model",
+                  sub: "Modeled at your objective",
+                  depthIn: knownFeet(data.snowpack?.nohrsc?.snowDepthIn),
+                  sweIn: knownFeet(data.snowpack?.nohrsc?.sweIn),
+                },
+                ...(data.snowpack?.cdec ? [{
+                  label: "CDEC station",
+                  sub: [data.snowpack.cdec.stationName, knownFeet(data.snowpack.cdec.elevationFt) !== null ? w.formatElevationDisplay(data.snowpack.cdec.elevationFt!) : null, w.cdecDistanceDisplay]
+                    .filter((part) => part && part !== "N/A" && part !== "Unavailable").join(" · ") || "No station",
+                  depthIn: knownFeet(data.snowpack.cdec.snowDepthIn),
+                  sweIn: knownFeet(data.snowpack.cdec.sweIn),
+                }] : []),
+              ]}
+            />
             <div className="sky-table-scroll">
               <table className="sky-table">
                 <thead>

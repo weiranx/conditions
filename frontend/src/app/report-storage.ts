@@ -6,7 +6,7 @@ import {
 } from './constants';
 import { isValidLatLon, parseTimeInputMinutes } from './core';
 import { hasStoredUserPreferences, normalizeUserPreferences } from './preferences';
-import type { SafetyData, UserPreferences } from './types';
+import type { ActivityType, SafetyData, UserPreferences } from './types';
 import { buildSafetyRequestKey } from './url-state';
 import type { RouteAnalysisResult, RouteOption } from '../hooks/useRouteAnalysis';
 import { MAX_DISPLAY_TRACK_POINTS, type GpxCheckpoint, type GpxTrackPoint, type ParsedGpxRoute } from '../lib/gpx';
@@ -350,19 +350,24 @@ export function clearPersistedReport(): void {
 
 export function persistedReportMatchesPlan(
   report: PersistedReport,
-  plan: { lat: number; lon: number; forecastDate: string; alpineStartTime: string; travelWindowHours: number },
+  plan: { lat: number; lon: number; forecastDate: string; alpineStartTime: string; travelWindowHours: number; activity: ActivityType },
 ): boolean {
+  // Older reports predate forecast.activity; the preferences saved with them
+  // hold the activity they were generated for.
+  const reportActivity = report.safetyData.forecast?.activity ?? report.preferences?.defaultActivity ?? 'backcountry';
   return buildSafetyRequestKey(
     report.plan.lat,
     report.plan.lon,
     report.plan.forecastDate,
     report.plan.alpineStartTime,
     report.plan.travelWindowHours,
+    reportActivity,
   ) === buildSafetyRequestKey(
     plan.lat,
     plan.lon,
     plan.forecastDate,
     plan.alpineStartTime,
     plan.travelWindowHours,
+    plan.activity,
   );
 }

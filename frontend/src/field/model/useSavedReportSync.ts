@@ -121,7 +121,8 @@ type SyncOptions = AccountState & {
   safetyData: SafetyData | null;
   viewingHistoryReport: boolean;
   setReportChatMessages: Dispatch<SetStateAction<PersistedReportChatMessage[]>>;
-  resetRouteState: () => void;
+  /** Runs once when a freshly generated report arrives. */
+  onReportGenerated: () => void;
   setReportChatSessionKey: Dispatch<SetStateAction<number>>;
 };
 
@@ -129,7 +130,7 @@ type SyncOptions = AccountState & {
 export function useSavedReportSync(session: ReturnType<typeof useSavedReportSession>, {
   hasObjective, reportSnapshot, safetyData, viewingHistoryReport,
   accountLoading, accountUserId, syncGeneratedReportUsage,
-  setReportChatMessages, resetRouteState, setReportChatSessionKey,
+  setReportChatMessages, onReportGenerated, setReportChatSessionKey,
 }: SyncOptions) {
   const {
     activeSavedReportId, reportGenerationPending, setReportGenerationPending,
@@ -144,10 +145,10 @@ export function useSavedReportSync(session: ReturnType<typeof useSavedReportSess
     )
       return;
     setReportChatMessages([]);
-    resetRouteState();
+    onReportGenerated();
     setReportGenerationPending(false);
     setReportChatSessionKey((value) => value + 1);
-  }, [reportGenerationPending, resetRouteState, safetyData, reportSaveSourceDataRef, setReportChatMessages, setReportChatSessionKey, setReportGenerationPending]);
+  }, [reportGenerationPending, onReportGenerated, safetyData, reportSaveSourceDataRef, setReportChatMessages, setReportChatSessionKey, setReportGenerationPending]);
 
   useEffect(() => {
     if (!hasObjective || !reportSnapshot || reportGenerationPending) return;

@@ -14,7 +14,7 @@ import "./compare.css";
 import "./sky/sky.css";
 import "./sky/parts.css";
 import "./sky/chapters.css";
-import { DayStrip } from "./sky/DayStrip";
+import { MiniSky } from "./sky/MiniSky";
 import { buildSkyHours } from "./sky/sky-model";
 import { buildPlannedReportWeatherRows } from "./report-weather";
 import { formatClockForStyle, minutesToTwentyFourHourClock, parseSolarClockMinutes } from "../app/core";
@@ -288,7 +288,9 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                             {day.decisionLevel === "GO" ? "Go" : day.decisionLevel === "NO-GO" ? "No-go" : "Caution"}
                           </span>
                         </span>
-                        <DayStrip hours={hours} clock={clock} />
+                        <MiniSky hours={hours} clock={clock}
+                          sunrise={parseSolarClockMinutes(day.safetyData?.solar?.sunrise)}
+                          sunset={parseSolarClockMinutes(day.safetyData?.solar?.sunset)} />
                         <span className="sky-day-fact">
                           <strong>{isNumber(day.score) ? day.score : "—"}<small>{isNumber(day.score) ? "/100" : " score"}</small></strong>
                           <small>{day.travelTotalHours > 0 ? `${day.travelPassHours} of ${day.travelTotalHours} h within` : "Hours unavailable"}</small>

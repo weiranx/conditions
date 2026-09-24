@@ -5,10 +5,13 @@ import { JSDOM } from 'jsdom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Route } from '../src/field/Route';
+import { WorkspacePlan } from '../src/field/WorkspacePlan';
+import { publishAiAvailability } from '../src/hooks/useAiAvailability';
 import { buildCheckpointProfile } from '../src/field/route-planning';
 import { parseGpxText } from '../src/lib/gpx';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
 import { makeReport } from '../dev/mock-data.mjs';
+import { getDefaultUserPreferences } from '../src/app/preferences';
 
 function parseGpx(xml) {
   const dom = new JSDOM('');
@@ -78,7 +81,8 @@ const workspace = (overrides = {}) => ({
   preferences: { elevationUnit: 'ft' }, featureFlags: { gpxImport: true },
   objectiveName: 'Test mountain', position: { lat: 46, lng: -121 },
   forecastDate: '2026-09-08', alpineStartTime: '23:00', travelWindowHours: 4,
-  objectiveTimezone: 'America/Los_Angeles', customRouteName: '',
+  objectiveTimezone: 'America/Los_Angeles', customRouteName: '', plannedRouteName: '',
+  handleAnalyzePlannedRoute: () => {}, setCustomRouteName: () => {},
   routeSuggestions: [{ name: 'West ridge', class: 'Class 2', distance_rt_miles: 10, elev_gain_ft: 3000 }],
   formatElevationDisplay: n => `${n} ft`, formatDistanceDisplay: n => `${n} mi`,
   formatElevationDeltaDisplay: n => `+${n} ft`, formatTempDisplay: n => `${n}°F`,
@@ -114,13 +118,13 @@ test('profile rejects unavailable elevations and handles flat, duplicate and rev
   }
 });
 
-test('itinerary keeps every arrival date, alternatives and route uncertainty visible', () => {
+test('itinerary keeps every arrival date and route uncertainty visible', () => {
   const html = renderToStaticMarkup(<Route workspace={workspace()} />);
   const doc = new JSDOM(html).window.document;
   assert.equal(doc.querySelectorAll('.field-route-stop').length, 2);
   assert.match(doc.querySelector('.field-route-itinerary').textContent, /Tue, Sep 8.*Wed, Sep 9/);
-  assert.ok(doc.querySelector('.field-route-alternatives'));
-  assert.equal(doc.querySelector('.field-route-alternatives').open, false);
+  // Choosing a route happens in the plan; the chapter only re-runs or renames it.
+  assert.doesNotMatch(html, /Import GPX|Find routes|Route options/);
   assert.match(html, /2 of 2 forecasts returned/);
   assert.match(html, /not been verified against a mapped trail/);
   assert.match(html, /not terrain-adjusted pace/);
@@ -141,7 +145,6 @@ test('empty results and unavailable services provide a useful next step', () => 
   const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: result([]), routeSuggestions: [],
     safetyData: { capabilities: { routeAnalysis: false } } })} />);
   assert.match(html, /No checkpoint forecasts were returned/);
-  assert.match(html, /No route suggestions found/);
   assert.match(html, /unavailable on this server/);
   assert.doesNotMatch(html, /NaN|Infinity/);
 });
@@ -284,4 +287,94 @@ test('no stop is called the high point when every elevation is unknown', () => {
   assert.ok(!facts.includes('Top out'));
   assert.ok(!facts.includes('High point'));
   assert.ok(facts.includes('Back at start'));
+});
+
+test('the chapter re-runs the planned GPX route rather than importing another', async t => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
+  const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  globalThis.fetch = async () => new Response(JSON.stringify({ ai: { available: true } }));
+  const root = createRoot(document.getElementById('root'));
+  t.after(async () => {
+    await act(async () => root.unmount());
+    dom.window.close(); Object.assign(globalThis, previous); delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+  let runs = 0;
+  const gpx = { name: 'Loop', fileName: 'loop.gpx', distanceMiles: 6, elevationGainFt: 1200, checkpoints: [{}, {}, {}] };
+  await act(async () => root.render(<Route workspace={workspace({ routeAnalysis: null, importedGpxRoute: gpx,
+    plannedRouteName: 'Loop', handleAnalyzePlannedRoute: () => { runs += 1; } })} />));
+  assert.match(document.querySelector('.sky-route-choose').textContent, /Loop · your GPX track, 3 checkpoints/);
+  assert.equal(document.querySelector('.sky-route-choose input'), null);
+  const analyze = document.querySelector('.sky-route-choose button');
+  assert.equal(analyze.textContent, 'Analyze route');
+  await act(async () => analyze.click());
+  assert.equal(runs, 1);
+});
+
+test('without a planned route the chapter cannot analyze a blank name', () => {
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: null })} />);
+  const doc = new JSDOM(html).window.document;
+  assert.equal(doc.querySelector('.sky-route-choose button').disabled, true);
+  assert.match(html, /Name a route to check conditions along it/);
+});
+
+const planWorkspace = (overrides = {}) => ({
+  ...workspace(),
+  searchWrapperRef: { current: null }, searchInputRef: { current: null },
+  preferences: { ...getDefaultUserPreferences(), elevationUnit: 'ft', defaultActivity: 'hiking' },
+  formatTempDisplay: (f) => `${f}°F`,
+  searchQuery: 'Test mountain', showSuggestions: false, suggestions: [], activeSuggestionIndex: -1,
+  hasObjective: true, objectiveDraftDirty: false, featureFlags: { gpxImport: true, routeAnalysis: true },
+  todayDate: '2026-09-08', maxForecastDate: '2026-09-15', travelWindowHoursDraft: '4',
+  routeLoading: false, routeLoadingState: null, routeError: null, accountUser: null,
+  customRouteName: 'West ridge', plannedRouteName: 'West ridge', importedGpxRoute: null,
+  ...overrides,
+});
+
+test('the plan carries the route: a name, suggestions to pick from, or the imported GPX track', () => {
+  const named = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace()} />)).window.document;
+  const step = named.querySelector('.sky-plan-route');
+  assert.equal(step.open, true);
+  assert.match(step.querySelector('summary').textContent, /Route.*West ridge/);
+  assert.equal(step.querySelector('.sky-plan-route-name input').value, 'West ridge');
+  const option = step.querySelector('.sky-plan-route-options button');
+  assert.equal(option.getAttribute('aria-pressed'), 'true');
+  assert.match(option.textContent, /West ridge.*Class 2 · 10 mi round trip · \+3000 ft gain/);
+  assert.match(step.textContent, /Sign in to check conditions/);
+
+  const gpx = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ customRouteName: '',
+    plannedRouteName: 'Loop', accountUser: { id: 'u1' },
+    importedGpxRoute: { name: 'Loop', fileName: 'loop.gpx', distanceMiles: 6, elevationGainFt: 1200, checkpoints: [{}, {}] } })} />)).window.document;
+  const gpxStep = gpx.querySelector('.sky-plan-route');
+  assert.equal(gpxStep.querySelector('.sky-plan-route-name'), null);
+  assert.match(gpxStep.textContent, /Checkpoints come from your GPX track, 2 along the way/);
+  assert.match(gpxStep.textContent, /once your brief is ready/);
+
+  const blank = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ customRouteName: '',
+    plannedRouteName: '', routeSuggestions: null })} />)).window.document;
+  assert.equal(blank.querySelector('.sky-plan-route').open, false);
+  assert.match(blank.querySelector('.sky-plan-route summary').textContent, /Optional/);
+
+  const flagOff = planWorkspace({ featureFlags: { routeAnalysis: false } });
+  assert.doesNotMatch(renderToStaticMarkup(<WorkspacePlan workspace={flagOff} />), /sky-plan-route/);
+  const comparison = renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ tripStartDate: '2026-09-08',
+    tripStartTime: '07:00', tripDurationDays: 3 })} comparison />);
+  assert.doesNotMatch(comparison, /sky-plan-route/);
+});
+
+// Last in the file: the published availability is shared module state.
+test('the plan does not offer route suggestions when the server has no route AI', () => {
+  const previous = globalThis.window;
+  globalThis.window = { dispatchEvent: () => true };
+  try {
+    publishAiAvailability({ available: true, features: { routeAnalysis: { available: false } } });
+  } finally {
+    globalThis.window = previous;
+  }
+  const doc = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ accountUser: { id: 'u1' } })} />)).window.document;
+  const suggest = [...doc.querySelectorAll('.sky-plan-route button')].find((b) => b.textContent === 'Suggest routes');
+  assert.equal(suggest.disabled, true);
+  assert.match(doc.querySelector('.sky-plan-route-hint').textContent, /unavailable on this server/);
 });

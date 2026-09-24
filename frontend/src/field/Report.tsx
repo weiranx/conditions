@@ -34,6 +34,7 @@ import { buildSkyHours } from "./sky/sky-model";
 import { verdictCopy } from "./verdict-copy";
 import { buildPlannedReportWeatherRows } from "./report-weather";
 import { minutesToTwentyFourHourClock } from "../app/core";
+import { ACTIVITY_PROFILES } from "../app/activity-profiles";
 import "./sky/sky.css";
 import "./sky/parts.css";
 import "./sky/chapters.css";
@@ -399,7 +400,7 @@ export function Report({
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
         <Forecast report={report} approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
-        <Conditions workspace={w} />
+        <Conditions workspace={w} hours={skyHours} />
       </section>
     );
     if (id === "timing") return <Timing key="timing" workspace={w} hours={skyHours} />;
@@ -538,6 +539,11 @@ export function Report({
                 decision={decision}
                 actionLine={w.decisionActionLine}
                 onSources={() => go("sources")}
+                activityLabel={
+                  data.forecast?.activity
+                    ? ACTIVITY_PROFILES[data.forecast.activity]?.label ?? null
+                    : null
+                }
                 localize={w.localizeUnitText}
               />
             )}
