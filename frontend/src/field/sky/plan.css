@@ -55,7 +55,7 @@
   color: var(--sky-label, var(--f-ink)); font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
-.field-plan-form.sky-plan label.sky-activity:hover { border-color: var(--sky-field-border-hover); box-shadow: 0 6px 14px -10px rgba(24, 32, 28, 0.35); }
+.field-plan-form.sky-plan label.sky-activity:hover { border-color: var(--sky-field-border-hover); }
 .field-plan-form.sky-plan .sky-activity input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }
 /* Each activity's glyph sits in a small well that fills with the accent when chosen. */
 .sky-activity svg {
@@ -65,7 +65,7 @@
 }
 .field-plan-form.sky-plan label.sky-activity.is-checked {
   border-color: var(--sky-accent, var(--f-primary)); background: var(--sky-accent-tint, var(--f-paper));
-  box-shadow: 0 0 0 1px var(--sky-accent, var(--f-primary)), 0 10px 20px -14px var(--sky-accent-glow, transparent);
+  box-shadow: 0 0 0 1px var(--sky-accent, var(--f-primary));
 }
 .sky-activity.is-checked svg { background: var(--sky-accent-fill, var(--f-primary)); color: var(--sky-on-accent, var(--f-primary-ink)); }
 /* A check in the corner marks the choice without relying on colour alone. */
