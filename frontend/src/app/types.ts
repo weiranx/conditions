@@ -29,7 +29,7 @@ export interface SupplementalSource {
 import type { LatLngLiteral } from 'leaflet';
 
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
-export type ActivityType = 'backcountry' | 'hiking' | 'scrambling' | 'alpine-climbing' | 'snow-climbing' | 'ski-touring' | 'trail-running';
+export type ActivityType = 'backcountry' | 'hiking' | 'scrambling' | 'alpine-climbing' | 'mountaineering' | 'snow-climbing' | 'ski-touring' | 'trail-running';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type MapStyle = 'topo' | 'street' | 'satellite';
 export type TemperatureUnit = 'f' | 'c';
@@ -180,6 +180,8 @@ export interface SafetyData {
   forecast?: {
     selectedDate?: string;
     requestedStartTime?: string | null;
+    /** Activity the gear list was tailored for; absent on older reports. */
+    activity?: ActivityType | null;
     selectedStartTime?: string;
     selectedEndTime?: string;
     isFuture?: boolean;

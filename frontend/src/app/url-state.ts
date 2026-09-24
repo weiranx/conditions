@@ -181,6 +181,14 @@ export function buildShareQuery(state: {
   return params.toString();
 }
 
-export function buildSafetyRequestKey(lat: number, lon: number, date: string, startTime: string, travelWindowHours: number): string {
-  return `${lat.toFixed(5)},${lon.toFixed(5)}@${date}@${startTime}@w${travelWindowHours}`;
+export function buildSafetyRequestKey(
+  lat: number,
+  lon: number,
+  date: string,
+  startTime: string,
+  travelWindowHours: number,
+  activity?: string,
+): string {
+  const base = `${lat.toFixed(5)},${lon.toFixed(5)}@${date}@${startTime}@w${travelWindowHours}`;
+  return activity ? `${base}@${activity}` : base;
 }

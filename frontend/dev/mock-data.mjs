@@ -126,6 +126,7 @@ export function makeReport(params = {}, scenario = "mixed") {
     forecast: {
       selectedDate: date,
       requestedStartTime: start,
+      activity: gearSuggestions.normalizeGearActivity(params.activity),
       selectedStartTime: start,
       selectedEndTime: clock(minutes + count * 60),
       isFuture: date > now.slice(0, 10),
@@ -448,6 +449,7 @@ export function makeReport(params = {}, scenario = "mixed") {
     heatRiskData: report.heatRisk,
     selectedTravelWindowHours: count,
     contingencyData: report.contingency,
+    activity: params.activity,
   });
   report.pleasantness = pleasantnessScoring.calculatePleasantnessScore({
     weatherData: report.weather,

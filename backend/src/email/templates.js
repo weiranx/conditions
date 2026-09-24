@@ -477,6 +477,7 @@ const ACTIVITY_LABELS = Object.freeze({
   hiking: 'Mountain hiking',
   scrambling: 'Exposed scrambling',
   'alpine-climbing': 'Alpine climbing',
+  mountaineering: 'Mountaineering',
   'snow-climbing': 'Snow climbing',
   'ski-touring': 'Ski touring',
   'trail-running': 'Trail running',
