@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { buildWindLoadingDisplay } from "../src/app/wind-loading-display";
 import { buildTerrainWindow } from "../src/app/terrain-window";
 import { getDefaultUserPreferences } from "../src/app/preferences";
+import { buildSnowpackDisplayState } from "../src/app/risk-display";
 
 const windy = { weather: { windDirection: "W", windSpeed: 22, windGust: 34 }, avalanche: { problems: [] } };
 const trend = [{ time: "07:00", windDirection: "W", wind: 22, gust: 34 }];
@@ -40,4 +41,14 @@ test("without wind-loading aspects the terrain window keeps its elevation lanes 
   assert.deepEqual(withoutLee.lanes.map((lane) => lane.aspectLabel), ["All aspects", "All aspects"]);
   assert.ok(withoutLee.lanes.every((lane) => lane.cells[0].reasons.every((r) => !/wind-loading|Cross-loading/.test(r))));
   assert.doesNotMatch(withoutLee.explanation, /avalanche/);
+});
+
+test("a CDEC-only snow reading counts as a snowpack signal", () => {
+  const fmt = () => "";
+  const snowpack = (cdec) => buildSnowpackDisplayState(
+    { weather: {}, snowpack: { status: "partial", snotel: null, nohrsc: null, cdec } },
+    fmt, fmt, fmt, fmt, fmt, "ft", null, 0, "", 0, "",
+  );
+  assert.equal(snowpack({ snowDepthIn: 4, sweIn: null }).hasSignal, true);
+  assert.equal(snowpack({ snowDepthIn: 0, sweIn: 0 }).hasSignal, false);
 });
