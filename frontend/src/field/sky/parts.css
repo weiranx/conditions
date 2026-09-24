@@ -17,18 +17,19 @@
 
 /* Segmented control: one choice from a short set. */
 .sky-segmented {
-  display: flex; gap: 2px; padding: 2px; margin: 0 0 14px; border-radius: 11px; background: var(--sky-fill);
+  display: flex; gap: 2px; padding: 3px; margin: 0 0 14px; border-radius: 12px; background: var(--sky-fill);
   overflow-x: auto; scrollbar-width: none;
 }
 .sky-segmented::-webkit-scrollbar { display: none; }
 .sky-segmented button {
   flex: 1 0 auto; min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px;
-  background: transparent; color: var(--sky-label); font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  background: transparent; color: var(--sky-secondary); font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
+.sky-segmented button:hover:not(:disabled) { color: var(--sky-label); }
 .sky-segmented button[aria-pressed="true"] {
-  background: var(--sky-surface); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  background: var(--sky-segment); color: var(--sky-label); font-weight: 600; box-shadow: var(--sky-raised-shadow);
 }
-html[data-theme="dark"] .sky-segmented button[aria-pressed="true"] { background: #3a403d; }
 .sky-segmented button:disabled { color: var(--sky-secondary); opacity: 0.5; cursor: not-allowed; }
 .sky-segmented button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; }
 

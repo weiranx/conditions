@@ -1,3 +1,5 @@
+/* index.html paints a themed page behind the loading splash; this page stays on white. */
+html:has(.mcp-connect) { background: #fff; }
 .mcp-connect { max-width: 600px; margin: 48px auto; padding: 24px; color: #202c28; background: #fff; font: 16px/1.6 system-ui,sans-serif; }
 .mcp-connect h1 { font-size: 28px; line-height: 1.2; }
 .mcp-connect h2 { font-size: 20px; }

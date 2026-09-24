@@ -16,6 +16,27 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&family=IBM+Plex+Mono:wght@500;600;700&display=swap"
     />
+    <!-- Paints the app background and a centred splash before the bundle's styles load. -->
+    <style>
+      html { background: #f2f3f1; }
+      .loading-state {
+        display: grid; place-items: center; align-content: center; gap: 16px; min-height: 100vh; min-height: 100dvh; margin: 0;
+        font: 500 15px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #58615c;
+      }
+      .loading-state::before {
+        content: ""; width: 52px; height: 52px; border-radius: 14px;
+        background: url(/summitsafe-icon.svg) center / contain no-repeat;
+        box-shadow: 0 10px 24px -10px rgba(8, 24, 16, 0.5);
+      }
+      @media (prefers-color-scheme: dark) {
+        html { background: #0f1211; }
+        .loading-state { color: #a3ada8; }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .loading-state::before { animation: splash-breathe 1.6s ease-in-out infinite alternate; }
+        @keyframes splash-breathe { from { opacity: 0.6; transform: scale(0.96); } }
+      }
+    </style>
     <title>Backcountry Conditions — Mountain Planning Intelligence</title>
     <meta name="description" content="Plan backcountry trips with weather, avalanche, snowpack, air quality, terrain, and daylight signals synthesized into one time-aware conditions brief." />
 

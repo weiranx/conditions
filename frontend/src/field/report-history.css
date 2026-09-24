@@ -2,6 +2,8 @@
 .field-history-filters { margin-bottom: 0; }
 .field-history-count { margin: 10px 4px 8px; }
 .field-history-device .sky-row-list { padding: 6px; }
+/* The older .field-library-bar mutes the heading and rules it off; keep it a plain section head. */
+.sky-sh.field-library-bar { margin-bottom: 0; padding-bottom: 12px; border-bottom: 0; color: var(--sky-label); font-size: inherit; }
 
 .field-report-history .field-library-entry { position: relative; margin: 0; padding: 0; border: 0; background: none; }
 .field-report-history .sky-row-group + .sky-row-group .field-library-entry { border-top: 1px solid var(--sky-separator); }
@@ -18,13 +20,17 @@
 .field-library-entry:has(.sky-row-action) .sky-report-row { padding-right: 118px; grid-template-columns: 48px minmax(0, 1fr) auto; }
 .field-library-entry:has(.sky-row-action) .sky-report-row > svg:last-child { display: none; }
 
-.sky-date-badge { display: grid; place-items: center; width: 48px; height: 52px; border-radius: 12px; background: var(--sky-fill); line-height: 1; }
-.sky-date-badge small { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--sky-caution); letter-spacing: 0.04em; }
+/* A page torn from a calendar. The month is the brand accent: orange is reserved for "over a limit". */
+.sky-date-badge {
+  display: grid; place-items: center; align-content: center; gap: 3px; width: 48px; height: 52px; border-radius: 12px;
+  background: var(--sky-raised); box-shadow: var(--sky-raised-shadow); line-height: 1;
+}
+.sky-date-badge small { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--sky-accent); letter-spacing: 0.06em; }
 .sky-date-badge strong { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sky-date-badge.is-missing small { color: var(--sky-missing); }
 .sky-report-copy { display: grid; gap: 2px; min-width: 0; }
 .sky-report-copy strong { font-size: 16px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sky-report-copy small { font-size: 13px; color: var(--sky-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sky-report-copy small { font-size: 13px; letter-spacing: 0; color: var(--sky-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sky-report-copy small + small { font-size: 12px; }
 .sky-ai-tag { display: inline-flex; align-items: center; gap: 3px; color: var(--sky-accent); font-weight: 600; }
 .sky-ai-tag svg { vertical-align: -1px; }
@@ -35,9 +41,10 @@
 .sky-row-action {
   position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
   display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 0; border-radius: 999px;
-  background: var(--sky-fill); color: var(--sky-label); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--sky-raised); color: var(--sky-label); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  box-shadow: var(--sky-raised-shadow);
 }
-.sky-row-action:hover:not(:disabled) { background: color-mix(in srgb, var(--sky-label) 12%, var(--sky-fill)); }
+.sky-row-action:hover:not(:disabled) { background: var(--sky-raised-hover); }
 .sky-row-action:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
 .sky-row-action:disabled { opacity: 0.5; cursor: default; }
 .field-history-more { display: flex; justify-content: center; margin-top: 14px; }

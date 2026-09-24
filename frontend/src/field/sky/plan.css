@@ -2,11 +2,12 @@
 .field-plan-form.sky-plan .field-form-title { display: none; }
 .field-plan-form.sky-plan .sky-plan-step {
   display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 0;
-  font-size: 20px; font-weight: 700; letter-spacing: -0.01em; color: var(--sky-label, var(--f-ink));
+  font-size: 19px; font-weight: 650; letter-spacing: -0.015em; color: var(--sky-label, var(--f-ink));
 }
 .field-plan-form.sky-plan .sky-plan-step > span {
-  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
-  background: var(--sky-label, var(--f-ink)); color: var(--sky-bg, var(--f-bg)); font-size: 14px; font-weight: 700;
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--sky-label, var(--f-ink)); color: var(--sky-bg, var(--f-bg)); font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 .field-plan-form.sky-plan .field-form-divider { border-top: 0; margin-top: 28px; padding-top: 0; }
 .field-plan-form.sky-plan .field-form-divider .sky-plan-step { margin: 0; }
@@ -19,6 +20,22 @@
 }
 .field-plan-form.sky-plan .field-duration-control input::-webkit-outer-spin-button,
 .field-plan-form.sky-plan .field-duration-control input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+/* Text fields sit a step below the card: a hairline edge that darkens on hover, the accent on focus. */
+.field-app .field-plan-form :is(input[type="date"], input[type="time"], select),
+.field-app .field-plan-form :is(.field-input-icon, .field-duration-control) {
+  border: 1px solid var(--sky-field-border); background-color: var(--sky-field);
+  box-shadow: inset 0 1px 2px rgba(24, 32, 28, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.field-app .field-plan-form .field-duration-control input { border: 0; background: transparent; box-shadow: none; }
+.field-app .field-plan-form :is(input[type="date"], input[type="time"], select):hover:not(:disabled),
+.field-app .field-plan-form :is(.field-input-icon, .field-duration-control):hover { border-color: var(--sky-field-border-hover); }
+.field-app .field-plan-form :is(input[type="date"], input[type="time"], select):focus-visible,
+.field-app .field-plan-form :is(.field-input-icon, .field-duration-control):has(input:focus) {
+  border-color: var(--sky-accent); outline: none; box-shadow: 0 0 0 1px var(--sky-accent), var(--sky-focus-ring);
+}
+.field-app .field-plan-form :is(.field-input-icon, .field-duration-control) input:focus-visible { outline: none; }
+
 .sky-stepper {
   display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px;
   background: transparent; color: var(--sky-label, var(--f-ink)); cursor: pointer;
@@ -29,19 +46,78 @@
 
 .sky-plan-activities { margin: 28px 0 0; padding: 0; border: 0; min-width: 0; }
 .sky-plan-activities > legend { float: left; width: 100%; }
-.sky-activity-grid { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.sky-activity-grid { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; }
 .field-plan-form.sky-plan label.sky-activity {
-  position: relative; display: grid; gap: 8px; align-content: start; min-height: 88px; padding: 14px;
-  border-radius: 16px; background: var(--sky-surface, var(--f-paper)); border: 1px solid var(--sky-separator, var(--f-line));
-  color: var(--sky-label, var(--f-ink)); font-size: 15px; font-weight: 600; cursor: pointer;
+  position: relative; display: grid; gap: 10px; align-content: start; min-height: 92px; padding: 12px 14px 14px;
+  border-radius: 16px; background: var(--sky-surface, var(--f-paper)); border: 1px solid var(--sky-field-border, var(--f-line));
+  color: var(--sky-label, var(--f-ink)); font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
+.field-plan-form.sky-plan label.sky-activity:hover { border-color: var(--sky-field-border-hover); box-shadow: 0 6px 14px -10px rgba(24, 32, 28, 0.35); }
 .field-plan-form.sky-plan .sky-activity input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }
-.sky-activity svg { color: var(--sky-secondary, var(--f-muted)); }
-.sky-activity.is-checked { border-color: transparent; outline: 2.5px solid var(--sky-accent, var(--f-primary)); outline-offset: -2.5px; }
-.sky-activity.is-checked svg { color: var(--sky-accent, var(--f-primary)); }
-.sky-activity:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--sky-accent, var(--f-primary)); }
+/* Each activity's glyph sits in a small well that fills with the accent when chosen. */
+.sky-activity svg {
+  box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px;
+  background: var(--sky-fill, var(--f-wash)); color: var(--sky-secondary, var(--f-muted));
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.field-plan-form.sky-plan label.sky-activity.is-checked {
+  border-color: var(--sky-accent, var(--f-primary)); background: var(--sky-accent-tint, var(--f-paper));
+  box-shadow: 0 0 0 1px var(--sky-accent, var(--f-primary)), 0 10px 20px -14px var(--sky-accent-glow, transparent);
+}
+.sky-activity.is-checked svg { background: var(--sky-accent-fill, var(--f-primary)); color: var(--sky-on-accent, var(--f-primary-ink)); }
+/* A check in the corner marks the choice without relying on colour alone. */
+.sky-activity.is-checked::before {
+  content: ""; position: absolute; top: 10px; right: 10px; width: 18px; height: 18px; border-radius: 50%; background: var(--sky-accent, var(--f-primary));
+}
+.sky-activity.is-checked::after {
+  content: ""; position: absolute; top: 13px; right: 16.5px; width: 4px; height: 8px;
+  border: solid var(--sky-on-accent, var(--f-primary-ink)); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.sky-activity:has(input:focus-visible) { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; }
 .field-plan-form.sky-plan .field-form-submit { margin-top: 24px; min-height: 52px; border-radius: 14px; font-size: 17px; }
 
 @media (max-width: 650px) {
   .sky-activity-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---------- Workspace: map card, quick locations, recent brief ---------- */
+/* The map sits inset in its card like a sheet on a table; layers are a segmented control. */
+.field-app .field-planner-map .field-map-tools { padding: 0 18px 12px; border-bottom: 0; background: transparent; }
+.field-app .field-map-tools > div { gap: 2px; padding: 3px; border: 0; border-radius: 12px; background: var(--sky-fill); }
+.field-app .field-map-tools > div button { min-height: 32px; padding: 0 12px; border-radius: 9px; color: var(--sky-secondary); font-size: 13px; font-weight: 500; }
+.field-app .field-map-tools > div button:hover { background: transparent; color: var(--sky-label); }
+.field-app .field-map-tools > div button[aria-pressed="true"] { background: var(--sky-segment); color: var(--sky-label); font-weight: 600; box-shadow: var(--sky-raised-shadow); }
+.field-app .field-map-tools > button {
+  display: grid; place-items: center; width: 38px; min-height: 38px; padding: 0; border-radius: 50%;
+  background: var(--sky-raised); color: var(--sky-label); box-shadow: var(--sky-raised-shadow);
+}
+.field-app .field-map-tools > button:hover { background: var(--sky-raised-hover); }
+.field-app .field-planner-map .field-map { margin: 0 12px; border-radius: 14px; }
+.field-app .field-map .leaflet-control-zoom { border: 0; border-radius: 10px; overflow: hidden; box-shadow: var(--sky-raised-shadow); }
+.field-app .field-map .leaflet-control-zoom a { background: var(--sky-raised); color: var(--sky-label); border-color: var(--sky-separator); }
+.field-app .field-map .leaflet-control-zoom a:hover { background: var(--sky-raised-hover); }
+
+.field-app .field-workspace-bottom h2 { font-size: 17px; font-weight: 650; letter-spacing: -0.015em; }
+.field-app .field-quick-locations .field-location-row { gap: 14px; padding: 12px 10px; border-top-color: var(--sky-separator); }
+.field-app .field-quick-locations .field-location-row:hover { background: color-mix(in srgb, var(--sky-fill) 50%, transparent); }
+/* Each summit gets a small tile, echoing the brand mark. */
+.field-app .field-quick-locations .field-location-row > svg:first-child {
+  box-sizing: content-box; width: 18px; height: 18px; padding: 9px; border-radius: 11px;
+  background: var(--sky-accent-tint); color: var(--sky-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sky-accent) 14%, transparent);
+}
+.field-app .field-quick-locations .field-location-row > span { font-size: 15px; font-weight: 600; }
+.field-app .field-quick-locations .field-location-row small { font-size: 13px; font-weight: 400; color: var(--sky-secondary); }
+.field-app .field-quick-locations .field-location-row > svg:last-child {
+  box-sizing: content-box; padding: 7px; border-radius: 50%; color: var(--sky-secondary);
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.field-app .field-quick-locations .field-location-row:hover > svg:last-child { background: var(--sky-raised); color: var(--sky-label); box-shadow: var(--sky-raised-shadow); }
+.field-app .field-workspace-empty > svg {
+  box-sizing: content-box; padding: 11px; margin-bottom: 6px; border-radius: 14px;
+  background: var(--sky-accent-tint); color: var(--sky-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sky-accent) 14%, transparent);
+}
+.field-app .field-workspace-empty strong { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.field-app .field-workspace-empty p { font-size: 14px; color: var(--sky-secondary); }

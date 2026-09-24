@@ -23,8 +23,35 @@
   --sky-missing: #5c6360;
   --sky-ok-fill: #d5dad6;
   --sky-radius: 20px;
-  /* Cards lift off the grouped background with a hairline and a soft, low shadow. */
-  --sky-elevation: 0 0 0 0.5px rgba(24, 32, 28, 0.06), 0 1px 2px rgba(24, 32, 28, 0.04), 0 8px 24px -16px rgba(24, 32, 28, 0.18);
+  /* One typeface everywhere, landing page included; Inter's optical sizes tighten large titles. */
+  --sky-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Cards lift off the grouped background with a hairline, a contact shadow and a long, faint drop. */
+  --sky-hairline: rgba(24, 32, 28, 0.07);
+  --sky-elevation: 0 0 0 1px var(--sky-hairline), 0 1px 2px rgba(24, 32, 28, 0.05), 0 6px 16px -8px rgba(24, 32, 28, 0.08), 0 20px 40px -28px rgba(24, 32, 28, 0.2);
+  /* Pointer hover on a card that opens something. */
+  --sky-elevation-raised: 0 0 0 1px rgba(24, 32, 28, 0.09), 0 2px 4px rgba(24, 32, 28, 0.06), 0 12px 24px -12px rgba(24, 32, 28, 0.16), 0 28px 48px -30px rgba(24, 32, 28, 0.28);
+  /* Small raised controls: secondary buttons, the selected sidebar item and segment. */
+  --sky-raised: #ffffff;
+  --sky-raised-hover: #f6f7f5;
+  --sky-raised-shadow: 0 0 0 1px rgba(24, 32, 28, 0.1), 0 1px 2px rgba(24, 32, 28, 0.07), 0 3px 8px -5px rgba(24, 32, 28, 0.16);
+  /* The chosen segment of a segmented control, raised out of its --sky-fill track. */
+  --sky-segment: #ffffff;
+  /* The accent as a lit surface: primary buttons and the selected activity. */
+  --sky-accent-fill: linear-gradient(180deg, #246a50, #1b503c);
+  --sky-accent-fill-hover: linear-gradient(180deg, #2a765a, #1f5a44);
+  --sky-accent-glow: rgba(30, 90, 67, 0.3);
+  --sky-accent-tint: color-mix(in srgb, var(--sky-accent) 7%, var(--sky-surface));
+  /* Text fields sit a step below the card they are on. */
+  --sky-field: #f7f8f6;
+  --sky-field-border: rgba(24, 32, 28, 0.13);
+  --sky-field-border-hover: rgba(24, 32, 28, 0.26);
+  --sky-focus-ring: 0 0 0 4px color-mix(in srgb, var(--sky-accent) 16%, transparent);
+  /* The brand mark keeps the app icon's colours in both themes. */
+  --sky-brand-tile: #16352a;
+  --sky-brand-line: #5fae85;
+  /* Contour lines behind page titles; decoration only, never data. */
+  --sky-topo: rgba(30, 90, 67, 0.14);
+  --sky-glow: rgba(30, 90, 67, 0.07);
 }
 html[data-theme="dark"] {
   --sky-bg: #0f1211;
@@ -41,9 +68,25 @@ html[data-theme="dark"] {
   --sky-cold-fill: rgba(114, 180, 240, 0.2);
   --sky-missing: #a7afab;
   --sky-ok-fill: #343a37;
-  --sky-elevation: 0 0 0 0.5px rgba(236, 239, 237, 0.08);
+  /* In the dark a card is lit from above: a faint top edge instead of a shadow you cannot see. */
+  --sky-hairline: rgba(236, 239, 237, 0.075);
+  --sky-elevation: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 0 0 1px var(--sky-hairline), 0 16px 36px -24px rgba(0, 0, 0, 0.8);
+  --sky-elevation-raised: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(236, 239, 237, 0.12), 0 22px 44px -24px rgba(0, 0, 0, 0.9);
+  --sky-raised: #2c322f;
+  --sky-raised-hover: #353b38;
+  --sky-segment: #3a403d;
+  --sky-raised-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(236, 239, 237, 0.07), 0 2px 6px -2px rgba(0, 0, 0, 0.5);
+  --sky-accent-fill: linear-gradient(180deg, #92d4b2, #72bf99);
+  --sky-accent-fill-hover: linear-gradient(180deg, #a3dcbf, #80c9a5);
+  --sky-accent-glow: rgba(127, 200, 164, 0.22);
+  --sky-field: #131715;
+  --sky-field-border: rgba(236, 239, 237, 0.12);
+  --sky-field-border-hover: rgba(236, 239, 237, 0.24);
+  --sky-topo: rgba(127, 200, 164, 0.09);
+  --sky-glow: rgba(127, 200, 164, 0.06);
 }
 @media (prefers-contrast: more) {
-  :root { --sky-separator: rgba(24, 32, 28, 0.4); --sky-ok-fill: #b9c0bb; }
+  :root { --sky-separator: rgba(24, 32, 28, 0.4); --sky-ok-fill: #b9c0bb; --sky-field-border: rgba(24, 32, 28, 0.5); --sky-hairline: rgba(24, 32, 28, 0.3); }
+  html[data-theme="dark"] { --sky-field-border: rgba(236, 239, 237, 0.5); --sky-hairline: rgba(236, 239, 237, 0.3); }
 }
 
