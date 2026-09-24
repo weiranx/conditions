@@ -1,6 +1,7 @@
 /* Report chapters in the Sky design: timelines, lists and two-up card rows. */
 
 .sky-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.sky-duo > :only-child { grid-column: 1 / -1; }
 .sky-card-actions { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .sky-card-actions > .sky-details { flex: 1 1 100%; }
 .sky-table-scroll { overflow-x: auto; margin: 6px -4px 0; }

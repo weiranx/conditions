@@ -8,20 +8,20 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#173723" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&family=IBM+Plex+Mono:wght@500;600;700&display=swap"
-    />
-    <!-- Paints the app background and a centred splash before the bundle's styles load. -->
+    <!-- Browser bars take the page background; the app retints them when its own theme setting differs. -->
+    <meta name="theme-color" content="#f2f3f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1211" media="(prefers-color-scheme: dark)" />
+    <!-- viewport-fit=cover lets the layout pad for the home indicator and notch with env(safe-area-inset-*). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <style>
-      html { background: #f2f3f1; }
+      /* First paint, until the app applies its theme: no white flash in dark mode. */
+      html:not([data-theme]) { background: #f2f3f1; color: #18201c; }
+      body { margin: 0; }
+      /* Until the bundle's styles load: the app icon over a quiet line, centred. */
       .loading-state {
-        display: grid; place-items: center; align-content: center; gap: 16px; min-height: 100vh; min-height: 100dvh; margin: 0;
-        font: 500 15px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #58615c;
+        box-sizing: border-box; display: grid; place-items: center; align-content: center; gap: 16px;
+        min-height: 100vh; min-height: 100dvh; margin: 0; padding: 24px 16px;
+        font: 500 15px/1.5 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #58615c;
       }
       .loading-state::before {
         content: ""; width: 52px; height: 52px; border-radius: 14px;
@@ -29,7 +29,7 @@
         box-shadow: 0 10px 24px -10px rgba(8, 24, 16, 0.5);
       }
       @media (prefers-color-scheme: dark) {
-        html { background: #0f1211; }
+        html:not([data-theme]) { background: #0f1211; color: #eceeed; }
         .loading-state { color: #a3ada8; }
       }
       @media (prefers-reduced-motion: no-preference) {
@@ -37,6 +37,12 @@
         @keyframes splash-breathe { from { opacity: 0.6; transform: scale(0.96); } }
       }
     </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..750&family=IBM+Plex+Mono:wght@500;600;700&display=swap"
+    />
     <title>Backcountry Conditions — Mountain Planning Intelligence</title>
     <meta name="description" content="Plan backcountry trips with weather, avalanche, snowpack, air quality, terrain, and daylight signals synthesized into one time-aware conditions brief." />
 

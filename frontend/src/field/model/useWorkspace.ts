@@ -141,6 +141,7 @@ import {
 } from "../../app/report-storage";
 import { copyTextToClipboard } from "../../app/clipboard";
 import { parseReportSectionHash } from "../../app/report-sections";
+import { followThemePreference } from "../../app/theme";
 import { useHealthChecks } from "../../hooks/useHealthChecks";
 import { useRouteAnalysis } from "../../hooks/useRouteAnalysis";
 import type { RouteAnalysisOptions } from "../../hooks/useRouteAnalysis";
@@ -1061,23 +1062,7 @@ export function useWorkspace() {
     if (typeof window === "undefined") {
       return;
     }
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const applyTheme = () => {
-      const resolvedTheme: "light" | "dark" =
-        preferences.themeMode === "system"
-          ? mediaQuery.matches
-            ? "dark"
-            : "light"
-          : preferences.themeMode;
-      document.documentElement.setAttribute("data-theme", resolvedTheme);
-    };
-
-    applyTheme();
-    mediaQuery.addEventListener("change", applyTheme);
-    return () => {
-      mediaQuery.removeEventListener("change", applyTheme);
-    };
+    return followThemePreference(preferences.themeMode);
   }, [preferences.themeMode]);
 
   useEffect(() => {
@@ -1935,6 +1920,16 @@ export function useWorkspace() {
         /depth\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi,
         (_, value) =>
           `depth ~${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)}`,
+      )
+      .replace(
+        /(\d+(?:\.\d+)?)\s?in of new snow\b/gi,
+        (_, value) =>
+          `${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)} of new snow`,
+      )
+      .replace(/(\d+(?:\.\d+)?)\s?in of rain\b/gi, (match, value) =>
+        preferences.elevationUnit === "m"
+          ? `${Math.round(Number(value) * 25.4)} mm of rain`
+          : match,
       )
       .replace(/(-?\d+(?:\.\d+)?)\s?km\b/gi, (_, value) =>
         formatDistanceForElevationUnit(
@@ -2833,6 +2828,7 @@ export function useWorkspace() {
     windLoadingActionLine,
     windLoadingSummary,
     windLoadingNotes,
+    windLoadingApplies,
     windLoadingHintsRelevant,
   } = windLoading;
   if (decision && aspectOverlapProblems.length > 0) {
@@ -2857,18 +2853,17 @@ export function useWorkspace() {
             typeof rawItem.title === "string"
           ) {
             const { title, detail, category, tone } = rawItem;
-            let detailText = String(detail || "").trim();
-            // Backend gear details can quote a single observed snow depth; when the
-            // snow sources disagree that number is misleading on its own.
-            if (
-              snowpackDepthConflict &&
-              /observed snow depth/i.test(detailText)
-            ) {
-              detailText = `${detailText.replace(/\.$/, "")} (snow sources disagree — see Snowpack card).`;
+            const detailText = String(detail || "").trim();
+            let reasonText = String(rawItem.reason || "").trim();
+            // Gear reasons can quote a single snow depth; when the snow sources
+            // disagree that number is misleading on its own.
+            if (snowpackDepthConflict && /snow depth/i.test(reasonText)) {
+              reasonText = `${reasonText} (snow sources disagree; see Snowpack)`;
             }
             return {
               title: String(title || "").trim(),
               detail: detailText,
+              reason: reasonText,
               category: String(category || "General"),
               tone: String(tone || "go"),
             };
@@ -2912,7 +2907,7 @@ export function useWorkspace() {
               : category === "General"
                 ? "watch"
                 : "go";
-          return { title, detail, category, tone };
+          return { title, detail, reason: "", category, tone };
         })
         .filter(
           (
@@ -2920,6 +2915,7 @@ export function useWorkspace() {
           ): item is {
             title: string;
             detail: string;
+            reason: string;
             category: string;
             tone: string;
           } => item !== null,
@@ -3492,6 +3488,7 @@ export function useWorkspace() {
     windLoadingActionLine,
     windLoadingSummary,
     windLoadingNotes,
+    windLoadingApplies,
     windLoadingHintsRelevant,
     terrainCondition,
     terrainConditionPillClass,

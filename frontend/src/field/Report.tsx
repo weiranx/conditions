@@ -110,6 +110,7 @@ export function Report({
 }) {
   const [view, setView] = useState<View>(viewFromHash);
   const topRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLElement>(null);
   const briefScroll = useRef(0);
   // An anchor asks to land on a specific part of a (possibly lazy) chapter.
   const focusRequest = useRef<"chapter" | "brief" | { anchor: string } | null>(null);
@@ -154,6 +155,13 @@ export function Report({
     window.addEventListener("hashchange", listener);
     return () => window.removeEventListener("hashchange", listener);
   }, []);
+  useEffect(() => {
+    // On a narrow screen the tab row scrolls; keep the open chapter's tab in view.
+    const tabs = tabsRef.current;
+    const current = tabs?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!tabs || !current || tabs.scrollWidth <= tabs.clientWidth) return;
+    tabs.scrollLeft = current.offsetLeft - (tabs.clientWidth - current.offsetWidth) / 2;
+  }, [activeView]);
   useEffect(() => {
     // Only an explicit navigation moves focus; loading a report must not.
     const request = focusRequest.current;
@@ -432,7 +440,7 @@ export function Report({
             <DayStrip hours={skyHours} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} />
           </div>
           {!fullReport && (
-            <nav className="sky-chapter-tabs" aria-label="Report sections">
+            <nav className="sky-chapter-tabs" aria-label="Report sections" ref={tabsRef}>
               {visibleChapters.map((c) => (
                 <button key={c.id} type="button" aria-current={activeView === c.id ? "page" : undefined} onClick={() => go(c.id)}>
                   {c.label}
@@ -519,6 +527,7 @@ export function Report({
                 decision={decision}
                 actionLine={w.decisionActionLine}
                 onSources={() => go("sources")}
+                localize={w.localizeUnitText}
               />
             )}
           </Suspense>

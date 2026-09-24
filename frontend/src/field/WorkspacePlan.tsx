@@ -21,6 +21,7 @@ import {
 import { parseGpxFile } from "../lib/gpx";
 import "./sky/plan.css";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
+import { liftAboveKeyboard } from "./touch";
 
 
 export function WorkspacePlan({
@@ -36,6 +37,7 @@ export function WorkspacePlan({
   const id = useId();
   const file = useRef<HTMLInputElement>(null);
   const results = useRef<HTMLDivElement>(null);
+  const tapped = useRef(false);
   const [error, setError] = useState("");
   const [selectingLocation, setSelectingLocation] = useState(false);
   const busy = comparison ? w.tripForecastLoading : w.loading;
@@ -131,7 +133,16 @@ export function WorkspacePlan({
                   : undefined
               }
               autoComplete="off"
-              onFocus={w.handleFocus}
+              onPointerDown={(event) => {
+                tapped.current = event.pointerType !== "mouse";
+              }}
+              onFocus={() => {
+                w.handleFocus();
+                // Only a tap opens the keyboard; focus moved here by the form
+                // (after a failed search) keeps the page where it is.
+                if (tapped.current) liftAboveKeyboard(searchWrapperRef.current);
+                tapped.current = false;
+              }}
               onChange={(event) => {
                 setError("");
                 w.handleInputChange(event);

@@ -27,13 +27,14 @@ const buildLayeringGearSuggestions = ({
   const snowpackEnabled = scoreFeatureEnabled('snowpackDetails');
   const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
   const contingencyEnabled = scoreFeatureEnabled('contingencyPlanning');
-  const addSuggestion = (id, title, detail, category, tone, priority = 50) => {
+  const daylightEnabled = scoreFeatureEnabled('daylightTimeline');
+  const addSuggestion = (id, title, detail, category, tone, priority = 50, reason = '') => {
     if (typeof id !== 'string' || !id.trim() || typeof title !== 'string' || !title.trim()) {
       return;
     }
     const existing = suggestionMap.get(id);
     if (!existing || priority < existing.priority) {
-      suggestionMap.set(id, { id, title, detail, category, tone, priority });
+      suggestionMap.set(id, { id, title, detail, reason, category, tone, priority });
     }
   };
   const formatWhole = (value, suffix) => {
@@ -125,121 +126,245 @@ const buildLayeringGearSuggestions = ({
   const hasAlerts = Number(alertsData?.activeCount) > 0;
   const heatLevel = heatRiskEnabled ? Number(heatRiskData?.level) : Number.NaN;
 
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const windowLowFeelsLike = formatWhole(windowMinFeelsLikeF, 'F');
+  const windowPeakGust = formatWhole(windowPeakGustMph, ' mph');
+  const windowPeakWind = formatWhole(windowPeakWindMph, ' mph');
+  const windowPeakPrecip = formatWhole(windowPeakPrecipChance, '%');
+  const rain24h = formatOneDecimal(rain24hIn, ' in');
+  const snow24h = formatWhole(snow24hIn, ' in');
+  const snowDepth = formatWhole(maxObservedSnowDepthIn, ' in');
+  const snowOnGround = snowy || icy || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 2);
+  const hasDarkInWindow = weatherData?.isDaytime === false || trend.some((row) => row?.isDaytime === false);
+  const AVALANCHE_DANGER_LABELS = { 1: 'Low', 2: 'Moderate', 3: 'Considerable', 4: 'High', 5: 'Extreme' };
+
   addSuggestion(
     'backcountry-essentials',
-    'Core backcountry kit',
-    'Offline map + compass, headlamp, first-aid/repair kit, emergency communication, extra food, and reserve water.',
-    'Safety',
+    'Ten Essentials',
+    'Map and compass or offline GPS, headlamp, sun protection, first aid, knife and repair kit, fire starter, emergency shelter, extra food, water, and layers, plus a way to call for help.',
+    'Essentials',
     'go',
     8,
   );
 
   addSuggestion(
     'layering-core',
-    'Layering core',
-    'Moisture-wicking base + breathable midlayer. Avoid cotton to limit chill during breaks.',
-    'Conditions',
+    'Base and mid layers',
+    'Synthetic or wool base layer with a warm midlayer. Skip cotton: it stays wet and chills you at stops.',
+    'Clothing',
     'go',
     10,
   );
 
   if (hasWetSignal || hasRainAccumulation) {
+    const wetReasons = [
+      windowPeakPrecip ? `Up to ${windowPeakPrecip} chance of ${hasSnowSignal ? 'rain or snow' : 'rain'}` : 'Wet weather in the forecast',
+      hasRainAccumulation && rain24h ? `${rain24h} of rain in the last 24 h` : null,
+    ].filter(Boolean);
     addSuggestion(
       'shell-wet',
-      'Storm shell',
-      `Waterproof-breathable jacket + pants${formatWhole(windowPeakPrecipChance, '%') ? ` (window peak ${formatWhole(windowPeakPrecipChance, '%')} precip)` : ''}${formatOneDecimal(rain24hIn, ' in rain/24h') ? ` and ${formatOneDecimal(rain24hIn, ' in rain/24h')}` : ''}.`,
-      'Conditions',
+      hasSnowSignal ? 'Waterproof jacket and pants' : 'Rain jacket and rain pants',
+      'Waterproof and breathable, with a hood.',
+      'Clothing',
       'caution',
       20,
+      wetReasons.join('; '),
     );
-    addSuggestion('gaiters-wet', 'Wet-foot control', 'Gaiters + waterproof footwear to reduce ankle/boot soak-through.', 'Conditions', 'watch', 32);
+    addSuggestion('gaiters-wet', 'Waterproof boots and gaiters', 'Keep feet dry on wet trail and brush, and pack spare socks.', 'Footwear & traction', 'watch', 32, 'Wet trail and brush likely');
   } else if (hasSnowSignal || windy) {
     addSuggestion(
       'shell-wind-snow',
-      'Wind/snow shell',
-      `Wind-resistant outer layer for exposed terrain${formatWhole(windowPeakGustMph, ' mph') ? ` (window peak ${formatWhole(windowPeakGustMph, ' mph')} gusts)` : ''}.`,
-      'Conditions',
+      'Windproof shell with a hood',
+      'Blocks wind and sheds snow on exposed ridges and summits.',
+      'Clothing',
       'caution',
       22,
+      windy
+        ? (windowPeakGust && windowPeakGustMph >= 25 ? `Gusts to ${windowPeakGust}` : windowPeakWind ? `Wind to ${windowPeakWind}` : 'Windy in your window')
+        : 'Snow or cold precipitation in your window',
     );
   } else {
-    addSuggestion('shell-light', 'Light shell backup', 'Pack a light wind shell for ridge exposure and fast weather shifts.', 'Conditions', 'go', 60);
+    addSuggestion('shell-light', 'Light wind jacket', 'Weighs little and covers ridge wind or a passing shower.', 'Clothing', 'go', 60);
   }
 
   if (cold || hasSnowSignal || windy) {
     addSuggestion(
       'insulation-stop',
-      'Static insulation',
-      `Puffy sized over active layers${formatWhole(windowMinFeelsLikeF, 'F') ? ` (window low feels like ${formatWhole(windowMinFeelsLikeF, 'F')})` : ''} for stops and contingencies.`,
-      'Conditions',
+      'Insulated jacket',
+      'A puffy that fits over your other layers, for breaks and for waiting out a delay.',
+      'Clothing',
       'caution',
       24,
+      windowLowFeelsLike ? `Feels like ${windowLowFeelsLike} at the coldest` : 'Cold, wind, or snow in your window',
     );
   }
   if (veryCold) {
-    addSuggestion('extremities-cold', 'Cold extremities kit', 'Warm hat, neck gaiter, insulated gloves/mitts, and spare liners.', 'Conditions', 'caution', 16);
+    addSuggestion(
+      'extremities-cold',
+      'Warm hat, insulated gloves, and neck gaiter',
+      'Add spare liner gloves. Wet or bare hands lose dexterity fast at these temperatures.',
+      'Clothing',
+      'caution',
+      16,
+      windowLowFeelsLike ? `Feels like ${windowLowFeelsLike} at the coldest` : 'Very cold in your window',
+    );
   }
 
   if (muddy || hasRainAccumulation) {
-    addSuggestion('traction-mud', 'Mud traction', 'Aggressive-lug footwear and poles for slick or soft approaches.', 'Conditions', 'watch', 34);
+    addSuggestion(
+      'traction-mud',
+      'Trekking poles and grippy shoes',
+      'Deep lugs and poles for slick, muddy approaches.',
+      'Footwear & traction',
+      'watch',
+      34,
+      muddy ? 'Trail reported muddy' : `${rain24h} of rain in the last 24 h`,
+    );
   }
   if (icy || snowy || hasSnowSignal || hasFreshSnow || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4)) {
     addSuggestion(
       'traction-snow',
-      'Snow/ice traction',
-      `Carry traction devices + poles${formatOneDecimal(maxObservedSnowDepthIn, ' in observed snow depth') ? ` (${formatOneDecimal(maxObservedSnowDepthIn, ' in observed snow depth')})` : ''}.`,
-      'Conditions',
+      'Microspikes and trekking poles',
+      'Microspikes grip packed snow and ice on trails. They do not replace crampons on steep snow.',
+      'Footwear & traction',
       'caution',
       26,
+      icy ? 'Icy or firm snow on the trail'
+        : hasFreshSnow && snow24h ? `${snow24h} of new snow in the last 24 h`
+          : snowDepth && maxObservedSnowDepthIn >= 2 ? `Snow depth ~${snowDepth} nearby`
+            : snowy ? 'Snow on the trail' : 'Snow in the forecast',
     );
   }
   if ((Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 12) || (Number.isFinite(snow24hIn) && snow24hIn >= 6)) {
-    addSuggestion('snow-flotation', 'Snow flotation', 'Snowshoes or skis may be needed for deep or unconsolidated snow; verify supportability near the trailhead.', 'Conditions', 'watch', 27);
+    addSuggestion(
+      'snow-flotation',
+      'Snowshoes or skis',
+      'Deep or soft snow makes travel on foot slow and exhausting. Check how well it supports you near the trailhead.',
+      'Footwear & traction',
+      'watch',
+      27,
+      Number.isFinite(snow24hIn) && snow24hIn >= 6 ? `${snow24h} of new snow in the last 24 h` : `Snow depth ~${snowDepth} nearby`,
+    );
   }
   if (icy && (cold || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4))) {
-    addSuggestion('alpine-hardware', 'Technical snow travel', 'For steep, firm snow only: ice axe, crampons, and helmet — and the training to use them. Otherwise change the route.', 'Safety', 'caution', 15);
+    addSuggestion(
+      'alpine-hardware',
+      'Ice axe, crampons, and helmet',
+      'Only for steep, firm snow, and only if you are trained to self-arrest. Otherwise choose a different route.',
+      'Safety & rescue',
+      'caution',
+      15,
+      cold ? 'Firm, icy snow with cold temperatures' : `Icy trail with snow depth ~${snowDepth} nearby`,
+    );
   }
 
-  if (Number.isFinite(humidity) && humidity > 80) {
-    addSuggestion('humidity-management', 'Moisture backup', `Pack one dry base layer for high humidity (${Math.round(humidity)}% RH).`, 'Conditions', 'go', 48);
+  if (Number.isFinite(humidity) && humidity > 80 && (hasWetSignal || (Number.isFinite(windowMinFeelsLikeF) && windowMinFeelsLikeF <= 60))) {
+    addSuggestion('humidity-management', 'Spare base layer', 'A dry layer to change into if you sweat or get rained through.', 'Clothing', 'go', 48, `${Math.round(humidity)}% humidity, so layers dry slowly`);
   }
   if (airQualityEnabled && Number(airQualityData?.usAqi) >= 101) {
-    addSuggestion('aq-health', 'Smoke respirator', `If travel is unavoidable, carry a well-fitting NIOSH-approved N95 or P100 respirator and reduce exertion (AQI ${Math.round(Number(airQualityData.usAqi))}). A Buff or cloth covering does not filter wildfire smoke.`, 'Exposure', 'watch', 30);
+    const aqi = Math.round(Number(airQualityData.usAqi));
+    addSuggestion(
+      'aq-health',
+      'Smoke respirator',
+      'A well-fitted NIOSH-approved N95 or P100, and an easier pace. A Buff or cloth covering does not filter wildfire smoke.',
+      'Health',
+      'watch',
+      30,
+      `Air quality index ${aqi}: unhealthy${aqi >= 151 ? ' for everyone' : ' for sensitive groups'}`,
+    );
   }
   if (hasAlerts) {
-    addSuggestion('alerts-comms', 'Alerts contingency', 'Verify active alert details and carry backup comms/power.', 'Safety', 'watch', 28);
+    const alertCount = Math.round(Number(alertsData.activeCount));
+    addSuggestion(
+      'alerts-comms',
+      'Satellite messenger and battery pack',
+      'A way to call for help without cell service, and power to keep it running. Read the alert details before you go.',
+      'Navigation & comms',
+      'watch',
+      28,
+      `${plural(alertCount, 'active weather alert')} for this area`,
+    );
   }
   if (fireRiskEnabled && Number(fireRiskData?.level) >= 3) {
-    addSuggestion('fire-risk', 'Heat/fire prep', `Extra water + sun protection; verify land-management restrictions (${fireRiskData.label || 'elevated fire risk'}).`, 'Exposure', 'watch', 36);
+    addSuggestion(
+      'fire-risk',
+      'Extra water and sun cover',
+      'Hot, dry air dehydrates you quickly. Check campfire and stove restrictions before you go.',
+      'Sun & heat',
+      'watch',
+      36,
+      String(fireRiskData.label || 'Elevated fire risk').replace(/\.$/, ''),
+    );
   }
 
   if (avalancheEnabled && avalancheData?.relevant !== false && (avyDanger >= 1 || avalancheData?.dangerUnknown)) {
-    addSuggestion('avalanche-kit', 'Avalanche rescue kit', 'Each traveler: transceiver on and checked, metal shovel, and probe — with partners trained and practiced in rescue.', 'Safety', 'nogo', 14);
-  }
-  if (avalancheEnabled && avalancheData?.relevant !== false && avalancheData?.dangerUnknown) {
-    addSuggestion('avalanche-unknown', 'Avalanche coverage gap', 'No official rating. Choose non-avalanche terrain and conservative slopes.', 'Safety', 'nogo', 12);
+    const dangerLabel = AVALANCHE_DANGER_LABELS[Math.round(avyDanger)];
+    addSuggestion(
+      'avalanche-kit',
+      'Avalanche rescue kit',
+      avalancheData?.dangerUnknown
+        ? 'Each traveler: transceiver on and checked, metal shovel, and probe. With no official rating, stick to low-angle terrain away from avalanche paths.'
+        : 'Each traveler: transceiver on and checked, metal shovel, and probe, with partners who have practiced rescue.',
+      'Safety & rescue',
+      'nogo',
+      14,
+      avalancheData?.dangerUnknown
+        ? 'No avalanche forecast covers this area'
+        : dangerLabel ? `Avalanche danger ${dangerLabel} (${Math.round(avyDanger)} of 5)` : 'Avalanche terrain on this objective',
+    );
   }
 
   if (Number.isFinite(windowMaxFeelsLikeF) && windowMaxFeelsLikeF >= 68 && hasDaylightInWindow) {
-    addSuggestion('sun-protection', 'Sun protection', 'Sunscreen, sunglasses, and sun hat for UV exposure on open terrain.', 'Exposure', 'go', 40);
+    addSuggestion('sun-protection', 'Sunscreen, sunglasses, and sun hat', 'UV is stronger on open terrain and at altitude.', 'Sun & heat', 'go', 40, `Feels like up to ${formatWhole(windowMaxFeelsLikeF, 'F')} in daylight`);
+  } else if (snowOnGround && hasDaylightInWindow) {
+    addSuggestion('sun-protection', 'Dark sunglasses and sunscreen', 'Snow reflects most UV, so sunburn and snow blindness happen even on cold days.', 'Sun & heat', 'watch', 40, 'Daylight travel over snow');
   }
   if (Number.isFinite(heatLevel) && heatLevel >= 1) {
-    addSuggestion('hydration-heat', 'Heat hydration', 'Carry extra water; plan re-supply points for heat-stress conditions.', 'Exposure', 'watch', 38);
+    addSuggestion('hydration-heat', 'Extra water', 'Carry more than usual and know where you can refill.', 'Sun & heat', 'watch', 38, heatRiskData?.label ? `Heat risk: ${String(heatRiskData.label).replace(/\.$/, '')}` : 'Heat stress possible in your window');
   }
   if (Number.isFinite(heatLevel) && heatLevel >= 2) {
-    addSuggestion('electrolytes-heat', 'Electrolytes', 'Pack electrolyte tabs or drink mix to offset sweat-salt loss in heat.', 'Exposure', 'watch', 42);
+    addSuggestion('electrolytes-heat', 'Electrolytes', 'Tabs or drink mix to replace salt lost to sweat.', 'Sun & heat', 'watch', 42, 'Heavy sweating likely');
   }
 
   if (weatherContextEnabled && /fog|mist|smoke|blizzard/.test(windowDescription)) {
-    addSuggestion('navigation-low-vis', 'Navigation', 'GPS device or downloaded offline maps required in low-visibility conditions.', 'General', 'watch', 44);
+    addSuggestion(
+      'navigation-low-vis',
+      'GPS with offline maps',
+      'Download the route before you go. Trails and landmarks disappear in low visibility.',
+      'Navigation & comms',
+      'watch',
+      44,
+      /blizzard/.test(windowDescription) ? 'Blizzard conditions in your window'
+        : /smoke/.test(windowDescription) ? 'Smoke may limit visibility' : 'Fog in your window',
+    );
+  }
+
+  if (daylightEnabled && hasDarkInWindow) {
+    addSuggestion('headlamp-dark', 'Headlamp and spare batteries', 'Check it works before you leave, and keep it where you can reach it.', 'Navigation & comms', 'watch', 35, 'Part of your time window is after dark');
   }
 
   if (convective) {
-    addSuggestion('storm-contingency', 'Storm contingency kit', 'Headlamp, backup power, and waterproof protection for navigation and communication. Gear does not make exposed terrain safe in lightning.', 'Safety', 'caution', 17);
+    addSuggestion(
+      'storm-contingency',
+      'Storm kit',
+      'Rain layers, a headlamp, and a charged phone or messenger in case a storm delays you. Gear does not protect you from lightning: be off exposed terrain before storms build.',
+      'Safety & rescue',
+      'caution',
+      17,
+      'Thunderstorms possible in your window',
+    );
   }
 
   if ((hasAlerts && cold) || avyDanger >= 3) {
-    addSuggestion('emergency-shelter', 'Emergency shelter', 'Bivy sack or space blanket for severe conditions or extended rescue scenarios.', 'Safety', 'caution', 18);
+    addSuggestion(
+      'emergency-shelter',
+      'Emergency bivy',
+      'A bivy sack or emergency blanket in case you have to wait for help.',
+      'Safety & rescue',
+      'caution',
+      18,
+      avyDanger >= 3 ? `Avalanche danger ${AVALANCHE_DANGER_LABELS[Math.round(avyDanger)] || 'Considerable'} or higher` : 'Active alerts with cold temperatures',
+    );
   }
 
   const overnight = contingencyEnabled ? contingencyData?.overnight : null;
@@ -248,20 +373,22 @@ const buildLayeringGearSuggestions = ({
     const nightWet = Number(overnight.peakPrecipChance) >= 50 || overnight.freezingRain || overnight.snow;
     addSuggestion(
       'overnight-insulation',
-      'Unplanned-night insulation',
-      `Extra insulating layer, warm hat, gloves, and a sit pad sized for a night out${nightLow ? ` (night feels like ${nightLow})` : ''}, not just for moving.`,
-      'Safety',
+      'Extra warm layers for a night out',
+      'An extra insulating layer, warm hat, gloves, and a sit pad, sized for sitting still overnight rather than moving.',
+      'Safety & rescue',
       overnight.severity === 'high' ? 'caution' : 'watch',
       overnight.severity === 'high' ? 16 : 30,
+      nightLow ? `If you are delayed, the night feels like ${nightLow}` : 'An unplanned night would be cold',
     );
     if (overnight.severity === 'high' || nightWet) {
       addSuggestion(
         'emergency-shelter',
-        'Emergency shelter',
-        `Bivy sack or emergency blanket and a way to stay dry: ${String(overnight.summary || 'an unplanned night would be cold or wet').replace(/\.$/, '')}.`,
-        'Safety',
+        'Emergency bivy',
+        'A bivy sack or emergency blanket and a way to stay dry if you are stuck overnight.',
+        'Safety & rescue',
         'caution',
         17,
+        `A forced night out would be ${[overnight.severity === 'high' ? 'serious' : 'cold', nightWet ? 'wet' : null].filter(Boolean).join(' and ')}${nightLow ? ` (feels like ${nightLow})` : ''}`,
       );
     }
   }
@@ -278,7 +405,7 @@ const buildLayeringGearSuggestions = ({
 
   return selectedSuggestions
     .sort((a, b) => (TONE_PRIORITY[a.tone] ?? 4) - (TONE_PRIORITY[b.tone] ?? 4) || a.priority - b.priority)
-    .map(({ id, title, detail, category, tone }) => ({ id, title, detail, category, tone }))
+    .map(({ id, title, detail, reason, category, tone }) => ({ id, title, detail, reason, category, tone }))
     .slice(0, MAX_GEAR_SUGGESTIONS);
 };
 

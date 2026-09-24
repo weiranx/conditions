@@ -10,6 +10,8 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 .field-plan-form.sky-plan .field-form-divider { border-top: 0; margin-top: 28px; padding-top: 0; }
+/* Lifted to the top of a phone's screen while typing, clear of the keyboard. */
+.field-plan-form.sky-plan .field-search { scroll-margin-top: calc(var(--field-sticky-top, 0px) + 12px); }
 .field-plan-form.sky-plan .field-form-divider .sky-plan-step { margin: 0; }
 
 .field-plan-form.sky-plan .field-plan-duration { min-width: 0; font-size: 13px; font-weight: 550; }
@@ -78,7 +80,16 @@
 .field-plan-form.sky-plan .field-form-submit { margin-top: 24px; min-height: 52px; border-radius: 14px; font-size: 17px; }
 
 @media (max-width: 650px) {
-  .sky-activity-grid { grid-template-columns: 1fr 1fr; }
+  /* Icon beside the name: seven choices in about half the height, so the
+     submit button is closer on a phone. */
+  .sky-activity-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field-plan-form.sky-plan label.sky-activity {
+    grid-template-columns: 30px minmax(0, 1fr); align-items: center; align-content: center;
+    gap: 10px; min-height: 56px; padding: 8px 12px; font-size: 14px; line-height: 1.3;
+  }
+  .sky-activity svg { width: 18px; height: 18px; padding: 6px; border-radius: 9px; }
+  /* The filled glyph well marks the choice here; a corner check would crowd the name. */
+  .sky-activity.is-checked::before, .sky-activity.is-checked::after { content: none; }
 }
 
 /* ---------- Workspace: map card, quick locations, recent brief ---------- */

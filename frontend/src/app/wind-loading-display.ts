@@ -39,6 +39,8 @@ export interface WindLoadingDisplay {
   windLoadingActionLine: string;
   windLoadingSummary: string;
   windLoadingNotes: string[];
+  /** Snow could be moving: an active avalanche context or a measured snowpack. */
+  windLoadingApplies: boolean;
   windLoadingHintsRelevant: boolean;
 }
 
@@ -273,8 +275,8 @@ export function buildWindLoadingDisplay(
     : [];
   // Wind loading is an avalanche mechanism: only relevant when there's snow to
   // transport — an active avalanche context or a measurable snowpack signal.
-  const windLoadingHintsRelevant =
-    (avalancheRelevant || hasSnowpackSignal) && Boolean(resolvedWindDirection);
+  const windLoadingApplies = avalancheRelevant || hasSnowpackSignal;
+  const windLoadingHintsRelevant = windLoadingApplies && Boolean(resolvedWindDirection);
 
   // Note: aspectOverlapProblems and decision mutation are handled by the caller
 
@@ -306,6 +308,7 @@ export function buildWindLoadingDisplay(
     windLoadingActionLine,
     windLoadingSummary,
     windLoadingNotes,
+    windLoadingApplies,
     windLoadingHintsRelevant,
   };
 }

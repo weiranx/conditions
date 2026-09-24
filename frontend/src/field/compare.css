@@ -2,7 +2,7 @@
    tradeoff cards, a side-by-side table and the selected day's detail. */
 .sky-compare { color: var(--sky-label); }
 .field-compare-layout > div { min-width: 0; }
-.sky-compare-results { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 0; min-width: 0; }
+.sky-compare-results { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 0; min-width: 0; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px); }
 .sky-compare-results > * { min-width: 0; }
 .sky-compare-results > .sky-notice { margin: 0 0 12px; }
 

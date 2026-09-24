@@ -149,6 +149,25 @@ test("only unmet checks expose actions and clear reports do not invent warnings"
   assert.equal(document.querySelector(".gear-concerns"), null);
   assert.match(
     document.querySelector(".gear-field-plan").textContent,
-    /No specific adjustments are listed/,
+    /Nothing in this report calls for a plan change/,
   );
+});
+
+test("items show why they were added, localized, and forecast items group together", async (t) => {
+  await mount(t, {
+    decision: { level: "GO", blockers: [], cautions: [], checks: [] },
+    localize: (text) => text.replace("35 mph", "56 km/h"),
+    recommendations: [
+      { ...shell, reason: "Gusts to 35 mph" },
+      { title: "Headlamp and spare batteries", detail: "Check it works.", reason: "Part of your time window is after dark", category: "Navigation & comms", tone: "watch" },
+      { title: "Ten Essentials", detail: "Map, first aid.", reason: "", category: "Essentials", tone: "go" },
+    ],
+  });
+  assert.match(document.querySelector(".gear-decision").textContent, /Plan looks workable/);
+  const [conditions, standard] = document.querySelectorAll(".gear-group");
+  assert.match(conditions.querySelector("legend").textContent, /For today’s conditions/);
+  assert.equal(conditions.querySelectorAll(".gear-item").length, 2);
+  assert.match(conditions.querySelector(".gear-item-why").textContent, /Why: Gusts to 56 km\/h/);
+  assert.match(standard.querySelector("legend").textContent, /Standard kit/);
+  assert.equal(standard.querySelector(".gear-item-why"), null);
 });

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import { markLandingSeen } from "../app/landing-gate";
 import { loadUserPreferences } from "../app/preferences";
+import { followThemePreference } from "../app/theme";
 import { BrandMark } from "./BrandMark";
 import { SkyHero } from "./sky/SkyHero";
 import { buildSkyHours, type PlannedRow } from "./sky/sky-model";
@@ -84,15 +85,10 @@ export default function Landing() {
     markLandingSeen();
     const previous = document.title;
     document.title = "Backcountry Conditions";
-    const root = document.documentElement;
-    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    const mode = loadUserPreferences().themeMode;
-    const apply = () => root.setAttribute("data-theme", mode === "system" ? (media?.matches ? "dark" : "light") : mode);
-    apply();
-    media?.addEventListener?.("change", apply);
+    const stopFollowingTheme = followThemePreference(loadUserPreferences().themeMode);
     return () => {
       document.title = previous;
-      media?.removeEventListener?.("change", apply);
+      stopFollowingTheme();
     };
   }, []);
 

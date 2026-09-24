@@ -54,6 +54,8 @@
 
 @media (max-width: 650px) {
   .sky-report-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; padding: 10px; }
+  /* Two lines rather than cutting the start time or generated date mid-word. */
+  .sky-report-copy small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; }
   .sky-report-row > svg { display: none; }
   .field-library-entry:has(.sky-row-action) .sky-report-row { padding-right: 10px; padding-bottom: 50px; }
   .sky-row-action { top: auto; bottom: 10px; right: auto; left: 66px; transform: none; min-height: 32px; }
