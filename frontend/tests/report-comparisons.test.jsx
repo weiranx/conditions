@@ -418,7 +418,7 @@ function useSyncedSession(input) {
   const noOp = () => {};
   useSavedReportSync(session, { ...input, hasObjective: true, viewingHistoryReport: false,
     syncGeneratedReportUsage: (...args) => usageSyncs.push(args),
-    setReportChatMessages: noOp, resetRouteState: noOp, setReportChatSessionKey: noOp });
+    setReportChatMessages: noOp, onReportGenerated: noOp, setReportChatSessionKey: noOp });
   return session;
 }
 function savedTestSnapshot() {

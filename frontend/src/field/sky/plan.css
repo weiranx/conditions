@@ -1,4 +1,4 @@
-/* Plan form in the Sky design: three steps (Where, When, How), activity cards and a duration stepper. */
+/* Plan form in the Sky design: steps (Where, When, How, optional Route), activity cards and a duration stepper. */
 .field-plan-form.sky-plan .field-form-title { display: none; }
 .field-plan-form.sky-plan .sky-plan-step {
   display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 0;
@@ -139,3 +139,46 @@
 }
 .field-app .field-workspace-empty strong { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
 .field-app .field-workspace-empty p { font-size: 14px; color: var(--sky-secondary); }
+
+/* Optional fourth step: a route to check at timed checkpoints once the brief is ready. */
+.sky-plan-route { margin: 28px 0 0; }
+.sky-plan-route > summary {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; list-style: none;
+}
+.sky-plan-route > summary::-webkit-details-marker { display: none; }
+.field-plan-form.sky-plan .sky-plan-route > summary .sky-plan-step { margin: 0; }
+.sky-plan-route > summary small {
+  min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 14px; color: var(--sky-secondary, var(--f-muted));
+}
+.sky-plan-route > summary::after {
+  content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px; border: solid var(--sky-secondary, var(--f-muted));
+  border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px);
+}
+.sky-plan-route[open] > summary::after { transform: rotate(-135deg); }
+.sky-plan-route > summary:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; border-radius: 8px; }
+.sky-plan-route-name { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; }
+.sky-plan-route-name label { flex: 1 1 220px; display: grid; gap: 6px; font-size: 13px; font-weight: 550; }
+.field-app .field-plan-form .sky-plan-route-name input {
+  min-height: 44px; padding: 0 14px; border: 1px solid var(--sky-field-border); border-radius: 12px;
+  background: var(--sky-field); color: var(--sky-label, var(--f-ink)); font: inherit; font-size: 16px;
+}
+.field-app .field-plan-form .sky-plan-route-name input:focus-visible {
+  border-color: var(--sky-accent); outline: none; box-shadow: 0 0 0 1px var(--sky-accent), var(--sky-focus-ring);
+}
+.sky-plan-route-name .field-button { min-height: 44px; }
+.sky-plan-route-options { display: grid; gap: 8px; margin-top: 12px; }
+.sky-plan-route-options button {
+  display: grid; gap: 2px; padding: 10px 14px; text-align: left; cursor: pointer;
+  border: 1px solid var(--sky-field-border, var(--f-line)); border-radius: 12px;
+  background: var(--sky-surface, var(--f-paper)); color: var(--sky-label, var(--f-ink)); font: inherit;
+}
+.sky-plan-route-options button:hover { border-color: var(--sky-field-border-hover); }
+.sky-plan-route-options button[aria-pressed="true"] {
+  border-color: var(--sky-accent, var(--f-primary)); background: var(--sky-accent-tint, var(--f-paper));
+  box-shadow: 0 0 0 1px var(--sky-accent, var(--f-primary));
+}
+.sky-plan-route-options strong { font-size: 15px; font-weight: 600; }
+.sky-plan-route-options small { font-size: 13px; color: var(--sky-secondary, var(--f-muted)); }
+.sky-plan-route-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; }
+.sky-plan-route-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--sky-secondary, var(--f-muted)); }
