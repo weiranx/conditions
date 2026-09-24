@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -10,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { Administration } from "./model/useAdministration";
+import type { AIProvider, Administration } from "./model/useAdministration";
 import { AdminNotice, AdminStats } from "./Administration";
 import { Details } from "./Details";
 
@@ -40,11 +41,14 @@ function ShareBars({ items, empty = "No requests in this period." }: {
 }
 
 /** Requests by hour of day as a small column chart. */
-function HourColumns({ hours }: { hours: { hour: number; label: string; requests: number }[] }) {
+function HourColumns({ hours, empty }: {
+  hours: { hour: number; label: string; requests: number }[];
+  empty: string;
+}) {
   const max = Math.max(0, ...hours.map((h) => h.requests));
   const total = hours.reduce((sum, h) => sum + h.requests, 0);
   const peak = hours.reduce((best, h) => (h.requests > best.requests ? h : best), hours[0]);
-  if (!max) return <p className="sky-empty admin-empty-line">No requests in this period.</p>;
+  if (!max) return <p className="sky-empty admin-empty-line">{empty}</p>;
   return (
     <figure className="admin-hours">
       <figcaption className="sky-cap">
@@ -66,48 +70,108 @@ function HourColumns({ hours }: { hours: { hour: number; label: string; requests
 
 const CHART = { grid: "var(--sky-separator)", tick: { fontSize: 11, fill: "var(--sky-secondary)" } };
 
+/** Tooltip heading: the hovered bucket's time span rather than its axis label. */
+const bucketPeriod = (
+  label: unknown,
+  payload: ReadonlyArray<{ payload?: { period?: string } }>,
+) => payload?.[0]?.payload?.period ?? String(label ?? "");
+
+/**
+ * Charts key their category axis by bucket start time: categories must be
+ * unique, or hovering a bucket whose label repeats (including the blank ones)
+ * shows the first bucket with that label.
+ */
+const bucketTick =
+  (buckets: ReadonlyArray<{ timestamp: number; label: string }>) =>
+  (timestamp: number) =>
+    buckets.find((bucket) => bucket.timestamp === timestamp)?.label ?? "";
+
+const RECENT_AI_REQUESTS = 10;
+
+/**
+ * An estimated cost cell. When only some calls could be priced, the sum is a
+ * lower bound, so it is marked as one and the pricing coverage is shown.
+ */
+function CostCell({ a, value, priced, calls }: {
+  a: Administration;
+  value: number;
+  priced: number;
+  calls: number;
+}) {
+  if (!priced) return <td className="is-num">—</td>;
+  const partial = priced < calls;
+  return (
+    <td className="is-num">
+      {partial && "≥ "}
+      {a.formatEstimatedCost(value)}
+      {partial && <small>{priced} of {calls} calls priced</small>}
+    </td>
+  );
+}
+
 export function AdminAnalytics({ a }: { a: Administration }) {
   const { requestActivityRef, aiUsageRef } = a;
+  const period = a.selectedRange.label.toLowerCase();
+  // 12-hour buckets label only the midnight ones, so every tick must render.
+  const tickInterval = a.analyticsRange === "7d" ? 0 : "preserveStartEnd";
+  const requestsEmpty = a.loading
+    ? "Loading report requests…"
+    : a.error
+      ? "Report requests are unavailable."
+      : `No report requests in the ${period}.`;
+  const aiEmpty = a.loading
+    ? "Loading AI usage…"
+    : a.aiUsageError
+      ? "AI usage is unavailable."
+      : `No AI requests in the ${period}.`;
+  const hasRequests = !a.loading && !a.error && a.metrics.total > 0;
+  const hasAIUsage = !a.loading && !a.aiUsageError && a.aiMetrics.calls > 0;
+  const requestFilters = !!a.query || a.statusFilter !== "all";
+  const providerName = (provider: string) =>
+    (a.AI_PROVIDERS as readonly string[]).includes(provider)
+      ? a.aiProviderLabel(provider as AIProvider)
+      : provider;
   return (
     <>
       <AdminStats a={a} />
       <section className="field-panel">
         <h2>Report reliability</h2>
-        <p>
-          Completed, partial, and failed requests over{" "}
-          {a.selectedRange.label.toLowerCase()}.
-        </p>
-        <div className="field-admin-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={a.trendData}>
-              <CartesianGrid vertical={false} stroke={CHART.grid} />
-              <XAxis dataKey="label" tick={CHART.tick} tickLine={false} axisLine={false} minTickGap={28} />
-              <YAxis allowDecimals={false} width={35} tick={CHART.tick} tickLine={false} axisLine={false} />
-              <Tooltip cursor={{ fill: "var(--sky-fill)" }} />
-              <Legend iconType="circle" iconSize={8} />
-              <Bar
-                dataKey="healthy"
-                name="Complete"
-                stackId="reports"
-                fill="var(--sky-accent)"
-                radius={[0, 0, 0, 0]}
-              />
-              <Bar
-                dataKey="partial"
-                name="Partial"
-                stackId="reports"
-                fill="color-mix(in srgb, var(--sky-caution) 45%, var(--sky-surface))"
-              />
-              <Bar
-                dataKey="errors"
-                name="Errors"
-                stackId="reports"
-                fill="var(--sky-caution)"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <p>Completed, partial, and failed requests over {period}.</p>
+        {hasRequests ? (
+          <div className="field-admin-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={a.trendData}>
+                <CartesianGrid vertical={false} stroke={CHART.grid} />
+                <XAxis dataKey="timestamp" tickFormatter={bucketTick(a.trendData)} tick={CHART.tick} tickLine={false} axisLine={false} interval={tickInterval} minTickGap={28} />
+                <YAxis allowDecimals={false} width={35} tick={CHART.tick} tickLine={false} axisLine={false} />
+                <Tooltip cursor={{ fill: "var(--sky-fill)" }} labelFormatter={bucketPeriod} />
+                <Legend iconType="circle" iconSize={8} />
+                <Bar
+                  dataKey="healthy"
+                  name="Complete"
+                  stackId="reports"
+                  fill="var(--sky-accent)"
+                  radius={[0, 0, 0, 0]}
+                />
+                <Bar
+                  dataKey="partial"
+                  name="Partial"
+                  stackId="reports"
+                  fill="color-mix(in srgb, var(--sky-caution) 45%, var(--sky-surface))"
+                />
+                <Bar
+                  dataKey="errors"
+                  name="Errors"
+                  stackId="reports"
+                  fill="var(--sky-caution)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="sky-empty admin-chart-empty">{requestsEmpty}</p>
+        )}
         <Details
           title="Request measurements and period comparison"
           value={a.metrics}
@@ -116,11 +180,14 @@ export function AdminAnalytics({ a }: { a: Administration }) {
       <div className="admin-analytics-grid">
         <section className="field-panel">
           <h2>Popular objectives</h2>
-          <ShareBars items={a.topLocations.map((l) => ({ label: l.name, count: l.count, share: l.share }))} />
+          <ShareBars
+            items={a.topLocations.map((l) => ({ label: l.name, count: l.count, share: l.share }))}
+            empty={requestsEmpty}
+          />
         </section>
         <section className="field-panel">
           <h2>Time of day</h2>
-          <HourColumns hours={a.hourlyDistribution} />
+          <HourColumns hours={a.hourlyDistribution} empty={requestsEmpty} />
         </section>
         <section className="field-panel">
           <h2>How far ahead people plan</h2>
@@ -132,7 +199,9 @@ export function AdminAnalytics({ a }: { a: Administration }) {
         </section>
         <section className="field-panel admin-span">
           <h2>Reliability by objective</h2>
-          {a.reliabilityHotspots.length ? (
+          {!hasRequests ? (
+            <p className="sky-empty admin-empty-line">{requestsEmpty}</p>
+          ) : a.reliabilityHotspots.length ? (
             <ul className="admin-hotspots">
               {a.reliabilityHotspots.map((spot) => (
                 <li key={spot.name}>
@@ -153,12 +222,23 @@ export function AdminAnalytics({ a }: { a: Administration }) {
         </section>
       </div>
       <section className="field-panel" ref={requestActivityRef}>
-        <h2>Report requests</h2>
+        <div className="field-section-heading">
+          <h2>Report requests</h2>
+          <button
+            className="field-button"
+            disabled={!a.filteredAndSorted.length}
+            onClick={() => a.downloadReportCsv(a.filteredAndSorted)}
+          >
+            <Download size={16} aria-hidden="true" />
+            Export requests
+          </button>
+        </div>
         <div className="field-action-row admin-filters">
           <label className="field-form-label">
             Search requests
             <input
               type="search"
+              placeholder="Objective, date, status, or network"
               value={a.query}
               onChange={(e) => a.setQuery(e.target.value)}
             />
@@ -178,15 +258,9 @@ export function AdminAnalytics({ a }: { a: Administration }) {
               ))}
             </select>
           </label>
-          <button
-            className="field-button"
-            onClick={() => a.downloadReportCsv(a.filteredAndSorted)}
-          >
-            Export filtered requests
-          </button>
         </div>
         <div className="field-table-wrap">
-          <table className="field-table sky-table admin-requests">
+          <table className="field-table sky-table admin-table admin-requests">
             <thead>
               <tr>
                 {(
@@ -250,13 +324,35 @@ export function AdminAnalytics({ a }: { a: Administration }) {
                   </td>
                 </tr>
               ))}
+              {!a.visibleLogs.length && (
+                <tr>
+                  <td colSpan={6} className="admin-table-empty">
+                    {hasRequests && requestFilters
+                      ? "No requests match these filters."
+                      : requestsEmpty}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
-        <p className="sky-cap admin-table-foot">
-          {a.visibleLogs.length} of {a.filteredAndSorted.length} matching
-          requests
-        </p>
+        <div className="admin-result-summary admin-table-foot" role="status">
+          <span>
+            {a.visibleLogs.length} of {a.filteredAndSorted.length} matching
+            requests
+          </span>
+          {requestFilters && (
+            <button
+              className="field-text-button"
+              onClick={() => {
+                a.setQuery("");
+                a.setStatusFilter("all");
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
         {a.visibleLogs.length < a.filteredAndSorted.length && (
           <button
             className="field-button"
@@ -271,39 +367,45 @@ export function AdminAnalytics({ a }: { a: Administration }) {
           <h2>AI usage</h2>
           <button
             className="field-button"
+            disabled={!a.rangeAIUsage.length}
             onClick={() => a.downloadAIUsageCsv(a.rangeAIUsage)}
           >
+            <Download size={16} aria-hidden="true" />
             Export AI usage
           </button>
         </div>
         <AdminNotice message={a.aiUsageError} />
-        <div className="field-admin-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={a.aiTrendData}>
-              <CartesianGrid vertical={false} stroke={CHART.grid} />
-              <XAxis dataKey="label" minTickGap={28} tick={CHART.tick} tickLine={false} axisLine={false} />
-              <YAxis width={55} tick={CHART.tick} tickLine={false} axisLine={false} />
-              <Tooltip />
-              <Legend iconType="circle" iconSize={8} />
-              <Area
-                type="monotone"
-                dataKey="inputTokens"
-                name="Input tokens"
-                stackId="tokens"
-                stroke="var(--sky-accent)"
-                fill="color-mix(in srgb, var(--sky-accent) 28%, transparent)"
-              />
-              <Area
-                type="monotone"
-                dataKey="outputTokens"
-                name="Output tokens"
-                stackId="tokens"
-                stroke="var(--sky-secondary)"
-                fill="color-mix(in srgb, var(--sky-secondary) 22%, transparent)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        {hasAIUsage ? (
+          <div className="field-admin-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={a.aiTrendData}>
+                <CartesianGrid vertical={false} stroke={CHART.grid} />
+                <XAxis dataKey="timestamp" tickFormatter={bucketTick(a.aiTrendData)} interval={tickInterval} minTickGap={28} tick={CHART.tick} tickLine={false} axisLine={false} />
+                <YAxis width={55} tick={CHART.tick} tickLine={false} axisLine={false} tickFormatter={(value: number) => a.formatTokenCount(value)} />
+                <Tooltip labelFormatter={bucketPeriod} formatter={(value) => (typeof value === "number" ? value.toLocaleString() : value)} />
+                <Legend iconType="circle" iconSize={8} />
+                <Area
+                  type="monotone"
+                  dataKey="inputTokens"
+                  name="Input tokens"
+                  stackId="tokens"
+                  stroke="var(--sky-accent)"
+                  fill="color-mix(in srgb, var(--sky-accent) 28%, transparent)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="outputTokens"
+                  name="Output tokens"
+                  stackId="tokens"
+                  stroke="var(--sky-secondary)"
+                  fill="color-mix(in srgb, var(--sky-secondary) 22%, transparent)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="sky-empty admin-chart-empty">{aiEmpty}</p>
+        )}
         <dl className="admin-mini-stats">
           {(
             [
@@ -322,13 +424,103 @@ export function AdminAnalytics({ a }: { a: Administration }) {
           ).map(([label, value]) => (
             <div key={label}>
               <dt>{label}</dt>
-              <dd>{value}</dd>
+              <dd>{a.loading || a.aiUsageError ? "—" : value}</dd>
             </div>
           ))}
         </dl>
-        <Details title="Models and estimated costs" value={a.aiModels} />
-        <Details title="Usage by feature" value={a.aiFeatures} />
-        <Details title="Individual AI requests" value={a.rangeAIUsage} />
+        {hasAIUsage && (
+          <>
+            <h3 className="admin-subheading">By model</h3>
+            <div className="field-table-wrap">
+              <table className="field-table sky-table admin-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th className="is-num">Calls</th>
+                    <th className="is-num">Tokens</th>
+                    <th className="is-num">Est. cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {a.aiModels.map((m) => (
+                    <tr key={`${m.provider}:${m.model}`}>
+                      <td>
+                        <strong>{m.model}</strong>
+                        <small>{providerName(m.provider)}</small>
+                      </td>
+                      <td className="is-num">{m.calls.toLocaleString()}</td>
+                      <td className="is-num">{a.formatTokenCount(m.tokens)}</td>
+                      <CostCell a={a} value={m.estimatedCostUsd} priced={m.pricedCalls} calls={m.calls} />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3 className="admin-subheading">By feature</h3>
+            <div className="field-table-wrap">
+              <table className="field-table sky-table admin-table">
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th className="is-num">Calls</th>
+                    <th className="is-num">Failed</th>
+                    <th className="is-num">Tokens</th>
+                    <th className="is-num">Avg time</th>
+                    <th className="is-num">Est. cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {a.aiFeatures.map((f) => (
+                    <tr key={f.feature}>
+                      <td>{a.aiUsageFeatureLabel(f.feature)}</td>
+                      <td className="is-num">{f.calls.toLocaleString()}</td>
+                      <td className={`is-num${f.errors ? " is-over" : ""}`}>{f.errors.toLocaleString()}</td>
+                      <td className="is-num">{a.formatTokenCount(f.tokens)}</td>
+                      <td className="is-num">{a.formatDuration(f.averageDurationMs)}</td>
+                      <CostCell a={a} value={f.estimatedCostUsd} priced={f.pricedCalls} calls={f.calls} />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3 className="admin-subheading">Recent requests</h3>
+            <div className="field-table-wrap">
+              <table className="field-table sky-table admin-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Feature</th>
+                    <th>Model</th>
+                    <th className="is-num">Tokens</th>
+                    <th className="is-num">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {a.recentAIRequests.slice(0, RECENT_AI_REQUESTS).map((entry, i) => (
+                    <tr key={`${entry.timestamp}-${i}`}>
+                      <td>
+                        {new Date(entry.timestamp).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                        {entry.status === "error" && <b className="admin-code is-issue"> · Failed</b>}
+                      </td>
+                      <td>{a.aiUsageFeatureLabel(entry.feature)}</td>
+                      <td>
+                        {entry.model}
+                        <small>{providerName(entry.provider)}</small>
+                      </td>
+                      <td className="is-num">{a.formatTokenCount(entry.totalTokens)}</td>
+                      <td className="is-num">{a.formatDuration(entry.durationMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {a.recentAIRequests.length > RECENT_AI_REQUESTS && (
+              <p className="sky-cap admin-table-foot">
+                Latest {RECENT_AI_REQUESTS} of {a.recentAIRequests.length.toLocaleString()} requests. Export AI usage for the full list.
+              </p>
+            )}
+          </>
+        )}
       </section>
     </>
   );

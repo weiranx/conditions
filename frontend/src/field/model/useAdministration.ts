@@ -1,4 +1,4 @@
-import { mergeModelDrafts } from "./model-drafts";
+import { mergeDraft, mergeDraftRecord, mergeModelDrafts } from "./model-drafts";
 import {
   Activity,
   AlertTriangle,
@@ -748,6 +748,7 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "slow", label: "Slow (10s+)" },
 ];
 const LOG_PAGE_SIZE = 10;
+const AUTO_REFRESH_MS = 30_000;
 const AUDIT_FILTERS: Array<{ value: AuditFilter; label: string }> = [
   { value: "all", label: "All activity" },
   { value: "accounts", label: "Accounts" },
@@ -802,7 +803,7 @@ function matchesStatus(entry: ReportLogEntry, filter: StatusFilter): boolean {
   if (filter === "slow") return entry.durationMs >= 10_000;
   return true;
 }
-function formatDuration(durationMs: number | null): string {
+export function formatDuration(durationMs: number | null): string {
   if (durationMs == null || !Number.isFinite(durationMs)) return "—";
   if (durationMs > 0 && durationMs < 1) return "<1ms";
   return durationMs >= 1000
@@ -847,7 +848,7 @@ function formatLogTime(timestamp: string): {
         }),
   };
 }
-const formatSchedulerTimestamp = (value: string | null) => {
+export const formatSchedulerTimestamp = (value: string | null) => {
   if (!value) return "Not recorded yet";
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime())
@@ -859,7 +860,7 @@ const formatSchedulerTimestamp = (value: string | null) => {
       })
     : "Invalid timestamp";
 };
-const schedulerHealthLabel = (
+export const schedulerHealthLabel = (
   health: ObjectiveWatchSchedulerStatus["health"],
 ) =>
   ({
@@ -881,12 +882,15 @@ const OBJECTIVE_WATCH_INTERVAL_OPTIONS = [
   90,
   ...Array.from({ length: 23 }, (_, index) => (index + 2) * 60),
 ];
-const formatCheckIntervalChoice = (minutes: number) => {
+export const formatCheckIntervalChoice = (minutes: number) => {
   if (minutes < 60) return `Every ${minutes} minutes`;
   const hours = minutes / 60;
   return `Every ${Number.isInteger(hours) ? hours : hours.toFixed(1)} ${hours === 1 ? "hour" : "hours"}`;
 };
-function formatAccountDate(timestamp: string | null): string {
+/** "suspended" → "Suspended", for lowercase values shown as labels. */
+export const capitalize = (value: string) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
+export function formatAccountDate(timestamp: string | null): string {
   if (!timestamp) return "No activity yet";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "Unknown";
@@ -904,11 +908,12 @@ function formatAccountDate(timestamp: string | null): string {
       date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   });
 }
-function formatHealthMonitorAction(action: string): string {
+export function formatHealthMonitorAction(action: string): string {
   if (action === "alert-sent") return "Alert emailed";
   if (action === "reminder-sent") return "Reminder emailed";
   if (action === "recovery-sent") return "Recovery emailed";
   if (action === "processing-failed") return "Alert processing failed";
+  if (action === "unchanged-unhealthy") return "Incident ongoing";
   return "No email needed";
 }
 function accountInitials(user: AdminUserRecord): string {
@@ -933,59 +938,102 @@ function percentile(values: number[], percentileValue: number): number {
 function isHealthyResponse(entry: ReportLogEntry): boolean {
   return entry.statusCode === 200 && entry.partialData !== true;
 }
+export interface TimeBucket {
+  timestamp: number;
+  end: number;
+  /** Axis label; empty where it would repeat another bucket's day or time. */
+  label: string;
+  /** The bucket's span, for tooltips. */
+  period: string;
+}
+const clockTime = (date: Date, withMinutes: boolean) =>
+  date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: withMinutes ? "2-digit" : undefined,
+  });
+/**
+ * Chart buckets for a range, aligned to local clock boundaries (half hours,
+ * even hours, or midnight and noon) so each axis label names a distinct time.
+ * The first bucket starts before the range and only counts in-range entries.
+ */
+export function buildTimeBuckets(
+  range: AnalyticsRange,
+  now: number,
+): TimeBucket[] {
+  const { durationMs, bucketDurationMs } = getAnalyticsRange(range);
+  const stepMinutes = bucketDurationMs / 60_000;
+  const withMinutes = range === "6h";
+  const rangeStart = now - durationMs;
+  const cursor = new Date(rangeStart);
+  const minuteOfDay = cursor.getHours() * 60 + cursor.getMinutes();
+  const alignedMinute = minuteOfDay - (minuteOfDay % stepMinutes);
+  cursor.setHours(Math.floor(alignedMinute / 60), alignedMinute % 60, 0, 0);
+  const buckets: TimeBucket[] = [];
+  while (cursor.getTime() < now) {
+    const start = new Date(cursor);
+    // Stepping in local time keeps buckets on the clock across DST changes.
+    cursor.setMinutes(cursor.getMinutes() + stepMinutes);
+    const startsDay = start.getHours() === 0 && start.getMinutes() === 0;
+    const weekday = start.toLocaleDateString([], { weekday: "short" });
+    buckets.push({
+      timestamp: start.getTime(),
+      end: cursor.getTime(),
+      // A partial first bucket would repeat the last bucket's day or hour.
+      label:
+        start.getTime() < rangeStart
+          ? ""
+          : range === "7d"
+            ? startsDay
+              ? weekday
+              : ""
+            : range === "24h" && startsDay
+              ? weekday
+              : clockTime(start, withMinutes),
+      period: `${start.toLocaleDateString([], {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })}, ${clockTime(start, withMinutes)} – ${clockTime(cursor, withMinutes)}`,
+    });
+  }
+  return buckets;
+}
+function bucketFor<T extends TimeBucket>(
+  buckets: T[],
+  range: AnalyticsRange,
+  now: number,
+  timestamp: number,
+): T | undefined {
+  if (
+    !Number.isFinite(timestamp) ||
+    timestamp < now - getAnalyticsRange(range).durationMs ||
+    timestamp > now
+  )
+    return undefined;
+  for (let index = buckets.length - 1; index >= 0; index -= 1)
+    if (buckets[index].timestamp <= timestamp) return buckets[index];
+  return undefined;
+}
 function buildTrendData(
   entries: ReportLogEntry[],
   range: AnalyticsRange,
   now: number,
 ) {
-  const rangeConfig = getAnalyticsRange(range);
-  const rangeDuration = rangeConfig.durationMs;
-  const bucketDuration = rangeConfig.bucketDurationMs;
-  const start = now - rangeDuration;
-  const bucketCount = Math.ceil(rangeDuration / bucketDuration);
-  const buckets = Array.from({ length: bucketCount }, (_, index) => {
-    const bucketStart = start + index * bucketDuration;
-    const date = new Date(bucketStart);
-    return {
-      timestamp: bucketStart,
-      label:
-        range !== "7d"
-          ? date.toLocaleTimeString([], {
-              hour: "numeric",
-              minute: range === "6h" ? "2-digit" : undefined,
-            })
-          : date.toLocaleDateString([], { weekday: "short" }),
-      period:
-        range !== "7d"
-          ? date.toLocaleString([], {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-            })
-          : date.toLocaleString([], {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-            }),
-      healthy: 0,
-      partial: 0,
-      errors: 0,
-      durations: [] as number[],
-    };
-  });
+  const buckets = buildTimeBuckets(range, now).map((bucket) => ({
+    ...bucket,
+    healthy: 0,
+    partial: 0,
+    errors: 0,
+    durations: [] as number[],
+  }));
 
   entries.forEach((entry) => {
-    const timestamp = new Date(entry.timestamp).getTime();
-    if (!Number.isFinite(timestamp) || timestamp < start || timestamp > now)
-      return;
-    const bucket =
-      buckets[
-        Math.min(
-          bucketCount - 1,
-          Math.floor((timestamp - start) / bucketDuration),
-        )
-      ];
+    const bucket = bucketFor(
+      buckets,
+      range,
+      now,
+      new Date(entry.timestamp).getTime(),
+    );
     if (!bucket) return;
     if (entry.statusCode !== 200) bucket.errors += 1;
     else if (entry.partialData === true) bucket.partial += 1;
@@ -1158,39 +1206,19 @@ function buildAITrendData(
   range: AnalyticsRange,
   now: number,
 ) {
-  const rangeConfig = getAnalyticsRange(range);
-  const rangeDuration = rangeConfig.durationMs;
-  const bucketDuration = rangeConfig.bucketDurationMs;
-  const start = now - rangeDuration;
-  const bucketCount = Math.ceil(rangeDuration / bucketDuration);
-  const buckets = Array.from({ length: bucketCount }, (_, index) => {
-    const bucketStart = start + index * bucketDuration;
-    const date = new Date(bucketStart);
-    return {
-      timestamp: bucketStart,
-      label:
-        range !== "7d"
-          ? date.toLocaleTimeString([], {
-              hour: "numeric",
-              minute: range === "6h" ? "2-digit" : undefined,
-            })
-          : date.toLocaleDateString([], { weekday: "short" }),
-      inputTokens: 0,
-      outputTokens: 0,
-    };
-  });
+  const buckets = buildTimeBuckets(range, now).map((bucket) => ({
+    ...bucket,
+    inputTokens: 0,
+    outputTokens: 0,
+  }));
 
   entries.forEach((entry) => {
-    const timestamp = new Date(entry.timestamp).getTime();
-    if (!Number.isFinite(timestamp) || timestamp < start || timestamp > now)
-      return;
-    const bucket =
-      buckets[
-        Math.min(
-          bucketCount - 1,
-          Math.floor((timestamp - start) / bucketDuration),
-        )
-      ];
+    const bucket = bucketFor(
+      buckets,
+      range,
+      now,
+      new Date(entry.timestamp).getTime(),
+    );
     if (!bucket) return;
     bucket.inputTokens += Number.isFinite(entry.inputTokens)
       ? entry.inputTokens
@@ -1211,6 +1239,7 @@ function buildAIModels(entries: AIUsageEntry[]) {
       calls: number;
       tokens: number;
       estimatedCostUsd: number;
+      pricedCalls: number;
     }
   >();
   entries.forEach((entry) => {
@@ -1221,14 +1250,16 @@ function buildAIModels(entries: AIUsageEntry[]) {
       calls: 0,
       tokens: 0,
       estimatedCostUsd: 0,
+      pricedCalls: 0,
     };
     current.calls += 1;
     current.tokens += Number.isFinite(entry.totalTokens)
       ? entry.totalTokens
       : 0;
-    current.estimatedCostUsd += Number.isFinite(entry.estimatedCostUsd)
-      ? Number(entry.estimatedCostUsd)
-      : 0;
+    if (Number.isFinite(entry.estimatedCostUsd)) {
+      current.estimatedCostUsd += Number(entry.estimatedCostUsd);
+      current.pricedCalls += 1;
+    }
     models.set(key, current);
   });
   return [...models.values()].sort(
@@ -1244,6 +1275,7 @@ function buildAIFeatures(entries: AIUsageEntry[]) {
       errors: number;
       tokens: number;
       estimatedCostUsd: number;
+      pricedCalls: number;
       totalDurationMs: number;
     }
   >();
@@ -1255,6 +1287,7 @@ function buildAIFeatures(entries: AIUsageEntry[]) {
       errors: 0,
       tokens: 0,
       estimatedCostUsd: 0,
+      pricedCalls: 0,
       totalDurationMs: 0,
     };
     current.calls += 1;
@@ -1262,9 +1295,10 @@ function buildAIFeatures(entries: AIUsageEntry[]) {
     current.tokens += Number.isFinite(entry.totalTokens)
       ? entry.totalTokens
       : 0;
-    current.estimatedCostUsd += Number.isFinite(entry.estimatedCostUsd)
-      ? Number(entry.estimatedCostUsd)
-      : 0;
+    if (Number.isFinite(entry.estimatedCostUsd)) {
+      current.estimatedCostUsd += Number(entry.estimatedCostUsd);
+      current.pricedCalls += 1;
+    }
     current.totalDurationMs += Number.isFinite(entry.durationMs)
       ? entry.durationMs
       : 0;
@@ -1281,6 +1315,25 @@ function buildAIFeatures(entries: AIUsageEntry[]) {
       (left, right) => right.calls - left.calls || right.tokens - left.tokens,
     );
 }
+const AI_USAGE_FEATURE_LABELS: Record<string, string> = {
+  "report-brief": "Field briefing",
+  "report-chat": "Report chat",
+  "report-chat-suggestions": "Report chat suggestions",
+  "trip-chat": "Trip chat",
+  "trip-chat-suggestions": "Trip chat suggestions",
+  "route-analysis": "Route analysis",
+  "route-suggestions": "Route suggestions",
+  "route-waypoints": "Route waypoints",
+  "snow-vision": "Satellite snow vision",
+};
+export function aiUsageFeatureLabel(feature: string): string {
+  const key = feature.trim();
+  return (
+    AI_USAGE_FEATURE_LABELS[key] ??
+    (key.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase()) ||
+      "Unknown")
+  );
+}
 function formatUptime(seconds: number | undefined): string {
   if (!Number.isFinite(seconds)) return "—";
   const totalMinutes = Math.floor((seconds ?? 0) / 60);
@@ -1291,7 +1344,7 @@ function formatUptime(seconds: number | undefined): string {
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
-function formatTokenCount(value: number): string {
+export function formatTokenCount(value: number): string {
   if (!Number.isFinite(value)) return "—";
   if (value < 1000) return value.toLocaleString();
   return new Intl.NumberFormat(undefined, {
@@ -1299,7 +1352,7 @@ function formatTokenCount(value: number): string {
     maximumFractionDigits: 1,
   }).format(value);
 }
-function formatEstimatedCost(value: number): string {
+export function formatEstimatedCost(value: number): string {
   if (!Number.isFinite(value)) return "—";
   if (value === 0) return "$0.00";
   if (value < 0.001) return `$${value.toFixed(6)}`;
@@ -1599,7 +1652,33 @@ export function useAdministration() {
 
   const [visibleLogCount, setVisibleLogCount] = useState(LOG_PAGE_SIZE);
 
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(
+    null,
+  );
+
+  const [maintenanceNotice, setMaintenanceNotice] = useState<string | null>(
+    null,
+  );
+
+  const [cacheClearPending, setCacheClearPending] = useState(false);
+
   const hasLoadedRef = useRef(false);
+
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
+
+  const lastFetchStartedRef = useRef(0);
+
+  // The last saved values each form draft was synced to; a background refresh
+  // only replaces drafts that still show them (see mergeDraft).
+  const savedUsageDraftsRef = useRef<{ ai: string; reports: string } | null>(
+    null,
+  );
+
+  const savedEnvironmentDraftsRef = useRef<Record<string, string> | null>(
+    null,
+  );
+
+  const savedCheckIntervalRef = useRef<string | null>(null);
 
   const dashboardContentRef = useRef<HTMLDivElement>(null);
 
@@ -1722,46 +1801,78 @@ export function useAdministration() {
     return true;
   }, []);
 
-  const applyRuntimeEnvironment = useCallback((payload: unknown) => {
-    if (
-      !payload ||
-      typeof payload !== "object" ||
-      Array.isArray(payload) ||
-      !("entries" in payload)
-    )
-      return false;
-    const status = payload as RuntimeEnvironmentStatus;
-    if (!Array.isArray(status.entries)) return false;
-    setRuntimeEnvironment(status);
-    setRuntimeEnvironmentDrafts(
-      Object.fromEntries(
+  /** `savedKey` is the entry just saved: its draft always takes the new value. */
+  const applyRuntimeEnvironment = useCallback(
+    (payload: unknown, savedKey?: string) => {
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        Array.isArray(payload) ||
+        !("entries" in payload)
+      )
+        return false;
+      const status = payload as RuntimeEnvironmentStatus;
+      if (!Array.isArray(status.entries)) return false;
+      setRuntimeEnvironment(status);
+      const next = Object.fromEntries(
         status.entries.map((entry) => [
           entry.key,
           entry.secret ? "" : (entry.value ?? ""),
         ]),
-      ),
-    );
-    setRuntimeEnvironmentError(null);
-    return true;
-  }, []);
+      );
+      const previous = savedEnvironmentDraftsRef.current;
+      savedEnvironmentDraftsRef.current = next;
+      setRuntimeEnvironmentDrafts((current) => {
+        const merged = mergeDraftRecord(current, previous, next);
+        if (savedKey && savedKey in next) merged[savedKey] = next[savedKey];
+        return merged;
+      });
+      setRuntimeEnvironmentError(null);
+      return true;
+    },
+    [],
+  );
 
-  const applyObjectiveWatchScheduler = useCallback((payload: unknown) => {
-    if (!payload || typeof payload !== "object" || Array.isArray(payload))
-      return false;
-    if (
-      !("enabled" in payload) ||
-      !("health" in payload) ||
-      !("configured" in payload)
-    )
-      return false;
-    const status = payload as ObjectiveWatchSchedulerStatus;
-    setObjectiveWatchScheduler(status);
-    setObjectiveWatchCheckIntervalDraft(
-      String(status.checkIntervalMinutes || 180),
-    );
-    setObjectiveWatchSchedulerError(null);
-    return true;
-  }, []);
+  const applyUsageSettings = useCallback(
+    (settings: AdminUsageSettings, saved = false) => {
+      setUsageSettings(settings);
+      const next = {
+        ai: String(settings.freeMonthlyAITokenLimit),
+        reports: String(settings.freeMonthlyReportUsageLimit),
+      };
+      const previous = saved ? null : savedUsageDraftsRef.current;
+      savedUsageDraftsRef.current = next;
+      setUsageLimitDraft((current) => mergeDraft(current, previous?.ai, next.ai));
+      setReportLimitDraft((current) =>
+        mergeDraft(current, previous?.reports, next.reports),
+      );
+    },
+    [],
+  );
+
+  const applyObjectiveWatchScheduler = useCallback(
+    (payload: unknown, savedInterval = false) => {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload))
+        return false;
+      if (
+        !("enabled" in payload) ||
+        !("health" in payload) ||
+        !("configured" in payload)
+      )
+        return false;
+      const status = payload as ObjectiveWatchSchedulerStatus;
+      setObjectiveWatchScheduler(status);
+      const next = String(status.checkIntervalMinutes || 180);
+      const previous = savedInterval ? null : savedCheckIntervalRef.current;
+      savedCheckIntervalRef.current = next;
+      setObjectiveWatchCheckIntervalDraft((current) =>
+        mergeDraft(current, previous, next),
+      );
+      setObjectiveWatchSchedulerError(null);
+      return true;
+    },
+    [],
+  );
 
   const fetchAuditTrail = useCallback(async () => {
     try {
@@ -1790,8 +1901,8 @@ export function useAdministration() {
     return false;
   }, [applyUserDirectory]);
 
-  const fetchAdminData = useCallback(
-    async (background = false) => {
+  const loadAdminData = useCallback(
+    async (background: boolean) => {
       if (background) setRefreshing(true);
       try {
         const [
@@ -1923,13 +2034,7 @@ export function useAdministration() {
           usageSettingsResult.payload &&
           typeof usageSettingsResult.payload === "object"
         ) {
-          const nextUsageSettings =
-            usageSettingsResult.payload as AdminUsageSettings;
-          setUsageSettings(nextUsageSettings);
-          setUsageLimitDraft(String(nextUsageSettings.freeMonthlyAITokenLimit));
-          setReportLimitDraft(
-            String(nextUsageSettings.freeMonthlyReportUsageLimit),
-          );
+          applyUsageSettings(usageSettingsResult.payload as AdminUsageSettings);
           setUsageSettingsError(null);
         } else {
           setUsageSettingsError("Usage limits are temporarily unavailable.");
@@ -1999,9 +2104,25 @@ export function useAdministration() {
       applyHealthSnapshot,
       applyObjectiveWatchScheduler,
       applyRuntimeEnvironment,
+      applyUsageSettings,
       applyUserDirectory,
       fetchHealthSnapshot,
     ],
+  );
+
+  // A manual refresh during a slow automatic one shares it, so an older
+  // response can never land after a newer one.
+  const fetchAdminData = useCallback(
+    (background = false) => {
+      if (!refreshInFlightRef.current) {
+        lastFetchStartedRef.current = Date.now();
+        refreshInFlightRef.current = loadAdminData(background).finally(() => {
+          refreshInFlightRef.current = null;
+        });
+      }
+      return refreshInFlightRef.current;
+    },
+    [loadAdminData],
   );
 
   const refreshModelCatalog = useCallback(async () => {
@@ -2104,8 +2225,9 @@ export function useAdministration() {
       !(await requestAdminConfirmation({
         title: "Stop all AI features?",
         description:
-          "Every individual AI feature will be switched off. You can re-enable them later.",
+          "Every AI feature becomes unavailable immediately. Individual feature settings are kept and apply again when AI is re-enabled.",
         confirmLabel: "Stop AI features",
+        tone: "danger",
       }))
     )
       return;
@@ -2143,6 +2265,7 @@ export function useAdministration() {
         description:
           "This immediately signs them out and blocks future sign-ins until the account is reactivated.",
         confirmLabel: "Suspend account",
+        tone: "danger",
       }))
     )
       return;
@@ -2275,10 +2398,7 @@ export function useAdministration() {
         setUsageSettingsError(message);
         return;
       }
-      const nextSettings = result.payload as AdminUsageSettings;
-      setUsageSettings(nextSettings);
-      setUsageLimitDraft(String(nextSettings.freeMonthlyAITokenLimit));
-      setReportLimitDraft(String(nextSettings.freeMonthlyReportUsageLimit));
+      applyUsageSettings(result.payload as AdminUsageSettings, true);
       await fetchUserDirectory();
       void fetchAuditTrail();
     } catch {
@@ -2441,6 +2561,7 @@ export function useAdministration() {
         description:
           "Current-month AI and report usage will return to zero for every account. Saved reports will not be deleted.",
         confirmLabel: "Reset all usage",
+        tone: "danger",
       }))
     )
       return;
@@ -2476,6 +2597,7 @@ export function useAdministration() {
         description:
           "All custom AI and generated report limits will be removed. Current usage will not be reset.",
         confirmLabel: "Restore defaults",
+        tone: "danger",
       }))
     )
       return;
@@ -2614,9 +2736,12 @@ export function useAdministration() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ values: { [entry.key]: reset ? null : draft } }),
       });
-      if (result.response.ok && applyRuntimeEnvironment(result.payload)) {
+      if (
+        result.response.ok &&
+        applyRuntimeEnvironment(result.payload, entry.key)
+      ) {
         setRuntimeEnvironmentNotice(
-          `${entry.key} ${reset ? "restored to its deployment value" : "saved"}. Restart the backend to apply it everywhere.`,
+          `${entry.label} ${reset ? "restored to its deployment value" : "saved"}.${entry.restartRequired ? " Restart the backend to apply it everywhere." : ""}`,
         );
         void fetchAuditTrail();
         return;
@@ -2668,7 +2793,7 @@ export function useAdministration() {
               statusResult.payload as BackendRestartStatus,
             );
           }
-          setRuntimeEnvironmentNotice(
+          setMaintenanceNotice(
             "Backend restart completed and the health check is responding.",
           );
           setBackendRestartPending(false);
@@ -2681,7 +2806,7 @@ export function useAdministration() {
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
     }
     setBackendRestartPending(false);
-    setRuntimeEnvironmentError(
+    setMaintenanceError(
       "The restart was requested, but the backend did not become healthy within 30 seconds.",
     );
   };
@@ -2689,14 +2814,18 @@ export function useAdministration() {
   const restartBackend = async () => {
     if (!backendRestartStatus?.available || backendRestartPending) return;
     if (
-      !window.confirm(
-        "Restart the backend now? Requests may be unavailable briefly while Docker starts a fresh process. This does not recreate the container or reread the host .env file.",
-      )
+      !(await requestAdminConfirmation({
+        title: "Restart the backend?",
+        description:
+          "Requests may be unavailable briefly while Docker starts a fresh process. This does not recreate the container or reread the host .env file.",
+        confirmLabel: "Restart backend",
+        tone: "danger",
+      }))
     )
       return;
     setBackendRestartPending(true);
-    setRuntimeEnvironmentError(null);
-    setRuntimeEnvironmentNotice(null);
+    setMaintenanceError(null);
+    setMaintenanceNotice(null);
     try {
       const result = await fetchApi("/api/admin/maintenance/backend-restart", {
         method: "POST",
@@ -2707,7 +2836,7 @@ export function useAdministration() {
         typeof result.payload === "object"
       ) {
         setBackendRestartStatus(result.payload as BackendRestartStatus);
-        setRuntimeEnvironmentNotice(
+        setMaintenanceNotice(
           "Backend restart requested. Waiting for the health check to return…",
         );
         void waitForBackendAfterRestart(health?.uptime);
@@ -2719,22 +2848,76 @@ export function useAdministration() {
         "error" in result.payload
           ? String(result.payload.error)
           : "The backend restart could not be scheduled.";
-      setRuntimeEnvironmentError(message);
+      setMaintenanceError(message);
     } catch {
-      setRuntimeEnvironmentError(
-        "Could not reach the backend to schedule a restart.",
-      );
+      setMaintenanceError("Could not reach the backend to schedule a restart.");
     }
     setBackendRestartPending(false);
+  };
+
+  const clearBackendCaches = async () => {
+    if (cacheClearPending) return;
+    if (
+      !(await requestAdminConfirmation({
+        title: "Clear backend caches?",
+        description:
+          "Cached forecasts and provider responses are discarded. The next reports fetch fresh data and may be slower until the caches warm up.",
+        confirmLabel: "Clear caches",
+        tone: "caution",
+      }))
+    )
+      return;
+    setCacheClearPending(true);
+    setMaintenanceError(null);
+    setMaintenanceNotice(null);
+    try {
+      const result = await fetchApi("/api/admin/maintenance/caches", {
+        method: "POST",
+      });
+      const payload =
+        result.payload &&
+        typeof result.payload === "object" &&
+        !Array.isArray(result.payload)
+          ? (result.payload as { count?: unknown; error?: unknown })
+          : null;
+      if (!result.response.ok) {
+        setMaintenanceError(
+          payload?.error
+            ? String(payload.error)
+            : "The backend caches could not be cleared.",
+        );
+        return;
+      }
+      const count = Number(payload?.count);
+      setMaintenanceNotice(
+        Number.isFinite(count)
+          ? `Cleared ${count} backend ${count === 1 ? "cache" : "caches"}.`
+          : "Backend caches cleared.",
+      );
+      try {
+        applyHealthSnapshot(await fetchHealthSnapshot());
+      } catch {
+        // The next refresh updates the cache measurements.
+      }
+      void fetchAuditTrail();
+    } catch {
+      setMaintenanceError("Could not reach the backend to clear its caches.");
+    } finally {
+      setCacheClearPending(false);
+    }
   };
 
   const setObjectiveWatchSchedulerEnabled = async (enabled: boolean) => {
     if (objectiveWatchSchedulerPending) return;
     if (
       !enabled &&
-      !window.confirm(
-        "Stop automatic Objective Watch checks? The host heartbeat will continue so Admin can still report scheduler health.",
-      )
+      !(await requestAdminConfirmation({
+        title: "Pause automatic Objective Watch checks?",
+        description:
+          "Watches stop checking for changes until the scheduler is enabled again. The host heartbeat continues, so scheduler health is still reported here.",
+        confirmLabel: "Pause checks",
+        tone: "caution",
+      }))
     )
       return;
     setObjectiveWatchSchedulerPending(true);
@@ -2794,7 +2977,10 @@ export function useAdministration() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ checkIntervalMinutes }),
       });
-      if (result.response.ok && applyObjectiveWatchScheduler(result.payload)) {
+      if (
+        result.response.ok &&
+        applyObjectiveWatchScheduler(result.payload, true)
+      ) {
         setObjectiveWatchSchedulerNotice(
           `Standard Objective Watch checks will run ${formatCheckIntervalChoice(checkIntervalMinutes).toLowerCase()}. Active watches were rescheduled to match.`,
         );
@@ -2966,11 +3152,20 @@ export function useAdministration() {
       void fetchAdminData();
     }
     if (!autoRefresh) return undefined;
-    const interval = window.setInterval(
-      () => void fetchAdminData(true),
-      30_000,
-    );
-    return () => window.clearInterval(interval);
+    // Hidden tabs skip refreshes and catch up as soon as they are shown again.
+    const refreshIfDue = () => {
+      if (
+        document.visibilityState !== "hidden" &&
+        Date.now() - lastFetchStartedRef.current >= AUTO_REFRESH_MS - 1_000
+      )
+        void fetchAdminData(true);
+    };
+    const interval = window.setInterval(refreshIfDue, AUTO_REFRESH_MS);
+    document.addEventListener("visibilitychange", refreshIfDue);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshIfDue);
+    };
   }, [autoRefresh, fetchAdminData]);
 
   const referenceTime = lastRefreshed?.getTime() ?? Date.now();
@@ -3113,6 +3308,15 @@ export function useAdministration() {
 
   const aiFeatures = useMemo(
     () => buildAIFeatures(rangeAIUsage),
+    [rangeAIUsage],
+  );
+
+  const recentAIRequests = useMemo(
+    () =>
+      [...rangeAIUsage].sort(
+        (left, right) =>
+          (Date.parse(right.timestamp) || 0) - (Date.parse(left.timestamp) || 0),
+      ),
     [rangeAIUsage],
   );
 
@@ -3762,6 +3966,9 @@ export function useAdministration() {
     setAutoRefresh,
     visibleLogCount,
     setVisibleLogCount,
+    maintenanceError,
+    maintenanceNotice,
+    cacheClearPending,
     hasLoadedRef,
     dashboardContentRef,
     requestActivityRef,
@@ -3796,6 +4003,7 @@ export function useAdministration() {
     updateRuntimeEnvironmentEntry,
     waitForBackendAfterRestart,
     restartBackend,
+    clearBackendCaches,
     setObjectiveWatchSchedulerEnabled,
     saveObjectiveWatchCheckInterval,
     runObjectiveWatchChecksNow,
@@ -3814,6 +4022,7 @@ export function useAdministration() {
     aiTrendData,
     aiModels,
     aiFeatures,
+    recentAIRequests,
     aiMetrics,
     slowReports,
     cacheMetrics,
@@ -3875,6 +4084,7 @@ export function useAdministration() {
     OBJECTIVE_WATCH_INTERVAL_OPTIONS,
     formatCheckIntervalChoice,
     formatAccountDate,
+    capitalize,
     formatHealthMonitorAction,
     accountInitials,
     percentile,
@@ -3890,6 +4100,7 @@ export function useAdministration() {
     buildAITrendData,
     buildAIModels,
     buildAIFeatures,
+    aiUsageFeatureLabel,
     formatUptime,
     formatTokenCount,
     formatEstimatedCost,

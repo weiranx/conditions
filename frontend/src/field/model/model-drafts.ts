@@ -1,5 +1,26 @@
 export type ProviderModels = Record<string, { primary: string; fast: string }>;
-// A refresh may update saved values, but it must not overwrite an unsaved edit.
+// A refresh may update a saved value, but it must not overwrite an unsaved
+// edit: the draft follows the server only while it still shows the value the
+// server last reported.
+export function mergeDraft(
+  current: string,
+  previous: string | null | undefined,
+  next: string,
+): string {
+  return previous == null || current === previous ? next : current;
+}
+export function mergeDraftRecord(
+  current: Record<string, string>,
+  previous: Record<string, string> | null,
+  next: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(next).map(([key, value]) => [
+      key,
+      mergeDraft(current[key] ?? "", previous?.[key], value),
+    ]),
+  );
+}
 export function mergeModelDrafts<T extends ProviderModels>(
   current: T,
   previous: T | null,
@@ -9,14 +30,16 @@ export function mergeModelDrafts<T extends ProviderModels>(
     Object.entries(next).map(([provider, models]) => [
       provider,
       {
-        primary:
-          !previous || current[provider].primary === previous[provider].primary
-            ? models.primary
-            : current[provider].primary,
-        fast:
-          !previous || current[provider].fast === previous[provider].fast
-            ? models.fast
-            : current[provider].fast,
+        primary: mergeDraft(
+          current[provider].primary,
+          previous?.[provider].primary,
+          models.primary,
+        ),
+        fast: mergeDraft(
+          current[provider].fast,
+          previous?.[provider].fast,
+          models.fast,
+        ),
       },
     ]),
   ) as T;

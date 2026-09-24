@@ -244,6 +244,7 @@ export function AdminOverview({ a }: { a: Administration }) {
               [
                 ["Total accounts", a.usersTotal],
                 ["Active", a.userSummary.active],
+                ["Premium", a.userSummary.premium],
                 ["Suspended", a.userSummary.suspended],
                 ["Unverified email", a.userSummary.unverified],
                 ["Active sessions", a.userSummary.activeSessions],
