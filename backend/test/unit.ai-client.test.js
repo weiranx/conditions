@@ -143,7 +143,15 @@ describe('AI provider client wrapper', () => {
     process.env.AI_REASONING_EFFORT = 'medium';
     expect(loadClient('openai').reasoningEffortFor('openai', 'gpt-5.6-terra')).toBe('medium');
     process.env.AI_REASONING_EFFORT = 'minimal';
-    expect(loadClient('openai').reasoningEffortFor('gemini', 'gemini-3.7-flash')).toBeNull();
+    const minimal = loadClient('openai');
+    expect(minimal.reasoningEffortFor('openai', 'gpt-5-mini')).toBe('minimal');
+    expect(minimal.reasoningEffortFor('openai', 'gpt-5.6-terra')).toBe('low');
+    expect(minimal.reasoningEffortFor('gemini', 'gemini-3.7-flash')).toBe('low');
+    process.env.AI_REASONING_EFFORT = 'none';
+    const none = loadClient('openai');
+    expect(none.reasoningEffortFor('openai', 'gpt-5.6-luna')).toBe('none');
+    expect(none.reasoningEffortFor('openai', 'gpt-5-nano')).toBe('low');
+    expect(none.reasoningEffortFor('openai', 'o3')).toBe('low');
     process.env.AI_REASONING_EFFORT = 'default';
     const client = loadClient('openai');
     expect(client.reasoningEffortFor('openai', 'gpt-5.6-terra')).toBeNull();

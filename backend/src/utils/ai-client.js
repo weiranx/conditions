@@ -75,18 +75,26 @@ const parseReasoningEffort = (value) => {
 };
 const REASONING_EFFORT = parseReasoningEffort(process.env.AI_REASONING_EFFORT);
 
-// Only models known to accept an effort get one: an unsupported parameter is a 400.
-// Pro and chat variants reject reduced efforts; Gemini accepts low/medium/high.
+// Accepted efforts differ by model, and an unsupported value is a 400. Pro and chat
+// variants reject reduced efforts; GPT-5.1+ replaced "minimal" with "none".
+const supportedReasoningEfforts = (provider, id) => {
+  if (provider === 'openai') {
+    if (!/^(?:gpt-5|o[134])(?:[.-]|$)/.test(id) || /(?:^|-)(?:pro|chat)(?:-|$)/.test(id)) return null;
+    if (id.startsWith('o')) return ['low', 'medium', 'high'];
+    if (/^gpt-5(?:-|$)/.test(id)) return ['minimal', 'low', 'medium', 'high'];
+    return ['none', 'low', 'medium', 'high'];
+  }
+  if (provider === 'gemini') return /^gemini-(?:2\.5|[3-9])/.test(id) ? ['low', 'medium', 'high'] : null;
+  return null;
+};
+
+// Only models known to accept an effort get one. A configured effort the model
+// doesn't accept falls back to "low", which every reasoning model here supports.
 const reasoningEffortFor = (provider, model) => {
   if (!REASONING_EFFORT) return null;
-  const id = String(model || '').toLowerCase();
-  if (provider === 'openai') {
-    return /^(?:gpt-5|o[134])(?:[.-]|$)/.test(id) && !/(?:^|-)(?:pro|chat)(?:-|$)/.test(id) ? REASONING_EFFORT : null;
-  }
-  if (provider === 'gemini') {
-    return /^gemini-(?:2\.5|[3-9])/.test(id) && ['low', 'medium', 'high'].includes(REASONING_EFFORT) ? REASONING_EFFORT : null;
-  }
-  return null;
+  const supported = supportedReasoningEfforts(provider, String(model || '').toLowerCase());
+  if (!supported) return null;
+  return supported.includes(REASONING_EFFORT) ? REASONING_EFFORT : 'low';
 };
 
 let openAIClient;

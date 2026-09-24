@@ -176,3 +176,29 @@ test('AI brief sends the forecast discussion once, without irrelevant sections',
   expect(prompt).not.toContain('RAW PRODUCT TEXT');
   expect(prompt).not.toContain('MVFR ceilings');
 });
+
+test('AI brief keeps the raw discussion when a relevant section was truncated', async () => {
+  const { SECTION_TEXT_LIMIT } = require('../src/utils/forecast-discussion');
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn().mockResolvedValue('not json');
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({
+      decisionLevel: 'CAUTION',
+      report: {
+        safety: { score: 58 },
+        supplementalEvidence: {
+          discussion: {
+            text: 'FULL PRODUCT TEXT with a late thunderstorm mention',
+            sections: [{ title: 'LONG TERM', kind: 'period', text: 'x'.repeat(SECTION_TEXT_LIMIT) }],
+          },
+        },
+      },
+    });
+
+  expect(response.status).toBe(200);
+  expect(askAI.mock.calls[0][0]).toContain('late thunderstorm mention');
+});
