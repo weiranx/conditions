@@ -40,6 +40,8 @@ const MAX_SUPPLIED_WAYPOINTS = 8;
 // A generated landmark this close to the objective, and not the objective itself,
 // has the objective's coordinates rather than its own.
 const COPIED_OBJECTIVE_COORDINATE_KM = 0.25;
+// Above Everest's summit, a generated landmark elevation is a hallucination.
+const MAX_GENERATED_ELEVATION_FT = 29100;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 
@@ -168,14 +170,17 @@ const sanitizeGeneratedWaypoints = (rawWaypoints) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
       throw new Error(`AI waypoint ${index + 1} must have valid coordinates`);
     }
+    // Generated elevations may be kept when the terrain lookup is skipped or
+    // fails, so drop implausible ones (the prompt's own example is 0 ft).
     const elevation = raw.elev_ft == null ? null : Number(raw.elev_ft);
-    const { objective, ...rest } = raw;
+    const plausible = Number.isFinite(elevation) && elevation > 0 && elevation <= MAX_GENERATED_ELEVATION_FT;
+    const { objective, elev_ft: _generatedElevation, ...rest } = raw;
     return {
       ...rest,
       name,
       lat,
       lon,
-      ...(Number.isFinite(elevation) ? { elev_ft: Math.round(elevation) } : {}),
+      ...(plausible ? { elev_ft: Math.round(elevation) } : {}),
       ...(objective === true ? { objective: true } : {}),
     };
   });

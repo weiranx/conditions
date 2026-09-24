@@ -517,6 +517,29 @@ test('an unfound landmark placed at the objective keeps its generated elevation'
   expect(fetchElevationFt).toHaveBeenCalledTimes(2);
 });
 
+test('an implausible generated elevation at a mislocated landmark is dropped, not kept', async () => {
+  const app = express();
+  app.use(express.json());
+  const fetchElevationFt = jest.fn(async () => ({ elevationFt: 11496 }));
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints'
+      ? '[{"name":"Echoed Trailhead","lat":34.0993,"lon":-116.8249,"elev_ft":0},{"name":"Odd Camp","lat":34.0993,"lon":-116.8249,"elev_ft":-50000},{"name":"San Gorgonio Mountain","lat":34.0993,"lon":-116.8249,"elev_ft":11503}]'
+      : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45, elevation: 11400 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+    fetchElevationFt,
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'San Gorgonio Implausible Elevation Test', route: 'Vivian Creek Trail', lat: 34.0993, lon: -116.8249, date: '2026-09-26', start: '07:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([null, null, 11496, null, null]);
+});
+
 const generatedRouteApp = (waypointsJson) => {
   const app = express();
   app.use(express.json());
