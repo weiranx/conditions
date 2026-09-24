@@ -53,7 +53,10 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
     };
 
     void refresh();
-    const interval = window.setInterval(() => void refresh(), FEATURE_FLAGS_REFRESH_MS);
+    // A hidden tab skips polls and refreshes when it is shown again.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') void refresh();
+    }, FEATURE_FLAGS_REFRESH_MS);
     window.addEventListener(FEATURE_FLAGS_EVENT, handleFlagsChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
