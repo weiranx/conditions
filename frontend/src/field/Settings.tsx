@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
-import { Check, Compass, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { Check, Compass, Plus, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 import type { ActivityType, UserPreferences } from "../app/types";
 import type { Workspace } from "./model/useWorkspace";
 import {
@@ -12,30 +12,70 @@ import {
   activeActivityKey,
   activeActivityLabel,
   createCustomActivityPatch,
+  defaultRouteTimingForKey,
   deleteCustomActivityPatch,
   findCustomActivity,
+  pickRouteTiming,
   renameCustomActivityPatch,
+  sameRouteTiming,
 } from "../app/activity-limits";
+import { ROUTE_TIMING_BOUNDS } from "../app/preferences";
 import { NumberField, Row, Thresholds } from "./Thresholds";
 import { Account } from "./Account";
 import { useAccount } from "../hooks/useAccount";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import "./settings.css";
 
-/** Route timing a Settings pick applies; a custom activity uses its base activity's. */
-function routePacePatch(activity: ActivityType): Partial<UserPreferences> {
-  const profile = ACTIVITY_PROFILES[activity].preferencePatch;
-  return {
-    runnerPaceMinutesPerMile: profile.runnerPaceMinutesPerMile,
-    runnerAscentMinutesPer1000Ft: profile.runnerAscentMinutesPer1000Ft,
-    runnerStopBufferMinutes: profile.runnerStopBufferMinutes,
-  };
+const ROUTE_TIMING_FIELDS = [
+  { key: "runnerPaceMinutesPerMile", label: "Travel pace", unit: "min/mi" },
+  { key: "runnerAscentMinutesPer1000Ft", label: "Ascent", unit: "min/1,000 ft" },
+  { key: "runnerStopBufferMinutes", label: "Stops and transitions", unit: "min" },
+] as const;
+
+/** Pace, climbing rate and stop time for the selected activity; each activity keeps its own. */
+function RouteTiming({ workspace: w, idPrefix }: { workspace: Workspace; idPrefix: string }) {
+  const p = w.preferences;
+  const key = activeActivityKey(p);
+  const custom = findCustomActivity(p, key);
+  const defaults = defaultRouteTimingForKey(p, key);
+  const atDefaults = sameRouteTiming(pickRouteTiming(p), defaults);
+  const defaultsLabel = ACTIVITY_PROFILES[custom ? custom.baseActivity : p.defaultActivity].label.toLowerCase();
+  return (
+    <>
+      <div className="sky-thresholds-activity">
+        <p>
+          <span>Timing for <strong>{activeActivityLabel(p)}</strong></span>
+          <small>{atDefaults ? `Using the ${defaultsLabel} defaults` : "Adjusted by you"}</small>
+        </p>
+        {!atDefaults && (
+          <button type="button" className="field-button sky-thresholds-reset" onClick={() => w.updatePreferences(defaults)}>
+            <RotateCcw size={14} aria-hidden="true" />
+            Reset to {defaultsLabel} defaults
+          </button>
+        )}
+      </div>
+      <div className="sky-setting-group">
+        {ROUTE_TIMING_FIELDS.map((item) => {
+          const [min, max] = ROUTE_TIMING_BOUNDS[item.key];
+          return (
+            <Row key={item.key} label={item.label} htmlFor={`${idPrefix}-${item.key}`}>
+              <NumberField id={`${idPrefix}-${item.key}`} value={p[item.key]} unit={item.unit} min={min} max={max}
+                onChange={(e) => {
+                  if (e.target.value !== "")
+                    w.updatePreferences({ [item.key]: Math.min(max, Math.max(min, Number(e.target.value))) });
+                }} />
+            </Row>
+          );
+        })}
+      </div>
+    </>
+  );
 }
 
 /**
  * Every activity, built-in or the user's own, as one grid of cards. Choosing
- * a card loads that activity's weather limits into the editor below it; the
- * last card creates a new activity in place.
+ * a card loads that activity's weather limits and route timing into the
+ * editors below it; the last card creates a new activity in place.
  */
 function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
   const id = useId();
@@ -52,7 +92,7 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
     event.preventDefault();
     const patch = createCustomActivityPatch(p, name, base);
     if (!patch) return;
-    w.updatePreferences({ ...patch, ...routePacePatch(base) });
+    w.updatePreferences(patch);
     setName("");
     setCreating(false);
   };
@@ -74,7 +114,7 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
               key={key}
               type="button"
               aria-pressed={activityKey === key}
-              onClick={() => w.updatePreferences({ defaultActivity: key, customActivityId: null, ...routePacePatch(key) })}
+              onClick={() => w.updatePreferences({ defaultActivity: key, customActivityId: null })}
             >
               <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
               <strong>{ACTIVITY_PROFILES[key].label}</strong>
@@ -91,11 +131,7 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
               aria-pressed={activityKey === custom.id}
               onClick={() => {
                 setRenameDraft(null);
-                w.updatePreferences({
-                  defaultActivity: custom.baseActivity,
-                  customActivityId: custom.id,
-                  ...routePacePatch(custom.baseActivity),
-                });
+                w.updatePreferences({ defaultActivity: custom.baseActivity, customActivityId: custom.id });
               }}
             >
               <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
@@ -115,7 +151,7 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
           >
             <Plus size={22} strokeWidth={1.7} aria-hidden="true" />
             <strong>New activity</strong>
-            <small>Name the way you travel and give it its own limits.</small>
+            <small>Name the way you travel and give it its own limits and pace.</small>
           </button>
         )}
       </div>
@@ -143,8 +179,8 @@ function ActivityPicker({ workspace: w }: { workspace: Workspace }) {
             </select>
           </label>
           <p className="sky-setting-footnote">
-            It starts with the {ACTIVITY_PROFILES[base].label.toLowerCase()} limits and route pace. Change them below once it
-            is created.
+            It starts with your {ACTIVITY_PROFILES[base].label.toLowerCase()} limits and route timing. Change them below once
+            it is created.
           </p>
           <div className="sky-toolbar-actions">
             <button type="submit" className="field-button field-button-primary" disabled={!name.trim()}>
@@ -327,8 +363,8 @@ export function Settings({
           <section id={`${sectionId}-weather`} tabIndex={-1} aria-labelledby={`${sectionId}-weather-h`} className="sky-setting-section">
             <h2 id={`${sectionId}-weather-h`}>Activities and limits</h2>
             <p className="sky-setting-footnote is-above">
-              Each activity remembers its own weather limits. Pick one to see or change its limits; the planner uses
-              the limits of the activity you plan with.
+              Each activity remembers its own weather limits and route timing. Pick one to see or change them; the
+              planner uses the settings of the activity you plan with.
             </p>
             <ActivityPicker workspace={w} />
             <Thresholds workspace={w} />
@@ -360,26 +396,11 @@ export function Settings({
 
           <section id={`${sectionId}-route`} tabIndex={-1} aria-labelledby={`${sectionId}-route-h`} className="sky-setting-section">
             <h2 id={`${sectionId}-route-h`}>Route timing</h2>
-            <div className="sky-setting-group">
-              {(
-                [
-                  { key: "runnerPaceMinutesPerMile", label: "Travel pace", unit: "min/mi", min: 5, max: 90 },
-                  { key: "runnerAscentMinutesPer1000Ft", label: "Ascent", unit: "min/1,000 ft", min: 0, max: 120 },
-                  { key: "runnerStopBufferMinutes", label: "Stops and transitions", unit: "min", min: 0, max: 240 },
-                ] as const
-              ).map((item) => (
-                <Row key={item.key} label={item.label} htmlFor={`${sectionId}-${item.key}`}>
-                  <NumberField id={`${sectionId}-${item.key}`} value={p[item.key]} unit={item.unit} min={item.min} max={item.max}
-                    onChange={(e) => {
-                      if (e.target.value !== "")
-                        w.updatePreferences({
-                          [item.key]: Math.min(item.max, Math.max(item.min, Number(e.target.value))),
-                        });
-                    }} />
-                </Row>
-              ))}
-            </div>
-            <p className="sky-setting-footnote">Used to estimate when your party reaches GPX checkpoints.</p>
+            <RouteTiming workspace={w} idPrefix={sectionId} />
+            <p className="sky-setting-footnote">
+              Used to estimate when your party reaches GPX checkpoints and how high you are during the approach. Choose
+              another activity above to set its timing.
+            </p>
           </section>
 
           <section id={`${sectionId}-save`} tabIndex={-1} aria-labelledby={`${sectionId}-save-h`} className="sky-setting-section">

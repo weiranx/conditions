@@ -128,6 +128,26 @@ describe('password accounts', () => {
       .toThrow(AccountValidationError);
   });
 
+  test('accepts optional per-activity route timing', () => {
+    const custom = { id: 'custom-winterpeaks', label: 'Winter peaks', baseActivity: 'hiking' };
+    const timing = { runnerPaceMinutesPerMile: 22, runnerAscentMinutesPer1000Ft: 35, runnerStopBufferMinutes: 20 };
+    expect(validateAccountPreferences(PREFERENCES)).not.toHaveProperty('activityRouteTiming');
+    const withTiming = {
+      ...PREFERENCES,
+      customActivities: [custom],
+      activityRouteTiming: { 'trail-running': timing, 'custom-winterpeaks': timing },
+    };
+    expect(validateAccountPreferences(withTiming)).toEqual(withTiming);
+    expect(() => validateAccountPreferences({ ...PREFERENCES, activityRouteTiming: { 'custom-missing': timing } }))
+      .toThrow(AccountValidationError);
+    expect(() => validateAccountPreferences({
+      ...PREFERENCES,
+      activityRouteTiming: { hiking: { ...timing, runnerPaceMinutesPerMile: 2 } },
+    })).toThrow(AccountValidationError);
+    expect(() => validateAccountPreferences({ ...PREFERENCES, activityRouteTiming: [] }))
+      .toThrow(AccountValidationError);
+  });
+
   test('accepts custom activities and per-activity weather limits', () => {
     const custom = { id: 'custom-winterpeaks', label: '  Winter   peaks ', baseActivity: 'hiking' };
     const limits = { maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: -5, maxFeelsLikeF: 80 };
