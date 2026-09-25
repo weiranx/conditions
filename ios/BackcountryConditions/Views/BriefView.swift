@@ -165,6 +165,7 @@ struct BriefView: View {
                 // Spelled out over the hero; an icon once the bar carries the plan's name.
                 Button("Edit plan", systemImage: "slider.horizontal.3") { editing = NewPlanDraft(editing: live) }
                     .labelStyle(EditLabelStyle(iconOnly: pastHero))
+                    .accessibilityLabel("Edit plan")
                     .tint(barTint)
             }
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
