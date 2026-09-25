@@ -2,13 +2,16 @@ import SwiftUI
 
 /// A meteogram of the objective's forecast, one column per planned hour: sky, temperature against
 /// freezing, rain or snow chance against your limit, cloud cover, and wind with gusts. Values are the
-/// forecast at the objective (`weather.trend`); the orange marks are the backend's hour-by-hour checks.
+/// forecast at the objective (`weather.trend`); the orange marks are the backend's check of each reading.
 struct MountainWeatherGraph: View {
     var points: [ForecastPoint]
     var hours: [Hour]
     var limits: Limits
     var elevationFt: Double?
     @Binding var selected: String?
+    /// The column last tapped. A plan that starts off the hour has one more reading than planned hours, so two
+    /// columns can share a planned hour; this keeps the one tapped highlighted.
+    @State private var picked: Int?
 
     private let freezingF = 32.0
     private let tempHeight: CGFloat = 104
@@ -55,10 +58,9 @@ struct MountainWeatherGraph: View {
             rowTitle("Wind and gusts, \(Units.current.windSymbol)")
             row { point in wind(point) }
             row { point in
-                let hour = hour(point)
                 Text(showsLabel(point, every: labelStride) ? point.shortLabel : " ")
-                    .font(.caption2.weight(hour?.isOver == true || isSelected(point) ? .bold : .regular))
-                    .foregroundStyle(hour?.isOver == true ? Palette.caution : isSelected(point) ? Palette.label : Palette.secondary)
+                    .font(.caption2.weight(point.isOver || isSelected(point) ? .bold : .regular))
+                    .foregroundStyle(point.isOver ? Palette.caution : isSelected(point) ? Palette.label : Palette.secondary)
                     .lineLimit(1)
                     .fixedSize()
                     .frame(height: 18)
@@ -231,7 +233,7 @@ struct MountainWeatherGraph: View {
                 .stroke(Palette.label.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 row { point in
                     let chance = point.precipChance
-                    let over = hour(point)?.failedRules.contains { $0.lowercased().hasPrefix("precip") } ?? false
+                    let over = point.failedRules.contains { $0.lowercased().hasPrefix("precip") }
                     VStack(spacing: 1) {
                         Spacer(minLength: 0)
                         if let chance, chance >= 1 {
@@ -255,7 +257,8 @@ struct MountainWeatherGraph: View {
     // MARK: Wind
 
     private func wind(_ point: ForecastPoint) -> some View {
-        let gustOver = hour(point).map { !$0.approachAdjusted && $0.failedRules.contains { $0.lowercased().hasPrefix("gust") } } ?? false
+        // An approach reading's gust was checked lower down than the summit value shown here.
+        let gustOver = !point.approachAdjusted && point.failedRules.contains { $0.lowercased().hasPrefix("gust") }
         return VStack(spacing: 2) {
             if let degrees = point.windFromDegrees {
                 // The arrow points where the wind blows to.
@@ -280,9 +283,11 @@ struct MountainWeatherGraph: View {
 
     // MARK: Hours
 
+    /// The tapped column while it still belongs to the selected hour; otherwise the first column that does.
     private var selectedIndex: Int? {
         let label = selected ?? hours.first?.shortLabel ?? points.first?.shortLabel
-        return points.firstIndex { $0.shortLabel == label }
+        if let picked, points.indices.contains(picked), hourLabel(points[picked]) == label { return picked }
+        return points.firstIndex { hourLabel($0) == label } ?? points.firstIndex { $0.shortLabel == label }
     }
 
     private var selectedPoint: ForecastPoint? { selectedIndex.map { points[$0] } }
@@ -291,11 +296,22 @@ struct MountainWeatherGraph: View {
 
     private func select(_ index: Int) {
         guard points.indices.contains(index) else { return }
-        selected = points[index].shortLabel
+        picked = index
+        selected = hourLabel(points[index])
     }
 
-    /// The planned hour the backend checked at the same time.
-    private func hour(_ point: ForecastPoint) -> Hour? { hours.first { $0.minutes == point.minutes } }
+    /// The planned hour whose readout goes with a column: the one under way when the reading starts, or,
+    /// before the first planned hour of a plan that starts off the hour, the one it runs into.
+    private func hour(_ point: ForecastPoint) -> Hour? {
+        guard let start = hours.first?.minutes else { return nil }
+        // Minutes from an hour before the start, so a window across midnight stays in order.
+        let offset = { (minutes: Int) in ((minutes - start + 60) % 1440 + 1440) % 1440 }
+        let at = offset(point.minutes)
+        return hours.first { at >= offset($0.minutes) && at < offset($0.minutes) + 60 }
+            ?? hours.first { offset($0.minutes) < at + 60 && offset($0.minutes) + 60 > at }
+    }
+
+    private func hourLabel(_ point: ForecastPoint) -> String { hour(point)?.shortLabel ?? point.shortLabel }
 
     private var labelStride: Int { points.count > 7 ? 2 : 1 }
     private var tempStride: Int { points.count > 10 ? 2 : 1 }
@@ -307,9 +323,10 @@ struct MountainWeatherGraph: View {
     }
 
     private var caption: String {
-        var parts = ["Shaded columns are night.", "The dashed line is your \(limits.maxPrecipChance)% rain limit."]
-        if hours.contains(where: \.isOver) { parts.append("Orange hours cross one of your limits.") }
-        if hours.contains(where: \.approachAdjusted) { parts.append("Hours on the approach are checked lower down; tap one to read it.") }
+        var parts = points.contains { $0.isDaytime == false } ? ["Shaded columns are night."] : []
+        parts.append("The dashed line is your \(limits.maxPrecipChance)% rain limit.")
+        if points.contains(where: \.isOver) { parts.append("Orange hours cross one of your limits.") }
+        if points.contains(where: \.approachAdjusted) { parts.append("Hours on the approach are checked lower down; tap one to read it.") }
         return parts.joined(separator: " ")
     }
 
@@ -318,7 +335,7 @@ struct MountainWeatherGraph: View {
                      "rain or snow chance \(Format.percent(point.precipChance))",
                      "cloud cover \(Format.percent(point.cloudCover))",
                      "wind \(Format.mph(point.wind))\(point.windDirection.map { " from \($0)" } ?? ""), gusts \(Format.mph(point.gust))"]
-        if hour(point)?.isOver == true { parts.append("over a limit") }
+        if point.isOver { parts.append("over a limit") }
         return parts.joined(separator: ", ")
     }
 
