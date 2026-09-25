@@ -19,16 +19,18 @@ struct ChapterView: View {
         Page {
             PageHeader(kicker: "\(plan.objective.shortName) · \(DateText.short(plan.date))", title: chapter.rawValue, subtitle: subtitle)
             Spacer().frame(height: 16)
-            ChapterChips(selection: $chapter)
+            ChapterChips(selection: $chapter, chapters: Chapter.ordered(for: plan.activity))
             Spacer().frame(height: 16)
             if let report {
                 switch chapter {
                 case .weather: WeatherChapter(plan: plan, report: report)
                 case .terrain: TerrainChapter(plan: plan, report: report, snapshot: snapshot)
                 case .timing: TimingChapter(plan: plan, report: report, snapshot: snapshot)
-                case .checks: ChecksChapter(report: report)
-                case .gear: GearChapter(report: report)
+                case .route: RouteChapter(plan: plan, report: report, snapshot: snapshot)
+                case .checks: ChecksChapter(plan: plan, report: report, snapshot: snapshot)
+                case .gear: GearActionsSection(report: report)
                 }
+                pager(report)
             } else {
                 Notice(tone: .missing, text: "This plan hasn’t been checked yet.")
             }
@@ -36,14 +38,39 @@ struct ChapterView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// Previous and next chapter, as the web's chapter pager.
+    private func pager(_ report: Report) -> some View {
+        let chapters = Chapter.ordered(for: plan.activity)
+        let index = chapters.firstIndex(of: chapter) ?? 0
+        return HStack {
+            if index > 0 {
+                Button { withAnimation(.snappy) { chapter = chapters[index - 1] } } label: {
+                    Label(chapters[index - 1].rawValue, systemImage: "chevron.left")
+                }
+                .buttonStyle(.glass)
+            }
+            Spacer()
+            if index + 1 < chapters.count {
+                Button { withAnimation(.snappy) { chapter = chapters[index + 1] } } label: {
+                    Label(chapters[index + 1].rawValue, systemImage: "chevron.right").labelStyle(TrailingIconLabelStyle())
+                }
+                .buttonStyle(.glass)
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .padding(.horizontal, 16)
+        .padding(.top, 28)
+    }
+
     private var subtitle: String? {
         switch chapter {
         case .weather:
             guard let low = report?.hours.compactMap(\.elevationFt).min(), let high = report?.objectiveElevationFt else { return "Hour by hour against your limits." }
-            return "Checked along your climb, \(Format.feet(low).replacingOccurrences(of: " ft", with: ""))–\(Format.feet(high))."
+            return "Checked along your climb, \(Format.feet(low).replacingOccurrences(of: " \(Units.current.elevationSymbol)", with: ""))–\(Format.feet(high))."
         case .terrain: return report?.objectiveElevationFt.map { "Your objective is \(Format.feet($0))." }
         case .timing: return "Daylight, turnaround and other departures."
         case .checks: return "Every check behind the decision, and where the data came from."
+        case .route: return plan.route.map { "Checkpoints along \($0.name)." } ?? "Check the forecast along your way up."
         case .gear: return "What the conditions call for."
         }
     }
@@ -93,6 +120,12 @@ struct WeatherChapter: View {
             if let summary = report.windowSummary {
                 Caption(summary).padding(.horizontal, 20)
             }
+            Spacer().frame(height: 16)
+            HourlyTableSection(report: report)
+            Spacer().frame(height: 16)
+            PrecipitationSection(report: report)
+            Spacer().frame(height: 16)
+            BeyondWeatherSection(report: report)
         }
         .onAppear { if selected == nil { selected = (hours.first(where: \.isOver) ?? hours.first)?.shortLabel } }
     }
@@ -101,17 +134,17 @@ struct WeatherChapter: View {
 
     private var title: String {
         switch metric {
-        case .wind: "Gusts, mph"
-        case .cold: "Feels like, °F"
+        case .wind: "Gusts, \(Units.current.windSymbol)"
+        case .cold: "Feels like, \(Units.current.tempSymbol)"
         case .rain: "Rain or snow chance, %"
-        case .temp: "Temperature, °F"
+        case .temp: "Temperature, \(Units.current.tempSymbol)"
         }
     }
 
     private var limitValue: Double? {
         switch metric {
-        case .wind: Double(limits.maxGustMph)
-        case .cold: Double(limits.minFeelsLikeF)
+        case .wind: Units.current.wind(Double(limits.maxGustMph))
+        case .cold: Units.current.temp(Double(limits.minFeelsLikeF))
         case .rain: Double(limits.maxPrecipChance)
         case .temp: nil
         }
@@ -119,7 +152,7 @@ struct WeatherChapter: View {
 
     private var limitText: String? {
         switch metric {
-        case .wind: "Your limit \(limits.maxGustMph) mph"
+        case .wind: "Your limit \(Format.mph(Double(limits.maxGustMph)))"
         case .cold: "Your floor \(Format.temp(Double(limits.minFeelsLikeF)))"
         case .rain: "Your limit \(limits.maxPrecipChance)%"
         case .temp: nil
@@ -128,10 +161,10 @@ struct WeatherChapter: View {
 
     private func value(_ hour: Hour) -> Double? {
         switch metric {
-        case .wind: hour.gust
-        case .cold: hour.feelsLike
+        case .wind: hour.gust.map(Units.current.wind)
+        case .cold: hour.feelsLike.map(Units.current.temp)
         case .rain: hour.precipChance
-        case .temp: hour.temp
+        case .temp: hour.temp.map(Units.current.temp)
         }
     }
 
@@ -179,7 +212,7 @@ struct WeatherChapter: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(hour.shortLabel).font(.title3.weight(.semibold)).foregroundStyle(Palette.label)
                 if let ft = hour.elevationFt {
-                    Text("near \(Format.feet((ft / 100).rounded() * 100))").font(.subheadline).foregroundStyle(Palette.secondary)
+                    Text("near \(Format.roundFeet(ft))").font(.subheadline).foregroundStyle(Palette.secondary)
                 }
                 Spacer()
                 StatusTag(kind: hour.isMissing ? .missing : hour.isOver ? .over : .ok,
@@ -235,9 +268,18 @@ struct TerrainChapter: View {
         VStack(alignment: .leading, spacing: 0) {
             mountain
             Spacer().frame(height: 28)
+            ApproachSection(plan: plan, report: report, snapshot: snapshot)
+            Spacer().frame(height: 28)
+            SurfaceSection(report: report)
+            Spacer().frame(height: 28)
+            WindLoadingSection(report: report)
+            Spacer().frame(height: 28)
+            if AccountStore.shared.flags.terrainWindow { TerrainWindowSection(report: report); Spacer().frame(height: 28) }
             avalanche
             Spacer().frame(height: 28)
-            snowpack
+            SnowObservationsSection(report: report)
+            Spacer().frame(height: 28)
+            SnowVisionSection(plan: plan, report: report, snapshot: snapshot)
         }
         .onAppear {
             if targetFt == 0 {
@@ -382,29 +424,6 @@ struct TerrainChapter: View {
         }
         .padding(.horizontal, 16)
     }
-
-    @ViewBuilder
-    private var snowpack: some View {
-        SectionHead(title: "Snowpack") {
-            if let station = report.snowStation { Text(station).lineLimit(1) }
-        }
-        HStack(alignment: .top, spacing: 12) {
-            Card(missing: report.snowDepthIn == nil) {
-                CardHead("Snow depth")
-                BigValue(text: report.snowDepthIn.map { "\(Int($0.rounded())) in" } ?? "—")
-                Caption(report.sweIn.map { "Snow water equivalent \(String(format: "%.1f", $0)) in." } ?? "No depth reading at the nearest station.")
-            }
-            Card {
-                CardHead("Freezing level")
-                BigValue(text: report.freezingLevelFt.map(Format.feet) ?? "—", small: true)
-                Caption(report.snowLevelFt.map { "Snow level \(Format.feet($0))." } ?? "No snow level in the forecast.")
-            }
-        }
-        .padding(.horizontal, 16)
-        if let summary = report.snowpackSummary {
-            Caption(summary).padding(.horizontal, 20).padding(.top, 10)
-        }
-    }
 }
 
 /// The mountain in cross-section: bands by elevation on the right, freezing and snow levels across the
@@ -511,7 +530,7 @@ struct MountainSection: View {
                 ForEach(Array(bands.enumerated()), id: \.offset) { index, band in
                     VStack(alignment: .leading, spacing: 1) {
                         Text("\(bandName(band.label)) · \(Format.feet(band.elevationFt))").font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                        Text("\(Format.temp(band.temp)) · gust \(band.gust.map { "\(Int($0.rounded()))" } ?? "—")")
+                        Text("\(Format.temp(band.temp)) · gust \(Format.windNumber(band.gust))")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle((band.temp ?? 99) <= 32 ? Palette.cold : Palette.label)
                     }
@@ -633,12 +652,14 @@ struct AspectRose: View {
 // MARK: - Timing
 
 struct TimingChapter: View {
+    @Environment(PlanStore.self) private var store
     var plan: Plan
     var report: Report
     var snapshot: Bool
     @State private var scenarios: JSON?
     @State private var loading = false
     @State private var error: String?
+    @State private var extended = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -666,13 +687,57 @@ struct TimingChapter: View {
                 }
                 .padding(.horizontal, 20).padding(.top, 10)
             }
+            if !report.evaluation.at("criticalWindow.peak").isNull, report.evaluation.at("criticalWindow.peak.level").string != "stable" {
+                let peak = report.evaluation.at("criticalWindow.peak")
+                Spacer().frame(height: 28)
+                SectionHead("The hour to watch")
+                Card(spacing: 6) {
+                    CardHead(title: (report.evaluation.at("criticalWindow.peakTime").string ?? peak["time"].string).map(DateText.clock) ?? "—") {
+                        StatusTag(kind: peak["level"].string == "high" ? .over : peak["level"].string == "watch" ? .over : .ok,
+                                  text: (peak["level"].string ?? "stable").capitalized)
+                    }
+                    ForEach(peak["reasons"].strings, id: \.self) { reason in Caption("• \(reason)") }
+                    HStack {
+                        FactRow(label: "Temp", value: Format.temp(peak["temp"].double))
+                        Spacer(minLength: 16)
+                        FactRow(label: "Gust", value: Format.mph(peak["gust"].double))
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
             Spacer().frame(height: 28)
             SectionHead(title: "Other departures") {
                 if loading { ProgressView().controlSize(.small) }
             }
             scenarioList
+            if !snapshot && !plan.isSample && scenarios != nil && !extended {
+                Button("Check more departures") { extended = true; scenarios = nil; Task { await load() } }
+                    .buttonStyle(.glass).padding(.horizontal, 20).padding(.top, 10)
+            }
+            Spacer().frame(height: 28)
+            SectionHead("Your limits")
+            Card(spacing: 6) {
+                let limits = report.limits ?? plan.limits
+                FactRow(label: "Gusts up to", value: Format.mph(Double(limits.maxGustMph)))
+                FactRow(label: "Rain chance up to", value: "\(limits.maxPrecipChance)%")
+                FactRow(label: "Feels-like at least", value: Format.temp(Double(limits.minFeelsLikeF)))
+                FactRow(label: "Feels-like at most", value: Format.temp(Double(limits.maxFeelsLikeF)))
+                Caption("\(plan.activityLabel) limits. Change them in Edit plan or Settings.")
+            }
+            .padding(.horizontal, 16)
+            Spacer().frame(height: 28)
+            ContingencySection(report: report, plan: plan)
         }
         .task { await load() }
+    }
+
+    /// Moves the plan to another departure and checks it again.
+    private func use(start: String) {
+        guard var next = store.plan(plan.id) else { return }
+        next.start = start
+        store.update(next)
+        scenarios = nil
+        Task { await store.refresh(next) }
     }
 
     @ViewBuilder
@@ -700,7 +765,12 @@ struct TimingChapter: View {
                                scenario["score"].double.map { "score \(Int($0.rounded()))" }].compactMap { $0 }.joined(separator: " · "),
                         caption: start == best ? "Suggested departure" : scenario.at("decision.headline").string,
                         captionTone: start == best ? Palette.accent : Palette.secondary,
-                        captionEmphasized: start == best)
+                        captionEmphasized: start == best) {
+                        if start != plan.start && !snapshot && store.plan(plan.id) != nil {
+                            Button("Use \(DateText.clock(start)) start", systemImage: "arrow.right") { use(start: start) }
+                                .buttonStyle(.glass).controlSize(.small).padding(.top, 4)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -708,11 +778,11 @@ struct TimingChapter: View {
     }
 
     private func load() async {
-        guard !snapshot, !plan.isSample, scenarios == nil else { return }
+        guard !snapshot, !plan.isSample, scenarios == nil, AccountStore.shared.flags.startTimeComparisons else { return }
         loading = true
         defer { loading = false }
         do {
-            scenarios = try await APIClient().startTimeScenarios(place: plan.objective, params: plan.planParams)
+            scenarios = try await APIClient().startTimeScenarios(place: plan.objective, params: plan.planParams, extended: extended)
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -723,7 +793,9 @@ struct TimingChapter: View {
 // MARK: - Checks & sources
 
 struct ChecksChapter: View {
+    var plan: Plan
     var report: Report
+    var snapshot: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -749,49 +821,57 @@ struct ChecksChapter: View {
             }
             .padding(.horizontal, 16)
             Spacer().frame(height: 28)
-            SectionHead("Sources")
+            SectionHead(title: "How fresh is each source") {
+                if report.evaluation.at("interpretation.sourceFreshness.hasWarning").bool == true { Text("Check sources").foregroundStyle(Palette.caution) }
+            }
             Card(spacing: 10) {
                 ForEach(Array(report.sources.enumerated()), id: \.offset) { _, source in
                     HStack {
-                        Text(source.label).font(.subheadline)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(source.label).font(.subheadline)
+                            if let issued = source.issued { Text(DateText.stamp(issued) ?? issued).font(.caption2).foregroundStyle(Palette.secondary) }
+                        }
                         Spacer()
                         StatusTag(kind: source.state == "fresh" ? .ok : source.state == "stale" ? .over : .missing,
                                   text: source.state.capitalized)
                     }
                 }
-                if let link = report.forecastLink { Link("NWS forecast for this spot", destination: link).font(.subheadline.weight(.semibold)) }
-                if let link = report.avalancheLink { Link("Avalanche center forecast", destination: link).font(.subheadline.weight(.semibold)) }
+                if let warning = report.evaluation.at("interpretation.sourceFreshness.warningSummary").string { Caption(warning, tone: Palette.caution) }
+                Divider()
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(report.sourceLinks, id: \.label) { link in
+                        Link(link.label, destination: link.url).font(.subheadline.weight(.semibold))
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            Spacer().frame(height: 28)
+            DayOverDaySection(plan: plan, report: report, snapshot: snapshot)
+            Spacer().frame(height: 28)
+            if AccountStore.shared.flags.scoreBreakdown {
+                ScoreSection(report: report)
+                Spacer().frame(height: 28)
+            }
+            SupplementalSection(report: report)
+            Spacer().frame(height: 28)
+            AlertsSection(report: report)
+            Spacer().frame(height: 28)
+            SectionHead("Forecast provenance")
+            Card(spacing: 6) {
+                Caption([report.weatherProvider.map { "\($0) forecast" }, report.json.at("weather.forecastSource").string].compactMap { $0 }.joined(separator: " · "))
+                RawDataDisclosure(title: "Weather field sources and forecast context", value: .object([
+                    "sources": report.json.at("weather.sourceDetails"),
+                    "evidence": report.json.at("safety.weatherProvenance"),
+                    "forecast": report.json["forecast"],
+                ]))
+                RawDataDisclosure(title: "Complete report data", value: report.json)
+                ShareLink(item: ReportExport(report: report, name: plan.objective.shortName), preview: SharePreview("\(plan.objective.shortName) report data")) {
+                    Label("Export report data", systemImage: "square.and.arrow.up")
+                }
+                .font(.subheadline.weight(.semibold))
             }
             .padding(.horizontal, 16)
             Caption("Planning evidence, not a guarantee of safety.").padding(.horizontal, 20).padding(.top, 12)
-        }
-    }
-}
-
-// MARK: - Gear
-
-struct GearChapter: View {
-    var report: Report
-
-    var body: some View {
-        let groups = Dictionary(grouping: report.gear, by: \.category)
-        VStack(alignment: .leading, spacing: 0) {
-            if report.gear.isEmpty {
-                Notice(tone: .missing, text: "No gear suggestions came with this report.")
-            }
-            ForEach(groups.keys.sorted(), id: \.self) { category in
-                SectionHead(category)
-                VStack(spacing: 10) {
-                    ForEach(Array((groups[category] ?? []).enumerated()), id: \.offset) { _, item in
-                        Card(spacing: 4) {
-                            Text(item.title).font(.headline).foregroundStyle(Palette.label)
-                            Caption(item.detail)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
-            }
         }
     }
 }

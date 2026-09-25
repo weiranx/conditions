@@ -10,6 +10,8 @@ final class PlaceSearch {
     private(set) var searched = ""
     private var task: Task<Void, Never>?
     private var generation = 0
+    /// Biases results toward a place, such as the trailhead when choosing a camp.
+    var near: Place?
 
     /// Searches for the current query, after a pause in typing unless `now`.
     func run(now: Bool = false) {
@@ -22,7 +24,7 @@ final class PlaceSearch {
             guard current == generation else { return }
             searching = true
             do {
-                let found = try await APIClient().search(text)
+                let found = try await APIClient().search(text, near: near.map { ($0.lat, $0.lon) })
                 guard current == generation else { return }
                 results = found
                 error = nil
@@ -63,12 +65,24 @@ struct PlaceRow: View {
     }
 }
 
-/// A sheet for choosing an objective or camp.
+/// A sheet for choosing an objective or camp: search, the map, your location, or a recent place.
 struct PlacePicker: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(PlanStore.self) private var store
     var title: String
+    /// Where to center the map and bias the search.
+    var near: Place? = nil
+    var context: [Place] = []
     var onPick: (Place) -> Void
     @State private var search = PlaceSearch()
+    @State private var mapOpen = false
+    @State private var locating = false
+    @State private var locationError: String?
+
+    private var recents: [Place] {
+        var seen = Set<String>()
+        return store.plans.sorted { $0.createdAt > $1.createdAt }.map(\.objective).filter { seen.insert($0.id).inserted }.prefix(5).map { $0 }
+    }
 
     var body: some View {
         NavigationStack {
@@ -76,13 +90,30 @@ struct PlacePicker: View {
                 if let error = search.error {
                     Text(error).font(.footnote).foregroundStyle(Palette.caution)
                 }
+                if search.query.isEmpty {
+                    Section {
+                        Button { mapOpen = true } label: { Label("Choose on the map", systemImage: "map") }
+                        Button { Task { await useLocation() } } label: {
+                            Label(locating ? "Finding you…" : "Use my location", systemImage: "location")
+                        }
+                        .disabled(locating)
+                        if let locationError { Text(locationError).font(.footnote).foregroundStyle(Palette.caution) }
+                    }
+                    if !recents.isEmpty {
+                        Section("Recent") {
+                            ForEach(recents) { place in
+                                Button { onPick(place); dismiss() } label: { PlaceRow(place: place) }
+                            }
+                        }
+                    }
+                }
                 Section(search.query.isEmpty ? "Popular peaks" : "Results") {
                     ForEach(search.results) { place in
                         Button { onPick(place); dismiss() } label: { PlaceRow(place: place) }
                     }
                     if search.searching && search.results.isEmpty { ProgressView() }
                     if search.noMatches {
-                        Text("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead.")
+                        Text("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead, or choose on the map.")
                             .font(.footnote).foregroundStyle(Palette.secondary)
                     }
                 }
@@ -94,12 +125,30 @@ struct PlacePicker: View {
             .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Peak, trailhead or place")
             .onChange(of: search.query) { search.run() }
             .onSubmit(of: .search) { search.run(now: true) }
-            .onAppear { search.run() }
+            .onAppear { search.near = near; search.run() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel", systemImage: "xmark") { dismiss() } }
             }
+            .fullScreenCover(isPresented: $mapOpen) {
+                MapPicker(title: title, around: near, context: context) { place in
+                    onPick(place)
+                    dismiss()
+                }
+            }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func useLocation() async {
+        locating = true
+        defer { locating = false }
+        guard let location = await LocationProvider.shared.current() else {
+            locationError = "Your location isn’t available. Allow location access for Conditions in Settings, or choose on the map."
+            return
+        }
+        onPick(Place(name: "My location", lat: (location.coordinate.latitude * 1e5).rounded() / 1e5, lon: (location.coordinate.longitude * 1e5).rounded() / 1e5,
+                     elevationFt: location.verticalAccuracy >= 0 ? location.altitude * 3.28084 : nil, kind: "Location"))
+        dismiss()
     }
 }
 

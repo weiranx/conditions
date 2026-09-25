@@ -35,7 +35,7 @@ struct PlanSwitcher: View {
         Menu {
             ForEach(store.upcoming) { plan in
                 Button { store.briefPlanID = plan.id } label: {
-                    Label(plan.objective.shortName, systemImage: store.briefPlanID == plan.id ? "checkmark" : "mappin")
+                    Label(plan.title, systemImage: store.briefPlanID == plan.id ? "checkmark" : plan.isTrip ? "tent" : "mappin")
                 }
             }
         } label: {
@@ -47,19 +47,36 @@ struct PlanSwitcher: View {
 /// A day plan's brief. `snapshot` shows a saved report, which never updates.
 struct BriefView: View {
     @Environment(PlanStore.self) private var store
+    @Environment(AccountStore.self) private var account
     var plan: Plan
     var snapshot: Report?
     var savedAt: Date?
     /// Why a snapshot won't update, when it isn't a saved report (a trip day).
     var note: String?
+    /// A saved snapshot's AI explanation and conversation.
+    var savedAI: String?
+    var savedChat: [ChatMessage] = []
+    /// A saved report's share token, for its link.
+    var shareToken: String?
+    /// Keeps a saved report as a plan to check again.
+    var onPlanAgain: (() -> Void)?
 
     @State private var editing: NewPlanDraft?
     @State private var chapter: Chapter?
+    @State private var fullReport = false
     /// The report generation last saved from this brief, so Save shows it's done.
     @State private var savedGeneration: String?
+    @State private var feedback: String?
+    @State private var busy = false
+    @State private var chatOpen = false
+    @State private var signIn: String?
+    @State private var shareURL: URL?
+    @State private var confirmDelete = false
 
     private var report: Report? { snapshot ?? store.report(plan) }
     private var isLoading: Bool { snapshot == nil && store.loading.contains(plan.id) }
+    private var live: Plan { store.plan(plan.id) ?? plan }
+    private var readOnly: Bool { snapshot != nil }
 
     var body: some View {
         ScrollView {
@@ -74,7 +91,10 @@ struct BriefView: View {
         .refreshable { if snapshot == nil { await store.refresh(plan) } }
         .toolbar { toolbar }
         .navigationDestination(item: $chapter) { chapter in
-            ChapterView(plan: plan, report: report, snapshot: snapshot != nil, chapter: chapter)
+            ChapterView(plan: live, report: report, snapshot: snapshot != nil, chapter: chapter)
+        }
+        .navigationDestination(isPresented: $fullReport) {
+            if let report { FullReportView(plan: live, report: report, snapshot: snapshot != nil) }
         }
         .sheet(item: $editing) { draft in
             NewPlanSheet(draft: draft) { updated in
@@ -82,7 +102,24 @@ struct BriefView: View {
                 Task { await store.refresh(updated) }
             }
         }
+        .sheet(isPresented: $chatOpen) {
+            if let report {
+                ChatView(title: "Ask about this report", context: "\(plan.objective.shortName) · \(DateText.short(plan.date))", contextType: "report",
+                         payload: live.chatPayload(report), readOnly: readOnly, messages: readOnly ? savedChat : store.chat(plan),
+                         onChange: { if !readOnly { store.setChat($0, for: plan) } }, onSignIn: { signIn = "Sign in to use the report assistant." })
+            }
+        }
+        .sheet(item: Binding(get: { signIn.map(SignInReason.init) }, set: { signIn = $0?.text })) { reason in
+            NavigationStack {
+                AccountView(reason: reason.text)
+                    .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { signIn = nil } } }
+            }
+        }
+        .confirmationDialog("Delete this plan?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete plan", role: .destructive) { store.delete(plan.id) }
+        }
         .task { if snapshot == nil, report == nil, !isLoading { await store.refresh(plan) } }
+        .task(id: shareToken) { if let shareToken { shareURL = PlanStore.shareURL(token: shareToken) } }
     }
 
     @ToolbarContentBuilder
@@ -90,22 +127,64 @@ struct BriefView: View {
         if snapshot == nil {
             ToolbarItem(placement: .topBarLeading) { PlanSwitcher().tint(barTint) }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit plan") { editing = NewPlanDraft(editing: plan) }.tint(barTint)
+                Button("Edit plan") { editing = NewPlanDraft(editing: live) }.tint(barTint)
             }
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if let report {
-                ShareLink(item: BriefText.summary(plan: plan, report: report)) { Label("Share", systemImage: "square.and.arrow.up") }.tint(barTint)
+                shareMenu(report).tint(barTint)
             }
-            if snapshot == nil {
-                Menu {
+            Menu {
+                if snapshot == nil {
                     Button("Check again", systemImage: "arrow.clockwise") { Task { await store.refresh(plan) } }
-                    Button("Save snapshot", systemImage: "square.and.arrow.down") { store.saveSnapshot(plan) }.disabled(report == nil)
-                    Button(plan.watched ? "Stop watching" : "Watch this plan", systemImage: plan.watched ? "bell.slash" : "bell") { store.toggleWatch(plan.id) }
-                    Button("Delete plan", systemImage: "trash", role: .destructive) { store.delete(plan.id) }
-                } label: { Label("More", systemImage: "ellipsis") }.tint(barTint)
+                    Button("Save on this iPhone", systemImage: "square.and.arrow.down") { store.saveSnapshot(plan) }.disabled(report == nil)
+                    if account.flags.reportHistory {
+                        Button("Save to your account", systemImage: "icloud.and.arrow.up") { accountAction { _ = try await store.saveToAccount(plan); return "Report saved to your account." } }
+                            .disabled(report == nil || plan.isSample)
+                    }
+                    Button("Email report", systemImage: "envelope") { accountAction { try await store.emailReport(plan) } }
+                        .disabled(report == nil || plan.isSample)
+                    Button(live.watched ? "Stop watching on this iPhone" : "Watch on this iPhone", systemImage: live.watched ? "bell.slash" : "bell") { store.toggleWatch(plan.id) }
+                    if account.flags.objectiveWatch {
+                        Button("Watch in your account", systemImage: "bell.badge") { accountAction { try await store.watchOnAccount(plan) } }
+                            .disabled(report == nil || plan.isSample)
+                    }
+                } else if let onPlanAgain {
+                    Button("Plan this objective again", systemImage: "arrow.clockwise", action: onPlanAgain)
+                }
+                if let report {
+                    ShareLink(item: ReportExport(report: report, name: plan.objective.shortName), preview: SharePreview("\(plan.objective.shortName) report data")) {
+                        Label("Export report data", systemImage: "arrow.down.doc")
+                    }
+                }
+                if snapshot == nil {
+                    Button("Delete plan", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                }
+            } label: { Label("More", systemImage: "ellipsis") }.tint(barTint)
+        }
+    }
+
+    /// Share: the web link when the report is (or can be) saved to the account, and the text summary.
+    @ViewBuilder
+    private func shareMenu(_ report: Report) -> some View {
+        Menu {
+            if let shareURL {
+                ShareLink(item: shareURL) { Label("Share link", systemImage: "link") }
+                Button("Copy link", systemImage: "doc.on.doc") { UIPasteboard.general.url = shareURL; feedback = "Report link copied." }
+            } else if account.flags.reportSharing && snapshot == nil && !plan.isSample {
+                Button("Create a share link", systemImage: "link") {
+                    accountAction {
+                        let url = try await store.shareURL(plan)
+                        shareURL = url
+                        UIPasteboard.general.url = url
+                        return "Report saved to your account and its link copied."
+                    }
+                }
             }
+            ShareLink(item: BriefText.summary(plan: plan, report: report)) { Label("Share summary", systemImage: "text.alignleft") }
+        } label: {
+            Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
         }
     }
 
@@ -114,13 +193,15 @@ struct BriefView: View {
 
     private var placeholder: some View {
         VStack(alignment: .leading, spacing: 16) {
-            PageHeader(kicker: plan.activity.label, title: plan.objective.shortName,
+            PageHeader(kicker: plan.activityLabel, title: plan.objective.shortName,
                        subtitle: "\(DateText.short(plan.date)) · \(DateText.clock(plan.start)) start · \(plan.travelHours) hours")
             if isLoading {
                 HStack(spacing: 10) { ProgressView(); Text("Checking weather, avalanche, alerts and daylight…").font(.subheadline).foregroundStyle(Palette.secondary) }
                     .padding(.horizontal, 20)
             } else if let error = store.errors[plan.id] {
-                Notice(tone: .caution, text: error, actionTitle: "Try again") { Task { await store.refresh(plan) } }
+                Notice(tone: .caution, text: error, actionTitle: account.newReportBlocker != nil && !account.signedIn ? "Sign in" : "Try again") {
+                    if account.newReportBlocker != nil && !account.signedIn { signIn = error } else { Task { await store.refresh(plan) } }
+                }
             } else {
                 Button("Check conditions") { Task { await store.refresh(plan) } }.buttonStyle(.glassProminent).tint(Palette.prominent).padding(.horizontal, 20)
             }
@@ -133,11 +214,11 @@ struct BriefView: View {
     @ViewBuilder
     private func content(_ report: Report) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            SkyHero(plan: plan, report: report)
+            SkyHero(plan: live, report: report)
             VStack(alignment: .leading, spacing: 0) {
                 notices(report)
                 Spacer().frame(height: 24)
-                SectionHead(plan.activity == .hiking || plan.activity == .backpacking || plan.activity == .trailRunning ? "Wind and rain" : "Wind and cold up high")
+                SectionHead(plan.activity.leadsWithRain ? "Wind and rain" : "Wind and cold up high")
                 numbers(report)
                 Spacer().frame(height: 28)
                 SectionHead(title: "Checks") {
@@ -157,6 +238,28 @@ struct BriefView: View {
                 }
                 Spacer().frame(height: 26)
                 actions(report)
+                Spacer().frame(height: 26)
+                Button { fullReport = true } label: {
+                    Card(spacing: 2) {
+                        HStack {
+                            Image(systemName: "doc.text.magnifyingglass").foregroundStyle(Palette.accent)
+                            Text("Read the full report").font(.headline).foregroundStyle(Palette.label)
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Palette.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                Spacer().frame(height: 26)
+                AIBriefCard(plan: live, report: report, savedText: savedAI, readOnly: readOnly || plan.isSample, onSignIn: { signIn = "Sign in to use AI explanations." })
+                Spacer().frame(height: 16)
+                ChatLauncher(title: "Ask about this report", context: "\(plan.objective.shortName) · \(DateText.short(plan.date))",
+                             messageCount: readOnly ? savedChat.count : store.chat(plan).count, readOnly: readOnly || plan.isSample) {
+                    if !readOnly && !plan.isSample && !account.signedIn { signIn = "Sign in to use the report assistant." } else { chatOpen = true }
+                }
+                Spacer().frame(height: 26)
+                InsightsSection(report: report)
                 Spacer().frame(height: 20)
                 sources(report)
             }
@@ -172,21 +275,88 @@ struct BriefView: View {
             if let note {
                 Notice(tone: .info, text: note)
             } else if let savedAt {
-                Notice(tone: .info, text: "Saved snapshot from \(savedAt.formatted(date: .abbreviated, time: .shortened)). It shows conditions from when it was saved and won’t update.")
+                Notice(tone: .info, text: "Saved snapshot from \(savedAt.formatted(date: .abbreviated, time: .shortened)). It shows conditions from when it was saved and won’t update. For current conditions, plan it again.")
             } else if plan.isSample {
                 Notice(tone: .info, text: "Sample plan. It uses a saved Mount Shasta report and won’t update.")
             }
+            if let feedback {
+                Notice(tone: .info, text: feedback)
+            }
+            if snapshot == nil, !plan.isSample, let passed = passedStart {
+                Notice(tone: .caution, text: "This start has passed (\(passed)). The forecast is kept for reference. Pick a new start to get current conditions.",
+                       actionTitle: "Start now") { restart(tomorrow: false) }
+                Button("Start tomorrow at \(DateText.clock(PreferencesStore.shared.preferences.defaultStartTime))") { restart(tomorrow: true) }
+                    .buttonStyle(.glass).controlSize(.small).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 30)
+            }
             if let warning = report.apiWarning ?? report.freshnessWarning ?? (report.partialData ? "Some sources returned incomplete data. Check the official forecasts before committing." : nil) {
-                Notice(tone: .missing, text: warning)
+                Notice(tone: .missing, text: warning, actionTitle: "Checks & sources") { chapter = .checks }
             }
             if snapshot == nil, let error = store.errors[plan.id] {
                 Notice(tone: .caution, text: "Couldn’t update: \(error)", actionTitle: "Try again") { Task { await store.refresh(plan) } }
             }
+            if !report.warnings.isEmpty {
+                Notice(tone: .caution, text: "Field reports to check. " + report.warnings.map { "\($0.title): \($0.detail)" }.joined(separator: " · ") + " Check when each report was made and whether it applies to your route.")
+            }
             if !report.missingSignals.isEmpty {
                 Notice(tone: .missing, text: report.missingSignals.joined(separator: " · ") + ". Missing data does not mean conditions are clear.")
             }
+            if let route = live.route {
+                Button { chapter = .route } label: {
+                    Notice(tone: .info, text: route.analysis == nil
+                        ? "Via \(route.name). Check the forecast at its checkpoints in Route."
+                        : "Via \(route.name). \(route.analysis?["summaries"].array.count ?? 0) checkpoints checked\(route.analyzedFor != live.timingKey ? "; the plan changed since" : "").")
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.top, 16)
+    }
+
+    /// When the planned start is already behind us on the objective's clock, as "2 hours ago".
+    private var passedStart: String? {
+        guard let start = DateText.minutes(plan.start) else { return nil }
+        let zone = report?.json.at("forecast.timeZone").string ?? report?.json.at("location.timeZone").string
+        var calendar = Calendar(identifier: .gregorian)
+        if let zone, let tz = TimeZone(identifier: zone) { calendar.timeZone = tz }
+        guard let day = DateText.date(plan.date) else { return nil }
+        let utc = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: day)
+        guard let planned = calendar.date(from: DateComponents(year: utc.year, month: utc.month, day: utc.day, hour: start / 60, minute: start % 60)),
+              planned < Date() else { return nil }
+        return DateText.relative(planned)
+    }
+
+    private func restart(tomorrow: Bool) {
+        guard var next = store.plan(plan.id) else { return }
+        if tomorrow {
+            next.date = DateText.addDays(DateText.today(), 1)
+            next.start = PreferencesStore.shared.preferences.defaultStartTime
+        } else {
+            next.date = DateText.today()
+            let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+            next.start = String(format: "%02d:%02d", now.hour ?? 0, ((now.minute ?? 0) / 15) * 15)
+        }
+        store.update(next)
+        Task { await store.refresh(next) }
+    }
+
+    private func accountAction(_ action: @escaping () async throws -> String) {
+        guard account.signedIn else {
+            signIn = "Sign in to save reports to your account, share links, email reports and use the account watchlist."
+            return
+        }
+        busy = true
+        feedback = nil
+        Task {
+            do {
+                feedback = try await action()
+                if let token = store.plan(plan.id)?.shareToken { shareURL = PlanStore.shareURL(token: token) }
+            } catch let error as APIError where error.needsAccount {
+                signIn = error.message
+            } catch {
+                feedback = error.localizedDescription
+            }
+            busy = false
+        }
     }
 
     private func numbers(_ report: Report) -> some View {
@@ -195,10 +365,10 @@ struct BriefView: View {
         let peakGust = hours.compactMap { hour in hour.gust.map { (hour, $0) } }.max { $0.1 < $1.1 }
         let coldest = hours.compactMap { hour in hour.feelsLike.map { (hour, $0) } }.min { $0.1 < $1.1 }
         let wettest = hours.compactMap { hour in hour.precipChance.map { (hour, $0) } }.max { $0.1 < $1.1 }
-        let showRain = plan.activity == .hiking || plan.activity == .backpacking || plan.activity == .trailRunning
+        let showRain = plan.activity.leadsWithRain
         return HStack(alignment: .top, spacing: 12) {
             numberTile(title: "Peak gust", value: peakGust?.1, limit: Double(limits.maxGustMph), side: .above, range: 0...max(40, Double(limits.maxGustMph) * 2),
-                       text: Format.mph, caption: peakGust.map { "\($0.0.shortLabel)\(elevationText($0.0)). Your limit is \(limits.maxGustMph) mph." })
+                       text: Format.mph, caption: peakGust.map { "\($0.0.shortLabel)\(elevationText($0.0)). Your limit is \(Format.mph(Double(limits.maxGustMph)))." })
             if showRain {
                 numberTile(title: "Rain chance", value: wettest?.1, limit: Double(limits.maxPrecipChance), side: .above, range: 0...100,
                            text: Format.percent, caption: wettest.map { "Highest at \($0.0.shortLabel). Your limit is \(limits.maxPrecipChance)%." })
@@ -212,7 +382,7 @@ struct BriefView: View {
     }
 
     private func elevationText(_ hour: Hour) -> String {
-        hour.elevationFt.map { " near \(Format.feet(($0 / 100).rounded() * 100))" } ?? ""
+        hour.elevationFt.map { " near \(Format.roundFeet($0))" } ?? ""
     }
 
     private func numberTile(title: String, value: Double?, limit: Double, side: LimitScale.Side, range: ClosedRange<Double>,
@@ -256,20 +426,33 @@ struct BriefView: View {
                 if snapshot == nil {
                     watchButton
                     HStack(spacing: 10) {
-                        let isSaved = savedGeneration != nil && savedGeneration == (report.generatedAtText ?? "")
+                        let isSaved = (savedGeneration != nil && savedGeneration == (report.generatedAtText ?? "")) || store.savedToAccount(plan)
                         Button {
-                            store.saveSnapshot(plan)
-                            savedGeneration = report.generatedAtText ?? ""
+                            if account.signedIn && account.flags.reportHistory && !plan.isSample {
+                                accountAction {
+                                    _ = try await store.saveToAccount(plan)
+                                    savedGeneration = report.generatedAtText ?? ""
+                                    return "Report saved to your account."
+                                }
+                            } else {
+                                store.saveSnapshot(plan)
+                                savedGeneration = report.generatedAtText ?? ""
+                                feedback = "Saved on this iPhone. Sign in to keep reports in your account."
+                            }
                         } label: {
                             Label(isSaved ? "Saved" : "Save", systemImage: isSaved ? "checkmark" : "square.and.arrow.down").frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.glass)
-                        .disabled(isSaved)
+                        .disabled(isSaved || busy)
                         .sensoryFeedback(.success, trigger: savedGeneration)
                         shareButton(report)
                     }
                 } else {
                     shareButton(report)
+                    if let onPlanAgain {
+                        Button(action: onPlanAgain) { Label("Plan this objective again", systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }
+                            .buttonStyle(.glassProminent).tint(Palette.prominent)
+                    }
                 }
             }
             .controlSize(.large)
@@ -279,29 +462,84 @@ struct BriefView: View {
     }
 
     @ViewBuilder private var watchButton: some View {
-        let label = Label(plan.watched ? "Watching for changes" : "Watch for changes",
-                          systemImage: plan.watched ? "bell.fill" : "bell").frame(maxWidth: .infinity)
-        if plan.watched {
-            Button { store.toggleWatch(plan.id) } label: { label }.buttonStyle(.glass)
+        let watchingAccount = live.accountWatchID != nil
+        let watching = live.watched || watchingAccount
+        let label = Label(watching ? "Watching for changes" : "Watch for changes",
+                          systemImage: watching ? "bell.fill" : "bell").frame(maxWidth: .infinity)
+        if watching {
+            Menu {
+                Button(live.watched ? "Stop watching on this iPhone" : "Watch on this iPhone", systemImage: "iphone") { store.toggleWatch(plan.id) }
+                if account.flags.objectiveWatch && !watchingAccount {
+                    Button("Watch in your account", systemImage: "bell.badge") { accountAction { try await store.watchOnAccount(plan) } }
+                }
+            } label: { label }
+            .buttonStyle(.glass)
         } else {
-            Button { store.toggleWatch(plan.id) } label: { label }.buttonStyle(.glassProminent).tint(Palette.prominent)
+            Button {
+                store.toggleWatch(plan.id)
+                if account.signedIn && account.flags.objectiveWatch && !plan.isSample {
+                    accountAction { try await store.watchOnAccount(plan) }
+                } else {
+                    feedback = "Watching on this iPhone. Each check compares the new decision with this one."
+                }
+            } label: { label }
+            .buttonStyle(.glassProminent).tint(Palette.prominent)
+            .disabled(busy)
         }
     }
 
     private func shareButton(_ report: Report) -> some View {
-        ShareLink(item: BriefText.summary(plan: plan, report: report)) {
-            Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.glass)
+        shareMenu(report)
+            .buttonStyle(.glass)
+            .frame(maxWidth: .infinity)
     }
 
     private func sources(_ report: Report) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             let generated = report.generatedAt.map { "Generated \(DateText.relative($0))" }
             Caption([report.weatherProvider.map { "\($0) forecast" }, report.avalancheCenter, generated].compactMap { $0 }.joined(separator: " · "))
-            Caption("Planning evidence, not a guarantee of safety. Check the official forecasts before you commit.")
+            Caption("Backcountry Conditions is a planning aid, not a guarantee of safety. Check official forecasts, and make the final call from what you see in the field and your team’s judgment.")
         }
         .padding(.horizontal, 20)
+    }
+}
+
+private struct SignInReason: Identifiable {
+    var text: String
+    var id: String { text }
+}
+
+/// Every chapter on one page (the web's "All sections").
+struct FullReportView: View {
+    var plan: Plan
+    var report: Report
+    var snapshot: Bool
+
+    var body: some View {
+        Page {
+            PageHeader(kicker: "\(plan.objective.shortName) · \(DateText.short(plan.date))", title: "Full report", subtitle: report.headline)
+            Spacer().frame(height: 12)
+            VStack(alignment: .leading, spacing: 8) {
+                VerdictPill(level: report.level)
+                if let reason = report.reason { Text(reason).font(.subheadline) }
+                if let bridge = report.bridge { Caption(bridge) }
+                ForEach(report.limitingChecks, id: \.self) { check in Caption("• \(check)", tone: Palette.label) }
+            }
+            .padding(.horizontal, 20)
+            ForEach(Chapter.ordered(for: plan.activity)) { chapter in
+                Spacer().frame(height: 36)
+                Text(chapter.rawValue).font(.display(32)).padding(.horizontal, 20).padding(.bottom, 12)
+                switch chapter {
+                case .weather: WeatherChapter(plan: plan, report: report)
+                case .terrain: TerrainChapter(plan: plan, report: report, snapshot: snapshot)
+                case .timing: TimingChapter(plan: plan, report: report, snapshot: snapshot)
+                case .route: RouteChapter(plan: plan, report: report, snapshot: snapshot)
+                case .checks: ChecksChapter(plan: plan, report: report, snapshot: snapshot)
+                case .gear: GearActionsSection(report: report)
+                }
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -318,7 +556,7 @@ struct SkyHero: View {
         let hours = report.hours
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                Text([plan.activity.label, plan.objective.region].compactMap { $0 }.joined(separator: " · "))
+                Text([plan.activityLabel, plan.objective.region].compactMap { $0 }.joined(separator: " · "))
                     .font(.footnote.weight(.semibold)).opacity(0.85)
                 Text(plan.objective.shortName)
                     .font(.display(42)).tracking(-0.9)
@@ -411,12 +649,12 @@ struct SkyHero: View {
 
     private func hourLabels(_ hours: [Hour]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("GUST MPH").font(.system(size: 10, weight: .semibold)).tracking(0.6).foregroundStyle(.white.opacity(0.6)).padding(.leading, 16)
+            Text("GUST \(Units.current.windSymbol.uppercased())").font(.system(size: 10, weight: .semibold)).tracking(0.6).foregroundStyle(.white.opacity(0.6)).padding(.leading, 16)
             HStack(spacing: 0) {
                 ForEach(hours) { hour in
                     VStack(spacing: 2) {
                         Text(hour.shortLabel).font(.system(size: hours.count > 10 ? 9 : 11, weight: .semibold)).opacity(hour.isOver ? 1 : 0.75)
-                        Text(hour.gust.map { "\(Int($0.rounded()))" } ?? "—").font(.system(size: 14, weight: .bold)).monospacedDigit()
+                        Text(Format.windNumber(hour.gust)).font(.system(size: 14, weight: .bold)).monospacedDigit()
                     }
                     .foregroundStyle(hour.isOver ? Color(red: 1, green: 0.7, blue: 0.48) : .white.opacity(0.92))
                     .frame(maxWidth: .infinity)
@@ -697,7 +935,7 @@ enum BriefText {
     static func summary(plan: Plan, report: Report) -> String {
         var lines = [
             "\(plan.objective.shortName) — \(report.level.label)",
-            "\(DateText.short(plan.date)), \(DateText.clock(plan.start)) start, \(plan.travelHours) hours (\(plan.activity.label))",
+            "\(DateText.short(plan.date)), \(DateText.clock(plan.start)) start, \(plan.travelHours) hours (\(plan.activityLabel))",
             report.headline,
         ]
         if let reason = report.reason, reason != report.headline { lines.append(reason) }

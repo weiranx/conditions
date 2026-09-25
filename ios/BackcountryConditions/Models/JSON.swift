@@ -3,7 +3,7 @@ import Foundation
 /// A decoded JSON value. Reports from `/api/safety` are large and many fields can be
 /// null or missing, so the app reads them through this type instead of rigid models:
 /// a missing value stays missing and is never turned into zero.
-enum JSON: Codable, Sendable, Equatable {
+enum JSON: Codable, Sendable, Hashable {
     case null
     case bool(Bool)
     case number(Double)
