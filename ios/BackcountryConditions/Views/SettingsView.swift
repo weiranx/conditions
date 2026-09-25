@@ -22,10 +22,15 @@ struct SettingsView: View {
                 Section {
                     NavigationLink { AccountView() } label: {
                         HStack(spacing: 12) {
-                            Text(account.user?.initial ?? "?")
-                                .font(.headline).foregroundStyle(account.user == nil ? Palette.secondary : Palette.onAccent)
-                                .frame(width: 36, height: 36)
-                                .background(account.user == nil ? Palette.fill : Palette.accent, in: Circle())
+                            Group {
+                                if let user = account.user {
+                                    Text(user.initial).font(.headline).foregroundStyle(Palette.onAccent)
+                                } else {
+                                    Image(systemName: "person.fill").font(.body).foregroundStyle(Palette.accent)
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .background(account.user == nil ? Palette.fill : Palette.accent, in: Circle())
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(account.user?.displayName ?? "Sign in or create an account").font(.headline)
                                 Text(account.user.map { "\($0.email) · \(account.tierLabel ?? "Free")" } ?? "Save reports, sync preferences, and use AI tools")
@@ -107,6 +112,7 @@ struct SettingsView: View {
                     Text("Conditions is planning evidence, not a guarantee of safety. Missing data never means conditions are clear. Check the official forecasts and use your judgment in the field.")
                 }
             }
+            .pageBackground()
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -206,6 +212,7 @@ struct ActivitiesView: View {
                 Text("Sets when you reach each checkpoint on a route and where you are on the approach each hour.")
             }
         }
+        .pageBackground()
         .navigationTitle("Activities and limits")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $creating) {
@@ -217,6 +224,7 @@ struct ActivitiesView: View {
                     }
                     Text("It starts with your \(newBase.label.lowercased()) limits and route timing. Change them once it’s created.").font(.footnote)
                 }
+                .pageBackground()
                 .navigationTitle("New activity")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -327,6 +335,7 @@ struct StatusView: View {
                 }
             }
         }
+        .pageBackground()
         .navigationTitle("Service status")
         .navigationBarTitleDisplayMode(.inline)
         .task { await run() }

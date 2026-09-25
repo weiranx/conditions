@@ -234,6 +234,8 @@ struct NewPlanSheet: View {
                 .padding(.vertical, 4)
             }
             .scrollEdgeEffectHidden(true, for: .all)
+            // Unclipped, so the chips' glass doesn't leave a band at the row's edges.
+            .scrollClipDisabled()
         }
     }
 

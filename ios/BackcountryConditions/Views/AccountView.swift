@@ -40,6 +40,7 @@ struct AccountView: View {
                 Section { Text(message).font(.footnote) }
             }
         }
+        .pageBackground()
         .navigationTitle(account.signedIn ? "Your account" : "Account")
         .navigationBarTitleDisplayMode(.inline)
         .disabled(busy)
@@ -322,6 +323,7 @@ struct ConnectedAppsView: View {
                 Text("Access is read-only and limited to your account, including saved trip locations and dates. Signing out or letting your sign-in expire ends access.")
             }
         }
+        .pageBackground()
         .navigationTitle("AI apps")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

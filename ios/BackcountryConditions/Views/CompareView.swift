@@ -200,6 +200,8 @@ struct CompareDays: View {
                     }
                     .padding(.horizontal, 16)
                 }
+                // Unclipped, so the cards' shadows aren't cut off at the row's edges.
+                .scrollClipDisabled()
                 Spacer().frame(height: 28)
             }
             SectionHead(title: "Your days at a glance") {

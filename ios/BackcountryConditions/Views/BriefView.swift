@@ -312,11 +312,11 @@ struct BriefView: View {
     private func notices(_ report: Report) -> some View {
         VStack(spacing: 10) {
             if let note {
-                Notice(tone: .info, text: note)
+                Notice(tone: .info, text: note, symbol: "book")
             } else if let savedAt {
-                Notice(tone: .info, text: "Saved snapshot from \(savedAt.formatted(date: .abbreviated, time: .shortened)). It shows conditions from when it was saved and won’t update. For current conditions, plan it again.")
+                Notice(tone: .info, text: "Saved snapshot from \(savedAt.formatted(date: .abbreviated, time: .shortened)). It shows conditions from when it was saved and won’t update. For current conditions, plan it again.", symbol: "book")
             } else if plan.isSample {
-                Notice(tone: .info, text: "Sample plan. It uses a saved Mount Shasta report and won’t update.")
+                Notice(tone: .info, text: "Sample plan. It uses a saved Mount Shasta report and won’t update.", symbol: "book")
             }
             if let feedback {
                 Notice(tone: .info, text: feedback)
@@ -858,7 +858,7 @@ enum BriefChecks {
         }
 
         if let terrain = report.terrainLabel {
-            cards.append(BriefCheckCard(title: "Terrain", status: .ok, word: "Advisory", caption: report.terrainAdvice ?? terrain, chapter: .terrain,
+            cards.append(BriefCheckCard(title: "Terrain", status: .info, word: "Advisory", caption: report.terrainAdvice ?? terrain, chapter: .terrain,
                                         visual: AnyView(BigValue(text: terrain, small: true))))
         }
 
@@ -869,7 +869,7 @@ enum BriefChecks {
             word: daylight == nil ? "Missing" : daylight!.ok ? "Within" : "Late",
             caption: [report.sunriseText.map { "Sunrise \($0)" }, report.sunsetText.map { "sunset \($0)" }].compactMap { $0 }.joined(separator: ", ") + ".",
             chapter: .timing,
-            visual: AnyView(SunArc(sunrise: report.sunriseMinutes, sunset: report.sunsetMinutes, start: DateText.minutes(plan.start)))))
+            visual: AnyView(SunArc(sunrise: report.sunriseMinutes, sunset: report.sunsetMinutes, start: DateText.minutes(plan.start), hours: plan.travelHours))))
 
         let alerts = report.check("nws-alerts")
         cards.append(BriefCheckCard(
@@ -954,26 +954,39 @@ struct DangerChips: View {
     }
 }
 
+/// The sun's path from sunrise to sunset; the plan's hours in daylight are drawn solid, from the start's dot.
 struct SunArc: View {
     var sunrise: Int?
     var sunset: Int?
     var start: Int?
+    var hours: Int?
 
     var body: some View {
         Canvas { context, size in
             let ground = size.height - 8
+            let sun = Color(hex: 0xF2B33D)
+            func point(_ t: CGFloat) -> CGPoint { CGPoint(x: 8 + t * (size.width - 16), y: ground - sin(.pi * t) * (ground - 4)) }
+            func arc(_ from: CGFloat, _ to: CGFloat) -> Path {
+                var path = Path()
+                let steps = max(2, Int((to - from) * 48))
+                path.move(to: point(from))
+                for step in 1...steps { path.addLine(to: point(from + (to - from) * CGFloat(step) / CGFloat(steps))) }
+                return path
+            }
             var line = Path(); line.move(to: CGPoint(x: 0, y: ground)); line.addLine(to: CGPoint(x: size.width, y: ground))
             context.stroke(line, with: .color(Palette.separator), lineWidth: 1)
-            var arc = Path()
-            arc.move(to: CGPoint(x: 8, y: ground))
-            arc.addCurve(to: CGPoint(x: size.width - 8, y: ground), control1: CGPoint(x: size.width * 0.3, y: -8), control2: CGPoint(x: size.width * 0.7, y: -8))
-            context.stroke(arc, with: .color(Palette.okFill), style: StrokeStyle(lineWidth: 2, dash: [2, 4]))
-            if let sunrise, let sunset, let start {
-                let t = CGFloat(max(0, min(1, Double(start - sunrise) / Double(max(1, sunset - sunrise)))))
-                let x = 8 + t * (size.width - 16)
-                let y = ground - sin(.pi * t) * (ground - 4)
-                context.fill(Path(ellipseIn: CGRect(x: x - 5, y: y - 5, width: 10, height: 10)), with: .color(Color(hex: 0xF2B33D)))
+            context.stroke(arc(0, 1), with: .color(Palette.okFill), style: StrokeStyle(lineWidth: 2, dash: [2, 4]))
+            guard let sunrise, var sunset, let start else { return }
+            // A high-latitude summer sunset can fall after midnight, before sunrise on the clock.
+            if sunset < sunrise { sunset += 1440 }
+            func t(_ minute: Int) -> CGFloat { CGFloat(max(0, min(1, Double(minute - sunrise) / Double(max(1, sunset - sunrise))))) }
+            let from = t(start)
+            if let hours, hours > 0 {
+                let to = t(start + hours * 60)
+                if to > from { context.stroke(arc(from, to), with: .color(sun.opacity(0.6)), style: StrokeStyle(lineWidth: 3, lineCap: .round)) }
             }
+            let dot = point(from)
+            context.fill(Path(ellipseIn: CGRect(x: dot.x - 5, y: dot.y - 5, width: 10, height: 10)), with: .color(sun))
         }
         .frame(height: 40)
         .accessibilityHidden(true)

@@ -170,6 +170,12 @@ struct WeatherChapter: View {
 
     private func chart(_ hours: [Hour]) -> some View {
         Chart {
+            // The limit line goes under the bars, and each value knocks it out, so a value near the limit stays readable.
+            if let limitValue {
+                RuleMark(y: .value("Limit", limitValue))
+                    .foregroundStyle(Palette.label)
+                    .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+            }
             ForEach(hours) { hour in
                 if let v = value(hour) {
                     BarMark(x: .value("Hour", hour.shortLabel), y: .value(metric.rawValue, v))
@@ -178,13 +184,10 @@ struct WeatherChapter: View {
                         .annotation(position: .top, spacing: 2) {
                             Text("\(Int(v.rounded()))").font(.caption2.weight(hour.shortLabel == selectedLabel(hours) ? .bold : .regular))
                                 .foregroundStyle(hour.shortLabel == selectedLabel(hours) ? Palette.label : Palette.secondary)
+                                .padding(.horizontal, 3)
+                                .background(Palette.surface, in: Capsule())
                         }
                 }
-            }
-            if let limitValue {
-                RuleMark(y: .value("Limit", limitValue))
-                    .foregroundStyle(Palette.label)
-                    .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
             }
         }
         .chartXSelection(value: $selected)
@@ -453,7 +456,7 @@ struct MountainSection: View {
             let span = top - base, peakX = plotW * 0.62
             let ridge: [CGPoint] = [
                 CGPoint(x: 0, y: y(base - 200)), CGPoint(x: plotW * 0.18, y: y(base + span * 0.22)), CGPoint(x: plotW * 0.34, y: y(base + span * 0.48)),
-                CGPoint(x: plotW * 0.47, y: y(base + span * 0.8)), CGPoint(x: peakX, y: y(top + 250)), CGPoint(x: peakX + (plotW - peakX) * 0.32, y: y(base + span * 0.72)),
+                CGPoint(x: plotW * 0.47, y: y(base + span * 0.8)), CGPoint(x: peakX, y: y(top)), CGPoint(x: peakX + (plotW - peakX) * 0.32, y: y(base + span * 0.72)),
                 CGPoint(x: peakX + (plotW - peakX) * 0.63, y: y(base + span * 0.5)), CGPoint(x: plotW, y: y(base + span * 0.34)),
             ]
             let ridgeX: (Double) -> CGFloat = { ft in

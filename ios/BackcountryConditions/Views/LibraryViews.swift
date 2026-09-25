@@ -336,6 +336,7 @@ struct WatchlistView: View {
     @Environment(AccountStore.self) private var account
     var openBrief: (UUID) -> Void
     var newPlan: (NewPlanDraft) -> Void
+    @State private var signIn = false
 
     private var changed: [Plan] { store.watched.filter { !($0.watch?.reviewed ?? true) } }
     private var steady: [Plan] { store.watched.filter { $0.watch?.reviewed ?? true } }
@@ -352,7 +353,7 @@ struct WatchlistView: View {
                 }
                 SectionHead(title: "On this iPhone") { if !store.watched.isEmpty { Text("Pull to check") } }
                 if store.watched.isEmpty {
-                    Notice(tone: .info, text: "Watch a plan from its brief to keep an eye on it here. Each check compares the new decision with the last one and notifies you when it changes.")
+                    Notice(tone: .info, text: "Watch a plan from its brief to keep an eye on it here. Each check compares the new decision with the last one and notifies you when it changes.", symbol: "bell")
                 }
                 if !changed.isEmpty {
                     SectionHead(title: "Changed") { Text("Not reviewed") }
@@ -365,10 +366,21 @@ struct WatchlistView: View {
                 }
                 if !account.signedIn {
                     Spacer().frame(height: 20)
-                    Caption("Sign in to add plans to your account’s watchlist, where the server checks them on a schedule and can email you.").padding(.horizontal, 20)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Caption("Sign in to add plans to your account’s watchlist, where the server checks them on a schedule and can email you.")
+                        Button("Sign in", systemImage: "person.crop.circle") { signIn = true }
+                            .buttonStyle(.glass).controlSize(.small)
+                    }
+                    .padding(.horizontal, 20)
                 }
             }
             .refreshable { await store.refreshAll(store.watched, userInitiated: false) }
+            .sheet(isPresented: $signIn) {
+                NavigationStack {
+                    AccountView(reason: "Sign in to use your account’s watchlist.")
+                        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { signIn = false } } }
+                }
+            }
             .toolbar {
                 if !store.watched.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
