@@ -50,7 +50,8 @@ the end for you to add. After editing `.env`, run
 
 **Frontend:** the frontend is the Cloudflare Pages project `conditions`.
 `deploy.yml` builds and uploads it with Wrangler after the backend release, only
-for commits whose CI passed. Cloudflare's own automatic deployments must stay
+for commits whose CI passed and only when `frontend/` changed since the live
+deployment. Cloudflare's own automatic deployments must stay
 off (Settings → Build → Branch control), or Cloudflare would ship untested
 commits. The job needs the `CLOUDFLARE_API_TOKEN` (Account → Cloudflare Pages →
 Edit) and `CLOUDFLARE_ACCOUNT_ID` repository secrets. The build uses

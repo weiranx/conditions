@@ -11,13 +11,8 @@ struct MapPicker: View {
     var context: [Place] = []
     var onPick: (Place) -> Void
 
-    enum Style: String, CaseIterable, Identifiable {
-        case terrain = "Terrain", satellite = "Satellite", roads = "Roads"
-        var id: String { rawValue }
-    }
-
     @State private var pin: CLLocationCoordinate2D?
-    @State private var style: Style = .terrain
+    @AppStorage(MapLayer.storageKey) private var layer: MapLayer = .terrain
     @State private var position: MapCameraPosition = .automatic
     @State private var name = ""
     @State private var elevation: Double?
@@ -35,7 +30,7 @@ struct MapPicker: View {
                     }
                     UserAnnotation()
                 }
-                .mapStyle(mapStyle)
+                .mapStyle(layer.style)
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
@@ -52,8 +47,8 @@ struct MapPicker: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 10) {
-                    Picker("Map layer", selection: $style) {
-                        ForEach(Style.allCases) { Text($0.rawValue).tag($0) }
+                    Picker("Map layer", selection: $layer) {
+                        ForEach(MapLayer.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     if let pin {
@@ -93,14 +88,6 @@ struct MapPicker: View {
                 }
                 LocationProvider.shared.requestPermission()
             }
-        }
-    }
-
-    private var mapStyle: MapStyle {
-        switch style {
-        case .terrain: .standard(elevation: .realistic, emphasis: .muted, pointsOfInterest: .including([.nationalPark, .park, .campground]))
-        case .satellite: .hybrid(elevation: .realistic)
-        case .roads: .standard
         }
     }
 

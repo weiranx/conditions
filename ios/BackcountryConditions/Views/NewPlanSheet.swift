@@ -40,6 +40,7 @@ struct NewPlanSheet: View {
     @State private var stages: [StageDraft] = []
     @State private var exit: Place?
     @State private var bailPoints: [Place] = []
+    @State private var tripTrack: [TrackCoordinate]?
     @State private var picking: PlaceTarget?
     @State private var importing: ImportTarget?
     @State private var importError: String?
@@ -450,6 +451,7 @@ struct NewPlanSheet: View {
             route = plan.route
             tripName = plan.tripName ?? ""
             bailPoints = plan.bailPoints ?? []
+            tripTrack = plan.tripTrack
             if let parsed = DateText.localDate(plan.date) { date = parsed }
             if let time = DateText.localTime(plan.start) { startTime = time }
             if let planStages = plan.stages {
@@ -550,6 +552,7 @@ struct NewPlanSheet: View {
             next.append(stage)
         }
         stages = next
+        tripTrack = track.map { TrackCoordinate(lat: $0.lat, lon: $0.lon) }
         objective = point(track[0], "\(gpx.name) start")
         exit = gpx.isLoop ? nil : point(track[track.count - 1], "\(gpx.name) end")
         if tripName.isEmpty { tripName = gpx.name }
@@ -580,6 +583,7 @@ struct NewPlanSheet: View {
             plan.travelHours = plan.stages?.first?.travelHours ?? hours
             plan.tripName = tripName.trimmingCharacters(in: .whitespaces).isEmpty ? nil : tripName.trimmingCharacters(in: .whitespaces)
             plan.bailPoints = bailPoints.isEmpty ? nil : bailPoints
+            plan.tripTrack = tripTrack
             plan.route = nil
             plan.trailheadFt = nil
         } else {
@@ -590,6 +594,7 @@ struct NewPlanSheet: View {
             if plan.route?.gpx != route?.gpx || plan.route?.name != route?.name { plan.route = route }
             plan.tripName = nil
             plan.bailPoints = nil
+            plan.tripTrack = nil
         }
         plan.isSample = false
         onSubmit(plan)

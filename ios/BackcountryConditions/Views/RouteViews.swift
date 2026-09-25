@@ -1,4 +1,3 @@
-import MapKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -53,9 +52,7 @@ struct RouteChapter: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionHead(title: route.name) { Text(route.gpx == nil ? "Named route" : "GPX track") }
             Card(spacing: 8) {
-                RouteMapView(route: route, objective: current.objective)
-                    .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                PlanMapPreview(title: route.name, model: PlanMapModel(plan: current, report: report, trip: nil), height: 220)
                 if let gpx = route.gpx {
                     HStack {
                         FactColumn(label: "Distance", value: Format.miles(gpx.distanceMiles))
@@ -359,45 +356,6 @@ struct AnalysisView: View {
                 Caption("Route from \(source).").padding(.horizontal, 20).padding(.top, 10)
             }
         }
-    }
-}
-
-/// A route on a map: the track or mapped line, checkpoints, and the objective.
-struct RouteMapView: View {
-    var route: PlanRoute
-    var objective: Place
-
-    private var line: [CLLocationCoordinate2D] {
-        if let gpx = route.gpx { return gpx.displayTrack.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) } }
-        return (route.analysis?["routeGeometry"].array ?? []).compactMap { point in
-            guard let lat = point["lat"].double, let lon = point["lon"].double else { return nil }
-            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
-        }
-    }
-
-    private var checkpoints: [(name: String, coordinate: CLLocationCoordinate2D)] {
-        let analyzed = (route.analysis?["waypoints"].array ?? []).compactMap { point -> (String, CLLocationCoordinate2D)? in
-            guard let lat = point["lat"].double, let lon = point["lon"].double else { return nil }
-            return (point["name"].string ?? "Checkpoint", CLLocationCoordinate2D(latitude: lat, longitude: lon))
-        }
-        if !analyzed.isEmpty { return analyzed }
-        return (route.gpx?.checkpoints ?? []).map { ($0.name, CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)) }
-    }
-
-    var body: some View {
-        Map(initialPosition: .automatic) {
-            if line.count >= 2 {
-                MapPolyline(coordinates: line).stroke(Palette.accent, lineWidth: 4)
-            }
-            ForEach(Array(checkpoints.enumerated()), id: \.offset) { _, checkpoint in
-                Annotation(checkpoint.name, coordinate: checkpoint.coordinate) {
-                    Circle().fill(Palette.surface).frame(width: 12, height: 12).overlay(Circle().stroke(Palette.accent, lineWidth: 3))
-                }
-            }
-            Marker(objective.shortName, systemImage: "mountain.2", coordinate: CLLocationCoordinate2D(latitude: objective.lat, longitude: objective.lon))
-                .tint(Palette.accent)
-        }
-        .mapStyle(.hybrid(elevation: .realistic))
     }
 }
 

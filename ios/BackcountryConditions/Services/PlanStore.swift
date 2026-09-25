@@ -613,7 +613,7 @@ enum TripSnapshot {
                          "checkpoints": .array((stage.checkpoints ?? []).map(point))])
             }),
             "bailPoints": .array((plan.bailPoints ?? []).map(point)),
-            "track": .null,
+            "track": plan.tripTrack.map { track in .array(track.map { .object(["lat": .number($0.lat), "lon": .number($0.lon)]) }) } ?? .null,
         ])
         let webStages: [JSON] = stages.enumerated().map { index, stage in
             .object(["index": .number(Double(index)), "date": .string(DateText.addDays(plan.date, index)), "start": .string(stage.start),
@@ -663,6 +663,11 @@ enum TripSnapshot {
                         limits: limits, stages: stages)
         plan.tripName = draft["name"].string ?? snapshot["title"].string
         plan.bailPoints = draft["bailPoints"].array.compactMap(Place.init(json:))
+        let track = draft["track"].array.compactMap { point -> TrackCoordinate? in
+            guard let lat = point["lat"].double, let lon = point["lon"].double else { return nil }
+            return TrackCoordinate(lat: lat, lon: lon)
+        }
+        plan.tripTrack = track.count >= 2 ? track : nil
         let itinerary: JSON = .object([
             "stages": .array(result["results"].array),
             "assessment": result["assessment"],

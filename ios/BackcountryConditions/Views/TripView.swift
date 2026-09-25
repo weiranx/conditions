@@ -114,6 +114,10 @@ struct TripView: View {
             Spacer().frame(height: 16)
             actions
             Spacer().frame(height: 28)
+            SectionHead("Trip map")
+            PlanMapPreview(title: current.title, model: PlanMapModel(plan: current, report: nil, trip: trip), height: 240)
+                .padding(.horizontal, 16)
+            Spacer().frame(height: 28)
             SectionHead(title: "Day by day") {
                 if store.loading.contains(plan.id) { ProgressView().controlSize(.small) }
             }

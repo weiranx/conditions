@@ -269,6 +269,11 @@ struct BriefView: View {
                 // have nothing to show are empty, so the stack leaves no gap for them.
                 VStack(alignment: .leading, spacing: 28) {
                     InsightsSection(report: report)
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionHead(title: "Map") { if let route = live.route { Text(route.name).lineLimit(1) } }
+                        PlanMapPreview(title: plan.objective.shortName, model: PlanMapModel(plan: live, report: report, trip: nil))
+                            .padding(.horizontal, 16)
+                    }
                     actions(report)
                     Button { fullReport = true } label: {
                         Card(spacing: 2) {

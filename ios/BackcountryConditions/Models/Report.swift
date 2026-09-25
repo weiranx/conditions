@@ -34,6 +34,38 @@ struct Hour: Identifiable, Hashable, Sendable {
     var isMissing: Bool { !complete }
 }
 
+/// One hour of the objective's forecast, before any approach adjustment.
+struct ForecastPoint: Identifiable, Hashable, Sendable {
+    let id: Int
+    let minutes: Int
+    let condition: String?
+    let isDaytime: Bool?
+    let temp: Double?
+    let wind: Double?
+    let gust: Double?
+    let windDirection: String?
+    let precipChance: Double?
+    let cloudCover: Double?
+    /// Whether the backend checked this reading against the plan's limits, and what it found.
+    let checked: Bool
+    let pass: Bool
+    let complete: Bool
+    let failedRules: [String]
+    /// Checked at the estimated elevation on the approach rather than at the objective.
+    let approachAdjusted: Bool
+
+    var isOver: Bool { checked && !pass && complete }
+
+    /// "3 AM", matching `Hour.shortLabel`.
+    var shortLabel: String { Hour.shortLabel(minutes: minutes) }
+
+    /// Degrees the wind blows from, for a 16-point compass direction ("NNE" → 22.5).
+    var windFromDegrees: Double? {
+        let points = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+        return windDirection.flatMap { points.firstIndex(of: $0.uppercased()) }.map { Double($0) * 22.5 }
+    }
+}
+
 /// A named check from `evaluation.decision.checks`.
 struct Check: Identifiable, Hashable, Sendable {
     let key: String
@@ -162,6 +194,25 @@ struct Report: Sendable {
 
     var windowSummary: String? { evaluation.at("travelWindow.readings.insights.summary").string }
     var windDirection: String? { json.at("weather.windDirection").string }
+
+    /// The hourly forecast at the objective (`weather.trend`), for the mountain weather graph, each with the
+    /// backend's check of that reading (`travelWindow.readings.rows`, one per trend reading in the same order).
+    var forecast: [ForecastPoint] {
+        let checks = evaluation.at("travelWindow.readings.rows").array
+        return json.at("weather.trend").array.enumerated().compactMap { index, row in
+            // "2026-09-26T03:00:00-07:00" carries the objective's local clock.
+            let clock = row["timeIso"].string.flatMap { $0.firstMatch(of: /T(\d{2}:\d{2})/).map { String($0.1) } }
+            guard let minutes = clock.flatMap(DateText.minutes) else { return nil }
+            let check = checks.indices.contains(index) ? checks[index] : JSON.null
+            return ForecastPoint(
+                id: index, minutes: minutes, condition: row["condition"].string, isDaytime: row["isDaytime"].bool,
+                temp: row["temp"].double, wind: row["wind"].double, gust: row["gust"].double,
+                windDirection: row["windDirection"].string, precipChance: row["precipChance"].double,
+                cloudCover: row["cloudCover"].double,
+                checked: !check.isNull, pass: check["pass"].bool ?? false, complete: check["complete"].bool ?? true,
+                failedRules: check["failedRules"].strings, approachAdjusted: check["approachAdjusted"].bool ?? false)
+        }
+    }
 
     // MARK: Sun and snow
 
