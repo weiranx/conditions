@@ -94,7 +94,14 @@ struct WeatherChapter: View {
 
     var body: some View {
         let hours = report.hours
+        let forecast = report.forecast
         VStack(alignment: .leading, spacing: 12) {
+            if !forecast.isEmpty {
+                MountainWeatherGraph(points: forecast, hours: hours, limits: limits,
+                                     elevationFt: report.objectiveElevationFt, selected: $selected)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
+            }
             Picker("Metric", selection: $metric) {
                 ForEach(Metric.allCases) { Text($0.rawValue).tag($0) }
             }
