@@ -690,7 +690,9 @@ struct NewPlanSheet: View {
             plan.start = DateText.hhmm(startTime)
             plan.travelHours = hours
             plan.trailheadFt = trailheadFt
-            if plan.route?.gpx != route?.gpx || plan.route?.name != route?.name { plan.route = route }
+            // A different route (or the same name with new numbers) replaces the saved one and its analysis.
+            if plan.route?.gpx != route?.gpx || plan.route?.name != route?.name
+                || plan.route?.distanceRtMiles != route?.distanceRtMiles || plan.route?.elevationGainFt != route?.elevationGainFt { plan.route = route }
             plan.tripName = nil
             plan.bailPoints = nil
             plan.tripTrack = nil

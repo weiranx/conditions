@@ -240,14 +240,20 @@ extension Place {
 
 extension MKCoordinateRegion {
     /// The region around some points, with a margin and at least `minimumSpan` degrees; nil without any.
+    /// Longitudes are taken within 180° of the first point, so points either side of the antimeridian
+    /// (the western Aleutians) frame together rather than spanning the world.
     init?(fitting points: [CLLocationCoordinate2D], minimumSpan: Double = 0.08) {
         guard let first = points.first else { return nil }
+        let unwrap = { (lon: Double) in lon - 360 * ((lon - first.longitude) / 360).rounded() }
         var minLat = first.latitude, maxLat = first.latitude, minLon = first.longitude, maxLon = first.longitude
         for point in points {
+            let lon = unwrap(point.longitude)
             minLat = min(minLat, point.latitude); maxLat = max(maxLat, point.latitude)
-            minLon = min(minLon, point.longitude); maxLon = max(maxLon, point.longitude)
+            minLon = min(minLon, lon); maxLon = max(maxLon, lon)
         }
-        self.init(center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2),
+        var centerLon = (minLon + maxLon) / 2
+        centerLon -= 360 * (centerLon / 360).rounded()
+        self.init(center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: centerLon),
                   span: MKCoordinateSpan(latitudeDelta: max(minimumSpan, (maxLat - minLat) * 1.5), longitudeDelta: max(minimumSpan, (maxLon - minLon) * 1.5)))
     }
 }
