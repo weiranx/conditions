@@ -112,17 +112,17 @@ struct NewPlanSheet: View {
                     Spacer().frame(height: 12)
                     Notice(tone: .caution, text: importError)
                 }
-                Spacer().frame(height: 90)
+                Spacer().frame(height: 16)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close", systemImage: "xmark") { dismiss() }
                 }
             }
-            .safeAreaInset(edge: .bottom) {
+            .safeAreaBar(edge: .bottom) {
                 VStack(spacing: 6) {
                     if let gap = gaps.first {
-                        Text(gap).font(.footnote).foregroundStyle(Palette.secondary)
+                        Label(gap, systemImage: "info.circle").font(.footnote).foregroundStyle(Palette.secondary)
                     }
                     Button(action: submit) {
                         Label(kind == .day ? "Check conditions" : "Check trip", systemImage: "arrow.right")
@@ -134,9 +134,8 @@ struct NewPlanSheet: View {
                     .disabled(!gaps.isEmpty)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 16)
+                .padding(.top, 10)
                 .padding(.bottom, 8)
-                .background(LinearGradient(colors: [Palette.bg.opacity(0), Palette.bg, Palette.bg], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
             }
             .sheet(item: $picking) { target in
                 PlacePicker(title: pickerTitle(target), near: target == .objective ? nil : objective, context: contextPlaces) { place in
@@ -183,19 +182,28 @@ struct NewPlanSheet: View {
     private var objectiveCard: some View {
         Card {
             CardHead(kind == .day ? "Objective" : "Trailhead")
-            HStack(spacing: 12) {
-                TopoThumb()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(objective?.shortName ?? "Choose a place").font(.headline).foregroundStyle(objective == nil ? Palette.secondary : Palette.label)
-                    if let objective {
-                        Text([objective.elevationFt.map(Format.feet), objective.region].compactMap { $0 }.joined(separator: " · "))
-                            .font(.footnote).foregroundStyle(Palette.secondary).lineLimit(2)
+            Button { picking = .objective } label: {
+                HStack(spacing: 12) {
+                    TopoThumb()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(objective?.shortName ?? "Choose a place").font(.headline).foregroundStyle(objective == nil ? Palette.secondary : Palette.label)
+                        if let objective {
+                            Text([objective.elevationFt.map(Format.feet), objective.region].compactMap { $0 }.joined(separator: " · "))
+                                .font(.footnote).foregroundStyle(Palette.secondary).lineLimit(2)
+                        } else {
+                            Text("Search, drop a pin or use your location").font(.footnote).foregroundStyle(Palette.secondary)
+                        }
                     }
+                    Spacer(minLength: 8)
+                    Text(objective == nil ? "Search" : "Change")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.accent)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .glassEffect(.regular.interactive(), in: .capsule)
                 }
-                Spacer(minLength: 8)
-                Button(objective == nil ? "Search" : "Change") { picking = .objective }
-                    .buttonStyle(.glass).controlSize(.small)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .padding(.top, 4)
             if kind == .multi && account.flags.gpxImport {
                 Button { importing = .trip } label: { Label("Build the trip from a GPX track", systemImage: "square.and.arrow.down") }

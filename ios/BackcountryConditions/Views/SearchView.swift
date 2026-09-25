@@ -142,26 +142,57 @@ struct PlacePicker: View {
     private func useLocation() async {
         locating = true
         defer { locating = false }
-        guard let location = await LocationProvider.shared.current() else {
-            locationError = "Your location isn’t available. Allow location access for Conditions in Settings, or choose on the map."
+        guard let place = await Place.current() else {
+            locationError = Place.locationUnavailable
             return
         }
-        onPick(Place(name: "My location", lat: (location.coordinate.latitude * 1e5).rounded() / 1e5, lon: (location.coordinate.longitude * 1e5).rounded() / 1e5,
-                     elevationFt: location.verticalAccuracy >= 0 ? location.altitude * 3.28084 : nil, kind: "Location"))
+        onPick(place)
         dismiss()
     }
+}
+
+extension Place {
+    /// Where the phone is now, as a place to plan from.
+    static func current() async -> Place? {
+        guard let location = await LocationProvider.shared.current() else { return nil }
+        return Place(name: "My location", lat: (location.coordinate.latitude * 1e5).rounded() / 1e5, lon: (location.coordinate.longitude * 1e5).rounded() / 1e5,
+                     elevationFt: location.verticalAccuracy >= 0 ? location.altitude * 3.28084 : nil, kind: "Location")
+    }
+
+    static let locationUnavailable = "Your location isn’t available. Allow location access for Conditions in Settings, or choose on the map."
 }
 
 /// The Search tab: find an objective, then plan it.
 struct SearchView: View {
     var onPlan: (Place) -> Void
     @State private var search = PlaceSearch()
+    @State private var mapOpen = false
+    @State private var pinned: Place?
+    @State private var locating = false
+    @State private var locationError: String?
 
     var body: some View {
         NavigationStack {
             Page {
                 PageHeader(kicker: "Search", title: "Find an objective", subtitle: "Peaks, trailheads and places across the US.")
                 Spacer().frame(height: 22)
+                if search.query.isEmpty {
+                    HStack(spacing: 10) {
+                        Button { mapOpen = true } label: { Label("On the map", systemImage: "map").frame(maxWidth: .infinity) }
+                        Button { Task { await useLocation() } } label: {
+                            Label(locating ? "Finding you…" : "My location", systemImage: "location").frame(maxWidth: .infinity)
+                        }
+                        .disabled(locating)
+                    }
+                    .buttonStyle(.glass)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 16)
+                    if let locationError {
+                        Caption(locationError, tone: Palette.caution).padding(.horizontal, 20).padding(.top, 8)
+                    }
+                    Spacer().frame(height: 26)
+                }
                 SectionHead(title: search.query.isEmpty ? "Popular peaks" : "Results") {
                     if search.searching { ProgressView().controlSize(.small) }
                 }
@@ -169,16 +200,29 @@ struct SearchView: View {
                     Notice(tone: .caution, text: error)
                 }
                 if search.noMatches {
-                    Caption("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead.")
+                    Caption("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead, or choose on the map.")
                         .padding(.horizontal, 20)
                 }
-                VStack(spacing: 10) {
-                    ForEach(search.results) { place in
-                        Card {
-                            PlaceRow(place: place)
-                            Button("Plan this", systemImage: "plus") { onPlan(place) }
-                                .buttonStyle(.glass).controlSize(.small).padding(.top, 4)
+                VStack(spacing: 0) {
+                    ForEach(Array(search.results.enumerated()), id: \.element.id) { index, place in
+                        if index > 0 { Divider().padding(.leading, 66) }
+                        Button { onPlan(place) } label: {
+                            HStack(spacing: 8) {
+                                PlaceRow(place: place)
+                                Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(Palette.accent)
+                            }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Starts a new plan")
+                    }
+                }
+                .background {
+                    if !search.results.isEmpty {
+                        RoundedRectangle(cornerRadius: 20).fill(Palette.surface)
+                            .shadow(color: .black.opacity(0.05), radius: 1, y: 1)
+                            .shadow(color: .black.opacity(0.07), radius: 14, y: 8)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -187,6 +231,23 @@ struct SearchView: View {
             .onChange(of: search.query) { search.run() }
             .onSubmit(of: .search) { search.run(now: true) }
             .onAppear { if search.results.isEmpty { search.run() } }
+            // The new plan sheet opens once the map has gone.
+            .fullScreenCover(isPresented: $mapOpen, onDismiss: {
+                if let pinned { self.pinned = nil; onPlan(pinned) }
+            }) {
+                MapPicker(title: "Objective") { pinned = $0 }
+            }
         }
+    }
+
+    private func useLocation() async {
+        locating = true
+        defer { locating = false }
+        guard let place = await Place.current() else {
+            locationError = Place.locationUnavailable
+            return
+        }
+        locationError = nil
+        onPlan(place)
     }
 }

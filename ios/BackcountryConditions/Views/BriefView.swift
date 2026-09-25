@@ -36,11 +36,20 @@ struct PlanSwitcher: View {
             ForEach(store.upcoming) { plan in
                 Button { store.briefPlanID = plan.id } label: {
                     Label(plan.title, systemImage: store.briefPlanID == plan.id ? "checkmark" : plan.isTrip ? "tent" : "mappin")
+                    // The date and decision tell apart two plans for the same objective.
+                    Text([plan.isTrip ? DateText.range(plan.date, plan.endDate) : DateText.short(plan.date), verdict(plan)]
+                        .compactMap { $0 }.joined(separator: " · "))
                 }
             }
         } label: {
             Label("Plans", systemImage: "list.bullet")
         }
+    }
+
+    /// The plan card's word for the decision, once there is one.
+    private func verdict(_ plan: Plan) -> String? {
+        if plan.isTrip, let trip = store.trip(plan) { return trip.itinerary == nil ? "No trip verdict" : store.level(plan).label }
+        return store.report(plan) == nil ? nil : store.level(plan).label
     }
 }
 
@@ -72,6 +81,9 @@ struct BriefView: View {
     @State private var signIn: String?
     @State private var shareURL: URL?
     @State private var confirmDelete = false
+    /// Past the sky hero, the bar carries the plan's name and decision.
+    @State private var pastHero = false
+    @State private var width: CGFloat = 400
 
     private var report: Report? { snapshot ?? store.report(plan) }
     private var isLoading: Bool { snapshot == nil && store.loading.contains(plan.id) }
@@ -88,6 +100,10 @@ struct BriefView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(Palette.bg)
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > 320 } action: { _, past in
+            withAnimation(.easeOut(duration: 0.2)) { pastHero = past }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .refreshable { if snapshot == nil { await store.refresh(plan) } }
         .toolbar { toolbar }
         .navigationDestination(item: $chapter) { chapter in
@@ -126,8 +142,31 @@ struct BriefView: View {
     private var toolbar: some ToolbarContent {
         if snapshot == nil {
             ToolbarItem(placement: .topBarLeading) { PlanSwitcher().tint(barTint) }
+        }
+        // Leading rather than centred, so a long name has the room the trailing buttons leave.
+        if pastHero {
+            ToolbarItem(placement: .topBarLeading) {
+                BarTitle(title: plan.objective.shortName, alignment: .leading, font: .subheadline.weight(.semibold)) {
+                    if let report {
+                        Label(report.level.label, systemImage: report.level.symbol)
+                            .labelStyle(TightLabelStyle())
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(report.level.color)
+                    }
+                }
+                .padding(.horizontal, 4)
+                // The bar leaves a leading item no room of its own; take what the buttons don't use.
+                .frame(width: max(80, width - (snapshot == nil ? 285 : 200)), alignment: .leading)
+            }
+            .sharedBackgroundVisibility(.hidden)
+        }
+        if snapshot == nil {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit plan") { editing = NewPlanDraft(editing: live) }.tint(barTint)
+                // Spelled out over the hero; an icon once the bar carries the plan's name.
+                Button("Edit plan", systemImage: "slider.horizontal.3") { editing = NewPlanDraft(editing: live) }
+                    .labelStyle(EditLabelStyle(iconOnly: pastHero))
+                    .accessibilityLabel("Edit plan")
+                    .tint(barTint)
             }
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
         }
@@ -501,6 +540,14 @@ struct BriefView: View {
             Caption("Backcountry Conditions is a planning aid, not a guarantee of safety. Check official forecasts, and make the final call from what you see in the field and your team’s judgment.")
         }
         .padding(.horizontal, 20)
+    }
+}
+
+private struct EditLabelStyle: LabelStyle {
+    var iconOnly: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly { configuration.icon } else { configuration.title }
     }
 }
 
