@@ -223,7 +223,7 @@ struct PlanMapModel {
                                    title: bail.shortName, detail: "Way out", tone: .place))
         }
 
-        if let track = plan.route?.gpx?.displayTrack, track.count >= 2 {
+        if let track = plan.tripTrack, track.count >= 2 {
             line = track.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) }
         } else {
             line = path
@@ -478,26 +478,46 @@ struct MapLegend: View {
 // MARK: - Every plan
 
 /// The Plan tab's map: each plan at its objective, coloured by the backend's decision.
+/// Plans at the same place (the same peak on different dates) share a pin that lists them all.
 struct PlansMapScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(PlanStore.self) private var store
     var openBrief: (UUID) -> Void
     @AppStorage(MapLayer.storageKey) private var layer: MapLayer = .terrain
     @State private var position: MapCameraPosition = .automatic
-    @State private var selection: UUID?
+    @State private var selection: String?
     @State private var includePast = false
 
+    private struct PlanGroup: Identifiable {
+        var id: String
+        var plans: [Plan]
+        var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: plans[0].objective.lat, longitude: plans[0].objective.lon) }
+    }
+
     private var plans: [Plan] { includePast ? store.upcoming + store.past : store.upcoming }
-    private var selected: Plan? { plans.first { $0.id == selection } }
+
+    /// Plans within about 100 m of each other, in list order.
+    private var groups: [PlanGroup] {
+        var order: [String] = []
+        var byPlace: [String: [Plan]] = [:]
+        for plan in plans {
+            let key = String(format: "%.3f,%.3f", plan.objective.lat, plan.objective.lon)
+            if byPlace[key] == nil { order.append(key) }
+            byPlace[key, default: []].append(plan)
+        }
+        return order.compactMap { key in byPlace[key].map { PlanGroup(id: key, plans: $0) } }
+    }
+
+    private var selected: PlanGroup? { groups.first { $0.id == selection } }
 
     var body: some View {
         NavigationStack {
             Map(position: $position, selection: $selection) {
-                ForEach(plans) { plan in
-                    Annotation(plan.title, coordinate: CLLocationCoordinate2D(latitude: plan.objective.lat, longitude: plan.objective.lon), anchor: .center) {
-                        MapPin(point: pin(plan), selected: selection == plan.id)
+                ForEach(groups) { group in
+                    Annotation(title(group), coordinate: group.coordinate, anchor: .center) {
+                        MapPin(point: pin(group), selected: selection == group.id)
                     }
-                    .tag(plan.id)
+                    .tag(group.id)
                 }
                 UserAnnotation()
             }
@@ -525,29 +545,55 @@ struct PlansMapScreen: View {
         }
     }
 
-    private func pin(_ plan: Plan) -> MapPoint {
+    private func tone(_ plan: Plan) -> MapTone {
         let checked = plan.isTrip ? store.trip(plan) != nil : store.report(plan) != nil
-        return MapPoint(id: plan.id.uuidString, kind: .objective, lat: plan.objective.lat, lon: plan.objective.lon, glyph: "",
-                        symbol: plan.isTrip ? "tent.fill" : "mountain.2.fill", title: plan.title, detail: nil,
-                        tone: checked ? MapTone(store.level(plan)) : .unchecked)
+        return checked ? MapTone(store.level(plan)) : .unchecked
+    }
+
+    private func title(_ group: PlanGroup) -> String {
+        group.plans.count == 1 ? group.plans[0].title : "\(group.plans[0].objective.shortName) · \(group.plans.count) plans"
+    }
+
+    /// One plan shows its kind; several show how many, in the worst tone among them.
+    private func pin(_ group: PlanGroup) -> MapPoint {
+        let first = group.plans[0]
+        let several = group.plans.count > 1
+        return MapPoint(id: group.id, kind: .objective, lat: first.objective.lat, lon: first.objective.lon,
+                        glyph: several ? String(group.plans.count) : "",
+                        symbol: several ? nil : first.isTrip ? "tent.fill" : "mountain.2.fill",
+                        title: title(group), detail: nil,
+                        tone: group.plans.map(tone).max() ?? .unchecked)
+    }
+
+    private func card(_ plan: Plan) -> some View {
+        Button {
+            dismiss()
+            openBrief(plan.id)
+        } label: {
+            PlanCard(plan: plan)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens the brief")
     }
 
     private var panel: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let selected {
-                Button {
-                    dismiss()
-                    openBrief(selected.id)
-                } label: {
-                    PlanCard(plan: selected)
+                if selected.plans.count == 1 {
+                    card(selected.plans[0])
+                } else {
+                    Text("\(selected.plans.count) plans here").font(.subheadline.weight(.semibold))
+                    ScrollView {
+                        VStack(spacing: 8) { ForEach(selected.plans) { card($0) } }
+                    }
+                    .frame(maxHeight: 340)
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens the brief")
             } else if plans.isEmpty {
                 Text(includePast ? "No plans to show." : "No upcoming plans. Turn on past plans to see the rest.")
                     .font(.footnote).foregroundStyle(Palette.secondary)
             } else {
-                MapLegend(tones: Array(Set(plans.map { pin($0).tone })).sorted())
+                MapLegend(tones: Array(Set(plans.map(tone))).sorted())
             }
             Picker("Map layer", selection: $layer) {
                 ForEach(MapLayer.allCases) { Text($0.rawValue).tag($0) }
