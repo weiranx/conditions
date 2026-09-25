@@ -146,7 +146,25 @@ export default function FieldApp() {
     const report = w.reportSnapshot;
     if (!report || actionBusy || w.reportSaveIntentRef.current === "saving") return;
     if (kind === "share") {
-      const token = w.sharedReportToken || w.activeSavedReportShareToken;
+      let token = w.sharedReportToken || w.activeSavedReportShareToken;
+      // A plan link makes a new report without the route analysis or AI work,
+      // so a signed-in user's report is saved and its saved copy is shared.
+      let saveFailed = false;
+      if (!token && account.user) {
+        setActionBusy(true);
+        setFeedback("");
+        try {
+          const saved = await w.saveReportSnapshot(report, (result) => {
+            account.syncGeneratedReportUsage(account.user!.id, result.reportCount, result.reportUsage);
+          });
+          if (!saved) return;
+          token = saved.shareToken;
+        } catch {
+          saveFailed = true;
+        } finally {
+          setActionBusy(false);
+        }
+      }
       const link = token
         ? buildSavedReportShareUrl(
             token,
@@ -155,9 +173,10 @@ export default function FieldApp() {
           )
         : window.location.href;
       const copied = await copyTextToClipboard(link);
-      setFeedback(
-        copied ? "Plan or saved report link copied." : `Share link: ${link}`,
-      );
+      const described = token
+        ? "Report link copied."
+        : `Plan link copied. ${saveFailed ? "The report could not be saved, so this" : "This"} link makes a new report without the route analysis or AI brief${saveFailed ? "." : "; sign in to share the report itself."}`;
+      setFeedback(copied ? described : `Share link: ${link}`);
       return;
     }
     if (!account.user) {
