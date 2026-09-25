@@ -134,7 +134,9 @@ struct NewPlanSheet: View {
                     .disabled(!gaps.isEmpty)
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 16)
                 .padding(.bottom, 8)
+                .background(LinearGradient(colors: [Palette.bg.opacity(0), Palette.bg, Palette.bg], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
             }
             .sheet(item: $picking) { target in
                 PlacePicker(title: pickerTitle(target), near: target == .objective ? nil : objective, context: contextPlaces) { place in

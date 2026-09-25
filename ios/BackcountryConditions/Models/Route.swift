@@ -155,7 +155,6 @@ struct PlanRoute: Codable, Hashable, Sendable {
     var analyzedFor: String?
 }
 
-extension JSON: Hashable {}
 
 // MARK: - GPX parsing
 

@@ -277,8 +277,6 @@ struct TerrainChapter: View {
             if AccountStore.shared.flags.terrainWindow { TerrainWindowSection(report: report); Spacer().frame(height: 28) }
             avalanche
             Spacer().frame(height: 28)
-            snowpack
-            Spacer().frame(height: 28)
             SnowObservationsSection(report: report)
             Spacer().frame(height: 28)
             SnowVisionSection(plan: plan, report: report, snapshot: snapshot)
@@ -425,29 +423,6 @@ struct TerrainChapter: View {
             }
         }
         .padding(.horizontal, 16)
-    }
-
-    @ViewBuilder
-    private var snowpack: some View {
-        SectionHead(title: "Snowpack") {
-            if let station = report.snowStation { Text(station).lineLimit(1) }
-        }
-        HStack(alignment: .top, spacing: 12) {
-            Card(missing: report.snowDepthIn == nil) {
-                CardHead("Snow depth")
-                BigValue(text: report.snowDepthIn.map { Format.inches($0) } ?? "—")
-                Caption(report.sweIn.map { "Snow water equivalent \(Format.inches($0))." } ?? "No depth reading at the nearest station.")
-            }
-            Card {
-                CardHead("Freezing level")
-                BigValue(text: report.freezingLevelFt.map(Format.feet) ?? "—", small: true)
-                Caption(report.snowLevelFt.map { "Snow level \(Format.feet($0))." } ?? "No snow level in the forecast.")
-            }
-        }
-        .padding(.horizontal, 16)
-        if let summary = report.snowpackSummary {
-            Caption(summary).padding(.horizontal, 20).padding(.top, 10)
-        }
     }
 }
 

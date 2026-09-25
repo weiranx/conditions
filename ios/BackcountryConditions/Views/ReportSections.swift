@@ -39,7 +39,8 @@ struct RawDataDisclosure: View {
                 }
                 .frame(maxHeight: 320)
             } label: {
-                Text(title).font(.footnote.weight(.semibold)).foregroundStyle(Palette.secondary)
+                Text(title).font(.footnote.weight(.semibold)).foregroundStyle(Palette.secondary).multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .tint(Palette.secondary)
         }
@@ -306,7 +307,7 @@ struct WindLoadingSection: View {
                     AspectRose(aspects: Set(wind["leewardAspects"].strings)).frame(width: 100, height: 100)
                     VStack(alignment: .leading, spacing: 4) {
                         if let summary = wind["summary"].string { Caption(summary, tone: Palette.label) }
-                        if let window = wind["activeWindowLabel"].string { FactRow(label: "Active", value: window) }
+                        if let window = wind["activeWindowLabel"].string { FactRow(label: "Transport", value: window) }
                         if let focus = wind["elevationFocus"].string { Caption(focus) }
                     }
                 }
@@ -406,7 +407,7 @@ struct SurfaceSection: View {
                 let profile = surface["snowProfile"]
                 if !profile.isNull {
                     Divider()
-                    CardHead(title: profile["label"].string ?? "Snow surface") { if let c = profile["confidence"].string { Text(c.capitalized).font(.footnote) } }
+                    CardHead(title: profile["label"].string.map { String($0.drop(while: { !$0.isLetter })) } ?? "Snow surface") { if let c = profile["confidence"].string { Text(c.capitalized).font(.footnote) } }
                     if let summary = profile["summary"].string { Caption(summary) }
                     let melt = profile["meltFreeze"]
                     if let line = melt["summary"].string ?? melt["label"].string { Caption(line) }
@@ -454,9 +455,10 @@ struct SnowObservationsSection: View {
                         }
                     }
                 }
+                if let freezing = report.freezingLevelFt { FactRow(label: "Freezing level", value: Format.feet(freezing)) }
+                if let level = report.snowLevelFt { FactRow(label: "Snow level", value: Format.feet(level)) }
                 if let history = snow["historicalComparisonLine"].string { Caption(history) }
                 if let context = snow["observationContext"].string { Caption(context) }
-                if let summary = snow.at("interpretation.summary").string ?? report.snowpackSummary { Caption(summary, tone: Palette.label) }
                 RawDataDisclosure(title: "Snowpack quality, history, and observation details", value: report.json["snowpack"])
             }
             .padding(.horizontal, 16)

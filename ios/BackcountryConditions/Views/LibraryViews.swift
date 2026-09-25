@@ -555,7 +555,7 @@ struct AccountWatchlist: View {
                         .font(.subheadline.weight(.semibold)).foregroundStyle(worse ? Palette.caution : Palette.label)
                     if (unreviewed["count"].int ?? 0) > 1 { Caption("\(unreviewed["count"].int ?? 0) changes in check history") }
                     ForEach(Self.reasons(worse ? unreviewed["latestWorse"] : unreviewed["latest"]), id: \.self) { reason in Caption("• \(reason)") }
-                    Button("Mark reviewed", systemImage: "checkmark") { Task { await run(watch) { try await APIClient().reviewWatch(id: $0) } } }
+                    Button("Mark reviewed", systemImage: "checkmark") { Task { await run(watch) { _ = try await APIClient().reviewWatch(id: $0) } } }
                         .buttonStyle(.glass).controlSize(.small)
                 }
             }
@@ -570,7 +570,7 @@ struct AccountWatchlist: View {
                     }
                     Button(pending == id ? "Working…" : ended ? "Plan completed" : wait > 0 ? "Check in \(Int((wait / 60).rounded(.up)))m" : "Check now", systemImage: "arrow.clockwise") {
                         Task {
-                            await run(watch, success: "Check complete. Review the latest result below.") { try await APIClient().refreshWatch(id: $0) }
+                            await run(watch, success: "Check complete. Review the latest result below.") { _ = try await APIClient().refreshWatch(id: $0) }
                         }
                     }
                     .buttonStyle(.glass)
@@ -583,7 +583,7 @@ struct AccountWatchlist: View {
             if policy["emailAlerts"].bool == true {
                 Toggle(account.user?.emailVerified == true ? "Email when risk increases" : "Verify your email in Account to enable alerts",
                        isOn: Binding(get: { watch["notificationsEnabled"].bool == true }, set: { enabled in
-                    Task { await run(watch) { try await APIClient().setWatchNotifications(id: $0, enabled: enabled) } }
+                    Task { await run(watch) { _ = try await APIClient().setWatchNotifications(id: $0, enabled: enabled) } }
                 }))
                 .font(.footnote)
                 .disabled(pending != nil || ended || account.user?.emailVerified != true)

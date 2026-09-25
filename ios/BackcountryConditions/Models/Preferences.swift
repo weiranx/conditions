@@ -349,7 +349,7 @@ final class PreferencesStore {
 }
 
 /// The display units every screen formats with. Report numbers stay imperial; these convert them.
-struct Units: Sendable {
+nonisolated struct Units: Sendable {
     var temperature: TemperatureUnit = .f
     var wind: WindUnit = .mph
     var elevation: ElevationUnit = .ft
@@ -357,7 +357,7 @@ struct Units: Sendable {
 
     init() {}
 
-    init(_ preferences: Preferences) {
+    @MainActor init(_ preferences: Preferences) {
         temperature = preferences.temperatureUnit
         wind = preferences.windUnit
         elevation = preferences.elevationUnit

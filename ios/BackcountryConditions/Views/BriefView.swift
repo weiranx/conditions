@@ -184,7 +184,7 @@ struct BriefView: View {
             }
             ShareLink(item: BriefText.summary(plan: plan, report: report)) { Label("Share summary", systemImage: "text.alignleft") }
         } label: {
-            Label("Share", systemImage: "square.and.arrow.up")
+            Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
         }
     }
 

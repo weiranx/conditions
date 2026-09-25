@@ -402,7 +402,6 @@ struct SafariView: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let controller = SFSafariViewController(url: url)
-        controller.preferredControlTintColor = UIColor(Palette.accent)
         return controller
     }
 

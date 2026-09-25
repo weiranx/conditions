@@ -266,6 +266,8 @@ final class AccountStore {
                 ? "Your monthly report allowance is used up. It resets automatically; see Account for details."
                 : nil
         }
+        // A server without accounts has no way to sign in, so the guest allowance doesn't apply.
+        guard available != false else { return nil }
         return guestReportCount >= Self.guestReportLimit
             ? "You’ve used the \(Self.guestReportLimit) reports available without an account. Sign in or create a free account to keep planning."
             : nil
