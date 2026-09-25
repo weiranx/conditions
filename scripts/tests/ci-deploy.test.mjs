@@ -27,7 +27,7 @@ function fixture(t) {
   const env = {
     ...gitEnv, PATH: `${bin}:${process.env.PATH}`, SUMMITSAFE_APP_DIR: host,
     TEST_BUILD_EXIT: '0', TEST_MIGRATION_EXIT: '0', TEST_HEALTH_EXIT: '0',
-    TEST_BACKEND_RUNNING: '1', TEST_ROLLBACK_HEALTHY: '0',
+    TEST_BACKEND_RUNNING: '1', TEST_ROLLBACK_HEALTHY: '0', TEST_MONITOR_EXIT: '0',
     TEST_MCP_BUILD_EXIT: '0', TEST_MCP_HEALTH_EXIT: '0', TEST_MCP_RUNNING: '1', TEST_MCP_ROLLBACK_HEALTHY: '0',
   };
   // macOS lacks the flock CLI. Use the same OS flock primitive for local tests;
@@ -63,6 +63,9 @@ if [ "$*" = 'compose build --pull backend' ]; then
     exit 50
   fi
   exit "$TEST_BUILD_EXIT"
+fi
+if [ "$*" = 'compose up -d --force-recreate --no-deps health-monitor' ]; then
+  exit "$TEST_MONITOR_EXIT"
 fi
 if [ "$*" = 'compose run --rm --no-deps backend npm run db:migrate' ]; then
   exit "$TEST_MIGRATION_EXIT"
@@ -480,4 +483,14 @@ test('manual releases rebuild unchanged images', (t) => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(builds(f, 'backend'), 2);
+});
+
+test('a failed health monitor start is retried by the next release', (t) => {
+  const f = fixture(t);
+  writeFileSync(join(f.host, '.env'), 'RESEND_API_KEY=x\nEMAIL_FROM=x@example.invalid\nAPP_BASE_URL=https://example.invalid\n');
+  assert.equal(f.run(f.initial, { TEST_MONITOR_EXIT: '45' }).status, 45);
+  const result = f.run(f.advance());
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(builds(f, 'backend'), 2);
+  assert.equal(f.calls().split('\n').filter((call) => call.endsWith('--no-deps health-monitor')).length, 2);
 });

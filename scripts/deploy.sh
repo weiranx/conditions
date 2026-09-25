@@ -235,10 +235,6 @@ else
     exit 1
   fi
 
-  if [ "$NO_BUILD" = false ]; then
-    record_release backend "${BACKEND_PATHS[@]}"
-  fi
-
   if grep -Eq '^RESEND_API_KEY=.+$' .env \
     && grep -Eq '^EMAIL_FROM=.+$' .env \
     && grep -Eq '^APP_BASE_URL=.+$' .env; then
@@ -247,6 +243,11 @@ else
   else
     echo "==> Health alerting disabled (RESEND_API_KEY, EMAIL_FROM, and APP_BASE_URL are required)."
     docker compose stop health-monitor >/dev/null 2>&1 || true
+  fi
+
+  # Only now, so a failed health monitor start is retried by the next release.
+  if [ "$NO_BUILD" = false ]; then
+    record_release backend "${BACKEND_PATHS[@]}"
   fi
 fi
 
