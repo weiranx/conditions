@@ -1,6 +1,8 @@
+import MapKit
 import SwiftUI
 
-/// Searches `/api/search`: the local peak catalog first, then OpenStreetMap places.
+/// Searches `/api/search`: the local peak catalog first, then OpenStreetMap places. When neither
+/// knows the name, Apple Maps' own places (many lakes, passes and trailheads) fill in.
 @Observable
 final class PlaceSearch {
     var query = ""
@@ -12,6 +14,9 @@ final class PlaceSearch {
     private var generation = 0
     /// Biases results toward a place, such as the trailhead when choosing a camp.
     var near: Place?
+    /// Whether an empty query lists popular peaks. They're far from any trailhead, so a search
+    /// biased near one never lists them.
+    var showsPopular = true
 
     /// Searches for the current query, after a pause in typing unless `now`.
     func run(now: Bool = false) {
@@ -19,13 +24,24 @@ final class PlaceSearch {
         generation += 1
         let current = generation
         let text = query.trimmingCharacters(in: .whitespaces)
+        if text.isEmpty && (!showsPopular || near != nil) || Place.coordinates(in: text) != nil {
+            results = []
+            error = nil
+            searched = ""
+            searching = false
+            return
+        }
         task = Task {
             try? await Task.sleep(for: .milliseconds(text.isEmpty || now ? 0 : 300))
             guard current == generation else { return }
             searching = true
             do {
-                let found = try await APIClient().search(text, near: near.map { ($0.lat, $0.lon) })
+                var found = try await APIClient().search(text, near: near.map { ($0.lat, $0.lon) })
                 guard current == generation else { return }
+                if found.isEmpty && text.count >= 3 {
+                    found = await Self.mapSearch(text, near: near)
+                    guard current == generation else { return }
+                }
                 results = found
                 error = nil
             } catch {
@@ -38,6 +54,32 @@ final class PlaceSearch {
         }
     }
 
+    private static func mapSearch(_ text: String, near: Place?) async -> [Place] {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = text
+        request.resultTypes = [.physicalFeature, .pointOfInterest]
+        // Near the trip's last stop, or across the lower 48.
+        request.region = near.map { MKCoordinateRegion(center: $0.coordinate, span: MKCoordinateSpan(latitudeDelta: 1.5, longitudeDelta: 1.5)) }
+            ?? MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 39.5, longitude: -98.5), span: MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 60))
+        guard let items = try? await MKLocalSearch(request: request).start().mapItems else { return [] }
+        return items.prefix(8).compactMap { item in
+            guard let name = item.name else { return nil }
+            let coordinate = item.location.coordinate
+            return Place(name: [name, item.addressRepresentations?.cityWithContext].compactMap { $0 }.joined(separator: ", "),
+                         lat: (coordinate.latitude * 1e5).rounded() / 1e5, lon: (coordinate.longitude * 1e5).rounded() / 1e5,
+                         elevationFt: nil, kind: item.pointOfInterestCategory.flatMap(Self.kind))
+        }
+    }
+
+    private static func kind(_ category: MKPointOfInterestCategory) -> String? {
+        switch category {
+        case .campground: "Campground"
+        case .nationalPark, .park: "Park"
+        case .beach: "Beach"
+        default: nil
+        }
+    }
+
     /// True once a typed query has come back with nothing.
     var noMatches: Bool {
         !searching && error == nil && results.isEmpty && !searched.isEmpty && searched == query.trimmingCharacters(in: .whitespaces)
@@ -46,6 +88,8 @@ final class PlaceSearch {
 
 struct PlaceRow: View {
     var place: Place
+    /// Shows how far the place is from here, such as last night's camp.
+    var from: Place? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -56,8 +100,34 @@ struct PlaceRow: View {
                 .background(Palette.fill, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text(place.shortName).font(.body.weight(.semibold)).foregroundStyle(Palette.label)
-                Text([place.kind, place.elevationFt.map(Format.feet), place.region].compactMap { $0 }.joined(separator: " · "))
+                Text([place.kind, place.elevationFt.map(Format.feet), distance, place.region].compactMap { $0 }.joined(separator: " · "))
                     .font(.footnote).foregroundStyle(Palette.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var distance: String? {
+        guard let from, from.id != place.id else { return nil }
+        return "\(Format.miles(place.miles(from: from))) straight-line"
+    }
+}
+
+/// Typed coordinates, offered above the search results.
+struct CoordinatesRow: View {
+    var place: Place
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "scope")
+                .font(.body)
+                .foregroundStyle(Palette.accent)
+                .frame(width: 36, height: 36)
+                .background(Palette.fill, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Use these coordinates").font(.body.weight(.semibold)).foregroundStyle(Palette.label)
+                Text(place.name).font(.footnote).foregroundStyle(Palette.secondary)
             }
             Spacer(minLength: 0)
         }
@@ -65,24 +135,47 @@ struct PlaceRow: View {
     }
 }
 
-/// A sheet for choosing an objective or camp: search, the map, your location, or a recent place.
+/// Why "Use my location" found nothing, with a way to Settings when access is off.
+struct LocationProblem: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Caption(Place.locationUnavailable, tone: Palette.caution)
+            if LocationProvider.shared.isDenied, let url = URL(string: UIApplication.openSettingsURLString) {
+                Button("Open Settings") { openURL(url) }.font(.footnote.weight(.semibold))
+            }
+        }
+    }
+}
+
+/// A sheet for choosing an objective or camp: search, typed coordinates, the map, your location, or a recent place.
 struct PlacePicker: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(PlanStore.self) private var store
     var title: String
-    /// Where to center the map and bias the search.
+    /// Where to center the map and bias the search, such as last night's camp when choosing the next.
     var near: Place? = nil
-    var context: [Place] = []
+    var context: [PlaceLandmark] = []
+    /// The plan's route, so its map opens where the route is.
+    var track: [TrackCoordinate] = []
+    var legs: [Place] = []
+    /// The place being changed, shown selected on the map.
+    var current: Place? = nil
     var onPick: (Place) -> Void
     @State private var search = PlaceSearch()
     @State private var mapOpen = false
     @State private var locating = false
-    @State private var locationError: String?
+    @State private var locationFailed = false
 
+    /// Recent objectives, for choosing an objective; a camp or exit is rarely one of them.
     private var recents: [Place] {
+        guard near == nil else { return [] }
         var seen = Set<String>()
         return store.plans.sorted { $0.createdAt > $1.createdAt }.map(\.objective).filter { seen.insert($0.id).inserted }.prefix(5).map { $0 }
     }
+
+    private var typed: Place? { Place.coordinates(in: search.query) }
 
     var body: some View {
         NavigationStack {
@@ -97,24 +190,35 @@ struct PlacePicker: View {
                             Label(locating ? "Finding you…" : "Use my location", systemImage: "location")
                         }
                         .disabled(locating)
-                        if let locationError { Text(locationError).font(.footnote).foregroundStyle(Palette.caution) }
+                        if locationFailed { LocationProblem() }
+                    } footer: {
+                        if let near {
+                            Text("Search for a lake, pass or campsite near \(near.shortName), or enter latitude, longitude.")
+                        }
                     }
                     if !recents.isEmpty {
                         Section("Recent") {
                             ForEach(recents) { place in
-                                Button { onPick(place); dismiss() } label: { PlaceRow(place: place) }
+                                Button { pick(place) } label: { PlaceRow(place: place) }
                             }
                         }
                     }
                 }
-                Section(search.query.isEmpty ? "Popular peaks" : "Results") {
-                    ForEach(search.results) { place in
-                        Button { onPick(place); dismiss() } label: { PlaceRow(place: place) }
+                if let typed {
+                    Section {
+                        Button { pick(typed) } label: { CoordinatesRow(place: typed) }
                     }
-                    if search.searching && search.results.isEmpty { ProgressView() }
-                    if search.noMatches {
-                        Text("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead, or choose on the map.")
-                            .font(.footnote).foregroundStyle(Palette.secondary)
+                }
+                if (!search.query.isEmpty && typed == nil) || !search.results.isEmpty {
+                    Section(search.query.isEmpty ? "Popular peaks" : "Results") {
+                        ForEach(search.results) { place in
+                            Button { pick(place) } label: { PlaceRow(place: place, from: near) }
+                        }
+                        if search.searching && search.results.isEmpty { ProgressView() }
+                        if search.noMatches {
+                            Text("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead, enter latitude, longitude, or choose on the map.")
+                                .font(.footnote).foregroundStyle(Palette.secondary)
+                        }
                     }
                 }
             }
@@ -122,44 +226,55 @@ struct PlacePicker: View {
             .background(Palette.bg)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Peak, trailhead or place")
+            .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Place or latitude, longitude")
             .onChange(of: search.query) { search.run() }
-            .onSubmit(of: .search) { search.run(now: true) }
+            .onSubmit(of: .search) {
+                if let typed { pick(typed) } else { search.run(now: true) }
+            }
             .onAppear { search.near = near; search.run() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel", systemImage: "xmark") { dismiss() } }
             }
             .fullScreenCover(isPresented: $mapOpen) {
-                MapPicker(title: title, around: near, context: context) { place in
-                    onPick(place)
-                    dismiss()
+                MapPicker(title: title, around: near, context: context, track: track, legs: legs, current: current) { place in
+                    pick(place)
                 }
             }
         }
         .presentationDetents([.medium, .large])
     }
 
+    private func pick(_ place: Place) {
+        onPick(place)
+        dismiss()
+    }
+
     private func useLocation() async {
         locating = true
         defer { locating = false }
         guard let place = await Place.current() else {
-            locationError = Place.locationUnavailable
+            locationFailed = true
             return
         }
-        onPick(place)
-        dismiss()
+        pick(place)
     }
 }
 
 extension Place {
-    /// Where the phone is now, as a place to plan from.
+    /// Where the phone is now, as a place to plan from, named after the nearest town or feature.
     static func current() async -> Place? {
         guard let location = await LocationProvider.shared.current() else { return nil }
-        return Place(name: "My location", lat: (location.coordinate.latitude * 1e5).rounded() / 1e5, lon: (location.coordinate.longitude * 1e5).rounded() / 1e5,
-                     elevationFt: location.verticalAccuracy >= 0 ? location.altitude * 3.28084 : nil, kind: "Location")
+        var place = Place(name: "My location", lat: (location.coordinate.latitude * 1e5).rounded() / 1e5, lon: (location.coordinate.longitude * 1e5).rounded() / 1e5,
+                          elevationFt: location.verticalAccuracy >= 0 ? location.altitude * 3.28084 : nil, kind: "Location")
+        if let name = await place.nearbyName(town: true) { place.name = name }
+        return place
     }
 
-    static let locationUnavailable = "Your location isn’t available. Allow location access for Conditions in Settings, or choose on the map."
+    static var locationUnavailable: String {
+        LocationProvider.shared.isDenied
+            ? "Location access is off for Conditions. Turn it on in Settings, or choose on the map."
+            : "Your location isn’t available right now. Try again, or choose on the map."
+    }
 }
 
 /// The Search tab: find an objective, then plan it.
@@ -169,12 +284,12 @@ struct SearchView: View {
     @State private var mapOpen = false
     @State private var pinned: Place?
     @State private var locating = false
-    @State private var locationError: String?
+    @State private var locationFailed = false
 
     var body: some View {
         NavigationStack {
             Page {
-                PageHeader(kicker: "Search", title: "Find an objective", subtitle: "Peaks, trailheads and places across the US.")
+                PageHeader(kicker: "Search", title: "Find an objective", subtitle: "Peaks, trailheads and places across the US, or latitude, longitude.")
                 Spacer().frame(height: 22)
                 if search.query.isEmpty {
                     HStack(spacing: 10) {
@@ -188,19 +303,34 @@ struct SearchView: View {
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .padding(.horizontal, 16)
-                    if let locationError {
-                        Caption(locationError, tone: Palette.caution).padding(.horizontal, 20).padding(.top, 8)
+                    if locationFailed {
+                        LocationProblem().padding(.horizontal, 20).padding(.top, 8)
                     }
                     Spacer().frame(height: 26)
                 }
-                SectionHead(title: search.query.isEmpty ? "Popular peaks" : "Results") {
-                    if search.searching { ProgressView().controlSize(.small) }
+                if let typed = Place.coordinates(in: search.query) {
+                    Button { onPlan(typed) } label: {
+                        HStack(spacing: 8) {
+                            CoordinatesRow(place: typed)
+                            Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(Palette.accent)
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Starts a new plan")
+                    .padding(.horizontal, 16)
+                } else {
+                    SectionHead(title: search.query.isEmpty ? "Popular peaks" : "Results") {
+                        if search.searching { ProgressView().controlSize(.small) }
+                    }
                 }
                 if let error = search.error {
                     Notice(tone: .caution, text: error)
                 }
                 if search.noMatches {
-                    Caption("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead, or choose on the map.")
+                    Caption("No places match “\(search.searched)”. Try a nearby peak, lake or trailhead, enter latitude, longitude, or choose on the map.")
                         .padding(.horizontal, 20)
                 }
                 VStack(spacing: 0) {
@@ -227,9 +357,11 @@ struct SearchView: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .searchable(text: $search.query, prompt: "Peak, trailhead or place")
+            .searchable(text: $search.query, prompt: "Place or latitude, longitude")
             .onChange(of: search.query) { search.run() }
-            .onSubmit(of: .search) { search.run(now: true) }
+            .onSubmit(of: .search) {
+                if let typed = Place.coordinates(in: search.query) { onPlan(typed) } else { search.run(now: true) }
+            }
             .onAppear { if search.results.isEmpty { search.run() } }
             // The new plan sheet opens once the map has gone.
             .fullScreenCover(isPresented: $mapOpen, onDismiss: {
@@ -244,10 +376,10 @@ struct SearchView: View {
         locating = true
         defer { locating = false }
         guard let place = await Place.current() else {
-            locationError = Place.locationUnavailable
+            locationFailed = true
             return
         }
-        locationError = nil
+        locationFailed = false
         onPlan(place)
     }
 }
