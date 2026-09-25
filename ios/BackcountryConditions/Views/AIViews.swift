@@ -69,7 +69,7 @@ struct AIBriefCard: View {
                             .buttonStyle(.glass).controlSize(.small).disabled(loading)
                         }
                     } else {
-                        Caption("A plain-language read of this report: what drives the decision, what to watch, and the best move for your plan.", tone: Palette.label)
+                        Caption("What drives the decision and what to watch, in plain language.", tone: Palette.label)
                         Button { Task { await request() } } label: {
                             Label(loading ? "Writing explanation…" : "Explain this report", systemImage: "sparkles").frame(maxWidth: .infinity)
                         }

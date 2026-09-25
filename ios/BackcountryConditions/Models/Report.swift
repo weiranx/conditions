@@ -82,13 +82,16 @@ struct Report: Sendable {
     var insufficientEvidence: Bool { evaluation.at("verdict.insufficient").bool ?? false }
     var score: Double? { json.at("safety.score").double }
     var actionLine: String? { evaluation.at("decisionSummary.actionLine").string }
+    /// Field reports the verdict asks the traveler to check: the ones the report's insights don't already cover.
     var warnings: [(title: String, detail: String)] {
         evaluation.at("verdict.warnings").array.map { ($0["title"].string ?? "", $0["detail"].string ?? "") }
     }
     var missingSignals: [String] { evaluation.at("verdict.missing").array.compactMap { $0["title"].string } }
-    var fieldSignals: [(title: String, detail: String)] {
-        evaluation["fieldSignals"].array.map { ($0["title"].string ?? "", $0["detail"].string ?? "") }
+    /// Every field report and feed, `attention` or `unavailable`.
+    var fieldSignals: [(title: String, detail: String, tone: String)] {
+        evaluation["fieldSignals"].array.map { ($0["title"].string ?? "", $0["detail"].string ?? "", $0["tone"].string ?? "") }
     }
+    var showsFieldObservations: Bool { json.at("featureFlags.fieldObservations").bool != false }
 
     var checks: [Check] {
         evaluation.at("decision.checks").array.compactMap { check in
@@ -120,8 +123,7 @@ struct Report: Sendable {
             return "\(label) (issued \(when))"
         }
         let names = parts.formatted(.list(type: .and))
-        return stale.count == 1 ? "\(names) is out of date. Check the source before relying on it."
-                                : "\(names) are out of date. Check the sources before relying on them."
+        return stale.count == 1 ? "\(names) is out of date." : "\(names) are out of date."
     }
     /// The objective's time zone, which the forecast's clock times are in.
     var timeZone: TimeZone? {
@@ -382,8 +384,49 @@ enum Format {
         if let match = text.wholeMatch(of: /condition: (.+)/) { return "\(match.1) forecast" }
         return text.prefix(1).uppercased() + text.dropFirst()
     }
+
+    /// A rule named by the limit it crosses, for a caption with little room: "gust 31>25 mph" → "Gusts over 25 mph".
+    static func limitRule(_ rule: String) -> String {
+        let text = rule.trimmingCharacters(in: .whitespaces)
+        if let match = text.wholeMatch(of: /gust (\d+(?:\.\d+)?)>(\d+(?:\.\d+)?) ?(\S*)/) {
+            return "Gusts over \(match.2)\(match.3.isEmpty ? "" : " \(match.3)")"
+        }
+        if let match = text.wholeMatch(of: /precip (\d+)%>(\d+)%/) { return "Rain chance over \(match.2)%" }
+        if let match = text.wholeMatch(of: /feels (.+?)<(.+)/) { return "Feels like below \(match.2)" }
+        if let match = text.wholeMatch(of: /feels (.+?)>(.+)/) { return "Feels like above \(match.2)" }
+        return plainRule(text)
+    }
 }
 
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+
+    /// The text through its first sentence, for a caption with room for one.
+    var firstSentence: String { leadingSentence(stopAtSemicolon: false) }
+
+    /// The first sentence, cut at a semicolon: "Expect changing surfaces; test footing…" → "Expect changing surfaces."
+    var firstClause: String { leadingSentence(stopAtSemicolon: true) }
+
+    private static let abbreviations: Set<String> = ["mt", "st", "no", "vs", "approx", "dr", "ave", "hwy", "rd", "est"]
+
+    private func leadingSentence(stopAtSemicolon: Bool) -> String {
+        let chars = Array(self)
+        guard chars.count > 2 else { return self }
+        for index in 0..<(chars.count - 2) where chars[index + 1] == " " {
+            let mark = chars[index]
+            if stopAtSemicolon && mark == ";" {
+                return String(chars[..<index]).trimmingCharacters(in: .whitespaces) + "."
+            }
+            guard mark == "." || mark == "!" || mark == "?" else { continue }
+            // A sentence goes on to a capital or a number; "Mt. Shasta" and "U.S." don't end one.
+            let next = chars[index + 2]
+            guard next.isUppercase || next.isNumber else { continue }
+            if mark == "." {
+                let word = String(chars[..<index]).split(separator: " ").last.map(String.init) ?? ""
+                if word.contains(".") || Self.abbreviations.contains(word.lowercased()) { continue }
+            }
+            return String(chars[...index])
+        }
+        return self
+    }
 }
