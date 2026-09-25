@@ -371,7 +371,9 @@ struct TerrainChapter: View {
         defer { checking = false }
         do {
             let evaluated = try await store.evaluate(plan, targetElevationFt: targetFt)
-            target = evaluated.elevationTarget?.byHour ?? []
+            let byHour = evaluated.elevationTarget?.byHour ?? []
+            // Slide the marker to the new elevation; a first result just appears.
+            withAnimation(target.isEmpty ? nil : .smooth) { target = byHour }
             targetError = nil
         } catch {
             target = []
@@ -431,7 +433,8 @@ struct TerrainChapter: View {
 
 /// The mountain in cross-section: bands by elevation on the right, freezing and snow levels across the
 /// slope, the objective on the ridge. Heights are to scale; the ridge shape is illustrative
-/// (`frontend/src/field/sky/MountainSection.tsx`).
+/// (`frontend/src/field/sky/MountainSection.tsx`). The first time it scrolls into view the ridge rises,
+/// snow settles to the snow level, the level lines draw across and the labels arrive.
 struct MountainSection: View {
     var bands: [ElevationBand]
     var objectiveFt: Double?
@@ -439,6 +442,50 @@ struct MountainSection: View {
     var snowFt: Double?
     var target: ElevationBand?
     var sky: SkyKind
+
+    @State private var reveal: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        MountainPlot(bands: bands, objectiveFt: objectiveFt, freezingFt: freezingFt, snowFt: snowFt, target: target, sky: sky,
+                     reveal: reduceMotion ? 1 : reveal, targetFt: target?.elevationFt ?? 0)
+            .onScrollVisibilityChange(threshold: 0.5) { visible in
+                guard visible, reveal == 0 else { return }
+                withAnimation(.linear(duration: 1.6)) { reveal = 1 }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Conditions by elevation. " + bands.map { "\($0.label) \(Format.feet($0.elevationFt)): \(Format.temp($0.temp)), gusts \(Format.mph($0.gust))" }.joined(separator: ". "))
+    }
+}
+
+/// The drawing behind `MountainSection`, redrawn each frame while `reveal` (0–1, the entrance) or
+/// `targetFt` (the checked elevation, which slides along the ridge) animate.
+private struct MountainPlot: View, Animatable {
+    var bands: [ElevationBand]
+    var objectiveFt: Double?
+    var freezingFt: Double?
+    var snowFt: Double?
+    var target: ElevationBand?
+    var sky: SkyKind
+    var reveal: Double
+    var targetFt: Double
+
+    var animatableData: AnimatablePair<Double, Double> {
+        get { AnimatablePair(reveal, targetFt) }
+        set { reveal = newValue.first; targetFt = newValue.second }
+    }
+
+    /// Progress through one stage of the entrance, eased out.
+    private func stage(_ from: Double, _ to: Double) -> CGFloat {
+        let t = min(1, max(0, (reveal - from) / (to - from)))
+        return CGFloat(1 - pow(1 - t, 3))
+    }
+
+    /// Like `stage`, with a small overshoot for markers that pop in.
+    private func pop(_ from: Double, _ to: Double) -> CGFloat {
+        let t = min(1, max(0, (reveal - from) / (to - from))) - 1
+        return CGFloat(1 + 2.4 * t * t * t + 1.4 * t * t)
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -467,85 +514,105 @@ struct MountainSection: View {
                 }
                 return yy > ridge[0].y ? 0 : peakX
             }
+            // The ridge rises from the ground, left to right a little ahead of the peak.
+            let risen = ridge.map { point in
+                let lead = 0.2 * Double(point.x / max(1, plotW))
+                return CGPoint(x: point.x, y: height - (height - point.y) * stage(lead, 0.5 + lead))
+            }
+            let levelsIn = stage(0.5, 0.8), labelsIn = stage(0.6, 0.92)
+            let labelYs = spread(bands.map { y($0.elevationFt) }, gap: 40, min: 22, max: height - 22)
             ZStack(alignment: .topLeading) {
+                let (zenith, horizon) = sky.colors
+                LinearGradient(colors: [zenith.opacity(0.82), horizon.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                    .id(sky)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.5)))
+                    .frame(width: plotW, height: height)
+                    .opacity(Double(stage(0, 0.3)))
                 Canvas { context, _ in
-                    let plot = CGRect(x: 0, y: 0, width: plotW, height: height)
-                    let (zenith, horizon) = sky.colors
-                    context.fill(Path(plot), with: .linearGradient(Gradient(colors: [zenith.opacity(0.82), horizon.opacity(0.6)]), startPoint: .zero, endPoint: CGPoint(x: 0, y: height)))
                     var shape = Path()
-                    shape.move(to: ridge[0])
-                    for point in ridge.dropFirst() { shape.addLine(to: point) }
+                    shape.move(to: risen[0])
+                    for point in risen.dropFirst() { shape.addLine(to: point) }
                     shape.addLine(to: CGPoint(x: plotW, y: height)); shape.addLine(to: CGPoint(x: 0, y: height)); shape.closeSubpath()
                     context.fill(shape, with: .color(Color(hex: 0x3B4A42)))
                     if let snowFt {
+                        // Snow settles from the sky down to the snow level.
                         var snowContext = context
                         snowContext.clip(to: shape)
-                        snowContext.fill(Path(CGRect(x: 0, y: 0, width: plotW, height: y(snowFt))), with: .color(Color(hex: 0xF4F7F8).opacity(0.94)))
+                        snowContext.fill(Path(CGRect(x: 0, y: 0, width: plotW, height: y(snowFt) * stage(0.38, 0.72))), with: .color(Color(hex: 0xF4F7F8).opacity(0.94)))
                     }
                     context.stroke(shape, with: .color(.black.opacity(0.22)), lineWidth: 1)
                     for (ft, color) in [(freezingFt, Palette.cold), (snowFt, Palette.secondary)] {
-                        guard let ft, ft > lo, ft < hi else { continue }
-                        var line = Path(); line.move(to: CGPoint(x: 0, y: y(ft))); line.addLine(to: CGPoint(x: plotW, y: y(ft)))
+                        guard let ft, ft > lo, ft < hi, levelsIn > 0 else { continue }
+                        var line = Path(); line.move(to: CGPoint(x: 0, y: y(ft))); line.addLine(to: CGPoint(x: plotW * levelsIn, y: y(ft)))
                         context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                     }
                     // Leaders from each band on the ridge out to its label.
-                    let labelYs = spread(bands.map { y($0.elevationFt) }, gap: 40, min: 22, max: height - 22)
                     for (index, band) in bands.enumerated() {
                         var leader = Path()
                         leader.move(to: CGPoint(x: ridgeX(band.elevationFt), y: y(band.elevationFt)))
                         leader.addLine(to: CGPoint(x: plotW, y: y(band.elevationFt)))
                         leader.addLine(to: CGPoint(x: plotW + 8, y: labelYs[index]))
                         leader.addLine(to: CGPoint(x: width, y: labelYs[index]))
-                        context.stroke(leader, with: .color(Palette.label.opacity(0.35)), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+                        context.stroke(leader, with: .color(Palette.label.opacity(0.35 * labelsIn)), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
                     }
-                    if let target {
-                        let point = CGPoint(x: ridgeX(target.elevationFt), y: y(target.elevationFt))
-                        var line = Path(); line.move(to: point); line.addLine(to: CGPoint(x: plotW, y: point.y))
+                    if target != nil {
+                        let point = CGPoint(x: ridgeX(targetFt), y: y(targetFt))
+                        let r = 5 * pop(0.8, 1)
+                        var line = Path(); line.move(to: point); line.addLine(to: CGPoint(x: point.x + (plotW - point.x) * stage(0.8, 1), y: point.y))
                         context.stroke(line, with: .color(Palette.accent), style: StrokeStyle(lineWidth: 1.5, dash: [2, 3]))
-                        context.fill(Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10)), with: .color(Palette.accent))
+                        context.fill(Path(ellipseIn: CGRect(x: point.x - r, y: point.y - r, width: r * 2, height: r * 2)), with: .color(Palette.accent))
                     }
                     if let objectiveFt {
                         let point = CGPoint(x: ridgeX(objectiveFt), y: y(objectiveFt))
-                        context.fill(Path(ellipseIn: CGRect(x: point.x - 7, y: point.y - 7, width: 14, height: 14)), with: .color(.white))
-                        context.stroke(Path(ellipseIn: CGRect(x: point.x - 7, y: point.y - 7, width: 14, height: 14)), with: .color(Palette.label), lineWidth: 3)
+                        let r = 7 * pop(0.7, 0.95)
+                        let dot = CGRect(x: point.x - r, y: point.y - r, width: r * 2, height: r * 2)
+                        context.fill(Path(ellipseIn: dot), with: .color(.white))
+                        context.stroke(Path(ellipseIn: dot), with: .color(Palette.label), lineWidth: 3 * min(1, r / 7))
                     }
                 }
                 // Text on top of the drawing.
                 if let freezingFt, freezingFt > lo, freezingFt < hi {
-                    levelLabel("Freezing level \(Format.feet(freezingFt))", color: Palette.cold).position(x: 80, y: y(freezingFt) - 9)
+                    levelLabel("Freezing level \(Format.feet(freezingFt))", color: Palette.cold).position(x: 80, y: y(freezingFt) - 9).opacity(levelsIn)
                 }
                 if let snowFt, snowFt > lo, snowFt < hi {
-                    levelLabel("Snow level \(Format.feet(snowFt))", color: Palette.label).position(x: 72, y: y(snowFt) + 11)
+                    levelLabel("Snow level \(Format.feet(snowFt))", color: Palette.label).position(x: 72, y: y(snowFt) + 11).opacity(levelsIn)
                 }
                 if let objectiveFt {
                     Text("Objective").font(.caption.weight(.bold)).foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.6), radius: 2)
                         .position(x: max(40, ridgeX(objectiveFt) - 44), y: y(objectiveFt) - 12)
+                        .opacity(stage(0.75, 1))
                 }
                 if let target {
-                    Text("\(Format.feet(target.elevationFt)) · \(Format.temp(target.temp))")
+                    Text("\(Format.feet(targetFt)) · \(Format.temp(target.temp))")
                         .font(.caption.weight(.bold))
+                        .contentTransition(.numericText())
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Palette.surface.opacity(0.85), in: Capsule())
-                        .position(x: min(plotW - 58, ridgeX(target.elevationFt) + 62), y: y(target.elevationFt) + 16)
+                        .position(x: min(plotW - 58, ridgeX(targetFt) + 62), y: y(targetFt) + 16)
+                        .opacity(stage(0.85, 1))
                 }
-                let labelYs = spread(bands.map { y($0.elevationFt) }, gap: 40, min: 22, max: height - 22)
                 ForEach(Array(bands.enumerated()), id: \.offset) { index, band in
+                    // Lowest band first, each a beat after the one below, rising with the ridge.
+                    let rank = Double(bands.filter { $0.elevationFt < band.elevationFt }.count)
+                    let beat = min(0.06, 0.18 / Double(max(1, bands.count - 1)))
+                    let arrive = stage(0.6 + beat * rank, 0.82 + beat * rank)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("\(bandName(band.label)) · \(Format.feet(band.elevationFt))").font(.system(size: 11)).foregroundStyle(Palette.secondary)
                         Text("\(Format.temp(band.temp)) · gust \(Format.windNumber(band.gust))")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle((band.temp ?? 99) <= 32 ? Palette.cold : Palette.label)
+                            .contentTransition(.numericText())
                     }
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .frame(width: side - 12, alignment: .leading)
                     .position(x: plotW + 12 + (side - 12) / 2, y: labelYs[index] + 4)
+                    .opacity(arrive)
+                    .offset(x: 10 * (1 - arrive))
                 }
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Conditions by elevation. " + bands.map { "\($0.label) \(Format.feet($0.elevationFt)): \(Format.temp($0.temp)), gusts \(Format.mph($0.gust))" }.joined(separator: ". "))
     }
 
     private func bandName(_ label: String) -> String {
