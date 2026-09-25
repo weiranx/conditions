@@ -92,6 +92,7 @@ private struct AdminOverview: View {
                 RawDataDisclosure(title: "History", value: history.value)
             }
         }
+        .pageBackground()
         .task { await load() }
         .refreshable { await load() }
     }
@@ -162,6 +163,7 @@ private struct AdminUsers: View {
                 Text("\(users.count) shown")
             }
         }
+        .pageBackground()
         .searchable(text: $search, prompt: "Name or email")
         .task { await directory.load("users") }
         .refreshable { await directory.load("users") }
@@ -223,6 +225,7 @@ private struct AdminFlags: View {
                 Text(loader.value["persistent"].bool == true ? "Saved on the server and kept across restarts." : "Not persistent: these reset when the server restarts.")
             }
         }
+        .pageBackground()
         .task { await loader.load("feature-flags") }
         .refreshable { await loader.load("feature-flags") }
     }
@@ -280,6 +283,7 @@ private struct AdminActivity: View {
                 }
             }
         }
+        .pageBackground()
         .task { await load() }
         .refreshable { await load() }
     }
@@ -338,6 +342,7 @@ private struct AdminMaintenance: View {
                 Text("These change the live server. Each one is recorded in the admin activity log.")
             }
         }
+        .pageBackground()
         .confirmationDialog(confirm?.rawValue ?? "", isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }), titleVisibility: .visible) {
             if let action = confirm {
                 Button(action.rawValue, role: .destructive) { Task { await run(action) } }

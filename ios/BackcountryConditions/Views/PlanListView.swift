@@ -126,7 +126,8 @@ struct PlanListView: View {
     private var subtitle: String {
         let count = store.upcoming.count
         let watched = store.watched.count
-        let plans = count == 1 ? "1 upcoming plan" : "\(count) upcoming plans"
+        if store.plans.isEmpty { return "Check an objective against your limits." }
+        let plans = count == 0 ? "No upcoming plans" : count == 1 ? "1 upcoming plan" : "\(count) upcoming plans"
         return watched > 0 ? "\(plans) · \(watched) on your watchlist" : plans
     }
 

@@ -137,11 +137,13 @@ extension CardHead where Trailing == EmptyView {
 }
 
 enum TagKind {
-    case ok, over, stop, missing
+    /// `info` is guidance rather than a check the plan passed.
+    case ok, info, over, stop, missing
 
     var symbol: String {
         switch self {
         case .ok: "checkmark"
+        case .info: "info.circle"
         case .over: "exclamationmark.triangle"
         case .stop: "xmark.octagon"
         case .missing: "questionmark.circle"
@@ -150,7 +152,7 @@ enum TagKind {
 
     var color: Color {
         switch self {
-        case .ok: Palette.secondary
+        case .ok, .info: Palette.secondary
         case .over: Palette.caution
         case .stop: Palette.stop
         case .missing: Palette.missing
@@ -264,12 +266,14 @@ struct Notice: View {
     enum Tone { case info, caution, missing }
     var tone: Tone
     var text: String
+    /// Replaces the tone's symbol, e.g. a book for a saved snapshot.
+    var symbol: String? = nil
     var actionTitle: String?
     var action: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: tone == .info ? "book" : tone == .caution ? "exclamationmark.triangle" : "questionmark.circle")
+            Image(systemName: symbol ?? (tone == .info ? "info.circle" : tone == .caution ? "exclamationmark.triangle" : "questionmark.circle"))
                 .foregroundStyle(tone == .caution ? Palette.caution : Palette.secondary)
             VStack(alignment: .leading, spacing: 8) {
                 Text(text).font(.footnote).foregroundStyle(Palette.label).fixedSize(horizontal: false, vertical: true)
@@ -322,7 +326,8 @@ struct LimitScale: View {
     var body: some View {
         Canvas { context, size in
             let w = size.width
-            func x(_ v: Double) -> CGFloat { CGFloat(max(0, min(1, (v - range.lowerBound) / (range.upperBound - range.lowerBound)))) * w }
+            // Inset by the dot's radius so a value at either end isn't clipped.
+            func x(_ v: Double) -> CGFloat { 6 + CGFloat(max(0, min(1, (v - range.lowerBound) / (range.upperBound - range.lowerBound)))) * (w - 12) }
             let track = CGRect(x: 0, y: 7, width: w, height: 8)
             context.fill(Path(roundedRect: track, cornerRadius: 4), with: .color(Palette.fill))
             let shade = side == .above ? CGRect(x: x(limit), y: 7, width: w - x(limit), height: 8) : CGRect(x: 0, y: 7, width: x(limit), height: 8)
@@ -425,6 +430,8 @@ struct ChapterChips: View {
                 .padding(.vertical, 4)
             }
             .scrollEdgeEffectHidden(true, for: .all)
+            // Unclipped, so the chips' glass doesn't leave a band at the row's edges.
+            .scrollClipDisabled()
             // Keep the open chapter's chip in view, including when a brief card opens a later chapter.
             .onAppear { proxy.scrollTo(selection, anchor: .center) }
             .onChange(of: selection) { withAnimation(.snappy) { proxy.scrollTo(selection, anchor: .center) } }
@@ -468,5 +475,12 @@ extension ItemCard where Footer == EmptyView {
          caption: String? = nil, captionTone: Color = Palette.secondary, captionEmphasized: Bool = false, levelLabel: String? = nil) {
         self.init(title: title, level: level, meta: meta, tiles: tiles, stripStart: stripStart, stripEnd: stripEnd,
                   caption: caption, captionTone: captionTone, captionEmphasized: captionEmphasized, levelLabel: levelLabel) { EmptyView() }
+    }
+}
+
+extension View {
+    /// A form on the app's page colour instead of the system's grouped gray.
+    func pageBackground() -> some View {
+        scrollContentBackground(.hidden).background(Palette.bg)
     }
 }
