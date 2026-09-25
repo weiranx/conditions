@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -379,4 +379,105 @@ test('--no-build releases start the MCP server without rebuilding it', (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(f.calls(), /up -d conditions-mcp/);
   assert.doesNotMatch(f.calls(), /image tag|build --pull/);
+});
+
+// Commits files to origin and returns the new SHA.
+function commit(f, files) {
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(f.origin, path)), { recursive: true });
+    writeFileSync(join(f.origin, path), content);
+  }
+  f.git(f.origin, 'add', '--', ...Object.keys(files));
+  f.git(f.origin, 'commit', '-m', `change ${Object.keys(files).join(' ')}`);
+  return f.git(f.origin, 'rev-parse', 'HEAD');
+}
+
+// A committed MCP server, as in production, with its ignored .env on the host.
+function trackMcp(f) {
+  const sha = commit(f, { '.gitignore': '.env\n', 'mcp/compose.yaml': '# test fixture\n' });
+  mkdirSync(join(f.host, 'mcp'), { recursive: true });
+  writeFileSync(join(f.host, 'mcp', '.env'), '# no secrets in tests\n');
+  return sha;
+}
+
+const builds = (f, name) => f.calls().split('\n').filter((call) => call.endsWith(`build --pull ${name}`)).length;
+
+test('a release that touches neither the backend nor MCP keeps both running', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run(trackMcp(f)).status, 0);
+  assert.equal(builds(f, 'backend'), 1);
+  assert.equal(builds(f, 'conditions-mcp'), 1);
+  const restarts = f.calls().split('\n').filter((call) => call.includes('up -d')).length;
+  const result = f.run(f.advance());
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Backend unchanged since [0-9a-f]{40}; keeping the running backend/);
+  assert.match(result.stdout, /MCP server unchanged since [0-9a-f]{40}; keeping the running server/);
+  assert.match(result.stdout, /Deploy complete/);
+  assert.equal(builds(f, 'backend'), 1);
+  assert.equal(builds(f, 'conditions-mcp'), 1);
+  assert.equal(f.calls().split('\n').filter((call) => call.includes('up -d')).length, restarts);
+});
+
+test('a backend change rebuilds the backend and keeps the unchanged MCP server', (t) => {
+  const f = fixture(t);
+  writeFileSync(join(f.host, '.env'), 'DATABASE_URL=postgresql://test.invalid/example\n');
+  assert.equal(f.run(trackMcp(f)).status, 0);
+  const result = f.run(commit(f, { 'backend/index.js': 'changed\n' }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(builds(f, 'backend'), 2);
+  assert.equal(f.calls().split('\n').filter((call) => call.endsWith('npm run db:migrate')).length, 2);
+  assert.equal(builds(f, 'conditions-mcp'), 1);
+});
+
+test('an MCP change rebuilds only the MCP server', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run(trackMcp(f)).status, 0);
+  const result = f.run(commit(f, { 'mcp/src/index.js': 'changed\n' }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(builds(f, 'backend'), 1);
+  assert.equal(builds(f, 'conditions-mcp'), 2);
+});
+
+test('a docker-compose.yml change rebuilds the backend', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run().status, 0);
+  assert.equal(f.run(commit(f, { 'docker-compose.yml': '# changed\n' })).status, 0);
+  assert.equal(builds(f, 'backend'), 2);
+});
+
+test('a rolled-back release is built again by the next one', (t) => {
+  const f = fixture(t);
+  const failed = commit(f, { 'backend/index.js': 'broken\n' });
+  assert.equal(f.run(failed, { TEST_HEALTH_EXIT: '28', TEST_ROLLBACK_HEALTHY: '1' }).status, 1);
+  const result = f.run(f.advance());
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(builds(f, 'backend'), 2);
+});
+
+test('an unchanged backend that is not running is started again', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run().status, 0);
+  const result = f.run(f.advance(), { TEST_BACKEND_RUNNING: '0' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(builds(f, 'backend'), 2);
+});
+
+test('an image built with uncommitted files is rebuilt by the next release', (t) => {
+  const f = fixture(t);
+  mkdirSync(join(f.host, 'backend'));
+  writeFileSync(join(f.host, 'backend', 'hotfix.js'), 'untracked\n');
+  assert.equal(f.run().status, 0);
+  rmSync(join(f.host, 'backend', 'hotfix.js'));
+  assert.equal(f.run(f.advance()).status, 0);
+  assert.equal(builds(f, 'backend'), 2);
+});
+
+test('manual releases rebuild unchanged images', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run().status, 0);
+  const result = spawnSync('bash', [join(f.host, 'scripts', 'deploy.sh'), '--no-pull', '--no-nginx'], {
+    cwd: f.host, env: { ...f.env, DEPLOY_SHA: f.initial }, encoding: 'utf8', timeout: 10_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(builds(f, 'backend'), 2);
 });

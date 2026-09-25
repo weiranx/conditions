@@ -60,3 +60,23 @@ test('every job releases the commit that passed CI', () => {
   }
   assert.match(jobs().frontend, /--commit-hash "\$DEPLOY_SHA"/);
 });
+
+test('the frontend builds and ships only when frontend/ differs from the live deployment', () => {
+  const { frontend } = jobs();
+  const steps = frontend.split(/\n(?= {6}- )/).slice(1);
+  const check = steps.findIndex((step) => /id: live\n/.test(step));
+  assert.ok(check > 0, 'the live check runs after the checkout');
+  assert.match(steps[check], /canonical_deployment\.deployment_trigger\.metadata\.commit_hash/);
+  assert.match(steps[check], /git diff --quiet "\$live" HEAD -- \./);
+  assert.match(frontend, /fetch-depth: 0\n\s+filter: blob:none/);
+  for (const step of steps.slice(check + 1)) {
+    assert.match(step, /^ {8}if: steps\.live\.outputs\.deploy == 'true'$/m, step.split('\n')[0]);
+  }
+  // Only the steps skip, so the smoke test still follows every release.
+  assert.doesNotMatch(frontend, /outputs:/);
+});
+
+test('the backend release skips unchanged images on the droplet', () => {
+  const bootstrap = readFileSync(new URL('../ci-deploy.sh', import.meta.url), 'utf8');
+  assert.match(bootstrap, /deploy\.sh" --no-pull --no-nginx --skip-unchanged\n/);
+});

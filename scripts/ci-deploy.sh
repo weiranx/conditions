@@ -42,4 +42,5 @@ git merge --ff-only "$DEPLOY_SHA"
 
 echo "==> Releasing tested commit $DEPLOY_SHA"
 # deploy.sh recognizes the inherited descriptor and holds it through readiness.
-SUMMITSAFE_DEPLOY_LOCK_FD=9 exec bash "$APP_DIR/scripts/deploy.sh" --no-pull --no-nginx
+# --skip-unchanged keeps a running backend or MCP server this commit does not touch.
+SUMMITSAFE_DEPLOY_LOCK_FD=9 exec bash "$APP_DIR/scripts/deploy.sh" --no-pull --no-nginx --skip-unchanged
