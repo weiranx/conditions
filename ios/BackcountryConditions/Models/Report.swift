@@ -24,6 +24,7 @@ struct Hour: Identifiable, Hashable, Sendable {
 
     static func shortLabel(minutes: Int) -> String {
         let hour = minutes / 60 % 24
+        if Units.current.timeStyle == .twentyFour { return String(format: "%02d", hour) }
         if hour == 12 { return "Noon" }
         let twelve = hour % 12 == 0 ? 12 : hour % 12
         return "\(twelve) \(hour < 12 ? "AM" : "PM")"
@@ -231,11 +232,32 @@ struct Report: Sendable {
     var alertTitles: [String] { json.at("alerts.alerts").array.compactMap { $0["event"].string ?? $0["headline"].string } }
     var airQualityAQI: Int? { json.at("airQuality.usAqi").int }
     var airQualityCategory: String? { json.at("airQuality.category").string }
-    var gear: [(title: String, detail: String, category: String)] {
-        json["gear"].array.compactMap { item in
-            guard let title = item["title"].string else { return nil }
-            return (title, item["detail"].string ?? "", item["category"].string ?? "Other")
+    struct GearItem: Hashable, Sendable {
+        var title: String
+        var detail: String
+        var category: String
+        var tone: String
+        var reason: String?
+    }
+
+    /// The backend's gear suggestions, one per title and category, keeping the most urgent tone.
+    var gear: [GearItem] {
+        var seen: [String: Int] = [:]
+        var items: [GearItem] = []
+        let rank: (String) -> Int = { $0 == "nogo" ? 0 : $0 == "caution" ? 1 : 2 }
+        for item in json["gear"].array {
+            guard let title = item["title"].string?.trimmingCharacters(in: .whitespaces), !title.isEmpty else { continue }
+            let next = GearItem(title: title, detail: item["detail"].string ?? "", category: item["category"].string ?? "Other",
+                                tone: item["tone"].string ?? "go", reason: item["reason"].string?.trimmingCharacters(in: .whitespaces).nilIfEmpty)
+            let key = "\(title)|\(next.detail)|\(next.category)"
+            if let index = seen[key] {
+                if rank(next.tone) < rank(items[index].tone) { items[index] = next }
+            } else {
+                seen[key] = items.count
+                items.append(next)
+            }
         }
+        return items
     }
     var sources: [(label: String, state: String, issued: String?)] {
         evaluation.at("interpretation.sourceFreshness.rows").array.map {
@@ -243,6 +265,23 @@ struct Report: Sendable {
         }
     }
     var weatherProvider: String? { json.at("safety.weatherProvenance.provider").string }
+
+    /// Links to each source the report read, when it carried one.
+    var sourceLinks: [(label: String, url: URL)] {
+        let candidates: [(String, String?)] = [
+            ("Weather forecast", json.at("weather.forecastLink").string),
+            ("Avalanche center", json.at("avalanche.link").string),
+            ("Precipitation source", json.at("rainfall.link").string ?? json.at("rainfall.sourceLink").string),
+            ("SNOTEL", json.at("snowpack.snotel.link").string),
+            ("NOHRSC", json.at("snowpack.nohrsc.link").string),
+            ("CDEC", json.at("snowpack.cdec.link").string),
+            ("Air quality", json.at("airQuality.link").string ?? json.at("airQuality.sourceLink").string),
+        ]
+        return candidates.compactMap { label, raw in
+            guard let raw, let url = URL(string: raw), url.scheme == "https" || url.scheme == "http" else { return nil }
+            return (label, url)
+        }
+    }
     var forecastLink: URL? { json.at("weather.forecastLink").string.flatMap(URL.init(string:)) }
 
     /// Night at camp, present on itinerary stage reports (`camp_night=1`).
@@ -269,26 +308,60 @@ extension ISO8601DateFormatter {
     }
 }
 
-/// Presentation of numbers the report carries in imperial units.
+/// Presentation of numbers the report carries in imperial units, in the traveler's display units.
 enum Format {
+    static var units: Units { Units.current }
+
     static func feet(_ value: Double) -> String {
-        "\(Int(value.rounded()).formatted(.number.grouping(.automatic))) ft"
+        "\(Int(units.elevation(value).rounded()).formatted(.number.grouping(.automatic))) \(units.elevationSymbol)"
+    }
+
+    /// Feet rounded to the nearest 100 (or 50 m), for "near 7,200 ft".
+    static func roundFeet(_ value: Double) -> String {
+        let display = units.elevation(value)
+        let step: Double = units.elevation == .m ? 50 : 100
+        return "\(Int((display / step).rounded() * step).formatted(.number.grouping(.automatic))) \(units.elevationSymbol)"
+    }
+
+    static func miles(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        let display = units.distance(value)
+        return "\(display < 10 ? String(format: "%.1f", display) : String(Int(display.rounded()))) \(units.distanceSymbol)"
     }
 
     static func temp(_ value: Double?) -> String {
         guard let value else { return "—" }
-        let rounded = Int(value.rounded())
-        return rounded < 0 ? "−\(-rounded)°F" : "\(rounded)°F"
+        let rounded = Int(units.temp(value).rounded())
+        return rounded < 0 ? "−\(-rounded)\(units.tempSymbol)" : "\(rounded)\(units.tempSymbol)"
+    }
+
+    /// A temperature without its unit, for tight labels.
+    static func tempNumber(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        let rounded = Int(units.temp(value).rounded())
+        return rounded < 0 ? "−\(-rounded)°" : "\(rounded)°"
     }
 
     static func mph(_ value: Double?) -> String {
         guard let value else { return "—" }
-        return "\(Int(value.rounded())) mph"
+        return "\(Int(units.wind(value).rounded())) \(units.windSymbol)"
+    }
+
+    /// A wind speed without its unit.
+    static func windNumber(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return "\(Int(units.wind(value).rounded()))"
     }
 
     static func percent(_ value: Double?) -> String {
         guard let value else { return "—" }
         return "\(Int(value.rounded()))%"
+    }
+
+    static func inches(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        if units.elevation == .m { return String(format: "%.1f cm", value * 2.54) }
+        return String(format: value < 10 ? "%.1f in" : "%.0f in", value)
     }
 
     /// Plain wording for a travel-window rule, as `frontend/src/field/sky/status.ts` does:
@@ -305,4 +378,8 @@ enum Format {
         if let match = text.wholeMatch(of: /condition: (.+)/) { return "\(match.1) forecast" }
         return text.prefix(1).uppercased() + text.dropFirst()
     }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

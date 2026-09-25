@@ -3,9 +3,19 @@ import SwiftUI
 /// The Plan tab: upcoming plans with each one's sky strip and the backend's decision.
 struct PlanListView: View {
     @Environment(PlanStore.self) private var store
+    @Environment(AccountStore.self) private var account
     var openBrief: (UUID) -> Void
     var newPlan: () -> Void
+    var newTrip: () -> Void = {}
     @State private var showSettings = false
+    @State private var quickPlace: NewPlanDraft?
+
+    /// The web workspace's quick locations.
+    private static let quickLocations = [
+        Place(name: "Mount Rainier, Washington · Cascades", lat: 46.8523, lon: -121.7603, elevationFt: 14411, kind: "Peak"),
+        Place(name: "Grand Teton, Wyoming · Teton Range", lat: 43.7417, lon: -110.8024, elevationFt: 13775, kind: "Peak"),
+        Place(name: "Mount Whitney, California · Sierra Nevada", lat: 36.5786, lon: -118.2923, elevationFt: 14505, kind: "Peak"),
+    ]
 
     var body: some View {
         NavigationStack {
@@ -14,6 +24,8 @@ struct PlanListView: View {
                 Spacer().frame(height: 24)
                 if store.plans.isEmpty {
                     emptyState
+                    Spacer().frame(height: 26)
+                    quickLocations
                 } else {
                     if !store.upcoming.isEmpty {
                         SectionHead(title: "Upcoming") {
@@ -21,6 +33,8 @@ struct PlanListView: View {
                         }
                         planList(store.upcoming)
                     }
+                    Spacer().frame(height: 26)
+                    quickLocations
                     Spacer().frame(height: 26)
                     SectionHead("Library")
                     NavigationLink { SavedView(embedded: true) } label: {
@@ -48,16 +62,64 @@ struct PlanListView: View {
             }
             .refreshable { await store.refreshAll() }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showSettings = true } label: {
+                        if let user = account.user {
+                            Text(user.initial).font(.subheadline.weight(.semibold)).frame(width: 28, height: 28)
+                                .foregroundStyle(Palette.onAccent).background(Palette.accent, in: Circle())
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                        }
+                    }
+                    .accessibilityLabel("Account and settings")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }
                 }
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("New plan", systemImage: "plus", action: newPlan)
-                        .buttonStyle(.glassProminent).tint(Palette.prominent)
+                    Menu {
+                        Button("Day trip", systemImage: "sun.max", action: newPlan)
+                        if account.flags.tripPlanning { Button("Multi-day trip", systemImage: "tent", action: newTrip) }
+                    } label: {
+                        Label("New plan", systemImage: "plus")
+                    } primaryAction: { newPlan() }
+                    .buttonStyle(.glassProminent).tint(Palette.prominent)
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(item: $quickPlace) { draft in
+                NewPlanSheet(draft: draft) { plan in
+                    store.add(plan)
+                    openBrief(plan.id)
+                    Task { await store.refresh(plan) }
+                }
+            }
+        }
+    }
+
+    private var quickLocations: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionHead("Quick locations")
+            VStack(spacing: 8) {
+                ForEach(Self.quickLocations) { place in
+                    Button { quickPlace = NewPlanDraft(objective: place) } label: {
+                        Card(spacing: 0) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "mountain.2").foregroundStyle(Palette.accent)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(place.shortName).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.label)
+                                    Text(place.region ?? "").font(.caption).foregroundStyle(Palette.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.right").foregroundStyle(Palette.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -112,7 +174,7 @@ struct PlanCard: View {
         let level = store.level(plan)
         let report = store.report(plan)
         ItemCard(
-            title: plan.objective.shortName,
+            title: plan.title,
             level: store.loading.contains(plan.id) && level == .unknown ? nil : level,
             meta: meta,
             tiles: tiles,
@@ -130,11 +192,11 @@ struct PlanCard: View {
     }
 
     private var meta: String {
-        if plan.isSample { return "Sample · \(plan.activity.label) · \(DateText.short(plan.date))" }
+        if plan.isSample { return "Sample · \(plan.activityLabel) · \(DateText.short(plan.date))" }
         if plan.isTrip, let stages = plan.stages {
-            return "\(plan.activity.label) · \(DateText.range(plan.date, plan.endDate)) · \(stages.count) days"
+            return "\(plan.activityLabel) · \(DateText.range(plan.date, plan.endDate)) · \(stages.count) days"
         }
-        return "\(plan.activity.label) · \(DateText.short(plan.date)) · \(DateText.clock(plan.start))"
+        return "\(plan.activityLabel) · \(DateText.short(plan.date)) · \(DateText.clock(plan.start))"
     }
 
     private var tiles: [SkyTile] {

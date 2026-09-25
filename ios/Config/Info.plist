@@ -22,6 +22,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Conditions uses your location to plan an outing from where you are and to show you on the map.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Conditions connects to a conditions server on your local network when you set one in Settings.</string>
 	<key>UIBackgroundModes</key>

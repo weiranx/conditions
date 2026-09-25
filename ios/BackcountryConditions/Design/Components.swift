@@ -346,8 +346,25 @@ enum Chapter: String, CaseIterable, Identifiable {
     case weather = "Weather"
     case terrain = "Terrain & snow"
     case timing = "Timing"
+    case route = "Route"
     case checks = "Checks & sources"
     case gear = "Gear"
+
+    /// The chapters a report shows, in the order its activity reads them (the web's activity lens);
+    /// Checks & sources and Gear always close the report.
+    static func ordered(for activity: Activity, flags: FeatureFlags = AccountStore.shared.flags) -> [Chapter] {
+        let lead: [Chapter]
+        switch activity {
+        case .mountaineering: lead = [.weather, .terrain, .timing, .route]
+        case .snowClimbing: lead = [.terrain, .timing, .weather, .route]
+        case .skiTouring: lead = [.terrain, .weather, .timing, .route]
+        case .trailRunning: lead = [.weather, .timing, .route, .terrain]
+        default: lead = [.weather, .timing, .terrain, .route]
+        }
+        return (lead + [.checks, .gear]).filter { chapter in
+            (chapter != .route || flags.routeAnalysis) && (chapter != .gear || flags.gearRecommendations)
+        }
+    }
 
     var id: String { rawValue }
 
@@ -365,6 +382,7 @@ enum Chapter: String, CaseIterable, Identifiable {
         case .terrain: "mountain.2"
         case .timing: "clock"
         case .checks: "checkmark.shield"
+        case .route: "point.topleft.down.to.point.bottomright.curvepath"
         case .gear: "backpack"
         }
     }
@@ -391,12 +409,13 @@ struct GlassChip: View {
 
 struct ChapterChips: View {
     @Binding var selection: Chapter
+    var chapters: [Chapter] = Chapter.allCases
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(Chapter.allCases) { chapter in
+                    ForEach(chapters) { chapter in
                         let on = chapter == selection
                         GlassChip(title: chapter.rawValue, selected: on) { withAnimation(.snappy) { selection = chapter } }
                             .id(chapter)

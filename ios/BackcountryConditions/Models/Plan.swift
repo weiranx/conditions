@@ -92,6 +92,32 @@ struct Stage: Codable, Hashable, Sendable, Identifiable {
     var travelHours: Int
     var from: Place
     var to: Place
+    /// A layover day stays at last night's camp.
+    var layover: Bool?
+    /// High points or passes the day crosses, checked besides the camp (up to two).
+    var checkpoints: [Place]?
+
+    var isLayover: Bool { layover ?? (from == to) }
+}
+
+extension Place {
+    /// An itinerary point as `/api/itineraries/check` reads one.
+    var json: JSON {
+        var object: [String: JSON] = ["name": .string(shortName), "lat": .number(lat), "lon": .number(lon)]
+        object["elevationFt"] = elevationFt.map(JSON.number) ?? .null
+        return .object(object)
+    }
+
+    init?(json: JSON) {
+        guard let lat = json["lat"].double, let lon = json["lon"].double else { return nil }
+        self.init(name: json["name"].string ?? String(format: "%.4f, %.4f", lat, lon), lat: lat, lon: lon,
+                  elevationFt: json["elevationFt"].double ?? json["elevation"].double, kind: nil)
+    }
+
+    /// A dropped pin, named by its coordinates.
+    static func pin(lat: Double, lon: Double, name: String? = nil) -> Place {
+        Place(name: name ?? String(format: "%.4f, %.4f", lat, lon), lat: lat, lon: lon, elevationFt: nil, kind: "Pin")
+    }
 }
 
 /// Where a check last left the plan, for the watchlist.
@@ -122,26 +148,200 @@ struct Plan: Codable, Hashable, Sendable, Identifiable {
     var createdAt = Date()
     /// Backed by the bundled sample report instead of the server.
     var isSample: Bool = false
+    /// The traveler's own activity, planned as `activity` with its own limits.
+    var customActivityID: String?
+    var customActivityLabel: String?
+    /// Trailhead elevation, when the traveler knows it; the backend estimates it otherwise.
+    var trailheadFt: Double?
+    /// The route the plan follows, and its analysis.
+    var route: PlanRoute?
+    /// A multi-day trip's name, and places to leave it early.
+    var tripName: String?
+    var bailPoints: [Place]?
+    /// The latest report as saved to the account, and its share link token.
+    var accountReportID: String?
+    var shareToken: String?
+    /// The report generation the account copy was saved from.
+    var accountReportGeneratedAt: String?
+    /// The account's watch of this plan, when it has one.
+    var accountWatchID: String?
 
     var isTrip: Bool { (stages?.count ?? 0) >= 2 }
+
+    var activityLabel: String { customActivityLabel ?? activity.label }
+
+    /// Where the plan's limits and route timing are kept in preferences.
+    var activityKey: String { customActivityID ?? activity.rawValue }
+
+    var title: String {
+        if isTrip, let tripName, !tripName.isEmpty { return tripName }
+        return objective.shortName
+    }
 
     var endDate: String {
         guard let stages, stages.count > 1 else { return date }
         return DateText.addDays(date, stages.count - 1)
     }
 
-    /// The flat plan params `/api/safety` and `/api/evaluate` read.
-    var planParams: [String: String] {
-        [
-            "date": date,
-            "start": start,
-            "travel_window_hours": String(travelHours),
-            "activity": activity.rawValue,
+    /// The traveler's limits and display units (the web's `planSettingsParams`).
+    var settingsParams: [String: String] {
+        var params = [
             "max_gust_mph": String(limits.maxGustMph),
             "max_precip_chance": String(limits.maxPrecipChance),
             "min_feels_like_f": String(limits.minFeelsLikeF),
             "max_feels_like_f": String(limits.maxFeelsLikeF),
         ]
+        params.merge(PreferencesStore.shared.preferences.unitParams) { _, new in new }
+        return params
+    }
+
+    /// The flat plan params `/api/safety` and `/api/evaluate` read: when, for how long, the limits,
+    /// the display units and the approach.
+    var planParams: [String: String] {
+        let preferences = PreferencesStore.shared.preferences
+        var params = settingsParams
+        params["date"] = date
+        params["start"] = start
+        params["travel_window_hours"] = String(travelHours)
+        params["activity"] = activity.rawValue
+        params.merge(Approach.params(enabled: preferences.approachElevationAdjustment, trailheadFt: trailheadFt, route: route,
+                                     timing: preferences.routeTiming(for: activityKey))) { _, new in new }
+        return params
+    }
+
+    /// The plan an analysis or check was run for, to tell when it's out of date.
+    var timingKey: String { "\(date)|\(start)|\(travelHours)" }
+
+    /// `/api/itineraries/check`'s body (the web's `buildItineraryRequest`).
+    func itineraryRequest(startDate: String? = nil) -> JSON {
+        var params = settingsParams
+        if !PreferencesStore.shared.preferences.approachElevationAdjustment { params["approach"] = "off" }
+        let timing = PreferencesStore.shared.preferences.routeTiming(for: activityKey)
+        if timing.ascentMinutesPer1000Ft > 0 { params["ascent_min_per_kft"] = String(timing.ascentMinutesPer1000Ft) }
+        return .object([
+            "startDate": .string(startDate ?? date),
+            "name": .string(tripName?.isEmpty == false ? tripName! : objective.shortName),
+            "activity": .string(activity.rawValue),
+            "plan": .object(params.mapValues { .string($0) }),
+            "bailPoints": .array((bailPoints ?? []).map(\.json)),
+            "stages": .array((stages ?? []).map { stage in
+                .object(["start": .string(stage.start), "travelHours": .number(Double(stage.travelHours)),
+                         "from": stage.from.json, "to": stage.to.json,
+                         "checkpoints": .array((stage.checkpoints ?? []).map(\.json))])
+            }),
+        ])
+    }
+
+    /// The same plan for one day of its trip.
+    func dayPlan(_ index: Int) -> Plan? {
+        guard let stages, stages.indices.contains(index) else { return nil }
+        let stage = stages[index]
+        var day = self
+        day.id = UUID()
+        day.stages = nil
+        day.objective = stage.to
+        day.date = DateText.addDays(date, index)
+        day.start = stage.start
+        day.travelHours = stage.travelHours
+        day.tripName = nil
+        day.bailPoints = nil
+        day.watched = false
+        day.watch = nil
+        day.accountReportID = nil
+        day.shareToken = nil
+        day.accountWatchID = nil
+        return day
+    }
+}
+
+// MARK: - The web app's saved report format
+
+extension Plan {
+    /// The preferences a report was checked with, in the web's shape: the traveler's settings with
+    /// this plan's activity, limits and duration.
+    var webPreferences: JSON {
+        var preferences = PreferencesStore.shared.preferences
+        if let custom = customActivityID, preferences.customActivities.contains(where: { $0.id == custom }) {
+            preferences.customActivityID = custom
+        } else {
+            preferences.customActivityID = nil
+        }
+        preferences.defaultActivity = activity
+        preferences.limits = limits
+        preferences.travelWindowHours = travelHours
+        return preferences.web
+    }
+
+    /// A report snapshot as the web app saves one (`PersistedReport`, version 3), so saved reports,
+    /// watches and share links work in both apps.
+    func persistedReport(_ report: Report, aiNarrative: String? = nil, chat: [ChatMessage] = []) -> JSON {
+        let units = Units.current
+        let routeJSON: JSON = .object([
+            "routeSuggestions": .null,
+            "routeAnalysis": route?.analysis ?? .null,
+            "customRouteName": .string(route?.gpx == nil ? route?.name ?? "" : ""),
+            "gpxRoute": route?.gpx?.json ?? .null,
+            "routeShape": .string(route?.shape ?? "auto"),
+        ])
+        return .object([
+            "version": .number(3),
+            "savedAt": .string(ISO8601DateFormatter.flexible.string(from: Date())),
+            "plan": .object([
+                "lat": .number(objective.lat),
+                "lon": .number(objective.lon),
+                "objectiveName": .string(objective.shortName),
+                "searchQuery": .string(objective.name),
+                "forecastDate": .string(report.selectedDate ?? date),
+                "alpineStartTime": .string(start),
+                "targetElevationInput": .string(""),
+                "trailheadElevationInput": .string(trailheadFt.map { String(Int(units.elevation($0).rounded())) } ?? ""),
+                "travelWindowHours": .number(Double(travelHours)),
+            ]),
+            "preferences": webPreferences,
+            "safetyData": report.json,
+            "ai": .object([
+                "aiBriefNarrative": aiNarrative.map(JSON.string) ?? .null,
+                "snowVisionAnalysis": .null,
+                "snowVisionImage": .null,
+                "reportChatMessages": .array(chat.map(\.json)),
+            ]),
+            "route": routeJSON,
+        ])
+    }
+
+    /// A plan read back from a saved report snapshot.
+    init?(persisted snapshot: JSON) {
+        let plan = snapshot["plan"]
+        let data = snapshot["safetyData"]
+        guard let lat = plan["lat"].double, let lon = plan["lon"].double else { return nil }
+        let preferences = snapshot["preferences"]
+        let activity = (data.at("forecast.activity").string ?? preferences["defaultActivity"].string).flatMap(Activity.init(rawValue:)) ?? .backcountry
+        let evaluated = data.at("evaluation.plan.limits")
+        let limits = Limits(web: .object([
+            "maxWindGustMph": evaluated["maxWindGustMph"].isNull ? preferences["maxWindGustMph"] : evaluated["maxWindGustMph"],
+            "maxPrecipChance": evaluated["maxPrecipChance"].isNull ? preferences["maxPrecipChance"] : evaluated["maxPrecipChance"],
+            "minFeelsLikeF": evaluated["minFeelsLikeF"].isNull ? preferences["minFeelsLikeF"] : evaluated["minFeelsLikeF"],
+            "maxFeelsLikeF": evaluated["maxFeelsLikeF"].isNull ? preferences["maxFeelsLikeF"] : evaluated["maxFeelsLikeF"],
+        ]), fallback: activity.defaultLimits) ?? activity.defaultLimits
+        let name = plan["objectiveName"].string ?? data.at("location.name").string ?? "Objective"
+        self.init(objective: Place(name: name, lat: lat, lon: lon, elevationFt: data.at("weather.elevation").double, kind: nil),
+                  activity: activity,
+                  date: plan["forecastDate"].string ?? data.at("forecast.selectedDate").string ?? DateText.today(),
+                  start: plan["alpineStartTime"].string ?? "07:00",
+                  travelHours: plan["travelWindowHours"].int ?? 12,
+                  limits: limits)
+        let customID = preferences["customActivityId"].string
+        if let customID, let custom = preferences["customActivities"].array.first(where: { $0["id"].string == customID }) {
+            customActivityID = customID
+            customActivityLabel = custom["label"].string
+        }
+        let route = snapshot["route"]
+        let gpx = GpxRoute(json: route["gpxRoute"])
+        let routeName = gpx?.name ?? route["customRouteName"].string ?? route.at("routeAnalysis.routeName").string
+        if let routeName {
+            self.route = PlanRoute(name: routeName, gpx: gpx, shape: route["routeShape"].string ?? "auto",
+                                   analysis: route["routeAnalysis"].isNull ? nil : route["routeAnalysis"])
+        }
     }
 }
 
@@ -151,6 +351,8 @@ struct SavedReport: Codable, Hashable, Sendable, Identifiable {
     var plan: Plan
     var savedAt = Date()
     var reportData: Data
+    var aiNarrative: String?
+    var chat: [ChatMessage]?
 }
 
 /// Date and clock text in the formats the API and the screens use.
@@ -205,14 +407,11 @@ enum DateText {
         return "\(month.string(from: a)) \(day.string(from: a)) – \(month.string(from: b)) \(day.string(from: b))"
     }
 
-    /// "03:00" → "3:00 AM"
+    /// "03:00" → "3:00 AM" (or "03:00" on a 24-hour clock)
     static func clock(_ hhmm: String) -> String {
         let parts = hhmm.split(separator: ":").compactMap { Int($0) }
-        guard parts.count == 2 else { return hhmm }
-        let hour = parts[0] % 24
-        let suffix = hour < 12 ? "AM" : "PM"
-        let twelve = hour % 12 == 0 ? 12 : hour % 12
-        return String(format: "%d:%02d %@", twelve, parts[1], suffix)
+        guard parts.count >= 2 else { return hhmm }
+        return clock(minutes: (parts[0] % 24) * 60 + parts[1])
     }
 
     /// Minutes after midnight for "03:00".
@@ -242,10 +441,43 @@ enum DateText {
     }
 
     static func clock(minutes: Int) -> String {
-        let hour = (minutes / 60) % 24
+        let wrapped = ((minutes % 1440) + 1440) % 1440
+        let hour = wrapped / 60
+        if Units.current.timeStyle == .twentyFour { return String(format: "%02d:%02d", hour, wrapped % 60) }
         let suffix = hour < 12 ? "AM" : "PM"
         let twelve = hour % 12 == 0 ? 12 : hour % 12
-        return String(format: "%d:%02d %@", twelve, minutes % 60, suffix)
+        return String(format: "%d:%02d %@", twelve, wrapped % 60, suffix)
+    }
+
+    /// "yyyy-MM-dd" for a local calendar date.
+    static func iso(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 2026, parts.month ?? 1, parts.day ?? 1)
+    }
+
+    /// "HH:mm" for a local time.
+    static func hhmm(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    }
+
+    /// A local Date for "yyyy-MM-dd" (midnight), for date pickers.
+    static func localDate(_ iso: String) -> Date? {
+        guard let parsed = date(iso) else { return nil }
+        let utc = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: parsed)
+        return Calendar.current.date(from: DateComponents(year: utc.year, month: utc.month, day: utc.day))
+    }
+
+    /// A local Date today at "HH:mm", for time pickers.
+    static func localTime(_ hhmm: String) -> Date? {
+        guard let minutes = minutes(hhmm) else { return nil }
+        return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date())
+    }
+
+    /// Timestamps from the server ("2026-09-24T18:03:11.201Z").
+    static func stamp(_ text: String?) -> String? {
+        guard let text, let date = ISO8601DateFormatter.parse(text) else { return nil }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     static func relative(_ date: Date) -> String {
