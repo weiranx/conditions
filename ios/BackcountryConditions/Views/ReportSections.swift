@@ -305,20 +305,18 @@ struct WindLoadingSection: View {
                 }
                 HStack(alignment: .top, spacing: 16) {
                     AspectRose(aspects: Set(wind["leewardAspects"].strings)).frame(width: 100, height: 100)
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let summary = wind["summary"].string { Caption(summary, tone: Palette.label) }
-                        if let window = wind["activeWindowLabel"].string { FactRow(label: "Transport", value: window) }
-                        if let focus = wind["elevationFocus"].string { Caption(focus) }
-                    }
+                    if let summary = wind["summary"].string { Caption(summary, tone: Palette.label) }
                 }
+                if let action = wind["actionLine"].string { Caption(action, tone: Palette.label, emphasized: true) }
                 if !wind["leewardAspects"].strings.isEmpty {
                     FactRow(label: "Leeward aspects", value: wind["leewardAspects"].strings.joined(separator: ", "))
                 }
                 if !wind["secondaryAspects"].strings.isEmpty {
                     FactRow(label: "Cross-loaded", value: wind["secondaryAspects"].strings.joined(separator: ", "))
                 }
-                if let action = wind["actionLine"].string { Caption(action, tone: Palette.label, emphasized: true) }
-                if let detail = wind["activeHoursDetail"].string { Caption(detail) }
+                if let window = wind["activeWindowLabel"].string { FactRow(label: "Transport", value: window) }
+                if let detail = wind["activeHoursDetail"].string { FactRow(label: "When", value: detail) }
+                if let focus = wind["elevationFocus"].string { Caption(focus) }
                 RawDataDisclosure(title: "Wind loading notes and overlapping avalanche problems", value: wind)
             }
             .padding(.horizontal, 16)
@@ -339,7 +337,6 @@ struct TerrainWindowSection: View {
             let hours = report.hours
             SectionHead("Terrain through the day")
             Card(spacing: 8) {
-                if let explanation = grouped["explanation"].string { Caption(explanation) }
                 ScrollView(.horizontal, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 3) {
@@ -370,6 +367,8 @@ struct TerrainWindowSection: View {
                     }
                 }
                 .foregroundStyle(Palette.secondary)
+                // How the cells are rated reads as a footnote to the grid, not an introduction to it.
+                if let explanation = grouped["explanation"].string { Caption(explanation) }
             }
             .padding(.horizontal, 16)
         }
@@ -400,9 +399,20 @@ struct SurfaceSection: View {
                 }
                 if let summary = surface["summary"].string { Caption(summary, tone: Palette.label) }
                 if let travel = surface["recommendedTravel"].string { Caption(travel) }
-                if let impact = surface["impact"].string { Caption(impact) }
-                ForEach(surface["reasons"].strings, id: \.self) { reason in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) { Circle().fill(Palette.secondary).frame(width: 4, height: 4); Caption(reason) }
+                let impact = surface["impact"].string
+                let reasons = surface["reasons"].strings
+                if impact != nil || !reasons.isEmpty {
+                    DisclosureGroup("Why") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let impact { Caption(impact) }
+                            ForEach(reasons, id: \.self) { reason in
+                                HStack(alignment: .firstTextBaseline, spacing: 6) { Circle().fill(Palette.secondary).frame(width: 4, height: 4); Caption(reason) }
+                            }
+                        }
+                        .padding(.top, 6)
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .tint(Palette.secondary)
                 }
                 let profile = surface["snowProfile"]
                 if !profile.isNull {
@@ -485,7 +495,6 @@ struct ScoreSection: View {
             Text(insufficient ? "Insufficient evidence" : safety["score"].double.map { "\(Int($0.rounded()))/100" } ?? "—")
         }
         Card(spacing: 8) {
-            Caption("Higher scores mean fewer modeled hazards. Trip checks and field warnings still apply.")
             if groups.isEmpty {
                 Caption("No group deductions were supplied with this report.")
             }
@@ -525,8 +534,16 @@ struct ScoreSection: View {
                 .font(.footnote.weight(.semibold))
                 .tint(Palette.secondary)
             }
-            Caption("The score starts at 100. Related hazards are combined to limit double counting; severe hazards can enforce a minimum deduction.")
-            if let version = safety["scoreVersion"].string { Caption("Scoring model \(version) · Saved reports may use earlier rules.") }
+            DisclosureGroup("How the score works") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Caption("Higher scores mean fewer modeled hazards. Trip checks and field warnings still apply.")
+                    Caption("The score starts at 100. Related hazards are combined to limit double counting; severe hazards can enforce a minimum deduction.")
+                    if let version = safety["scoreVersion"].string { Caption("Scoring model \(version) · Saved reports may use earlier rules.") }
+                }
+                .padding(.top, 6)
+            }
+            .font(.footnote.weight(.semibold))
+            .tint(Palette.secondary)
         }
         .padding(.horizontal, 16)
     }
@@ -711,6 +728,66 @@ struct ContingencySection: View {
     }
 }
 
+// MARK: - Field reports
+
+/// A field report to check: a warning symbol, its title and a line or two of detail.
+struct SignalRow: View {
+    var title: String
+    var detail: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle").font(.footnote.weight(.semibold)).foregroundStyle(Palette.caution)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.label)
+                if !detail.isEmpty { Caption(detail).lineLimit(2) }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// The feeds that returned nothing, on one line (the web's `sky-missing-line`).
+struct MissingFeedsLine: View {
+    var titles: [String]
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "questionmark.circle").font(.footnote.weight(.semibold)).foregroundStyle(Palette.missing)
+            // The backend titles each "Radar unavailable"; the line says "unavailable" once.
+            (Text("\(titles.count) \(titles.count == 1 ? "feed" : "feeds") unavailable: ").fontWeight(.semibold)
+                + Text(titles.map { $0.replacingOccurrences(of: " unavailable", with: "") }.joined(separator: " · ")))
+                .font(.footnote).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// Every nearby field report and feed (the web's "Field reports and access").
+struct FieldReportsSection: View {
+    var report: Report
+
+    var body: some View {
+        let signals = report.fieldSignals
+        let attention = signals.filter { $0.tone == "attention" }
+        let missing = signals.filter { $0.tone == "unavailable" }.map(\.title)
+        if report.showsFieldObservations, !signals.isEmpty {
+            SectionHead(title: "Field reports and access") {
+                Text(attention.isEmpty ? "Nothing unusual" : "\(attention.count) to check")
+            }
+            Card(spacing: 12) {
+                ForEach(Array(attention.enumerated()), id: \.offset) { _, signal in
+                    SignalRow(title: signal.title, detail: signal.detail)
+                }
+                if !missing.isEmpty { MissingFeedsLine(titles: missing) }
+                Caption("Nearby stations and reports may not describe your exact route.")
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
 // MARK: - Before you commit
 
 /// Field, access and forecast insights the backend flagged (the web's `ReportInsights`).
@@ -727,42 +804,49 @@ struct InsightsSection: View {
             item["decisionRelevant"].bool != true && item["tone"].string != "gap"
                 && !(item["tone"].string == "context" && ["access", "station-wind", "water"].contains(item["id"].string ?? ""))
         }
+        // One view, or none, so a stack spaces it as a single section.
         if !cautions.isEmpty || !background.isEmpty {
-            SectionHead(title: cautions.isEmpty ? "Field and access" : "Before you commit") {
-                Text(cautions.isEmpty ? "No flags" : cautions.count == 1 ? "1 check to resolve" : "\(cautions.count) checks to resolve")
-            }
-            VStack(spacing: 10) {
-                ForEach(Array(cautions.enumerated()), id: \.offset) { _, item in InsightCard(item: item) }
-                if !background.isEmpty {
-                    DisclosureGroup("\(background.count) background note\(background.count == 1 ? "" : "s")") {
-                        VStack(spacing: 10) { ForEach(Array(background.enumerated()), id: \.offset) { _, item in InsightCard(item: item) } }
-                            .padding(.top, 8)
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .tint(Palette.secondary)
-                    .padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 0) {
+                SectionHead(title: cautions.isEmpty ? "Field and access" : "Before you commit") {
+                    Text(cautions.isEmpty ? "No flags" : cautions.count == 1 ? "1 check to resolve" : "\(cautions.count) checks to resolve")
                 }
+                VStack(spacing: 10) {
+                    ForEach(Array(cautions.enumerated()), id: \.offset) { _, item in InsightCard(item: item) }
+                    if !background.isEmpty {
+                        DisclosureGroup("\(background.count) background note\(background.count == 1 ? "" : "s")") {
+                            VStack(spacing: 10) { ForEach(Array(background.enumerated()), id: \.offset) { _, item in InsightCard(item: item) } }
+                                .padding(.top, 8)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .tint(Palette.secondary)
+                        .padding(.horizontal, 4)
+                    }
+                }
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
     }
 }
 
+/// An insight leads with what to do; what the report found, and its sources, open on request.
 struct InsightCard: View {
     var item: JSON
 
     var body: some View {
+        let action = item["action"].string
+        // Without an action, the finding is the card's line.
+        let meaning = action == nil ? nil : item["meaning"].string
+        let evidence = item["evidence"].array
         Card(spacing: 6) {
             if item["decisionRelevant"].bool != true {
                 Text(item["tone"].string == "support" ? "Limited agreement" : "Background").font(.caption.weight(.semibold)).foregroundStyle(Palette.secondary)
             }
             Text(item["title"].string ?? "").font(.headline).foregroundStyle(Palette.label)
-            if let meaning = item["meaning"].string { Caption(meaning, tone: Palette.label) }
-            if let action = item["action"].string { Caption("For your plan: \(action)", emphasized: true) }
-            let evidence = item["evidence"].array
-            if !evidence.isEmpty {
+            if let line = action ?? item["meaning"].string { Caption(line, tone: Palette.label) }
+            if meaning != nil || !evidence.isEmpty {
                 DisclosureGroup("Why the report says this") {
                     VStack(alignment: .leading, spacing: 6) {
+                        if let meaning { Caption(meaning) }
                         ForEach(Array(evidence.enumerated()), id: \.offset) { _, source in
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(source["source"].string ?? "Source").font(.footnote.weight(.semibold))

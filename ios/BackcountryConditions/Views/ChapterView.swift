@@ -133,6 +133,8 @@ struct WeatherChapter: View {
             PrecipitationSection(report: report)
             Spacer().frame(height: 16)
             BeyondWeatherSection(report: report)
+            Spacer().frame(height: 16)
+            FieldReportsSection(report: report)
         }
         .onAppear { if selected == nil { selected = (hours.first(where: \.isOver) ?? hours.first)?.shortLabel } }
     }
@@ -307,7 +309,7 @@ struct TerrainChapter: View {
         let hours = report.hours
         return VStack(alignment: .leading, spacing: 0) {
             SectionHead(hourIndex == 0 ? "The mountain at your start" : "The mountain at \(hours.indices.contains(hourIndex) ? hours[hourIndex].shortLabel : "")")
-            Caption("Forecast by elevation. Heights are to scale; the ridge is illustrative.").padding(.horizontal, 20).padding(.top, -6).padding(.bottom, 10)
+            Caption("Forecast by elevation; the ridge is illustrative.").padding(.horizontal, 20).padding(.top, -6).padding(.bottom, 10)
             Card(spacing: 10) {
                 if bandsByHour.isEmpty {
                     Caption("Elevation bands are unavailable for this plan.")
@@ -326,7 +328,12 @@ struct TerrainChapter: View {
                             : .day)
                     .frame(height: 290)
                     elevationCheck
-                    if let note = report.elevationNote { Divider(); Caption(note) }
+                    if let note = report.elevationNote {
+                        Divider()
+                        DisclosureGroup("How elevations are estimated") { Caption(note).padding(.top, 6) }
+                            .font(.footnote.weight(.semibold))
+                            .tint(Palette.secondary)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -338,7 +345,7 @@ struct TerrainChapter: View {
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Check an elevation").font(.subheadline.weight(.semibold))
-                    Text(snapshot ? "Saved snapshots can’t be re-checked." : "Re-evaluated by the server").font(.caption).foregroundStyle(Palette.secondary)
+                    if snapshot { Text("Saved snapshots can’t be re-checked.").font(.caption).foregroundStyle(Palette.secondary) }
                 }
                 Spacer()
                 Stepper(value: $targetFt, in: 1000...20000, step: 500) {
@@ -893,20 +900,15 @@ struct ChecksChapter: View {
             SectionHead(title: "Every check") {
                 Text("\(report.checks.filter(\.ok).count) of \(report.checks.count) pass")
             }
+            // A card for each check that needs attention; the passing ones share one list.
+            let passing = report.checks.filter(\.ok)
             VStack(spacing: 10) {
-                ForEach(report.checks.sorted { !$0.ok && $1.ok }) { check in
-                    Card(spacing: 4) {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: check.ok ? "checkmark" : "exclamationmark.triangle")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(check.ok ? Palette.secondary : Palette.caution)
-                                .frame(width: 18)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(check.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.label)
-                                if let detail = check.detail { Caption(detail) }
-                                if !check.ok, let action = check.action { Caption(action, tone: Palette.caution, emphasized: true) }
-                            }
-                        }
+                ForEach(report.checks.filter { !$0.ok }) { check in
+                    Card(spacing: 4) { checkRow(check) }
+                }
+                if !passing.isEmpty {
+                    Card(spacing: 14) {
+                        ForEach(passing) { check in checkRow(check) }
                     }
                 }
             }
@@ -963,6 +965,21 @@ struct ChecksChapter: View {
             }
             .padding(.horizontal, 16)
             Caption("Planning evidence, not a guarantee of safety.").padding(.horizontal, 20).padding(.top, 12)
+        }
+    }
+
+    private func checkRow(_ check: Check) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: check.ok ? "checkmark" : "exclamationmark.triangle")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(check.ok ? Palette.secondary : Palette.caution)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(check.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.label)
+                if let detail = check.detail { Caption(detail) }
+                if !check.ok, let action = check.action { Caption(action, tone: Palette.caution, emphasized: true) }
+            }
+            Spacer(minLength: 0)
         }
     }
 }

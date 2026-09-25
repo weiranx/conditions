@@ -265,46 +265,36 @@ struct BriefView: View {
                     Text(failed == 0 ? "All clear" : "\(failed) need attention")
                 }
                 checkGrid(report)
-                if !report.fieldSignals.isEmpty {
-                    Spacer().frame(height: 28)
-                    SectionHead("Field reports")
-                    VStack(spacing: 10) {
-                        ForEach(Array(report.fieldSignals.enumerated()), id: \.offset) { _, signal in
-                            Card { CardHead(title: signal.title) { StatusTag(kind: .over, text: "Check") }; Caption(signal.detail) }
+                // What still needs resolving comes before what to do with the report. Sections that
+                // have nothing to show are empty, so the stack leaves no gap for them.
+                VStack(alignment: .leading, spacing: 28) {
+                    InsightsSection(report: report)
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionHead(title: "Map") { if let route = live.route { Text(route.name).lineLimit(1) } }
+                        PlanMapPreview(title: plan.objective.shortName, model: PlanMapModel(plan: live, report: report, trip: nil))
+                            .padding(.horizontal, 16)
+                    }
+                    actions(report)
+                    Button { fullReport = true } label: {
+                        Card(spacing: 2) {
+                            HStack {
+                                Image(systemName: "doc.text.magnifyingglass").foregroundStyle(Palette.accent)
+                                Text("Read the full report").font(.headline).foregroundStyle(Palette.label)
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(Palette.secondary)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                     .padding(.horizontal, 16)
-                }
-                Spacer().frame(height: 28)
-                SectionHead(title: "Map") { if let route = live.route { Text(route.name).lineLimit(1) } }
-                PlanMapPreview(title: plan.objective.shortName, model: PlanMapModel(plan: live, report: report, trip: nil))
-                    .padding(.horizontal, 16)
-                Spacer().frame(height: 26)
-                actions(report)
-                Spacer().frame(height: 26)
-                Button { fullReport = true } label: {
-                    Card(spacing: 2) {
-                        HStack {
-                            Image(systemName: "doc.text.magnifyingglass").foregroundStyle(Palette.accent)
-                            Text("Read the full report").font(.headline).foregroundStyle(Palette.label)
-                            Spacer()
-                            Image(systemName: "chevron.right").foregroundStyle(Palette.secondary)
-                        }
+                    AIBriefCard(plan: live, report: report, savedText: savedAI, readOnly: readOnly || plan.isSample, onSignIn: { signIn = "Sign in to use AI explanations." })
+                    ChatLauncher(title: "Ask about this report", context: "\(plan.objective.shortName) · \(DateText.short(plan.date))",
+                                 messageCount: readOnly ? savedChat.count : store.chat(plan).count, readOnly: readOnly || plan.isSample) {
+                        if !readOnly && !plan.isSample && !account.signedIn { signIn = "Sign in to use the report assistant." } else { chatOpen = true }
                     }
+                    sources(report)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 16)
-                Spacer().frame(height: 26)
-                AIBriefCard(plan: live, report: report, savedText: savedAI, readOnly: readOnly || plan.isSample, onSignIn: { signIn = "Sign in to use AI explanations." })
-                Spacer().frame(height: 16)
-                ChatLauncher(title: "Ask about this report", context: "\(plan.objective.shortName) · \(DateText.short(plan.date))",
-                             messageCount: readOnly ? savedChat.count : store.chat(plan).count, readOnly: readOnly || plan.isSample) {
-                    if !readOnly && !plan.isSample && !account.signedIn { signIn = "Sign in to use the report assistant." } else { chatOpen = true }
-                }
-                Spacer().frame(height: 26)
-                InsightsSection(report: report)
-                Spacer().frame(height: 20)
-                sources(report)
+                .padding(.top, 28)
             }
             .padding(.bottom, 40)
         }
@@ -318,30 +308,39 @@ struct BriefView: View {
             if let note {
                 Notice(tone: .info, text: note, symbol: "book")
             } else if let savedAt {
-                Notice(tone: .info, text: "Saved snapshot from \(savedAt.formatted(date: .abbreviated, time: .shortened)). It shows conditions from when it was saved and won’t update. For current conditions, plan it again.", symbol: "book")
+                Notice(tone: .info, text: "Saved \(savedAt.formatted(date: .abbreviated, time: .shortened)). This snapshot won’t update.", symbol: "book")
             } else if plan.isSample {
-                Notice(tone: .info, text: "Sample plan. It uses a saved Mount Shasta report and won’t update.", symbol: "book")
+                Notice(tone: .info, text: "Sample plan from a saved report. It won’t update.", symbol: "book")
             }
             if let feedback {
                 Notice(tone: .info, text: feedback)
             }
             if snapshot == nil, !plan.isSample, let passed = passedStart {
-                Notice(tone: .caution, text: "This start has passed (\(passed)). The forecast is kept for reference. Pick a new start to get current conditions.",
+                Notice(tone: .caution, text: "This start passed \(passed). Pick a new one for current conditions.",
                        actionTitle: "Start now") { restart(tomorrow: false) }
                 Button("Start tomorrow at \(DateText.clock(PreferencesStore.shared.preferences.defaultStartTime))") { restart(tomorrow: true) }
                     .buttonStyle(.glass).controlSize(.small).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 30)
             }
-            if let warning = report.apiWarning ?? report.freshnessWarning ?? (report.partialData ? "Some sources returned incomplete data. Check the official forecasts before committing." : nil) {
+            if let warning = report.apiWarning ?? report.freshnessWarning ?? (report.partialData ? "Some sources returned incomplete data." : nil) {
                 Notice(tone: .missing, text: warning, actionTitle: "Checks & sources") { chapter = .checks }
             }
             if snapshot == nil, let error = store.errors[plan.id] {
                 Notice(tone: .caution, text: "Couldn’t update: \(error)", actionTitle: "Try again") { Task { await store.refresh(plan) } }
             }
-            if !report.warnings.isEmpty {
-                Notice(tone: .caution, text: "Field reports to check. " + report.warnings.map { "\($0.title): \($0.detail)" }.joined(separator: " · ") + " Check when each report was made and whether it applies to your route.")
-            }
-            if !report.missingSignals.isEmpty {
-                Notice(tone: .missing, text: report.missingSignals.joined(separator: " · ") + ". Missing data does not mean conditions are clear.")
+            // Field reports the verdict asks about (lightning at the objective leads) stay at the top, one row each.
+            // Those a "Before you commit" check covers aren't repeated; the Weather chapter lists every one.
+            if !report.warnings.isEmpty || !report.missingSignals.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, signal in
+                        SignalRow(title: signal.title, detail: signal.detail)
+                    }
+                    if !report.missingSignals.isEmpty { MissingFeedsLine(titles: report.missingSignals) }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(report.warnings.isEmpty ? Palette.fill : Palette.cautionFill, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 16)
+                .accessibilityElement(children: .combine)
             }
             if let route = live.route {
                 Button { chapter = .route } label: {
@@ -414,25 +413,26 @@ struct BriefView: View {
         let showRain = plan.activity.leadsWithRain
         return HStack(alignment: .top, spacing: 12) {
             numberTile(title: "Peak gust", value: peakGust?.1, limit: Double(limits.maxGustMph), side: .above, range: 0...max(40, Double(limits.maxGustMph) * 2),
-                       text: Format.mph, caption: peakGust.map { "\($0.0.shortLabel)\(elevationText($0.0)). Your limit is \(Format.mph(Double(limits.maxGustMph)))." })
+                       text: Format.mph, when: peakGust.map { whenText($0.0) }, limitText: "Limit \(Format.mph(Double(limits.maxGustMph)))")
             if showRain {
                 numberTile(title: "Rain chance", value: wettest?.1, limit: Double(limits.maxPrecipChance), side: .above, range: 0...100,
-                           text: Format.percent, caption: wettest.map { "Highest at \($0.0.shortLabel). Your limit is \(limits.maxPrecipChance)%." })
+                           text: Format.percent, when: wettest.map { $0.0.shortLabel }, limitText: "Limit \(limits.maxPrecipChance)%")
             } else {
                 numberTile(title: "Feels like", value: coldest?.1, limit: Double(limits.minFeelsLikeF), side: .below,
                            range: (Double(limits.minFeelsLikeF) - 15)...(Double(limits.minFeelsLikeF) + 45),
-                           text: Format.temp, caption: coldest.map { "Coldest at \($0.0.shortLabel)\(elevationText($0.0)). Your floor is \(Format.temp(Double(limits.minFeelsLikeF)))." })
+                           text: Format.temp, when: coldest.map { whenText($0.0) }, limitText: "Floor \(Format.temp(Double(limits.minFeelsLikeF)))")
             }
         }
         .padding(.horizontal, 16)
     }
 
-    private func elevationText(_ hour: Hour) -> String {
-        hour.elevationFt.map { " near \(Format.roundFeet($0))" } ?? ""
+    /// "5 AM · 14,200 ft"
+    private func whenText(_ hour: Hour) -> String {
+        [hour.shortLabel, hour.elevationFt.map(Format.roundFeet)].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func numberTile(title: String, value: Double?, limit: Double, side: LimitScale.Side, range: ClosedRange<Double>,
-                            text: (Double?) -> String, caption: String?) -> some View {
+                            text: (Double?) -> String, when: String?, limitText: String) -> some View {
         let over = value.map { side == .above ? $0 > limit : $0 < limit } ?? false
         return Card(missing: value == nil) {
             CardHead(title: title) {
@@ -441,26 +441,33 @@ struct BriefView: View {
             }
             BigValue(text: text(value), over: over)
             if let value { LimitScale(value: value, limit: limit, side: side, range: range) }
-            Caption(caption ?? "No reading for this plan’s hours.")
+            VStack(alignment: .leading, spacing: 1) {
+                Caption(value == nil ? "No reading for these hours" : when ?? "")
+                Caption(limitText)
+            }
         }
     }
 
     private func checkGrid(_ report: Report) -> some View {
         let columns = [GridItem(.flexible(), spacing: 12, alignment: .top), GridItem(.flexible(), spacing: 12, alignment: .top)]
         return LazyVGrid(columns: columns, spacing: 12) {
+            // Each card opens its chapter, like the Weather app's tiles; the card itself is the link.
             ForEach(BriefChecks.cards(for: report, plan: plan)) { item in
                 Button { chapter = item.chapter } label: {
                     Card(missing: item.status == .missing) {
                         CardHead(title: item.title) { StatusTag(kind: item.status, text: item.word) }
                         item.visual
-                        Caption(item.caption, tone: item.status == .over ? Palette.caution : Palette.secondary, emphasized: item.status == .over)
-                            .lineLimit(5)
+                        if let caption = item.caption {
+                            Caption(caption, tone: item.status == .over ? Palette.caution : Palette.secondary, emphasized: item.status == .over)
+                                .lineLimit(3)
+                        }
                         Spacer(minLength: 0)
-                        OpenLink(label: item.chapter.shortName)
                     }
                     .frame(maxHeight: .infinity)
+                    .contentShape(RoundedRectangle(cornerRadius: 20))
                 }
                 .buttonStyle(.plain)
+                .accessibilityHint("Opens \(item.chapter.rawValue)")
             }
         }
         .padding(.horizontal, 16)
@@ -544,7 +551,7 @@ struct BriefView: View {
         VStack(alignment: .leading, spacing: 6) {
             let generated = report.generatedAt.map { "Generated \(DateText.relative($0))" }
             Caption([report.weatherProvider.map { "\($0) forecast" }, report.avalancheCenter, generated].compactMap { $0 }.joined(separator: " · "))
-            Caption("Backcountry Conditions is a planning aid, not a guarantee of safety. Check official forecasts, and make the final call from what you see in the field and your team’s judgment.")
+            Caption("A planning aid, not a guarantee of safety. Check official forecasts and make the final call in the field.")
         }
         .padding(.horizontal, 20)
     }
@@ -660,10 +667,11 @@ struct SkyHero: View {
         return parts.joined(separator: " · ")
     }
 
+    /// The reason's first sentence; the rest is a "Before you commit" check or the full report's.
     private var reason: String? {
         guard let reason = report.reason, reason != report.headline else { return nil }
         let rules = report.hours.flatMap(\.failedRules)
-        return rules.reduce(reason) { $0.replacingOccurrences(of: $1, with: Format.plainRule($1)) }
+        return rules.reduce(reason) { $0.replacingOccurrences(of: $1, with: Format.plainRule($1)) }.firstSentence
     }
 
     /// The first run of hours over a limit, named in the sky.
@@ -829,7 +837,8 @@ struct BriefCheckCard: Identifiable {
     var title: String
     var status: TagKind
     var word: String
-    var caption: String
+    /// One short line or two; the chapter carries the rest. Nil when the value says it all.
+    var caption: String?
     var chapter: Chapter
     var visual: AnyView = AnyView(EmptyView())
 }
@@ -839,12 +848,11 @@ enum BriefChecks {
         var cards: [BriefCheckCard] = []
         let hours = report.hours
         let over = hours.filter(\.isOver)
-        let firstRule = over.first?.failedRules.first.map(Format.plainRule)
         cards.append(BriefCheckCard(
             title: "Weather",
             status: hours.isEmpty ? .missing : over.isEmpty ? .ok : .over,
             word: hours.isEmpty ? "Missing" : over.isEmpty ? "Within" : "Over",
-            caption: hours.isEmpty ? "No hourly forecast covers this plan." : firstRule.map { "\($0) at \(over[0].shortLabel)." } ?? (report.windowSummary ?? "Every hour is within your limits."),
+            caption: hours.isEmpty ? "No hourly forecast covers this plan." : overCaption(hours) ?? report.windowSummary?.firstSentence ?? "Every hour within your limits.",
             chapter: .weather,
             visual: AnyView(GustBars(hours: hours, limit: Double(report.limits?.maxGustMph ?? plan.limits.maxGustMph)))))
 
@@ -856,13 +864,13 @@ enum BriefChecks {
                 title: "Avalanche",
                 status: unknown ? .missing : (avalancheCheck?.ok ?? true) ? .ok : .over,
                 word: unknown ? "No rating" : DangerScale.name(level),
-                caption: report.avalancheCaption ?? avalancheCheck?.detail ?? "No avalanche information for this plan.",
+                caption: (report.avalancheCaption ?? avalancheCheck?.detail ?? "No avalanche information for this plan.").firstSentence,
                 chapter: .terrain,
                 visual: AnyView(DangerChips(rows: report.avalancheRows))))
         }
 
         if let terrain = report.terrainLabel {
-            cards.append(BriefCheckCard(title: "Terrain", status: .info, word: "Advisory", caption: report.terrainAdvice ?? terrain, chapter: .terrain,
+            cards.append(BriefCheckCard(title: "Terrain", status: .info, word: "Advisory", caption: report.terrainAdvice?.firstClause, chapter: .terrain,
                                         visual: AnyView(BigValue(text: terrain, small: true))))
         }
 
@@ -871,29 +879,68 @@ enum BriefChecks {
             title: "Daylight",
             status: daylight == nil ? .missing : daylight!.ok ? .ok : .over,
             word: daylight == nil ? "Missing" : daylight!.ok ? "Within" : "Late",
-            caption: [report.sunriseText.map { "Sunrise \($0)" }, report.sunsetText.map { "sunset \($0)" }].compactMap { $0 }.joined(separator: ", ") + ".",
+            // A late plan names its margin, the last part of the check's detail ("… • 20 min after sunset").
+            caption: report.sunriseText == nil && report.sunsetText == nil ? "No solar data."
+                : daylight?.ok == false ? daylight?.detail?.components(separatedBy: " • ").last : nil,
             chapter: .timing,
-            visual: AnyView(SunArc(sunrise: report.sunriseMinutes, sunset: report.sunsetMinutes, start: DateText.minutes(plan.start), hours: plan.travelHours))))
+            visual: AnyView(VStack(alignment: .leading, spacing: 8) {
+                SunArc(sunrise: report.sunriseMinutes, sunset: report.sunsetMinutes, start: DateText.minutes(plan.start), hours: plan.travelHours)
+                SunTimes(sunrise: report.sunriseText, sunset: report.sunsetText)
+            })))
 
         let alerts = report.check("nws-alerts")
+        let alertCount = report.alertsCount ?? 0
         cards.append(BriefCheckCard(
             title: "Alerts",
             status: alerts == nil ? .missing : alerts!.ok ? .ok : .over,
-            word: alerts == nil ? "Missing" : (report.alertsCount ?? 0) == 0 ? "None" : "\(report.alertsCount!) active",
-            caption: report.alertTitles.first ?? alerts?.detail ?? "No alert data was returned.",
+            word: alerts == nil ? "Missing" : alertCount == 0 ? "None" : "\(alertCount) active",
+            caption: alerts == nil ? "No alert data was returned." : alertCount == 0 ? nil : report.alertTitles.first ?? alerts?.detail?.firstSentence,
             chapter: .checks,
-            visual: AnyView(BigValue(text: (report.alertsCount ?? 0) == 0 ? "No alerts" : "\(report.alertsCount!) alerts", small: true))))
+            visual: AnyView(BigValue(text: alertCount == 0 ? "No alerts" : "\(alertCount) alert\(alertCount == 1 ? "" : "s")", small: true))))
 
         let air = report.check("air-quality")
         let aqi = report.airQualityAQI
+        let airOK = air?.ok ?? true
         cards.append(BriefCheckCard(
             title: "Air quality",
-            status: aqi == nil ? .missing : (air?.ok ?? true) ? .ok : .over,
+            status: aqi == nil ? .missing : airOK ? .ok : .over,
             word: aqi == nil ? "Unavailable" : report.airQualityCategory ?? "AQI \(aqi!)",
-            caption: aqi == nil ? "No reading was returned. Missing data doesn’t mean conditions are clear." : air?.detail ?? "AQI \(aqi!).",
+            caption: aqi == nil ? "No reading. That doesn’t mean the air is clear." : airOK ? nil : air?.detail?.firstSentence,
             chapter: .checks,
             visual: AnyView(aqi.map { BigValue(text: "AQI \($0)", small: true) })))
         return cards
+    }
+
+    /// The first run of hours over a limit, by the limit it crosses: "Gusts over 20 mph · 4 AM–8 AM".
+    private static func overCaption(_ hours: [Hour]) -> String? {
+        guard let start = hours.firstIndex(where: \.isOver), let rule = hours[start].failedRules.first else { return nil }
+        var end = start
+        while end + 1 < hours.count, hours[end + 1].isOver { end += 1 }
+        let range = start == end ? hours[start].shortLabel : "\(hours[start].shortLabel)–\(Hour.shortLabel(minutes: hours[end].minutes + 60))"
+        // The times wrap as one piece, never between "4" and "AM".
+        let unbroken = range.replacingOccurrences(of: " ", with: "\u{00A0}").replacingOccurrences(of: "–", with: "\u{2060}–\u{2060}")
+        return "\(Format.limitRule(rule)) · \(unbroken)"
+    }
+}
+
+/// Sunrise and sunset as symbols and times, side by side when they fit.
+struct SunTimes: View {
+    var sunrise: String?
+    var sunset: String?
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { times }
+            VStack(alignment: .leading, spacing: 2) { times }
+        }
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(Palette.secondary)
+        .labelStyle(TightLabelStyle())
+    }
+
+    @ViewBuilder private var times: some View {
+        if let sunrise { Label(sunrise, systemImage: "sunrise").accessibilityLabel("Sunrise \(sunrise)") }
+        if let sunset { Label(sunset, systemImage: "sunset").accessibilityLabel("Sunset \(sunset)") }
     }
 }
 

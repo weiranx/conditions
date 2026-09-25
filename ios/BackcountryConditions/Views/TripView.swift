@@ -175,7 +175,7 @@ struct TripView: View {
             }
         }
         .navigationDestination(item: $dayDetail) { detail in
-            BriefView(plan: detail.plan, snapshot: trip?.stageReport(detail.index), note: "Day \(detail.index + 1) of \(stages.count). This day was checked with your trip and won’t update on its own. Check the trip again for newer forecasts.")
+            BriefView(plan: detail.plan, snapshot: trip?.stageReport(detail.index), note: "Day \(detail.index + 1) of \(stages.count), checked with your trip. Check the trip again for newer forecasts.")
         }
         .sheet(item: $editing) { draft in
             NewPlanSheet(draft: draft) { updated in
