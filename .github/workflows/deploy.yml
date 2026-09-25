@@ -91,8 +91,36 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
+          # Commits and trees only: enough to diff against the live deployment.
+          fetch-depth: 0
+          filter: blob:none
+
+      # Compares with the commit of the live production deployment rather than
+      # the previous push, so a frontend change whose release failed or was
+      # skipped still ships with the next release. Any doubt deploys.
+      - name: Check whether frontend/ changed since the live deployment
+        id: live
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'conditions' }}
+        run: |
+          live="$(curl --fail --silent --show-error --retry 3 --max-time 30 \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PAGES_PROJECT" \
+            | jq -r '.result.canonical_deployment.deployment_trigger.metadata.commit_hash // empty')" || live=""
+          # The job runs in frontend/, so `.` is frontend/.
+          if [[ "$live" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$live^{commit}" 2>/dev/null \
+            && git diff --quiet "$live" HEAD -- .; then
+            echo "==> The live frontend ($live) already matches frontend/; skipping the build."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "==> Deploying the frontend (live commit: ${live:-unknown})."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Use Node.js 24
+        if: steps.live.outputs.deploy == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -100,11 +128,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Build
+        if: steps.live.outputs.deploy == 'true'
         env:
           VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL || 'https://apivps.conditions.weiranxiong.com' }}
         run: npm ci && npm run build
 
       - name: Deploy tested commit to Cloudflare Pages
+        if: steps.live.outputs.deploy == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

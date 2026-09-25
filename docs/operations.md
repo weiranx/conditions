@@ -181,8 +181,24 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 
 ## CI and Automatic Deployment
 
-`.github/workflows/ci.yml` runs three parallel jobs on pull requests and pushes
-to `main`:
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main`. A
+`changes` job first decides which of the parallel jobs below have inputs that
+changed (`scripts/ci-changed-areas.sh`), and the rest are skipped; a skipped job
+counts as passed, so CI still succeeds and deploys. A pull request is compared
+with its base branch; a push to `main` with the last `main` commit whose CI
+passed, so the changes of a cancelled or failed run are tested by the next push.
+A change to `ci.yml` or to that script, or no commit to compare with, runs
+everything.
+
+| Job | Runs when these change |
+| --- | --- |
+| `pipeline-checks` | `.github/`, `scripts/` |
+| `backend-tests` | `backend/`, `scripts/backend-reload-env.sh` |
+| `frontend-checks` | `frontend/`, `backend/src/` (the UI and mock API tests import backend utilities) |
+| `mcp-tests` | `mcp/`, `backend/` |
+
+Changes elsewhere (`ios/`, `docs/`, Markdown) run no jobs.
+
 
 - `pipeline-checks`: validates Actions YAML with checksum-verified actionlint,
   checks deployment shell scripts with ShellCheck, and runs release regression
@@ -190,6 +206,8 @@ to `main`:
 - `backend-tests`: installs locked dependencies and runs the complete Jest suite.
 - `frontend-checks`: installs locked dependencies, typechecks, lints, runs field,
   comparison, mock API, and saved-report history tests, and builds the frontend.
+- `mcp-tests`: runs the MCP server tests and the persistent OAuth tests against
+  a PostgreSQL service container.
 
 CI uses Node 24 to match the backend Docker runtime. Jobs have explicit timeouts,
 read-only repository permissions, and pinned action commits. Dependabot proposes
@@ -208,8 +226,8 @@ Sending the script from the runner also supports the first release before the
 VPS has that script. It takes the same lock as manual deployments, fetches `main`,
 and skips the release if `main` has advanced beyond the tested commit. Otherwise
 it fast-forwards the clean production checkout to that exact SHA, then runs
-`scripts/deploy.sh --no-pull --no-nginx` with the lock held through build,
-migrations, restart, and readiness checks. Detached branches, tracked edits,
+`scripts/deploy.sh --no-pull --no-nginx --skip-unchanged` with the lock held
+through build, migrations, restart, and readiness checks. Detached branches, tracked edits,
 divergent history, and commits present only on the server fail without resetting
 the checkout. Active deployments are never cancelled by a newer CI run.
 
@@ -220,6 +238,22 @@ rebuilds it, and recreates the container only when the image or configuration
 changed. It then checks `127.0.0.1:8104/health`, restoring the snapshot if the
 new image fails. An MCP failure fails the release but does not roll back the
 healthy backend.
+
+With `--skip-unchanged`, the backend and the MCP server are each released only
+when their files changed since their last healthy release: `backend/` and
+`docker-compose.yml` for the backend (whose migrations live in `backend/`), and
+`mcp/` for the MCP server. A healthy build from a clean tree records its commit in
+`.git/summitsafe-released-backend` or `.git/summitsafe-released-mcp`. A failed or
+rolled-back release keeps the older record, and a component that is not running
+or was built with uncommitted files is always rebuilt, so the next release
+catches up. The Objective Watch cron is still installed on every release. Manual
+`deploy.sh` runs rebuild everything and update the records. Delete a record to
+force a rebuild from CI, for example to pick up a patched base image.
+
+The frontend job asks Cloudflare which commit the live production deployment
+was built from, and builds and uploads only when `frontend/` differs from that
+commit. If the lookup fails, it deploys. A changed `PRODUCTION_API_URL` alone
+does not redeploy the frontend; deploy it by hand or with a `frontend/` change.
 
 After the SSH step, the workflow runs `scripts/smoke-test.mjs` from the runner
 against the public origins (`PRODUCTION_API_URL` and `PRODUCTION_FRONTEND_URL`
@@ -266,7 +300,7 @@ Local pipeline checks (requires Node, Git, Bash, actionlint, and ShellCheck):
 
 ```bash
 actionlint
-shellcheck scripts/deploy.sh scripts/ci-deploy.sh scripts/setup-nginx.sh scripts/provision.sh scripts/provision-server.sh
+shellcheck scripts/deploy.sh scripts/ci-deploy.sh scripts/ci-changed-areas.sh scripts/setup-nginx.sh scripts/provision.sh scripts/provision-server.sh
 node --test scripts/tests/*.test.mjs
 ```
 
