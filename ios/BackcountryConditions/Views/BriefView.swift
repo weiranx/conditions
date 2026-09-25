@@ -926,7 +926,9 @@ struct SunArc: View {
             var line = Path(); line.move(to: CGPoint(x: 0, y: ground)); line.addLine(to: CGPoint(x: size.width, y: ground))
             context.stroke(line, with: .color(Palette.separator), lineWidth: 1)
             context.stroke(arc(0, 1), with: .color(Palette.okFill), style: StrokeStyle(lineWidth: 2, dash: [2, 4]))
-            guard let sunrise, let sunset, let start else { return }
+            guard let sunrise, var sunset, let start else { return }
+            // A high-latitude summer sunset can fall after midnight, before sunrise on the clock.
+            if sunset < sunrise { sunset += 1440 }
             func t(_ minute: Int) -> CGFloat { CGFloat(max(0, min(1, Double(minute - sunrise) / Double(max(1, sunset - sunrise))))) }
             let from = t(start)
             if let hours, hours > 0 {
