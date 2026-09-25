@@ -74,10 +74,6 @@ struct PlanListView: View {
                     .accessibilityLabel("Account and settings")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Settings", systemImage: "gearshape") { showSettings = true }
-                }
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Day trip", systemImage: "sun.max", action: newPlan)
                         if account.flags.tripPlanning { Button("Multi-day trip", systemImage: "tent", action: newTrip) }

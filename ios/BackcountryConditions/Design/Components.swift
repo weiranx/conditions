@@ -26,9 +26,12 @@ struct TopoBackdrop: View {
     }
 }
 
-/// A scrolling page with the topo backdrop behind its header.
+/// A scrolling page with the topo backdrop behind its header. Once its `PageHeader` scrolls away,
+/// the header's title moves into the bar, which also keeps content from running under the status bar.
 struct Page<Content: View>: View {
     @ViewBuilder var content: Content
+    @State private var title: String?
+    @State private var scrolled = false
 
     var body: some View {
         ScrollView {
@@ -38,7 +41,45 @@ struct Page<Content: View>: View {
         }
         .background(alignment: .top) { TopoBackdrop().ignoresSafeArea() }
         .background(Palette.bg)
+        .onPreferenceChange(PageTitleKey.self) { title = $0 }
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 90 } action: { _, past in
+            withAnimation(.easeOut(duration: 0.2)) { scrolled = past }
+        }
+        .toolbar {
+            if let title {
+                ToolbarItem(placement: .principal) { BarTitle(title: title).opacity(scrolled ? 1 : 0) }
+            }
+        }
+        // The page draws its own large header; the bar only ever shows the small title.
+        .toolbarTitleDisplayMode(.inline)
     }
+}
+
+/// The title a page shows in its bar once its header scrolls away.
+struct PageTitleKey: PreferenceKey {
+    static let defaultValue: String? = nil
+    static func reduce(value: inout String?, nextValue: () -> String?) { value = value ?? nextValue() }
+}
+
+/// A bar title in the app's headline style, with an optional line under it.
+struct BarTitle<Accessory: View>: View {
+    var title: String
+    var alignment: HorizontalAlignment = .center
+    var font: Font = .headline
+    @ViewBuilder var accessory: Accessory
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 1) {
+            Text(title).font(font).foregroundStyle(Palette.label).lineLimit(1)
+            accessory
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+extension BarTitle where Accessory == EmptyView {
+    init(title: String) { self.init(title: title, accessory: { EmptyView() }) }
 }
 
 struct PageHeader: View {
@@ -63,6 +104,7 @@ struct PageHeader: View {
         .padding(.horizontal, 20)
         .padding(.top, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .preference(key: PageTitleKey.self, value: title)
     }
 }
 
