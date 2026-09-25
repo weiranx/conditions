@@ -326,12 +326,16 @@ struct BriefView: View {
 
     private func restart(tomorrow: Bool) {
         guard var next = store.plan(plan.id) else { return }
+        // Today and now on the objective's clock, which the plan's date and start are in.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = report?.timeZone ?? .current
+        let now = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: Date())
+        let today = String(format: "%04d-%02d-%02d", now.year ?? 0, now.month ?? 1, now.day ?? 1)
         if tomorrow {
-            next.date = DateText.addDays(DateText.today(), 1)
+            next.date = DateText.addDays(today, 1)
             next.start = PreferencesStore.shared.preferences.defaultStartTime
         } else {
-            next.date = DateText.today()
-            let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+            next.date = today
             next.start = String(format: "%02d:%02d", now.hour ?? 0, ((now.minute ?? 0) / 15) * 15)
         }
         store.update(next)

@@ -828,7 +828,8 @@ struct DayOverDaySection: View {
         let next = try? await APIClient().dayOverDay(place: plan.objective, params: plan.planParams)
         guard !Task.isCancelled else { return }
         comparison = next
-        loadedFor = key
+        // A failed request is tried again the next time the section appears.
+        if next != nil { loadedFor = key }
     }
 }
 
