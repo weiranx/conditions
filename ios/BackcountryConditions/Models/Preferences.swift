@@ -139,6 +139,18 @@ struct Preferences: Codable, Equatable, Sendable {
         ]
     }
 
+    /// What loaded reports were evaluated with besides the plan itself: display units (the evaluation's
+    /// text is written in them), the approach switch and route timing (the approach hours).
+    struct EvaluationInputs: Equatable {
+        var units: [String: String]
+        var approach: Bool
+        var timing: [String: RouteTiming]
+    }
+
+    var evaluationInputs: EvaluationInputs {
+        EvaluationInputs(units: unitParams, approach: approachElevationAdjustment, timing: activityRouteTiming)
+    }
+
     var colorScheme: ColorScheme? {
         switch themeMode {
         case .system: nil

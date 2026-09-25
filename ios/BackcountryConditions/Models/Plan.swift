@@ -212,6 +212,14 @@ struct Plan: Codable, Hashable, Sendable, Identifiable {
     /// The plan an analysis or check was run for, to tell when it's out of date.
     var timingKey: String { "\(date)|\(start)|\(travelHours)" }
 
+    /// Everything a check of the plan sends the server, to tell when a check or comparison no longer
+    /// matches the plan (it was edited, or the units or approach changed, while it ran).
+    var checkKey: String {
+        let request: JSON = isTrip ? itineraryRequest()
+            : .object(planParams.mapValues(JSON.string).merging(["lat": .number(objective.lat), "lon": .number(objective.lon)]) { value, _ in value })
+        return String(decoding: request.prettyData, as: UTF8.self)
+    }
+
     /// `/api/itineraries/check`'s body (the web's `buildItineraryRequest`).
     func itineraryRequest(startDate: String? = nil) -> JSON {
         var params = settingsParams

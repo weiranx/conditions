@@ -123,6 +123,10 @@ struct Report: Sendable {
         return stale.count == 1 ? "\(names) is out of date. Check the source before relying on it."
                                 : "\(names) are out of date. Check the sources before relying on them."
     }
+    /// The objective's time zone, which the forecast's clock times are in.
+    var timeZone: TimeZone? {
+        (json.at("weather.timezone").string ?? json.at("safety.weatherProvenance.timezone").string).flatMap(TimeZone.init(identifier:))
+    }
     var objectiveElevationFt: Double? { json.at("weather.elevation").double }
     var turnaround: String? { evaluation.at("plan.turnaroundTime").string }
     var limits: Limits? {

@@ -696,9 +696,8 @@ struct ContingencySection: View {
 
     private func eventTime(_ iso: String?, hoursAfterReturn: Double?) -> String {
         if let iso, let date = ISO8601DateFormatter.parse(iso) {
-            let zone = report.json.at("forecast.timeZone").string ?? report.json.at("location.timeZone").string
             var calendar = Calendar(identifier: .gregorian)
-            if let zone, let tz = TimeZone(identifier: zone) { calendar.timeZone = tz }
+            if let zone = report.timeZone { calendar.timeZone = zone }
             let parts = calendar.dateComponents([.hour, .minute], from: date)
             return DateText.clock(minutes: (parts.hour ?? 0) * 60 + (parts.minute ?? 0))
         }
@@ -812,14 +811,25 @@ struct DayOverDaySection: View {
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Caption("Comparing with the day before…") }.padding(.horizontal, 20)
             }
         }
-        .task(id: report.generatedAtText) { await load() }
+        .task(id: loadKey) { await load() }
     }
 
+    /// The plan and report generation the comparison is for; a new check or a changed plan compares again.
+    private var loadKey: String { "\(plan.checkKey)|\(report.generatedAtText ?? "")" }
+
+    @State private var loadedFor: String?
+
     private func load() async {
-        guard !snapshot, !plan.isSample, comparison == nil else { return }
+        guard !snapshot, !plan.isSample, loadedFor != loadKey else { return }
+        let key = loadKey
+        comparison = nil
         loading = true
         defer { loading = false }
-        comparison = try? await APIClient().dayOverDay(place: plan.objective, params: plan.planParams)
+        let next = try? await APIClient().dayOverDay(place: plan.objective, params: plan.planParams)
+        guard !Task.isCancelled else { return }
+        comparison = next
+        // A failed request is tried again the next time the section appears.
+        if next != nil { loadedFor = key }
     }
 }
 
@@ -829,9 +839,12 @@ struct DayOverDaySection: View {
 /// cautions, the checks that need attention, and the backend's gear, grouped by why it's there.
 struct GearActionsSection: View {
     var report: Report
-    @AppStorage("packedGear") private var packedRaw = ""
+    /// Whose packing list this is (a plan's id): each plan keeps its own.
+    var scope: String
+    @AppStorage("packedGear.v2") private var packedRaw = ""
 
-    private var packed: Set<String> { Set(packedRaw.split(separator: "\n").map(String.init)) }
+    private var allPacked: Set<String> { Set(packedRaw.split(separator: "\n").map(String.init)) }
+    private var packed: Set<String> { allPacked.filter { $0.hasPrefix("\(scope)|") } }
 
     var body: some View {
         let decision = report.evaluation["decision"]
@@ -924,7 +937,7 @@ struct GearActionsSection: View {
             }
         }
         if !packed.isEmpty {
-            Button("Clear packed items", systemImage: "arrow.counterclockwise") { packedRaw = "" }
+            Button("Clear packed items", systemImage: "arrow.counterclockwise") { packedRaw = allPacked.subtracting(packed).sorted().joined(separator: "\n") }
                 .buttonStyle(.glass).padding(.horizontal, 20)
         }
     }
@@ -933,10 +946,10 @@ struct GearActionsSection: View {
         tone == "nogo" ? "priority" : tone == "caution" || tone == "watch" ? "conditions" : "other"
     }
 
-    private func key(_ item: Report.GearItem) -> String { "\(item.title)|\(item.category)" }
+    private func key(_ item: Report.GearItem) -> String { "\(scope)|\(item.title)|\(item.category)" }
 
     private func toggle(_ item: Report.GearItem) {
-        var next = packed
+        var next = allPacked
         if next.contains(key(item)) { next.remove(key(item)) } else { next.insert(key(item)) }
         packedRaw = next.sorted().joined(separator: "\n")
     }

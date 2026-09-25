@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.serverKey) private var server = AppSettings.defaultServer
     @State private var status: String?
     @State private var testing = false
+    @State private var serverCheck: Task<Void, Never>?
 
     private var p: Binding<Preferences> { Binding(get: { preferencesStore.preferences }, set: { preferencesStore.preferences = $0 }) }
 
@@ -111,15 +112,16 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done", systemImage: "checkmark") { dismiss() }.buttonStyle(.glassProminent).tint(Palette.prominent) }
             }
-            .onChange(of: unitsKey) { Task { await store.reevaluateAll() } }
-            .onChange(of: server) { Task { await account.refresh() } }
+            // Asks the new server about the account once typing pauses, not on every keystroke.
+            .onChange(of: server) {
+                serverCheck?.cancel()
+                serverCheck = Task {
+                    try? await Task.sleep(for: .seconds(1))
+                    guard !Task.isCancelled else { return }
+                    await account.refresh()
+                }
+            }
         }
-    }
-
-    /// Units and approach change the evaluation's text and hours, so loaded reports are re-evaluated.
-    private var unitsKey: String {
-        let p = preferencesStore.preferences
-        return "\(p.temperatureUnit)|\(p.windUnit)|\(p.elevationUnit)|\(p.timeStyle)|\(p.approachElevationAdjustment)"
     }
 
     private var summary: String {

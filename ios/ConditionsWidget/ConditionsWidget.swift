@@ -44,7 +44,8 @@ struct NextPlanProvider: TimelineProvider {
     }
 
     private func entry() -> NextPlanEntry {
-        let plans = WidgetSnapshot.load()?.plans ?? []
+        // The app writes the snapshot when it runs; a plan that has ended since is skipped.
+        let plans = (WidgetSnapshot.load()?.plans ?? []).filter(\.isUpcoming)
         return NextPlanEntry(date: .now, plan: plans.first, more: max(0, plans.count - 1))
     }
 }

@@ -16,8 +16,17 @@ struct WidgetPlan: Codable, Hashable, Identifiable, Sendable {
     var stripEnd: String?
     var checkedAt: Date?
     var watched: Bool
+    /// The plan's last day (`yyyy-MM-dd`), so the widget can pass over a plan once it's over.
+    var endDate: String?
 
     var levelText: String { levelLabel ?? level.label }
+
+    /// Not over yet, by this device's calendar.
+    var isUpcoming: Bool {
+        guard let endDate else { return true }
+        let today = Calendar(identifier: .gregorian).dateComponents(in: .current, from: Date())
+        return endDate >= String(format: "%04d-%02d-%02d", today.year ?? 0, today.month ?? 0, today.day ?? 0)
+    }
 }
 
 /// What the app last told the widgets, kept in the shared App Group container.

@@ -258,6 +258,8 @@ struct CompareDays: View {
     private func open(_ day: Day, plan: Plan) {
         guard let report = day.report else { return }
         var dayPlan = plan
+        // Its own id, so the day's brief and chapters read this day rather than the saved plan.
+        dayPlan.id = UUID()
         dayPlan.date = day.date
         openDay = DayOpen(plan: dayPlan, report: report)
     }

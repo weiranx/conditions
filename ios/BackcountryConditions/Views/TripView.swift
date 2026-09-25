@@ -374,15 +374,24 @@ struct TripView: View {
         let lastForecast = DateText.addDays(DateText.today(), 7)
         let dates = [-2, -1, 1, 2].map { DateText.addDays(current.date, $0) }
             .filter { $0 >= DateText.today() && DateText.addDays($0, stages.count - 1) <= lastForecast }
+        guard !dates.isEmpty else {
+            feedback = "No other start date keeps the whole trip within the 7-day forecast."
+            return
+        }
         alternatives = dates.map { ($0, nil, nil) }
         for (index, date) in dates.enumerated() {
-            do {
-                alternatives[index].result = try await store.checkTrip(current, startingOn: date)
-            } catch let error as APIError where error.limitReached {
+            let outcome: Result<TripResult, Error>
+            do { outcome = .success(try await store.checkTrip(current, startingOn: date)) } catch { outcome = .failure(error) }
+            // "Use this start date" clears the list while later dates are still being checked.
+            guard alternatives.indices.contains(index), alternatives[index].date == date else { return }
+            switch outcome {
+            case .success(let result):
+                alternatives[index].result = result
+            case .failure(let error as APIError) where error.limitReached:
                 alternatives[index].error = "Your multi-day allowance is used up."
                 for rest in (index + 1)..<alternatives.count { alternatives[rest].error = "Not checked." }
-                break
-            } catch {
+                return
+            case .failure(let error):
                 alternatives[index].error = error.localizedDescription
             }
         }

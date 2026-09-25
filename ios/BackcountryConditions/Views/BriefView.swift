@@ -354,9 +354,8 @@ struct BriefView: View {
     /// When the planned start is already behind us on the objective's clock, as "2 hours ago".
     private var passedStart: String? {
         guard let start = DateText.minutes(plan.start) else { return nil }
-        let zone = report?.json.at("forecast.timeZone").string ?? report?.json.at("location.timeZone").string
         var calendar = Calendar(identifier: .gregorian)
-        if let zone, let tz = TimeZone(identifier: zone) { calendar.timeZone = tz }
+        if let zone = report?.timeZone { calendar.timeZone = zone }
         guard let day = DateText.date(plan.date) else { return nil }
         let utc = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: day)
         guard let planned = calendar.date(from: DateComponents(year: utc.year, month: utc.month, day: utc.day, hour: start / 60, minute: start % 60)),
@@ -366,12 +365,16 @@ struct BriefView: View {
 
     private func restart(tomorrow: Bool) {
         guard var next = store.plan(plan.id) else { return }
+        // Today and now on the objective's clock, which the plan's date and start are in.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = report?.timeZone ?? .current
+        let now = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: Date())
+        let today = String(format: "%04d-%02d-%02d", now.year ?? 0, now.month ?? 1, now.day ?? 1)
         if tomorrow {
-            next.date = DateText.addDays(DateText.today(), 1)
+            next.date = DateText.addDays(today, 1)
             next.start = PreferencesStore.shared.preferences.defaultStartTime
         } else {
-            next.date = DateText.today()
-            let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+            next.date = today
             next.start = String(format: "%02d:%02d", now.hour ?? 0, ((now.minute ?? 0) / 15) * 15)
         }
         store.update(next)
@@ -582,7 +585,7 @@ struct FullReportView: View {
                 case .timing: TimingChapter(plan: plan, report: report, snapshot: snapshot)
                 case .route: RouteChapter(plan: plan, report: report, snapshot: snapshot)
                 case .checks: ChecksChapter(plan: plan, report: report, snapshot: snapshot)
-                case .gear: GearActionsSection(report: report)
+                case .gear: GearActionsSection(report: report, scope: plan.id.uuidString)
                 }
             }
         }
