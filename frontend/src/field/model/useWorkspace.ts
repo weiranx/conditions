@@ -106,7 +106,8 @@ import { useTripForecast } from "../../hooks/useTripForecast";
 import { useSafetyData } from "../../hooks/useSafetyData";
 import { useSearchSuggestions } from "../../hooks/useSearchSuggestions";
 import { normalizeSuggestionText } from "../../lib/search";
-import { estimateRouteDurationHours, gpxTrackForAnalysis, type ParsedGpxRoute } from "../../lib/gpx";
+import { objectiveTerms as resolveObjectiveTerms } from "../../app/objective-terms";
+import { estimateRouteDurationHours, gpxObjectivePoint, gpxTrackForAnalysis, type ParsedGpxRoute } from "../../lib/gpx";
 import { useUrlState, useSyncUrlEffect } from "../../hooks/useUrlState";
 import type { AppView } from "../../hooks/useUrlState";
 import { useReportGeneration } from "./useReportGeneration";
@@ -679,6 +680,18 @@ export function useWorkspace() {
     recordRecentSuggestion,
     parsedTypedCoordinates,
   } = searchHook;
+  // Summit, route high point or other objective, so the report names the ends
+  // of the approach correctly. A searched place keeps its kind in recent searches.
+  const objectiveTerms = useMemo(() => {
+    const searched = searchHook.recentSearches.find((place) =>
+      Math.abs(Number(place.lat) - position.lat) < 0.0005 &&
+      Math.abs(Number(place.lon) - position.lng) < 0.0005 &&
+      normalizeSuggestionText(place.name.split(",")[0] ?? "") === normalizeSuggestionText(objectiveName));
+    return resolveObjectiveTerms({
+      route: Boolean(importedGpxRoute),
+      place: searched ?? (objectiveName ? { name: objectiveName } : null),
+    });
+  }, [searchHook.recentSearches, position.lat, position.lng, objectiveName, importedGpxRoute]);
   const objectiveDraftDirty =
     hasObjective &&
     normalizeSuggestionText(searchQuery) !==
@@ -711,12 +724,7 @@ export function useWorkspace() {
   const handleImportGpxObjective = useCallback(
     (route: ParsedGpxRoute) => {
       if (!featureFlags.gpxImport) return;
-      const anchor = route.checkpoints.reduce((closest, checkpoint) =>
-        Math.abs(checkpoint.progress_percent - 50) <
-        Math.abs(closest.progress_percent - 50)
-          ? checkpoint
-          : closest,
-      );
+      const anchor = gpxObjectivePoint(route);
       const label =
         route.name ||
         route.fileName.replace(/\.gpx$/i, "") ||
@@ -2451,6 +2459,7 @@ export function useWorkspace() {
     objectiveNameRef,
     importedGpxRoute,
     setImportedGpxRoute,
+    objectiveTerms,
     healthChecks,
     healthLoading,
     healthCheckedAt,

@@ -25,6 +25,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { PersistedReport } from "../app/report-storage";
+import { SUMMIT_TERMS, type ObjectiveTerms } from "../app/objective-terms";
 import type { PlanEvaluation, WeatherTrendPoint } from "../app/types";
 import {
   formatClockForStyle,
@@ -58,11 +59,13 @@ const METRICS: WeatherTrendMetricKey[] = ["temp", "feelsLike", "gust", "wind", "
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
-export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft` }: {
+export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, terms = SUMMIT_TERMS }: {
   report: PersistedReport;
   /** The backend's evaluation: each reading checked against the limits, at the party's estimated elevation on the approach. */
   evaluation: PlanEvaluation;
   elevation?: (ft: number) => string;
+  /** What the report calls the objective and the start of the approach. */
+  terms?: ObjectiveTerms;
 }) {
   const [hour, setHour] = useState(0);
   const [metric, setMetric] = useState<WeatherTrendMetricKey>("temp");
@@ -176,7 +179,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft` }:
           <span className="sky-lead-note">
             {" "}{approachSummary.adjustedHours} h {approachSummary.adjustedHours === 1 ? "is" : "are"} checked at your
             estimated elevation ({approachSummary.lowFt === approachSummary.highFt ? `~${nearFt(approachSummary.lowFt)}` : `~${nearFt(approachSummary.lowFt)}–${nearFt(approachSummary.highFt)}`}),
-            not the summit; the chart shows the summit forecast.
+            not the {terms.top}; the chart shows the {terms.top} forecast.
           </span>
         )}
       </p>
@@ -233,7 +236,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft` }:
               <p className="forecast-readout-approach">
                 Checked near {nearFt(selectedRow.elevationFt)} on the approach: feels like{" "}
                 {finite(selected.temp) && finite(selected.wind) ? temp(selectedRow.feelsLike) : "—"}, gusts {wind(selectedRow.gust)}.
-                {selectedRow.inversionRisk ? " Clear, calm conditions: the trailhead may be colder than the summit." : ""}
+                {selectedRow.inversionRisk ? ` Clear, calm conditions: the ${terms.start} may be colder than the ${terms.top}.` : ""}
               </p>
             )}
             <p className={`forecast-readout-status is-${tone}`}>

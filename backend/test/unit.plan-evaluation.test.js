@@ -274,7 +274,7 @@ describe('approach', () => {
       .cautions.find((item) => /Apparent temperature/.test(item)) || '';
     expect(caution({ approach: 'off' })).toBe('');
     expect(caution({ trailhead_ft: '7000' }))
-      .toMatch(/near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit/);
+      .toMatch(/low on the approach: clear, calm conditions can pool colder air in the valley than higher up/);
   });
 
   test('an off-the-hour start checks each reading at the elevation for its own minutes', () => {

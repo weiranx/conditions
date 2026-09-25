@@ -419,6 +419,7 @@ export function Report({
       clock={clock}
       elevation={(ft) => w.formatElevationDisplay(ft)}
       onEdit={w.viewingHistoryReport ? undefined : () => go("terrain", "sky-terrain-approach")}
+      terms={w.objectiveTerms}
     />
   );
   const routeNote = (
@@ -431,7 +432,7 @@ export function Report({
   const chapterContent = (id: Chapter) => {
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
-        <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} />
+        <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
         <Conditions workspace={w} hours={skyHours} />
       </section>
     );
@@ -481,7 +482,7 @@ export function Report({
               <span className="sky-kicker">{report.plan.objectiveName} · {dateLabel(report.plan.forecastDate)}</span>
               <h1 tabIndex={-1}>{fullReport ? "Full report" : activeChapter?.label}</h1>
             </div>
-            <DayStrip hours={skyHours} approach={plannedApproach} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} />
+            <DayStrip hours={skyHours} approach={plannedApproach} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
           </div>
           {!fullReport && (
             <nav className="sky-chapter-tabs" aria-label="Report sections" ref={tabsRef}>

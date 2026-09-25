@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { useWidth } from "./useWidth";
 import { WeatherSky } from "./MountainSection";
 import { ridgeShape } from "./ridge";
+import { SUMMIT_TERMS, capitalize, type ObjectiveTerms } from "../../app/objective-terms";
 import { shortHour, type SkyHour } from "./sky-model";
 
 type Level = { label: string; ft: number; tone: "cold" | "snow" };
@@ -14,13 +15,14 @@ const chanceOf = (hour: SkyHour) => (Number.isFinite(hour.precipChance) ? hour.p
  * precipitation turns to snow at the snow level (or the freezing level when
  * no snow level is forecast). One level is forecast for the whole window.
  */
-export function PrecipMountain({ hours, objectiveFt, trailheadFt, levels, format, timeStyle }: {
+export function PrecipMountain({ hours, objectiveFt, trailheadFt, levels, format, timeStyle, terms = SUMMIT_TERMS }: {
   hours: SkyHour[];
   objectiveFt: number;
   trailheadFt: number | null;
   levels: Level[];
   format: { elevation: (ft: number) => string; clock: (minute: number) => string };
   timeStyle: string;
+  terms?: ObjectiveTerms;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>(900);
   const id = useId().replace(/:/g, "");
@@ -46,10 +48,10 @@ export function PrecipMountain({ hours, objectiveFt, trailheadFt, levels, format
   const phaseText = phase === null
     ? "No snow or freezing level is forecast, so rain and snow can't be separated."
     : phase.ft <= base && trailheadKnown
-      ? `At ${format.elevation(phase.ft)} the ${phase.label.toLowerCase()} is at or below your trailhead: anything that falls on your route is likely snow.`
+      ? `At ${format.elevation(phase.ft)} the ${phase.label.toLowerCase()} is at or below your ${terms.start}: anything that falls on your route is likely snow.`
       : phase.ft >= objectiveFt
-        ? `The ${phase.label.toLowerCase()} is above your objective at ${format.elevation(phase.ft)}: anything that falls on your route is likely rain.`
-        : `Snow above about ${format.elevation(phase.ft)}, rain below it.${trailheadKnown ? "" : " Set your trailhead to see where your approach sits."}`;
+        ? `The ${phase.label.toLowerCase()} is above your ${terms.top} at ${format.elevation(phase.ft)}: anything that falls on your route is likely rain.`
+        : `Snow above about ${format.elevation(phase.ft)}, rain below it.${trailheadKnown ? "" : ` Set your ${terms.start} to see where your approach sits.`}`;
   const summary = `${format.clock(hour.minute)}: ${chance === null ? "precipitation chance unavailable" : `${Math.round(chance)}% chance of precipitation`}${hour.condition ? `, ${hour.condition.toLowerCase()}` : ""}.`;
   return (
     <div className="sky-precip-mountain">
@@ -92,13 +94,13 @@ export function PrecipMountain({ hours, objectiveFt, trailheadFt, levels, format
           ))}
           <g className="mt-objective">
             <circle cx={ridgeX(objectiveFt)} cy={y(objectiveFt)} r="7" />
-            <text x={ridgeX(objectiveFt) - 12} y={y(objectiveFt) - 12} textAnchor="end">Objective</text>
+            <text x={ridgeX(objectiveFt) - 12} y={y(objectiveFt) - 12} textAnchor="end">{capitalize(terms.top)}</text>
           </g>
           {trailheadKnown && (
             <g className="mt-target">
               <circle cx={Math.max(8, ridgeX(base))} cy={y(base)} r="5" />
               {/* Below the point: level labels run along the left edge above it. */}
-              <text x={Math.max(8, ridgeX(base)) + 10} y={Math.min(height - 4, y(base) + 16)}>Trailhead</text>
+              <text x={Math.max(8, ridgeX(base)) + 10} y={Math.min(height - 4, y(base) + 16)}>{capitalize(terms.start)}</text>
             </g>
           )}
         </svg>

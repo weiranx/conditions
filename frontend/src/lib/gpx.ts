@@ -51,6 +51,8 @@ export type ParsedGpxRoute = {
   checkpoints: GpxCheckpoint[];
   displayTrack: GpxTrackPoint[];
   routeShape: 'closed route' | 'point-to-point';
+  /** The track's highest point, where the report is read. Missing on routes saved before it was kept. */
+  highPoint?: { lat: number; lon: number; elev_ft: number };
 };
 
 export type RouteTimingProfile = {
@@ -311,6 +313,21 @@ export function estimateRouteDurationHours(
   return Math.max(1, Math.min(24, Math.round(totalMinutes / 60)));
 }
 
+/**
+ * Where a route's report is read: its highest point, where wind, cold and storms
+ * are worst. Without elevations, the checkpoint nearest halfway.
+ */
+export function gpxObjectivePoint(route: Pick<ParsedGpxRoute, 'checkpoints' | 'displayTrack' | 'highPoint'>): { lat: number; lon: number; elev_ft?: number } {
+  if (route.highPoint) return route.highPoint;
+  const withElevation = [...route.checkpoints, ...(route.displayTrack || [])]
+    .filter((point) => Number.isFinite(point.elev_ft));
+  if (withElevation.length) {
+    return withElevation.reduce((best, point) => ((point.elev_ft as number) > (best.elev_ft as number) ? point : best));
+  }
+  return route.checkpoints.reduce((closest, checkpoint) =>
+    Math.abs(checkpoint.progress_percent - 50) < Math.abs(closest.progress_percent - 50) ? checkpoint : closest);
+}
+
 export function parseGpxText(xmlText: string, fileName = 'Imported route.gpx'): ParsedGpxRoute {
   const document = new DOMParser().parseFromString(xmlText, 'application/xml');
   if (document.querySelector('parsererror')) {
@@ -342,6 +359,8 @@ export function parseGpxText(xmlText: string, fileName = 'Imported route.gpx'): 
     }
     previousPoint = point;
   }
+  const highest = points.reduce<ParsedTrackPoint | null>((best, point) =>
+    point.elevationMeters !== null && (best === null || point.elevationMeters > (best.elevationMeters as number)) ? point : best, null);
 
   return {
     name: routeName(document, fileName),
@@ -354,6 +373,13 @@ export function parseGpxText(xmlText: string, fileName = 'Imported route.gpx'): 
     checkpoints: chooseCheckpoints(points, totalDistanceMeters, extractNamedWaypoints(document)),
     displayTrack: chooseDisplayTrack(points, totalDistanceMeters),
     routeShape: haversineMeters(points[0], points[points.length - 1]) <= 250 ? 'closed route' : 'point-to-point',
+    ...(highest ? {
+      highPoint: {
+        lat: Number(highest.lat.toFixed(6)),
+        lon: Number(highest.lon.toFixed(6)),
+        elev_ft: Math.round((highest.elevationMeters as number) * METERS_TO_FEET),
+      },
+    } : {}),
   };
 }
 

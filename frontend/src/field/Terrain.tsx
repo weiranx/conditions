@@ -12,6 +12,7 @@ import { MountainSection } from "./sky/MountainSection";
 import { AvalancheMountain, type AvalancheBandKey } from "./sky/AvalancheMountain";
 import { AspectRose, type RoseAspect } from "./sky/AspectRose";
 import { SnowColumns } from "./sky/SnowColumns";
+import { capitalize } from "../app/objective-terms";
 import { formatSnowDepthForElevationUnit, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
 
 const parseClock = (time: string) => parseTimeInputMinutes(time) ?? parseHourLabelToMinutes(time) ?? NaN;
@@ -312,7 +313,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
         <div className="sky-card">
           <div className="sky-elevation-check">
             <label>
-              <span>Trailhead elevation ({w.elevationUnitLabel})</span>
+              <span>{capitalize(w.objectiveTerms.start)} elevation ({w.elevationUnitLabel})</span>
               <input className="sky-approach-input" inputMode="numeric" placeholder="Estimated"
                 value={w.trailheadElevationInput} onChange={w.handleTrailheadElevationChange}
                 disabled={!w.preferences.approachElevationAdjustment || approach?.source === "gpx" || approach?.source === "route"} />
@@ -320,7 +321,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
             {approach && (
               <dl className="sky-inline-facts">
                 <div><dt>Start</dt><dd>{w.formatElevationDisplay(approach.trailheadElevationFt)}</dd></div>
-                <div><dt>Objective</dt><dd>{w.formatElevationDisplay(approach.objectiveElevationFt)}</dd></div>
+                <div><dt>{capitalize(w.objectiveTerms.top)}</dt><dd>{w.formatElevationDisplay(approach.objectiveElevationFt)}</dd></div>
                 {approachHours > 0 && <div><dt>Hours adjusted</dt><dd>{approachHours}</dd></div>}
               </dl>
             )}
