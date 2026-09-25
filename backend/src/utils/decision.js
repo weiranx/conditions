@@ -312,7 +312,7 @@ const evaluateDecision = (report, context) => {
   }
   if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
     const inversionNote = coldestIsInversion
-      ? `${coldestFeelsLikeHour ? ` at ${coldestFeelsLikeHour}` : ''} near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit`
+      ? `${coldestFeelsLikeHour ? ` at ${coldestFeelsLikeHour}` : ''} low on the approach: clear, calm conditions can pool colder air in the valley than higher up`
       : '';
     addCaution(`Apparent temperature falls near ${formatTempValue(feelsLike)}${inversionNote}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
   }

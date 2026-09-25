@@ -17,7 +17,8 @@ import { formatClockForStyle } from '../src/app/core';
 import { fetchApiStream } from '../src/lib/api-client';
 import { useRouteAnalysis } from '../src/hooks/useRouteAnalysis';
 import { groupCheckpointsByPlace, worstTone } from '../src/field/route-map-pins';
-import { parseGpxText } from '../src/lib/gpx';
+import { gpxObjectivePoint, parseGpxText } from '../src/lib/gpx';
+import { objectiveTerms } from '../src/app/objective-terms';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
 import { makeReport } from '../dev/mock-data.mjs';
 import { getDefaultUserPreferences } from '../src/app/preferences';
@@ -83,6 +84,44 @@ test('GPX checkpoints always include the high point and a deep low point, named 
   assert.ok(!names.includes('Far away'));
   const distances = route.checkpoints.map((checkpoint) => checkpoint.distance_miles);
   assert.deepEqual(distances, [...distances].sort((a, b) => a - b));
+});
+
+test('an imported GPX route is reported at its high point, not halfway', () => {
+  // Climbs to a top at 30%, then a long gentle descent: halfway is well below the top.
+  const elevation = (i) => (i <= 30 ? 1000 + i * 40 : 2200 - (i - 30) * 10);
+  const track = Array.from({ length: 101 }, (_, i) =>
+    `<trkpt lat="${(40 + i * 0.001).toFixed(4)}" lon="-105"><ele>${elevation(i)}</ele></trkpt>`).join('');
+  const route = parseGpx(`<trk><trkseg>${track}</trkseg></trk>`);
+  assert.deepEqual(route.highPoint, { lat: 40.03, lon: -105, elev_ft: route.maxElevationFt });
+  assert.deepEqual(gpxObjectivePoint(route), route.highPoint);
+  // A route saved before the high point was kept falls back to its highest checkpoint.
+  const { highPoint: _, ...older } = route;
+  assert.equal(gpxObjectivePoint(older).elev_ft, route.maxElevationFt);
+  // A long track keeps the high point in the display track that times the approach.
+  const spike = Array.from({ length: 1999 }, (_, i) =>
+    `<trkpt lat="${(40 + i * 0.0001).toFixed(4)}" lon="-105"><ele>${i === 777 ? 3000 : 1000 + i * 0.1}</ele></trkpt>`).join('');
+  const long = parseGpx(`<trk><trkseg>${spike}</trkseg></trk>`);
+  assert.ok(long.displayTrack.length <= 500);
+  assert.equal(Math.max(...long.displayTrack.map((point) => point.elev_ft)), long.maxElevationFt);
+  const progress = long.displayTrack.map((point) => point.progress_percent);
+  assert.deepEqual(progress, [...progress].sort((a, b) => a - b));
+  // Without elevations, halfway.
+  const flat = parseGpx(`<trk><trkseg>${Array.from({ length: 11 }, (_, i) => `<trkpt lat="${40 + i * 0.001}" lon="-105"/>`).join('')}</trkseg></trk>`);
+  assert.equal(flat.highPoint, undefined);
+  assert.equal(gpxObjectivePoint(flat).progress_percent, 50);
+});
+
+test('the report names a route by its start and high point, and only a summit a summit', () => {
+  assert.deepEqual(objectiveTerms({ route: { hasElevation: true }, place: { name: 'Mount Rainier' } }), { kind: 'route', start: 'start', top: 'high point' });
+  // A track without elevations is read halfway, so it names no high point.
+  assert.deepEqual(objectiveTerms({ route: { hasElevation: false }, place: null }), { kind: 'route', start: 'start', top: 'objective' });
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Mount Rainier' } }).top, 'summit');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Grand Teton', kind: 'Peak' } }).top, 'summit');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Mount Si Trailhead' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Snow Lake', kind: 'Lake' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Mount Pass', kind: 'Pass' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Dropped pin' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: null }).start, 'trailhead');
 });
 
 test('GPX route elements do not add distance or ascent across disconnected routes', () => {

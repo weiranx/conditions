@@ -332,6 +332,9 @@ export function WorkspacePlan({
                 w.importedGpxRoute.elevationGainFt,
               )}{" "}
               ascent
+              {w.importedGpxRoute.maxElevationFt !== null && (
+                <> · report for the high point, {w.formatElevationDisplay(w.importedGpxRoute.maxElevationFt)}</>
+              )}
             </p>
             {w.gpxEstimatedDurationHours !== null && (
               <button

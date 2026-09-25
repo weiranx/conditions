@@ -471,7 +471,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
         <section className="sky-section sky-compare-hourly" aria-label={`Hourly detail for ${dateLabel(selected.date)}`}>
           <h2 className="sky-chapter-name">Hourly detail · {dateLabel(selected.date)}</h2>
           {selectedEvaluation && (
-            <Forecast key={selected.date} report={snapshot} evaluation={selectedEvaluation} elevation={(ft) => w.formatElevationDisplay(ft)} />
+            <Forecast key={selected.date} report={snapshot} evaluation={selectedEvaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
           )}
         </section>
       )}

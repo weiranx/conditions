@@ -22,6 +22,7 @@ import { Details, SourceLink } from "./Details";
 import { ComfortScore } from "./ComfortScore";
 import { shortHour, type SkyHour } from "./sky/sky-model";
 import { PrecipMountain } from "./sky/PrecipMountain";
+import { capitalize } from "../app/objective-terms";
 import { knownFeet } from "./sky/status";
 import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
 
@@ -78,7 +79,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
     : "End";
   const percent = (value: number) => `${Math.round(value)}%`;
   const hourMinutes = hours.map((hour) => parseTimeInputMinutes(hour.time) ?? parseHourLabelToMinutes(hour.time) ?? NaN);
-  // Heat builds lowest on the route, so the heat card leads with the trailhead and keeps the summit for reference.
+  // Heat builds lowest on the route, so the heat card leads with the start and keeps the objective for reference.
   const trailhead = w.evaluation?.trailheadTemperatures ?? null;
   const trailheadTemps = trailhead?.temps ?? null;
   const hourTicks = hourMinutes.map((minute) => shortHour(minute, w.preferences.timeStyle === "24h" ? "24h" : "12h"));
@@ -121,6 +122,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               levels={precipLevels}
               format={{ elevation: (ft) => w.formatElevationDisplay(ft), clock: skyClock }}
               timeStyle={w.preferences.timeStyle}
+              terms={w.objectiveTerms}
             />
           </section>
         )}
@@ -184,11 +186,11 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               value={heatRisk.label || "Unavailable"} tone={heatRisk.status}
               note={heatRisk.guidance}
               evidence={<Details title="Heat-stress measurements" value={data.heatRisk} />}>
-              <ConditionTrend label={trailheadTemps ? "Temperature, trailhead to summit" : "Temperature at the summit"}
+              <ConditionTrend label={trailheadTemps ? `Temperature, ${w.objectiveTerms.start} to ${w.objectiveTerms.top}` : `Temperature at the ${w.objectiveTerms.top}`}
                 values={trailheadTemps ?? hours.map((hour) => hour.temp)} format={w.formatTempDisplay} start={start} end={end}
                 compare={trailhead ? {
-                  primaryLabel: `Trailhead ${w.formatElevationDisplay(Math.round(trailhead.trailheadElevationFt / 100) * 100)}`,
-                  label: `Summit ${w.formatElevationDisplay(trailhead.objectiveElevationFt)}`,
+                  primaryLabel: `${capitalize(w.objectiveTerms.start)} ${w.formatElevationDisplay(Math.round(trailhead.trailheadElevationFt / 100) * 100)}`,
+                  label: `${capitalize(w.objectiveTerms.top)} ${w.formatElevationDisplay(trailhead.objectiveElevationFt)}`,
                   values: hours.map((hour) => hour.temp),
                 } : undefined}
                 hours={hourTicks} bands={[{ from: 85, to: 200, label: "hot", tone: "caution" }, { from: -100, to: 32, label: "freezing", tone: "cold" }]} />

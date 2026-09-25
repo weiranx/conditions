@@ -113,6 +113,18 @@ test('the day strip marks approach hours visually and for screen readers', () =>
   assert.match(html, /title="5 AM · checked near 9,500 ft"/);
 });
 
+test('a GPX route is described by its start and high point, not a trailhead and summit', () => {
+  const { hours, summary } = approachScenario();
+  const terms = { kind: 'route', start: 'start', top: 'high point' };
+  const note = renderToStaticMarkup(<ApproachNote hours={hours} summary={summary} source="estimated" clock={clock} elevation={elevation} onEdit={() => {}} terms={terms} />);
+  assert.match(note, /not the\s+high point/);
+  assert.match(note, /Set start/);
+  assert.match(note, /may be colder at the start than at the high point/);
+  assert.doesNotMatch(note, /summit|trailhead</);
+  const strip = renderToStaticMarkup(<DayStrip hours={hours} approach={summary} clock={clock} elevation={elevation} terms={terms} />);
+  assert.match(strip, /checked at your estimated elevation, not the high point/);
+});
+
 test('the Forecast chapter shows the same checked hours as the brief and tags them', () => {
   const { data, evaluation } = approachScenario();
   const report = buildPersistedReport(

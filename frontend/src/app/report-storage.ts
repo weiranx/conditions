@@ -174,6 +174,13 @@ function parseGpxRoute(value: unknown): ParsedGpxRoute | null {
     checkpoints: checkpoints as GpxCheckpoint[],
     displayTrack: displayTrack as GpxTrackPoint[],
     routeShape: value.routeShape,
+    ...(isRecord(value.highPoint)
+      && isFiniteNumber(value.highPoint.lat)
+      && isFiniteNumber(value.highPoint.lon)
+      && isValidLatLon(value.highPoint.lat, value.highPoint.lon)
+      && isFiniteNumber(value.highPoint.elev_ft)
+      ? { highPoint: { lat: value.highPoint.lat, lon: value.highPoint.lon, elev_ft: value.highPoint.elev_ft } }
+      : {}),
   };
 }
 
