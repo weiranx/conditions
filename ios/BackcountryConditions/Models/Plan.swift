@@ -12,13 +12,18 @@ struct Place: Codable, Hashable, Sendable, Identifiable {
 
     /// "Mount Shasta, California" reads as "Mount Shasta" in titles.
     var shortName: String {
-        name.split(separator: ",").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? name
+        if isCoordinates { return name }
+        return name.split(separator: ",").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? name
     }
 
     var region: String? {
+        if isCoordinates { return nil }
         let parts = name.split(separator: ",").dropFirst().map { $0.trimmingCharacters(in: .whitespaces) }
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
+
+    /// Named by its coordinates ("36.7727, -118.3413"), which read as one name, not a place and region.
+    private var isCoordinates: Bool { name.contains(",") && Place.coordinates(in: name) != nil }
 }
 
 /// Activity profiles. Labels and default limits mirror `frontend/src/app/activity-profiles.ts`;

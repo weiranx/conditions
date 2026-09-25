@@ -12,8 +12,7 @@ struct RouteChapter: View {
     var report: Report
     var snapshot: Bool
 
-    @State private var suggestions: [JSON] = []
-    @State private var loadingSuggestions = false
+    @State private var suggestions = RouteSuggestions()
     @State private var customName = ""
     @State private var analyzing = false
     @State private var progress: String?
@@ -107,7 +106,7 @@ struct RouteChapter: View {
 
     private var chooser: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHead(route == nil ? "Choose a route" : "Another route")
+            SectionHead(route == nil ? "Choose a route" : "Change the route")
             Card(spacing: 10) {
                 if account.flags.gpxImport {
                     Button { importing = true } label: {
@@ -120,38 +119,16 @@ struct RouteChapter: View {
                 HStack {
                     TextField("Route name, e.g. Avalanche Gulch", text: $customName)
                         .textInputAutocapitalization(.words)
+                        .submitLabel(.done)
+                        .onSubmit { useRoute(name: customName, miles: nil, gain: nil) }
+                        .padding(10).background(Palette.field, in: RoundedRectangle(cornerRadius: 10))
                     Button("Use") { useRoute(name: customName, miles: nil, gain: nil) }
                         .buttonStyle(.glass).disabled(customName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                Button {
-                    Task { await loadSuggestions() }
-                } label: {
-                    Label(loadingSuggestions ? "Finding routes…" : "Suggest routes", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                        .frame(maxWidth: .infinity)
+                RouteSuggestionPicker(model: suggestions, place: current.objective, selected: route?.gpx == nil ? route?.name : nil,
+                                      timing: PreferencesStore.shared.preferences.routeTiming(for: current.activityKey)) { option in
+                    useRoute(name: option.name, miles: option.miles, gain: option.gainFt)
                 }
-                .buttonStyle(.glass)
-                .disabled(loadingSuggestions || !account.signedIn)
-                ForEach(Array(suggestions.enumerated()), id: \.offset) { _, option in
-                    Button {
-                        useRoute(name: option["name"].string ?? "Route", miles: option["distance_rt_miles"].double, gain: option["elev_gain_ft"].double)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(option["name"].string ?? "Route").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.label)
-                                Spacer()
-                                if let grade = option["class"].string { Text(grade).font(.caption).foregroundStyle(Palette.secondary) }
-                            }
-                            Text([option["distance_rt_miles"].double.map { "\(Format.miles($0)) round trip" }, option["elev_gain_ft"].double.map { "\(Format.feet($0)) gain" }]
-                                .compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.secondary)
-                            if let description = option["description"].string { Caption(description) }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(Palette.field, in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-                }
-                if !account.signedIn { Caption("Suggestions use AI and need an account.") }
             }
             .padding(.horizontal, 16)
         }
@@ -189,17 +166,6 @@ struct RouteChapter: View {
             let gpx = try GpxParser.parse(data: Data(contentsOf: url), fileName: url.lastPathComponent)
             error = nil
             setRoute(PlanRoute(name: gpx.name, gpx: gpx, elevationGainFt: gpx.elevationGainFt, shape: gpx.isLoop ? "loop" : "auto"))
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    private func loadSuggestions() async {
-        loadingSuggestions = true
-        defer { loadingSuggestions = false }
-        do {
-            suggestions = try await APIClient().routeSuggestions(peak: current.objective.shortName, lat: current.objective.lat, lon: current.objective.lon).array
-            error = suggestions.isEmpty ? "No routes were suggested for this objective." : nil
         } catch {
             self.error = error.localizedDescription
         }
@@ -259,6 +225,129 @@ struct RouteChapter: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+// MARK: - Route suggestions
+
+/// A route suggested for an objective by `/api/route-suggestions`.
+struct RouteSuggestion: Hashable {
+    var name: String
+    var miles: Double?
+    var gainFt: Double?
+    var grade: String?
+    var description: String?
+
+    init?(json: JSON) {
+        guard let name = json["name"].string?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
+        self.name = name
+        miles = json["distance_rt_miles"].double.flatMap { $0 > 0 ? $0 : nil }
+        gainFt = json["elev_gain_ft"].double.flatMap { $0 >= 0 ? $0 : nil }
+        grade = json["class"].string
+        description = json["description"].string
+    }
+}
+
+/// Route suggestions per objective, kept for the session so the plan form and the Route chapter
+/// share one request.
+@Observable
+final class RouteSuggestions {
+    private static var cache: [String: [RouteSuggestion]] = [:]
+    private(set) var options: [RouteSuggestion]?
+    private(set) var loading = false
+    private(set) var error: String?
+    private var placeID: String?
+
+    /// Shows what was already found for a place, if anything.
+    func show(for place: Place?) {
+        guard place?.id != placeID else { return }
+        placeID = place?.id
+        options = place.flatMap { Self.cache[$0.id] }
+        error = nil
+    }
+
+    func load(for place: Place) async {
+        show(for: place)
+        loading = true
+        defer { loading = false }
+        do {
+            let found = try await APIClient().routeSuggestions(peak: place.shortName, lat: place.lat, lon: place.lon).array.compactMap(RouteSuggestion.init(json:))
+            Self.cache[place.id] = found
+            guard placeID == place.id else { return }
+            options = found
+            error = nil
+        } catch {
+            guard placeID == place.id else { return }
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Suggested routes for the objective, shared by the plan form and the Route chapter (the web's
+/// `RouteSuggestions`): each shows its grade, length, climb, a time at the traveler's own pace and
+/// its description; the planned one is checked.
+struct RouteSuggestionPicker: View {
+    @Environment(AccountStore.self) private var account
+    var model: RouteSuggestions
+    var place: Place?
+    var selected: String?
+    var timing: RouteTiming
+    var onPick: (RouteSuggestion) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if model.options == nil || model.loading {
+                Button {
+                    if let place { Task { await model.load(for: place) } }
+                } label: {
+                    Label(model.loading ? "Finding routes…" : "Suggest routes", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                .disabled(model.loading || place == nil || !account.signedIn)
+            }
+            if let options = model.options {
+                if options.isEmpty {
+                    Caption("No suggestions for this objective. Type a route name instead.")
+                } else {
+                    ForEach(options, id: \.self) { option in row(option) }
+                }
+            }
+            if let error = model.error { Caption(error, tone: Palette.caution) }
+            if !account.signedIn { Caption("Suggestions use AI and need an account. Sign in from Settings.") }
+        }
+        .onAppear { model.show(for: place) }
+        .onChange(of: place) { model.show(for: place) }
+    }
+
+    private func row(_ option: RouteSuggestion) -> some View {
+        let picked = option.name == selected
+        // Suggested lengths and climbs are approximate, so a time is only offered when both are listed.
+        let hours = option.miles.flatMap { miles in option.gainFt.map { timing.hours(miles: miles, gainFt: $0, lossFt: $0) } }
+        return Button { onPick(option) } label: {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.name).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.label)
+                    Text([option.grade, option.miles.map { "\(Format.miles($0)) round trip" }, option.gainFt.map { "\(Format.feet($0)) gain" },
+                          hours.map { "about \($0) h at your pace" }]
+                        .compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(Palette.secondary)
+                    if let description = option.description { Caption(description) }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: picked ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(picked ? Palette.accent : Palette.secondary.opacity(0.5))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(Palette.field, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                if picked { RoundedRectangle(cornerRadius: 12).stroke(Palette.accent, lineWidth: 1.5) }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(picked ? .isSelected : [])
     }
 }
 

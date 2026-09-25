@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -36,13 +37,20 @@ struct NewPlanSheet: View {
     @State private var limits = Activity.hiking.defaultLimits
     @State private var trailheadFt: Double?
     @State private var route: PlanRoute?
+    @State private var routeName = ""
+    @State private var routeSuggestions = RouteSuggestions()
     @State private var tripName = ""
     @State private var stages: [StageDraft] = []
     @State private var exit: Place?
     @State private var bailPoints: [Place] = []
     @State private var tripTrack: [TrackCoordinate]?
     @State private var picking: PlaceTarget?
-    @State private var importing: ImportTarget?
+    /// A trip stop being placed on the map, which opens on the route.
+    @State private var mapping: PlaceTarget?
+    @State private var importing = false
+    /// What the file being imported is for. Kept apart from `importing`, which the importer clears
+    /// before its completion runs.
+    @State private var importTarget: ImportTarget = .route
     @State private var importError: String?
     /// The activity the limits card was last filled for. The sheet opens with the plan's own limits;
     /// choosing another activity then brings in that activity's limits.
@@ -141,24 +149,20 @@ struct NewPlanSheet: View {
                 .padding(.bottom, 8)
             }
             .sheet(item: $picking) { target in
-                PlacePicker(title: pickerTitle(target), near: target == .objective ? nil : objective, context: contextPlaces) { place in
-                    switch target {
-                    case .objective: objective = place
-                    case .stageEnd(let index): if stages.indices.contains(index) { stages[index].end = place; stages[index].layover = false }
-                    case .checkpoint(let index):
-                        if stages.indices.contains(index) && stages[index].checkpoints.count < 2 {
-                            var point = place
-                            if point.kind == "Pin" { point.name = "Day \(index + 1) high point" }
-                            stages[index].checkpoints.append(point)
-                        }
-                    case .exit: exit = place
-                    case .bail: if bailPoints.count < 4 { bailPoints.append(place) }
-                    }
+                PlacePicker(title: pickerTitle(target), near: pickerNear(target), context: landmarks(excluding: target), track: routeTrack,
+                            legs: tripLegs, current: currentPoint(target)) { place in
+                    apply(place, to: target)
                 }
             }
-            .fileImporter(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            .fullScreenCover(item: $mapping) { target in
+                MapPicker(title: pickerTitle(target), around: pickerNear(target), context: landmarks(excluding: target),
+                          track: routeTrack, legs: tripLegs, current: currentPoint(target)) { place in
+                    apply(place, to: target)
+                }
+            }
+            .fileImporter(isPresented: $importing,
                           allowedContentTypes: [UTType(filenameExtension: "gpx") ?? .xml, .xml]) { result in
-                importGPX(result, for: importing ?? .route)
+                importGPX(result, for: importTarget)
             }
         }
         .onAppear(perform: load)
@@ -180,8 +184,75 @@ struct NewPlanSheet: View {
         }
     }
 
-    private var contextPlaces: [Place] {
-        ([objective] + stages.map(\.end) + [exit]).compactMap { $0 }
+    /// Where a picker opens and searches: the stop before the one being chosen, so night 2's camp
+    /// is found near night 1's and a day's high point near where that day starts.
+    private func pickerNear(_ target: PlaceTarget) -> Place? {
+        switch target {
+        case .objective: nil
+        case .stageEnd(let index), .checkpoint(let index): index > 0 ? campPoint(index - 1) : objective
+        case .exit: stages.count > 1 ? campPoint(stages.count - 2) : objective
+        case .bail: objective
+        }
+    }
+
+    private func apply(_ place: Place, to target: PlaceTarget) {
+        switch target {
+        case .objective: objective = place
+        case .stageEnd(let index):
+            if stages.indices.contains(index) { stages[index].end = place.named(unlessFeature: "Night \(index + 1) camp"); stages[index].layover = false }
+        case .checkpoint(let index):
+            if stages.indices.contains(index) && stages[index].checkpoints.count < 2 {
+                var point = place
+                if point.kind == "Pin" { point.name = "Day \(index + 1) high point" }
+                stages[index].checkpoints.append(point)
+            }
+        case .exit: exit = place.named(unlessFeature: "Exit")
+        case .bail: if bailPoints.count < 4 { bailPoints.append(place.named(unlessFeature: "Bail point \(bailPoints.count + 1)")) }
+        }
+    }
+
+    /// The point a stop already has, so changing it starts from there.
+    private func currentPoint(_ target: PlaceTarget) -> Place? {
+        switch target {
+        case .objective: objective
+        case .stageEnd(let index): stages.indices.contains(index) ? stages[index].end : nil
+        case .exit: exit
+        default: nil
+        }
+    }
+
+    /// The track the plan follows: a day trip's GPX route or a trip's imported track.
+    private var routeTrack: [TrackCoordinate] {
+        kind == .day ? (route?.gpx?.displayTrack ?? []).map { TrackCoordinate(lat: $0.lat, lon: $0.lon) } : tripTrack ?? []
+    }
+
+    /// The trip's stops in travel order: trailhead, each day's high points and camp, then the exit
+    /// (or back to the trailhead), for the map to draw the way between them.
+    private var tripLegs: [Place] {
+        guard kind == .multi, let objective else { return [] }
+        var points = [objective]
+        for (index, stage) in stages.enumerated() {
+            points += stage.checkpoints
+            if index < stages.count - 1, !stage.layover, let end = stage.end { points.append(end) }
+        }
+        points.append(exit ?? objective)
+        return points.count > 2 ? points : []
+    }
+
+    /// The plan's other points, labeled on the picker's map.
+    private func landmarks(excluding target: PlaceTarget) -> [PlaceLandmark] {
+        var points: [PlaceLandmark] = []
+        if let objective, target != .objective { points.append(PlaceLandmark(label: kind == .day ? "Objective" : "Trailhead", place: objective)) }
+        guard kind == .multi else { return points }
+        for (index, stage) in stages.dropLast().enumerated() where target != .stageEnd(index) && !stage.layover {
+            if let end = stage.end { points.append(PlaceLandmark(label: "Night \(index + 1)", place: end)) }
+        }
+        for (index, stage) in stages.enumerated() {
+            for point in stage.checkpoints { points.append(PlaceLandmark(label: "Day \(index + 1) high point", place: point)) }
+        }
+        if let exit, target != .exit { points.append(PlaceLandmark(label: "Exit", place: exit)) }
+        for point in bailPoints { points.append(PlaceLandmark(label: "Bail point", place: point)) }
+        return points
     }
 
     // MARK: Cards
@@ -191,7 +262,7 @@ struct NewPlanSheet: View {
             CardHead(kind == .day ? "Objective" : "Trailhead")
             Button { picking = .objective } label: {
                 HStack(spacing: 12) {
-                    TopoThumb()
+                    PlaceThumb(place: objective)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(objective?.shortName ?? "Choose a place").font(.headline).foregroundStyle(objective == nil ? Palette.secondary : Palette.label)
                         if let objective {
@@ -213,7 +284,7 @@ struct NewPlanSheet: View {
             .buttonStyle(.plain)
             .padding(.top, 4)
             if kind == .multi && account.flags.gpxImport {
-                Button { importing = .trip } label: { Label("Build the trip from a GPX track", systemImage: "square.and.arrow.down") }
+                Button { importTarget = .trip; importing = true } label: { Label("Build the trip from a GPX track", systemImage: "square.and.arrow.down") }
                     .buttonStyle(.glass).controlSize(.small).padding(.top, 4)
             }
         }
@@ -255,8 +326,7 @@ struct NewPlanSheet: View {
                 Text("Duration \(Text("· \(hours) hours").foregroundStyle(Palette.secondary))").font(.subheadline)
             }
             .padding(.top, 2)
-            if let gpx = route?.gpx {
-                let estimate = gpx.estimatedHours(preferences.routeTiming(for: activityKey))
+            if let estimate = route?.estimatedHours(preferences.routeTiming(for: activityKey)) {
                 if estimate != hours {
                     Button("Use \(estimate) hours from your route at your pace") { hours = estimate }.font(.footnote.weight(.semibold))
                 }
@@ -286,19 +356,48 @@ struct NewPlanSheet: View {
                         if let gpx = route.gpx {
                             Text("\(Format.miles(gpx.distanceMiles)) · \(gpx.elevationGainFt.map(Format.feet) ?? "—") gain · \(gpx.checkpoints.count) checkpoints")
                                 .font(.caption).foregroundStyle(Palette.secondary)
+                        } else {
+                            let facts = [route.distanceRtMiles.map { "\(Format.miles($0)) round trip" }, route.elevationGainFt.map { "\(Format.feet($0)) gain" }]
+                                .compactMap { $0 }.joined(separator: " · ")
+                            Text(facts.isEmpty ? "Named route" : facts).font(.caption).foregroundStyle(Palette.secondary)
                         }
                     }
                     Spacer()
                     Button("Remove", systemImage: "xmark.circle.fill") { self.route = nil }.labelStyle(.iconOnly).foregroundStyle(Palette.secondary)
                 }
+                Divider()
             } else {
-                Caption("Import a GPX track to check the approach where you’ll be each hour. You can also pick a named route in the brief’s Route chapter.")
+                Caption("Name your route, pick a suggested one, or import a GPX track to check the approach where you’ll be each hour.")
+            }
+            HStack {
+                TextField("Route name, e.g. Avalanche Gulch", text: $routeName)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    .onSubmit(useRouteName)
+                    .padding(10).background(Palette.field, in: RoundedRectangle(cornerRadius: 10))
+                Button("Use", action: useRouteName)
+                    .buttonStyle(.glass).controlSize(.small)
+                    .disabled(routeName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.vertical, 2)
+            if objective != nil {
+                RouteSuggestionPicker(model: routeSuggestions, place: objective, selected: route?.gpx == nil ? route?.name : nil,
+                                      timing: preferences.routeTiming(for: activityKey)) { option in
+                    route = PlanRoute(name: String(option.name.prefix(200)), gpx: nil, distanceRtMiles: option.miles, elevationGainFt: option.gainFt)
+                }
             }
             if account.flags.gpxImport {
-                Button { importing = .route } label: { Label(route == nil ? "Import GPX" : "Replace GPX", systemImage: "square.and.arrow.down") }
+                Button { importTarget = .route; importing = true } label: { Label(route?.gpx == nil ? "Import GPX" : "Replace GPX", systemImage: "square.and.arrow.down") }
                     .buttonStyle(.glass).controlSize(.small)
             }
         }
+    }
+
+    private func useRouteName() {
+        let name = routeName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        route = PlanRoute(name: String(name.prefix(200)), gpx: nil)
+        routeName = ""
     }
 
     private var tripCard: some View {
@@ -321,7 +420,7 @@ struct NewPlanSheet: View {
                             .font(.subheadline).foregroundStyle(Palette.secondary)
                         Spacer()
                         if index < stages.count - 1 {
-                            Button(stage.layover ? "Layover" : stage.end?.shortName ?? "Choose camp") { picking = .stageEnd(index) }
+                            Button(stage.layover ? "Layover" : stage.end?.shortName ?? "Choose camp") { mapping = .stageEnd(index) }
                                 .buttonStyle(.glass).controlSize(.small).lineLimit(1)
                         } else {
                             Text(exit.map { "To \($0.shortName)" } ?? "Back to trailhead").font(.footnote).foregroundStyle(Palette.secondary)
@@ -344,7 +443,7 @@ struct NewPlanSheet: View {
                         }
                     }
                     if stage.checkpoints.count < 2 && !(stage.layover && index < stages.count - 1) {
-                        Button("Add a high point or pass", systemImage: "plus") { picking = .checkpoint(index) }.font(.footnote.weight(.semibold))
+                        Button("Add a high point or pass", systemImage: "plus") { mapping = .checkpoint(index) }.font(.footnote.weight(.semibold))
                     }
                 }
             }
@@ -358,7 +457,7 @@ struct NewPlanSheet: View {
             HStack {
                 Text(exit.map { "Exit at \($0.shortName)" } ?? "Exit at the trailhead").font(.subheadline)
                 Spacer()
-                Button(exit == nil ? "Choose exit" : "Change") { picking = .exit }.buttonStyle(.glass).controlSize(.small)
+                Button(exit == nil ? "Choose exit" : "Change") { mapping = .exit }.buttonStyle(.glass).controlSize(.small)
                 if exit != nil { Button("Clear", systemImage: "xmark.circle.fill") { exit = nil }.labelStyle(.iconOnly).foregroundStyle(Palette.secondary) }
             }
             ForEach(Array(bailPoints.enumerated()), id: \.offset) { index, point in
@@ -369,7 +468,7 @@ struct NewPlanSheet: View {
                 }
             }
             if bailPoints.count < 4 {
-                Button("Add a bail point", systemImage: "plus") { picking = .bail }.font(.footnote.weight(.semibold))
+                Button("Add a bail point", systemImage: "plus") { mapping = .bail }.font(.footnote.weight(.semibold))
             }
             Caption("Bail points are places to leave the route early. Each night’s brief names the nearest way out.")
         }
@@ -591,7 +690,9 @@ struct NewPlanSheet: View {
             plan.start = DateText.hhmm(startTime)
             plan.travelHours = hours
             plan.trailheadFt = trailheadFt
-            if plan.route?.gpx != route?.gpx || plan.route?.name != route?.name { plan.route = route }
+            // A different route (or the same name with new numbers) replaces the saved one and its analysis.
+            if plan.route?.gpx != route?.gpx || plan.route?.name != route?.name
+                || plan.route?.distanceRtMiles != route?.distanceRtMiles || plan.route?.elevationGainFt != route?.elevationGainFt { plan.route = route }
             plan.tripName = nil
             plan.bailPoints = nil
             plan.tripTrack = nil
@@ -605,6 +706,54 @@ struct NewPlanSheet: View {
 struct TrailingIconLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 8) { configuration.title; configuration.icon }
+    }
+}
+
+private extension Place {
+    /// A dropped pin named only by its coordinates reads better as its role in the trip
+    /// ("Night 1 camp"); a pin on a named lake or pass keeps that name.
+    func named(unlessFeature role: String) -> Place {
+        guard kind == "Pin", Place.coordinates(in: name) != nil else { return self }
+        var place = self
+        place.name = role
+        return place
+    }
+}
+
+/// A small map of a chosen place, or a contour tile before one is chosen. A snapshot, so the
+/// tile is a picture rather than a live map with its own controls.
+struct PlaceThumb: View {
+    var place: Place?
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack {
+            if let image, place != nil {
+                Image(uiImage: image).resizable().scaledToFill()
+                Circle().fill(Palette.accent).frame(width: 10, height: 10).overlay(Circle().stroke(.white, lineWidth: 2))
+            } else {
+                TopoThumb()
+            }
+        }
+        .frame(width: 56, height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityHidden(true)
+        .task(id: "\(place?.id ?? "")|\(colorScheme)") { await snapshot() }
+    }
+
+    private func snapshot() async {
+        guard let place else { image = nil; return }
+        let options = MKMapSnapshotter.Options()
+        options.region = MKCoordinateRegion(center: place.coordinate, span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05))
+        options.size = CGSize(width: 56, height: 56)
+        options.scale = displayScale
+        let configuration = MKStandardMapConfiguration(elevationStyle: .flat, emphasisStyle: .muted)
+        configuration.pointOfInterestFilter = .excludingAll
+        options.preferredConfiguration = configuration
+        options.traitCollection = UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
+        image = try? await MKMapSnapshotter(options: options).start().image
     }
 }
 

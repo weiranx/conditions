@@ -251,10 +251,6 @@ struct PlanMapModel {
     }
 }
 
-private extension Place {
-    var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: lat, longitude: lon) }
-}
-
 // MARK: - Drawing
 
 /// The line, then the pins, so pins sit above it.

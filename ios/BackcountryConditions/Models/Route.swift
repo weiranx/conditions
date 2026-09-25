@@ -132,10 +132,18 @@ struct GpxRoute: Codable, Hashable, Sendable {
         for (index, point) in displayTrack.enumerated() where index > 0 {
             if let a = displayTrack[index - 1].elevFt, let b = point.elevFt { loss += max(0, a - b) }
         }
-        let minutes = distanceMiles * Double(max(5, timing.paceMinutesPerMile))
-            + (elevationGainFt ?? 0) / 1000 * Double(timing.ascentMinutesPer1000Ft)
-            + loss / 1000 * Double(timing.ascentMinutesPer1000Ft) / 3
-            + Double(timing.stopMinutes)
+        return timing.hours(miles: distanceMiles, gainFt: elevationGainFt ?? 0, lossFt: loss)
+    }
+}
+
+extension RouteTiming {
+    /// Hours to travel a route at this pace (the web's `estimateRouteDurationHours`): descending
+    /// takes a third of the time climbing does, plus the stops.
+    func hours(miles: Double, gainFt: Double, lossFt: Double) -> Int {
+        let minutes = max(0, miles) * Double(max(5, paceMinutesPerMile))
+            + max(0, gainFt) / 1000 * Double(ascentMinutesPer1000Ft)
+            + max(0, lossFt) / 1000 * Double(ascentMinutesPer1000Ft) / 3
+            + Double(stopMinutes)
         return max(1, min(24, Int((minutes / 60).rounded())))
     }
 }
@@ -153,6 +161,14 @@ struct PlanRoute: Codable, Hashable, Sendable {
     var analysis: JSON?
     /// The plan the analysis was run for ("date|start|hours"), to tell when it's out of date.
     var analyzedFor: String?
+
+    /// Hours at the traveler's pace: from the GPX track, or from a suggested route's round trip,
+    /// which descends what it climbs. Nil for a named route without both numbers.
+    func estimatedHours(_ timing: RouteTiming) -> Int? {
+        if let gpx { return gpx.estimatedHours(timing) }
+        guard let miles = distanceRtMiles, miles > 0, let gain = elevationGainFt, gain >= 0 else { return nil }
+        return timing.hours(miles: miles, gainFt: gain, lossFt: gain)
+    }
 }
 
 
