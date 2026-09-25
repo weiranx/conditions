@@ -38,7 +38,7 @@ xcodebuild -project BackcountryConditions.xcodeproj -scheme Conditions \
 | `BackcountryConditions/Models` | `JSON` (tolerant payload reader), `Plan` (and the web's saved-report format), `Report`, `Preferences` (units, activities, limits, route timing; synced in the web's `UserPreferences` shape), `Route` (GPX parsing, approach params) |
 | `BackcountryConditions/Services` | `APIClient`, `AccountStore` (session cookie, allowances, feature flags, AI availability, preference sync), `PlanStore` (plans, reports, AI explanations and chats, saved snapshots, watches, account saves), `Notifier` |
 | `BackcountryConditions/Design` | Page, cards, notices, chips and the other shared views; report data export |
-| `BackcountryConditions/Views` | Plan, New plan (day trip or multi-day), Brief, chapters (Weather, Terrain & snow, Timing, Route, Checks & sources, Gear), report sections, AI explanation and report chat, Trip, Compare (days, objectives, routes), Saved, Watchlist, Search and map picker, Settings, Account, Status, Administration |
+| `BackcountryConditions/Views` | Plan, New plan (day trip or multi-day), Brief, chapters (Weather, Terrain & snow, Timing, Route, Checks & sources, Gear), report sections, AI explanation and report chat, Trip, Compare (days, objectives, routes), Saved, Watchlist, Search and map picker, plan and trip maps, Settings, Account, Status, Administration |
 | `Shared` | Code compiled into the app and the widget: palette, decision levels, day strip, widget snapshot |
 | `ConditionsWidget` | WidgetKit extension: Next plan (small, medium, lock screen) |
 | `Config` | Info.plists and entitlements |
@@ -64,6 +64,11 @@ folders are picked up automatically, so there is no file list to maintain.
   alerts, gear and packing list, full report, data export.
 - **AI.** "The report, explained", the report assistant (streamed), trip and compare-days chats,
   route suggestions and analysis. These need an account, as on the web.
+- **Maps.** The brief, the Route chapter and a trip's brief show the plan on a map (Apple Maps:
+  terrain, satellite or roads): the objective in its decision's colour, the route or GPX track and
+  its numbered checkpoints, and a trip's trailhead, camps (coloured by the night check), high
+  points (by the day check), exit and bail points. Tap it for the full-screen map, with pin details
+  and directions in Maps. The Plan tab's map button shows every plan at its objective.
 - **Library and watches.** Save, share links and email go through the account; saved reports,
   saved trips and shared links open in the app. The watchlist shows the account's server-checked
   watches (check now, review, history, email alerts) next to the ones on this iPhone.

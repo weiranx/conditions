@@ -275,6 +275,10 @@ struct BriefView: View {
                     }
                     .padding(.horizontal, 16)
                 }
+                Spacer().frame(height: 28)
+                SectionHead(title: "Map") { if let route = live.route { Text(route.name).lineLimit(1) } }
+                PlanMapPreview(title: plan.objective.shortName, model: PlanMapModel(plan: live, report: report, trip: nil))
+                    .padding(.horizontal, 16)
                 Spacer().frame(height: 26)
                 actions(report)
                 Spacer().frame(height: 26)

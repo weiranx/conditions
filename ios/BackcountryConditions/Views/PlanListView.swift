@@ -9,6 +9,7 @@ struct PlanListView: View {
     var newTrip: () -> Void = {}
     @State private var showSettings = false
     @State private var quickPlace: NewPlanDraft?
+    @State private var showMap = false
 
     /// The web workspace's quick locations.
     private static let quickLocations = [
@@ -73,6 +74,12 @@ struct PlanListView: View {
                     }
                     .accessibilityLabel("Account and settings")
                 }
+                if !store.plans.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Map of your plans", systemImage: "map") { showMap = true }
+                    }
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Day trip", systemImage: "sun.max", action: newPlan)
@@ -84,6 +91,7 @@ struct PlanListView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .fullScreenCover(isPresented: $showMap) { PlansMapScreen(openBrief: openBrief) }
             .sheet(item: $quickPlace) { draft in
                 NewPlanSheet(draft: draft) { plan in
                     store.add(plan)
