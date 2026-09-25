@@ -97,6 +97,14 @@ test('an imported GPX route is reported at its high point, not halfway', () => {
   // A route saved before the high point was kept falls back to its highest checkpoint.
   const { highPoint: _, ...older } = route;
   assert.equal(gpxObjectivePoint(older).elev_ft, route.maxElevationFt);
+  // A long track keeps the high point in the display track that times the approach.
+  const spike = Array.from({ length: 1999 }, (_, i) =>
+    `<trkpt lat="${(40 + i * 0.0001).toFixed(4)}" lon="-105"><ele>${i === 777 ? 3000 : 1000 + i * 0.1}</ele></trkpt>`).join('');
+  const long = parseGpx(`<trk><trkseg>${spike}</trkseg></trk>`);
+  assert.ok(long.displayTrack.length <= 500);
+  assert.equal(Math.max(...long.displayTrack.map((point) => point.elev_ft)), long.maxElevationFt);
+  const progress = long.displayTrack.map((point) => point.progress_percent);
+  assert.deepEqual(progress, [...progress].sort((a, b) => a - b));
   // Without elevations, halfway.
   const flat = parseGpx(`<trk><trkseg>${Array.from({ length: 11 }, (_, i) => `<trkpt lat="${40 + i * 0.001}" lon="-105"/>`).join('')}</trkseg></trk>`);
   assert.equal(flat.highPoint, undefined);
@@ -104,14 +112,16 @@ test('an imported GPX route is reported at its high point, not halfway', () => {
 });
 
 test('the report names a route by its start and high point, and only a summit a summit', () => {
-  assert.deepEqual(objectiveTerms({ route: true, place: { name: 'Mount Rainier' } }), { kind: 'route', start: 'start', top: 'high point' });
-  assert.equal(objectiveTerms({ route: false, place: { name: 'Mount Rainier' } }).top, 'summit');
-  assert.equal(objectiveTerms({ route: false, place: { name: 'Grand Teton', kind: 'Peak' } }).top, 'summit');
-  assert.equal(objectiveTerms({ route: false, place: { name: 'Mount Si Trailhead' } }).top, 'objective');
-  assert.equal(objectiveTerms({ route: false, place: { name: 'Snow Lake', kind: 'Lake' } }).top, 'objective');
-  assert.equal(objectiveTerms({ route: false, place: { name: 'Mount Pass', kind: 'Pass' } }).top, 'objective');
-  assert.equal(objectiveTerms({ route: false, place: { name: 'Dropped pin' } }).top, 'objective');
-  assert.equal(objectiveTerms({ route: false, place: null }).start, 'trailhead');
+  assert.deepEqual(objectiveTerms({ route: { hasElevation: true }, place: { name: 'Mount Rainier' } }), { kind: 'route', start: 'start', top: 'high point' });
+  // A track without elevations is read halfway, so it names no high point.
+  assert.deepEqual(objectiveTerms({ route: { hasElevation: false }, place: null }), { kind: 'route', start: 'start', top: 'objective' });
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Mount Rainier' } }).top, 'summit');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Grand Teton', kind: 'Peak' } }).top, 'summit');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Mount Si Trailhead' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Snow Lake', kind: 'Lake' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Mount Pass', kind: 'Pass' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: { name: 'Dropped pin' } }).top, 'objective');
+  assert.equal(objectiveTerms({ route: null, place: null }).start, 'trailhead');
 });
 
 test('GPX route elements do not add distance or ascent across disconnected routes', () => {

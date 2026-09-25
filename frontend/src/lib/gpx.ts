@@ -258,12 +258,24 @@ function chooseCheckpoints(points: ParsedTrackPoint[], totalDistanceMeters: numb
   });
 }
 
-function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: number): GpxTrackPoint[] {
+function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: number, highestIndex = -1): GpxTrackPoint[] {
   const stride = Math.max(1, Math.ceil(points.length / MAX_DISPLAY_TRACK_POINTS));
-  const selected = points.filter((_, index) => index === 0 || index === points.length - 1 || index % stride === 0);
+  const indices = points.map((_, index) => index)
+    .filter((index) => index === 0 || index === points.length - 1 || index % stride === 0);
   // Keeping the end point can put a strided track one over the limit (1,000
   // points at stride 2 is 500 samples plus the end); drop the sample before it.
-  if (selected.length > MAX_DISPLAY_TRACK_POINTS) selected.splice(selected.length - 2, 1);
+  if (indices.length > MAX_DISPLAY_TRACK_POINTS) indices.splice(indices.length - 2, 1);
+  // The report is read at the high point, so the track that times the approach
+  // must reach it: it takes the place of the nearer interior sample beside it.
+  if (highestIndex >= 0 && !indices.includes(highestIndex)) {
+    const after = indices.findIndex((index) => index > highestIndex);
+    const before = after - 1;
+    const interior = (position: number) => position > 0 && position < indices.length - 1;
+    if (indices.length < MAX_DISPLAY_TRACK_POINTS) indices.splice(after, 0, highestIndex);
+    else if (interior(before) && (!interior(after) || highestIndex - indices[before] <= indices[after] - highestIndex)) indices[before] = highestIndex;
+    else indices[after] = highestIndex;
+  }
+  const selected = indices.map((index) => points[index]);
   return selected.map((point, index) => ({
     lat: Number(point.lat.toFixed(6)),
     lon: Number(point.lon.toFixed(6)),
@@ -371,7 +383,7 @@ export function parseGpxText(xmlText: string, fileName = 'Imported route.gpx'): 
     minElevationFt: elevations.length > 0 ? Math.round(Math.min(...elevations) * METERS_TO_FEET) : null,
     maxElevationFt: elevations.length > 0 ? Math.round(Math.max(...elevations) * METERS_TO_FEET) : null,
     checkpoints: chooseCheckpoints(points, totalDistanceMeters, extractNamedWaypoints(document)),
-    displayTrack: chooseDisplayTrack(points, totalDistanceMeters),
+    displayTrack: chooseDisplayTrack(points, totalDistanceMeters, highest ? points.indexOf(highest) : -1),
     routeShape: haversineMeters(points[0], points[points.length - 1]) <= 250 ? 'closed route' : 'point-to-point',
     ...(highest ? {
       highPoint: {

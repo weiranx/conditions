@@ -688,7 +688,7 @@ export function useWorkspace() {
       Math.abs(Number(place.lon) - position.lng) < 0.0005 &&
       normalizeSuggestionText(place.name.split(",")[0] ?? "") === normalizeSuggestionText(objectiveName));
     return resolveObjectiveTerms({
-      route: Boolean(importedGpxRoute),
+      route: importedGpxRoute ? { hasElevation: importedGpxRoute.maxElevationFt !== null } : null,
       place: searched ?? (objectiveName ? { name: objectiveName } : null),
     });
   }, [searchHook.recentSearches, position.lat, position.lng, objectiveName, importedGpxRoute]);
