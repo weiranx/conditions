@@ -57,8 +57,8 @@ struct TripNight {
             switch data["severity"].string {
             case "high": state = "serious"
             case "moderate": state = "hard"
-            case "low": state = "ok"
-            default: state = data["status"].string == "ok" ? "ok" : "unavailable"
+            case "low": state = data["complete"].bool == false ? "incomplete" : "settled"
+            default: state = data.isNull ? "unavailable" : data["status"].string == "ok" ? "settled" : "not-forecast"
             }
         }
         summary = data["summary"].string
@@ -66,7 +66,9 @@ struct TripNight {
         switch state {
         case "serious": kind = .stop; word = "Serious"
         case "hard": kind = .over; word = "Hard night"
-        case "ok", "fine", "comfortable": kind = .ok; word = "Fine"
+        case "settled": kind = .ok; word = "Fine"
+        case "incomplete": kind = .missing; word = "Partly forecast"
+        case "not-forecast": kind = .missing; word = "Not yet forecast"
         default: kind = .missing; word = trip == nil ? "Not checked" : "Unavailable"
         }
     }
@@ -145,8 +147,8 @@ struct TripView: View {
                 if trip.itinerary != nil {
                     Text(trip.headline ?? "The trip is its weakest day or night.")
                         .font(.title3.weight(.semibold)).foregroundStyle(Palette.label).padding(.top, 6)
-                    if let weak = trip.itinerary?.at("assessment.weakLink.reason").string {
-                        Text(weak).font(.subheadline).foregroundStyle(Palette.label)
+                    if let reason = trip.headlineReason {
+                        Text(reason).font(.subheadline).foregroundStyle(Palette.label)
                     }
                     if (trip.itinerary?.at("assessment.unresolved").int ?? 0) > 0 {
                         HStack(alignment: .top, spacing: 6) {
