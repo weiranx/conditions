@@ -40,9 +40,8 @@
 .sky-empty-card > svg,
 .sky-lost-icon {
   box-sizing: content-box; padding: 17px; border-radius: 50%;
-  background: radial-gradient(circle at 50% 25%, var(--sky-surface), var(--sky-fill) 90%);
+  background: var(--sky-fill);
   color: var(--sky-accent);
-  box-shadow: 0 0 0 1px var(--sky-hairline), 0 0 0 9px color-mix(in srgb, var(--sky-fill) 40%, transparent), 0 10px 24px -12px rgba(24, 32, 28, 0.28);
 }
 .sky-empty-card > svg { width: 26px; height: 26px; margin: 4px 0 8px; }
 .sky-empty-card :is(h2, h3) { margin: 0; font-family: var(--sky-display); font-size: 25px; font-weight: 500; letter-spacing: -0.012em; }

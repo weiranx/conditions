@@ -15,7 +15,8 @@ struct TripResult: Sendable {
         return DecisionLevel(itinerary.at("assessment.level").string)
     }
 
-    var headline: String? { itinerary?.at("assessment.headline.title").string ?? itinerary?.at("assessment.headline").string }
+    /// The verdict's headline, `{ title, reason }`: the weak link, named, and why.
+    var headline: String? { itinerary?.at("assessment.headline.title").string }
     var headlineReason: String? { itinerary?.at("assessment.headline.reason").string }
 
     func stageEntry(_ index: Int) -> JSON {
@@ -544,7 +545,7 @@ final class PlanStore {
                     item.levelLabel = "No trip verdict"
                     item.line = "Checked day by day"
                 } else {
-                    item.line = trip.itinerary?.at("assessment.weakLink.reason").string ?? trip.headline
+                    item.line = trip.headlineReason ?? trip.headline
                 }
             }
         } else {

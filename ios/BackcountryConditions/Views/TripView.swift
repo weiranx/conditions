@@ -57,8 +57,8 @@ struct TripNight {
             switch data["severity"].string {
             case "high": state = "serious"
             case "moderate": state = "hard"
-            case "low": state = "ok"
-            default: state = data["status"].string == "ok" ? "ok" : "unavailable"
+            case "low": state = data["complete"].bool == false ? "incomplete" : "settled"
+            default: state = data.isNull ? "unavailable" : data["status"].string == "ok" ? "settled" : "not-forecast"
             }
         }
         summary = data["summary"].string
@@ -66,7 +66,7 @@ struct TripNight {
         switch state {
         case "serious": kind = .stop; word = "Serious"
         case "hard": kind = .over; word = "Hard night"
-        case "ok", "fine", "comfortable", "settled": kind = .ok; word = "Settled"
+        case "settled": kind = .ok; word = "Fine"
         case "incomplete": kind = .missing; word = "Partly forecast"
         case "not-forecast": kind = .missing; word = "Not yet forecast"
         default: kind = .missing; word = trip == nil ? "Not checked" : "Unavailable"

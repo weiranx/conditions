@@ -1,6 +1,8 @@
 services:
   conditions-mcp:
     build: .
+    # scripts/deploy.sh snapshots this tag as conditions-mcp:rollback.
+    image: conditions-mcp:latest
     init: true
     restart: unless-stopped
     env_file: .env

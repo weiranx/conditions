@@ -38,6 +38,16 @@ npm run build            # Production build → frontend/dist/
 npm test                 # MCP tool tests
 ```
 
+### Deployment (`scripts/`)
+
+Merging to `main` deploys automatically, and only once CI passes: `deploy.yml` → `ci-deploy.sh` → `deploy.sh` on the droplet (backend, migrations, MCP server, rollback) → the frontend to Cloudflare Pages with Wrangler → `smoke-test.mjs` against the public URLs. Cloudflare's own Git deployments stay disabled so failing commits never ship.
+
+```bash
+./scripts/provision.sh --host IP --domain API_DOMAIN --frontend-origin URL --email EMAIL  # new or drifted server, end to end
+node scripts/smoke-test.mjs --api https://apivps.conditions.weiranxiong.com --frontend https://conditions.weiranxiong.com
+node --test scripts/tests/*.test.mjs   # deployment script tests (Docker, SSH and network are stubbed)
+```
+
 ### Run a single test file or pattern
 
 ```bash

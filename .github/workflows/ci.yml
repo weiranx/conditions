@@ -44,8 +44,9 @@ jobs:
       - name: Validate workflows and deployment scripts
         run: |
           actionlint -color
-          bash -n scripts/deploy.sh scripts/ci-deploy.sh
-          shellcheck scripts/deploy.sh scripts/ci-deploy.sh
+          scripts=(scripts/deploy.sh scripts/ci-deploy.sh scripts/setup-nginx.sh scripts/provision.sh scripts/provision-server.sh)
+          for script in "${scripts[@]}"; do bash -n "$script"; done
+          shellcheck "${scripts[@]}"
 
       - name: Deployment regression tests
         run: node --test scripts/tests/*.test.mjs
