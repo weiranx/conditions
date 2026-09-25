@@ -120,6 +120,12 @@ extension Place {
     }
 }
 
+/// A point of a trip's imported GPX track, for its map (the web's `ItineraryDraft.track`).
+struct TrackCoordinate: Codable, Hashable, Sendable {
+    var lat: Double
+    var lon: Double
+}
+
 /// Where a check last left the plan, for the watchlist.
 struct WatchState: Codable, Hashable, Sendable {
     var level: DecisionLevel
@@ -158,6 +164,8 @@ struct Plan: Codable, Hashable, Sendable, Identifiable {
     /// A multi-day trip's name, and places to leave it early.
     var tripName: String?
     var bailPoints: [Place]?
+    /// The GPX track a multi-day trip was built from, drawn on its map; nil for a trip built by hand.
+    var tripTrack: [TrackCoordinate]?
     /// The latest report as saved to the account, and its share link token.
     var accountReportID: String?
     var shareToken: String?
@@ -253,6 +261,7 @@ struct Plan: Codable, Hashable, Sendable, Identifiable {
         day.travelHours = stage.travelHours
         day.tripName = nil
         day.bailPoints = nil
+        day.tripTrack = nil
         day.watched = false
         day.watch = nil
         day.accountReportID = nil
