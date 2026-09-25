@@ -218,26 +218,44 @@ final class PlanStore {
         }
         loading.insert(plan.id)
         errors[plan.id] = nil
-        defer { loading.remove(plan.id) }
+        // A check answers for the plan as it was sent. If the plan was edited or deleted meanwhile,
+        // the answer is dropped, and an edited plan is checked again as it is now.
+        let key = plan.checkKey
+        let stillCurrent = { self.plan(plan.id)?.checkKey == key }
+        var outdated = false
         do {
             if plan.isTrip {
                 let result = try await checkTrip(plan)
-                trips[plan.id] = result
-                write(result.encoded().data(), to: reportURL(plan.id))
-                recordWatch(plan, level: result.level, reason: result.headline, incomplete: result.itinerary == nil)
                 if let usage = result.itinerary?["multiDayUsage"], !usage.isNull { account.noteUsage(.object(["multiDayUsage": usage])) }
+                if stillCurrent() {
+                    trips[plan.id] = result
+                    write(result.encoded().data(), to: reportURL(plan.id))
+                    recordWatch(plan, level: result.level, reason: result.headline, incomplete: result.itinerary == nil)
+                } else {
+                    outdated = true
+                }
             } else {
                 let report = try await fetchReport(plan)
-                reports[plan.id] = report
-                write(report.data, to: reportURL(plan.id))
-                if userInitiated && !plan.isSample { account.countNewReport() }
-                recordWatch(plan, level: report.level, reason: report.limitingChecks.first ?? report.reason, incomplete: report.partialData)
+                if stillCurrent() {
+                    reports[plan.id] = report
+                    write(report.data, to: reportURL(plan.id))
+                    if userInitiated && !plan.isSample { account.countNewReport() }
+                    recordWatch(plan, level: report.level, reason: report.limitingChecks.first ?? report.reason, incomplete: report.partialData)
+                } else {
+                    outdated = true
+                }
             }
         } catch {
-            errors[plan.id] = error.localizedDescription
-            if let apiError = error as? APIError, apiError.limitReached { blocker = apiError.message }
+            if stillCurrent() {
+                errors[plan.id] = error.localizedDescription
+                if let apiError = error as? APIError, apiError.limitReached { blocker = apiError.message }
+            } else {
+                outdated = true
+            }
         }
+        loading.remove(plan.id)
         publishWidgets()
+        if outdated, let latest = self.plan(plan.id) { await refresh(latest, userInitiated: userInitiated) }
     }
 
     func refreshAll(_ selection: [Plan]? = nil, userInitiated: Bool = true) async {
@@ -261,8 +279,11 @@ final class PlanStore {
     /// without asking the upstream sources again.
     func reevaluate(_ plan: Plan) async {
         guard let report = reports[plan.id], !plan.isTrip else { return }
+        let key = plan.checkKey
         do {
             let evaluation = try await APIClient().evaluate(report: report.json, params: plan.planParams)
+            // Dropped when the plan changed meanwhile, or a newer report replaced this one.
+            guard self.plan(plan.id)?.checkKey == key, reports[plan.id]?.generatedAtText == report.generatedAtText else { return }
             var object = report.json.object
             object["evaluation"] = evaluation
             let next = Report(json: .object(object))
@@ -533,7 +554,7 @@ final class PlanStore {
         let report = reports[plan.id]
         let trip = trips[plan.id]
         var item = WidgetPlan(id: plan.id, name: plan.title, when: "", level: level(plan), levelLabel: nil,
-                              line: nil, tiles: [], stripStart: nil, stripEnd: nil, checkedAt: nil, watched: plan.watched)
+                              line: nil, tiles: [], stripStart: nil, stripEnd: nil, checkedAt: nil, watched: plan.watched, endDate: plan.endDate)
         if plan.isTrip, let stages = plan.stages {
             item.when = "\(DateText.range(plan.date, plan.endDate)) · \(stages.count) days"
             item.tiles = TripTiles.tiles(plan: plan, trip: trip)

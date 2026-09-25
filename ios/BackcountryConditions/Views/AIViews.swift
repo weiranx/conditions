@@ -154,6 +154,8 @@ struct ChatView: View {
 
     @State private var input = ""
     @State private var streaming: Task<Void, Never>?
+    /// Which answer is streaming, so a stopped one can't clear the state of the next.
+    @State private var streamID = UUID()
     @State private var suggestions: [String] = []
     @State private var failed = false
     @FocusState private var focused: Bool
@@ -216,7 +218,7 @@ struct ChatView: View {
                 if !messages.isEmpty && !readOnly {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("New conversation", systemImage: "square.and.pencil") {
-                            streaming?.cancel()
+                            stop()
                             messages = []
                             suggestions = []
                             onChange(messages)
@@ -225,7 +227,7 @@ struct ChatView: View {
                 }
             }
         }
-        .onDisappear { streaming?.cancel() }
+        .onDisappear { stop() }
     }
 
     private func bubble(_ message: ChatMessage) -> some View {
@@ -256,7 +258,7 @@ struct ChatView: View {
                         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
                         .onChange(of: input) { if input.count > 1000 { input = String(input.prefix(1000)) } }
                     if busy {
-                        Button("Stop", systemImage: "stop.fill") { streaming?.cancel(); streaming = nil }
+                        Button("Stop", systemImage: "stop.fill") { stop() }
                             .buttonStyle(.glass).labelStyle(.iconOnly)
                     } else {
                         Button("Send", systemImage: "arrow.up") { send(input) }
@@ -290,15 +292,29 @@ struct ChatView: View {
         run()
     }
 
+    /// Stops the answer being written, keeping what arrived so far.
+    private func stop() {
+        guard let streaming else { return }
+        streaming.cancel()
+        self.streaming = nil
+        streamID = UUID()
+        messages.removeAll { $0.role == "assistant" && $0.text.isEmpty }
+        onChange(messages)
+    }
+
     private func run() {
         failed = false
         suggestions = []
         let history = Array(messages.suffix(16))
+        let id = UUID()
+        streamID = id
+        let placeholder = ChatMessage(role: "assistant", text: "")
+        messages.append(placeholder)
         streaming = Task {
-            var answer = ChatMessage(role: "assistant", text: "")
-            messages.append(answer)
+            var answer = placeholder
             do {
                 for try await event in APIClient().reportChat(messages: history, report: payload, contextType: contextType) {
+                    guard streamID == id else { return }
                     switch event {
                     case .text(let delta):
                         answer.text += delta
@@ -310,13 +326,16 @@ struct ChatView: View {
                         if let index = messages.lastIndex(where: { $0.id == answer.id }) { messages[index] = answer }
                     }
                 }
+                // Stopped: `stop()` already tidied up.
+                guard streamID == id else { return }
                 if answer.text.isEmpty {
                     messages.removeAll { $0.id == answer.id }
                     failed = true
                 }
             } catch {
+                guard streamID == id else { return }
                 if answer.text.isEmpty { messages.removeAll { $0.id == answer.id } }
-                if !Task.isCancelled { failed = true }
+                failed = true
                 if let apiError = error as? APIError, apiError.needsAccount { onSignIn() }
             }
             streaming = nil

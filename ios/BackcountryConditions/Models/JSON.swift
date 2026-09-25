@@ -65,7 +65,7 @@ enum JSON: Codable, Sendable, Hashable {
     var string: String? {
         switch self {
         case .string(let value): return value.isEmpty ? nil : value
-        case .number(let value): return value.rounded() == value ? String(Int(value)) : String(value)
+        case .number(let value): return value.rounded() == value && abs(value) < 1e15 ? String(Int(value)) : String(value)
         default: return nil
         }
     }
@@ -74,12 +74,13 @@ enum JSON: Codable, Sendable, Hashable {
     var double: Double? {
         switch self {
         case .number(let value): return value.isFinite ? value : nil
-        case .string(let value): return Double(value.trimmingCharacters(in: .whitespaces))
+        case .string(let value): return Double(value.trimmingCharacters(in: .whitespaces)).flatMap { $0.isFinite ? $0 : nil }
         default: return nil
         }
     }
 
-    var int: Int? { double.map { Int($0.rounded()) } }
+    /// Whole numbers in `Int`'s range; anything larger is treated as missing rather than crashing.
+    var int: Int? { double.flatMap { abs($0) < 1e15 ? Int($0.rounded()) : nil } }
 
     var bool: Bool? {
         if case .bool(let value) = self { return value }

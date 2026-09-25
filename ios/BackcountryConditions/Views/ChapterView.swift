@@ -28,7 +28,7 @@ struct ChapterView: View {
                 case .timing: TimingChapter(plan: plan, report: report, snapshot: snapshot)
                 case .route: RouteChapter(plan: plan, report: report, snapshot: snapshot)
                 case .checks: ChecksChapter(plan: plan, report: report, snapshot: snapshot)
-                case .gear: GearActionsSection(report: report)
+                case .gear: GearActionsSection(report: report, scope: plan.id.uuidString)
                 }
                 pager(report)
             } else {
@@ -284,7 +284,7 @@ struct TerrainChapter: View {
         .onAppear {
             if targetFt == 0 {
                 let objective = report.objectiveElevationFt ?? 10000
-                targetFt = Int(((objective - 2000) / 500).rounded() * 500)
+                targetFt = min(20000, max(1000, Int(((objective - 2000) / 500).rounded() * 500)))
             }
             hourIndex = min(hourIndex, max(0, report.bandsByHour.count - 1))
         }
@@ -660,6 +660,8 @@ struct TimingChapter: View {
     @State private var loading = false
     @State private var error: String?
     @State private var extended = false
+    /// The plan the departures were compared for.
+    @State private var loadedFor: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -728,7 +730,15 @@ struct TimingChapter: View {
             Spacer().frame(height: 28)
             ContingencySection(report: report, plan: plan)
         }
-        .task { await load() }
+        // A changed plan (another start, date or limits) compares its own departures.
+        .task(id: plan.checkKey) {
+            if loadedFor != nil && loadedFor != plan.checkKey {
+                scenarios = nil
+                extended = false
+                error = nil
+            }
+            await load()
+        }
     }
 
     /// Moves the plan to another departure and checks it again.
@@ -736,7 +746,6 @@ struct TimingChapter: View {
         guard var next = store.plan(plan.id) else { return }
         next.start = start
         store.update(next)
-        scenarios = nil
         Task { await store.refresh(next) }
     }
 
@@ -779,12 +788,17 @@ struct TimingChapter: View {
 
     private func load() async {
         guard !snapshot, !plan.isSample, scenarios == nil, AccountStore.shared.flags.startTimeComparisons else { return }
+        let key = plan.checkKey
         loading = true
         defer { loading = false }
         do {
-            scenarios = try await APIClient().startTimeScenarios(place: plan.objective, params: plan.planParams, extended: extended)
+            let next = try await APIClient().startTimeScenarios(place: plan.objective, params: plan.planParams, extended: extended)
+            guard !Task.isCancelled else { return }
+            scenarios = next
+            loadedFor = key
             error = nil
         } catch {
+            guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
         }
     }

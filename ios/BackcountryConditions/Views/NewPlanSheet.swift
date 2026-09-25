@@ -43,7 +43,9 @@ struct NewPlanSheet: View {
     @State private var picking: PlaceTarget?
     @State private var importing: ImportTarget?
     @State private var importError: String?
-    @State private var loaded = false
+    /// The activity the limits card was last filled for. The sheet opens with the plan's own limits;
+    /// choosing another activity then brings in that activity's limits.
+    @State private var limitsKey: String?
 
     enum PlaceTarget: Identifiable, Hashable {
         case objective
@@ -160,7 +162,11 @@ struct NewPlanSheet: View {
             }
         }
         .onAppear(perform: load)
-        .onChange(of: activityKey) { _, key in if loaded { limits = preferences.limits(for: key) } }
+        .onChange(of: activityKey) { _, key in
+            guard let limitsKey, key != limitsKey else { return }
+            self.limitsKey = key
+            limits = preferences.limits(for: key)
+        }
         .onChange(of: kind) { _, value in if value == .multi && stages.isEmpty { resizeStages(to: 3) } }
     }
 
@@ -378,14 +384,16 @@ struct NewPlanSheet: View {
     private var customLabel: String? { preferences.customActivities.first { $0.id == customID }?.label }
 
     private func limitBox(_ label: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int, text: @escaping (Int) -> String) -> some View {
-        FieldBox(label: label) {
-            Menu {
-                ForEach(Array(stride(from: range.lowerBound, through: range.upperBound, by: step)), id: \.self) { option in
-                    Button(text(option)) { value.wrappedValue = option }
-                }
-            } label: {
+        // The whole box opens the menu, not only the value's text.
+        Menu {
+            ForEach(Array(stride(from: range.lowerBound, through: range.upperBound, by: step)), id: \.self) { option in
+                Button(text(option)) { value.wrappedValue = option }
+            }
+        } label: {
+            FieldBox(label: label) {
                 Text(text(value.wrappedValue)).foregroundStyle(Palette.label)
             }
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -420,8 +428,9 @@ struct NewPlanSheet: View {
     }
 
     private func load() {
-        defer { loaded = true }
+        guard limitsKey == nil else { return }
         if let plan = draft.editing {
+            limitsKey = plan.activityKey
             objective = plan.objective
             activity = plan.activity
             customID = plan.customActivityID
@@ -447,6 +456,7 @@ struct NewPlanSheet: View {
             }
         } else {
             let p = preferences
+            limitsKey = p.activeKey
             objective = draft.objective
             activity = p.defaultActivity
             customID = p.customActivityID

@@ -62,7 +62,10 @@ extension DeepLink {
 struct RootView: View {
     @Environment(PlanStore.self) private var store
     @Environment(AccountStore.self) private var account
+    @Environment(PreferencesStore.self) private var preferences
     @State private var tab: AppTab = .plan
+    /// The preferences loaded reports were last evaluated with.
+    @State private var evaluatedWith: Preferences.EvaluationInputs?
     @State private var newPlanDraft: NewPlanDraft?
     @State private var sharedReport: RemoteReport?
     @State private var accountPrompt: String?
@@ -94,6 +97,17 @@ struct RootView: View {
         .onOpenURL { url in
             if let id = DeepLink.planID(from: url) { openPlan(id) }
             else if let token = DeepLink.reportToken(from: url.absoluteString) { sharedReport = RemoteReport(source: .shared(token)) }
+        }
+        // Units, approach or route timing changed, in Settings or from the account's preferences at
+        // sign-in: loaded reports are evaluated again, once the changes settle.
+        .task(id: preferences.preferences.evaluationInputs) {
+            let inputs = preferences.preferences.evaluationInputs
+            guard let previous = evaluatedWith else { evaluatedWith = inputs; return }
+            guard previous != inputs else { return }
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            evaluatedWith = inputs
+            await store.reevaluateAll()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openPlan)) { note in
             if let id = note.object as? UUID { sharedReport = nil; openPlan(id) }

@@ -315,9 +315,8 @@ struct BriefView: View {
     /// When the planned start is already behind us on the objective's clock, as "2 hours ago".
     private var passedStart: String? {
         guard let start = DateText.minutes(plan.start) else { return nil }
-        let zone = report?.json.at("forecast.timeZone").string ?? report?.json.at("location.timeZone").string
         var calendar = Calendar(identifier: .gregorian)
-        if let zone, let tz = TimeZone(identifier: zone) { calendar.timeZone = tz }
+        if let zone = report?.timeZone { calendar.timeZone = zone }
         guard let day = DateText.date(plan.date) else { return nil }
         let utc = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: day)
         guard let planned = calendar.date(from: DateComponents(year: utc.year, month: utc.month, day: utc.day, hour: start / 60, minute: start % 60)),
@@ -535,7 +534,7 @@ struct FullReportView: View {
                 case .timing: TimingChapter(plan: plan, report: report, snapshot: snapshot)
                 case .route: RouteChapter(plan: plan, report: report, snapshot: snapshot)
                 case .checks: ChecksChapter(plan: plan, report: report, snapshot: snapshot)
-                case .gear: GearActionsSection(report: report)
+                case .gear: GearActionsSection(report: report, scope: plan.id.uuidString)
                 }
             }
         }
