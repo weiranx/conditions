@@ -16,6 +16,7 @@ import {
   refreshObjectiveWatch,
   reviewObjectiveWatch,
   deleteObjectiveWatch,
+  saveObjectiveWatch,
   setObjectiveWatchNotifications,
   getObjectiveWatchChecks,
   getObjectiveWatchEvents,
@@ -36,6 +37,9 @@ import {
   watchCheckDetail,
   watchChangeReasons,
   watchReasonText,
+  watchesToReview,
+  watchScoreTrend,
+  untilLabel,
 } from "./watch-status";
 import { useVisibleRevalidation } from "../hooks/useVisibleRevalidation";
 import "./watchlist.css";
@@ -147,7 +151,7 @@ export function Library(props: LibraryProps) {
   return props.kind === "history"
     ? (
       <>
-        <ReportHistory localReport={props.localReport} onOpen={props.onOpen} navigate={props.navigate} sharingEnabled={featureFlags.reportSharing} timeStyle={props.workspace.preferences.timeStyle} />
+        <ReportHistory localReport={props.localReport} onOpen={props.onOpen} navigate={props.navigate} sharingEnabled={featureFlags.reportSharing} watchEnabled={featureFlags.objectiveWatch} timeStyle={props.workspace.preferences.timeStyle} />
         {featureFlags.tripPlanning && <SavedTrips workspace={props.workspace} />}
       </>
     )
@@ -170,10 +174,15 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
   const [pending, setPending] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ObjectiveWatch | null>(null);
+  // A removed watch that can still be put back; its check history is not restored.
+  const [removed, setRemoved] = useState<ObjectiveWatch | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState<Set<string>>(new Set());
   const localize = w.localizeUnitText;
   const matches = (title: string, date: string | null) =>
     `${title} ${date || ""} ${date ? dateLabel(date) : ""}`.toLocaleLowerCase().includes(query);
   const activeCount = items.filter((item) => !watchHasEnded(item, now)).length;
+  const toReview = watchesToReview(items, now);
+  const worsenedCount = toReview.filter((item) => item.unreviewedChanges?.worsened).length;
   const attentionCount = items.filter((item) => watchNeedsAttention(item, policy, now)).length;
   const visibleWatches = items.filter((item) => {
     if (!matches(item.title, item.plan.forecastDate)) return false;
@@ -325,6 +334,33 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
         {`${activeCount}${policy ? ` of ${policy.activeWatchLimit}` : ""} active watches · ${items.length - activeCount} completed`}
         {policyLine && ` · ${policyLine}`}
       </p>
+      {toReview.length > 0 && (
+        <div className={`sky-notice field-watch-summary ${worsenedCount ? "is-caution" : "is-improved"}`} role="status">
+          {worsenedCount ? <TriangleAlert size={20} aria-hidden="true" /> : <Info size={20} aria-hidden="true" />}
+          <div>
+            <strong>
+              {worsenedCount
+                ? `${worsenedCount} ${worsenedCount === 1 ? "objective has" : "objectives have"} a risk increase since you last looked`
+                : `${toReview.length} ${toReview.length === 1 ? "objective has" : "objectives have"} improved since you last looked`}
+            </strong>
+            {toReview.length > worsenedCount && worsenedCount > 0 && (
+              <span className="sky-muted"> · {toReview.length - worsenedCount} more with improvements</span>
+            )}
+          </div>
+          <button
+            className="field-button"
+            disabled={!!pending}
+            onClick={() => void run("all", async () => {
+              await Promise.all(toReview.map((item) => reviewObjectiveWatch(item.id)));
+              setNotice(`Marked ${toReview.length} ${toReview.length === 1 ? "watch" : "watches"} reviewed.`);
+              setRevision((n) => n + 1);
+            })}
+          >
+            <Check size={15} aria-hidden="true" />
+            Mark all reviewed
+          </button>
+        </div>
+      )}
       {loading && <p className="sky-cap" role="status">Loading your plans…</p>}
       {error && (
         <div className="sky-notice is-caution" role="alert">
@@ -336,6 +372,31 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
         <p className="sky-notice is-info" role="status">
           {notice}
         </p>
+      )}
+      {removed && (
+        <div className="sky-notice is-info" role="status">
+          <div>
+            <p>
+              Removed {removed.title}.
+              {removed.baselineReport ? " Undo adds it back, but its check history is not restored." : ""}
+            </p>
+          </div>
+          {removed.baselineReport && (
+            <button
+              className="field-button"
+              disabled={!!pending}
+              onClick={() => void run(removed.id, async () => {
+                await saveObjectiveWatch(removed.baselineReport!);
+                setRemoved(null);
+                setNotice(`${removed.title} is back on your watchlist.`);
+                setRevision((n) => n + 1);
+              })}
+            >
+              Undo
+            </button>
+          )}
+          <button className="field-button sky-icon-only" aria-label="Dismiss" onClick={() => setRemoved(null)}><X size={15} aria-hidden="true" /></button>
+        </div>
       )}
       <div className="sky-watch-grid">
       {visibleWatches.map((item) => {
@@ -350,6 +411,9 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
           const reviewFocusShown = latest?.status === "changed" && Boolean(reviewFocus?.checkedAt)
             && latest.change?.checkedAt === reviewFocus?.checkedAt;
           const attention = watchNeedsAttention(item, policy, now);
+          const trend = watchScoreTrend(item);
+          // Routine checks stay compact; anything that needs a look, or that was opened, shows everything.
+          const showDetails = attention || latest?.status === 'changed' || detailsOpen.has(item.id);
           const state = ended ? 'Completed' : policy?.automaticChecks ? policy.schedulerEnabled ? 'Monitoring' : 'Checks paused' : 'Manual checks';
           return (
           <article className={`sky-card field-watch-card${attention ? " is-attention" : ""}${ended ? " is-ended" : ""}`} key={item.id}>
@@ -371,16 +435,20 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
             <p className="sky-cap">
               {ended ? 'Monitoring complete · history remains available' : item.lastCheckedAt ? `Last successful check ${ageLabel(item.lastCheckedAt)}` : 'No successful checks yet'}
               {!ended && policy?.automaticChecks && policy.schedulerEnabled && item.nextCheckAt
-                ? ` · Next check ${new Date(item.nextCheckAt).toLocaleString()}` : ''}
+                ? ` · Next check ${untilLabel(item.nextCheckAt, now)}` : ''}
             </p>
             {latest && (
               <section className={`field-watch-latest is-${latest.status}${latestImproved ? " is-better" : ""}`} aria-label={`${item.title} latest check`}>
                 <div className="sky-watch-latest-head"><strong>{watchCheckLabel(latest)}</strong>
                   {latest.checkedAt && <time dateTime={latest.checkedAt}>{new Date(latest.checkedAt).toLocaleString()}</time>}
                 </div>
-                {latest.status !== 'failed' && latest.summary && (
+                {showDetails && latest.status !== 'failed' && latest.summary && (
                   <p className="field-watch-measurements">
-                    {typeof latest.summary.score === 'number' && <span>Score <b>{Math.round(latest.summary.score)}/100</b></span>}
+                    {typeof latest.summary.score === 'number' && <span>Score <b>{Math.round(latest.summary.score)}/100</b>{trend && trend.delta !== 0 && (
+                      <em className={trend.delta > 0 ? 'is-better' : 'is-worse'} title={`Was ${trend.baseline}/100 in the report you watched`}>
+                        {trend.delta > 0 ? '▲' : '▼'} {Math.abs(trend.delta)} since watched
+                      </em>
+                    )}</span>}
                     {latest.summary.tier && <span>{latest.summary.tier} risk</span>}
                     {typeof avalancheDanger === 'number' && AVALANCHE_DANGER_NAMES[avalancheDanger] && <span>Avalanche <b>{AVALANCHE_DANGER_NAMES[avalancheDanger]}</b></span>}
                     {typeof latest.summary.maxWindGust === 'number' && <span>Peak gust <b>{w.formatWindDisplay(latest.summary.maxWindGust)}</b></span>}
@@ -448,8 +516,13 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                   if (!policy || watchHasEnded(item) || watchRefreshWait(item, policy) > 0) return;
                   void run(item.id, async () => {
                     try {
-                      await refreshObjectiveWatch(item.id);
-                      setNotice("Check complete. Review the latest result below.");
+                      const { watch } = await refreshObjectiveWatch(item.id);
+                      const status = watch.latestCheck?.status;
+                      setNotice(status === "changed"
+                        ? `${watch.title}: ${watchCheckLabel({ status, change: watch.latestCheck?.change ?? null }).toLowerCase()}. Review what changed below.`
+                        : status === "failed" || status === "partial"
+                          ? `${watch.title}: ${watchCheckLabel({ status, change: null }).toLowerCase()}. ${watchCheckDetail({ status })}`
+                          : `${watch.title}: no meaningful change since the last check.`);
                       setRevision((n) => n + 1);
                     } catch (error) {
                       // Failed attempts also start a cooldown and can add history.
@@ -467,6 +540,19 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                 <RefreshCw size={14} aria-hidden="true" />
                 {pending === item.id ? 'Working…' : ended ? 'Plan completed' : wait > 0 ? `Check in ${Math.ceil(wait / 60000)}m` : 'Check now'}
               </button>
+              {latest && !attention && latest.status !== 'changed' && (
+                <button
+                  className="field-button"
+                  aria-pressed={detailsOpen.has(item.id)}
+                  onClick={() => setDetailsOpen((open) => {
+                    const next = new Set(open);
+                    if (!next.delete(item.id)) next.add(item.id);
+                    return next;
+                  })}
+                >
+                  {detailsOpen.has(item.id) ? 'Fewer details' : 'Readings'}
+                </button>
+              )}
               <button
                 className="field-button"
                 aria-expanded={expanded === item.id}
@@ -486,6 +572,13 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                 <Trash2 size={15} aria-hidden="true" />
               </button>
             </div>
+            {policy && !policy.emailAlerts && !ended && (
+              <p className="sky-cap field-watch-upsell">
+                Premium can email you the moment a risk increase is found — for example
+                “Peak gust rose from 20 to 40 mph” — so you do not have to reopen this page.{" "}
+                <button type="button" className="field-link" onClick={() => navigate("account")}>See Premium</button>
+              </p>
+            )}
             {policy?.emailAlerts && (
               <label className="sky-switch">
                 <input
@@ -501,7 +594,9 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                   }}
                 />
                 <span aria-hidden="true" />
-                {account.user?.emailVerified ? 'Email when risk increases' : 'Verify your email in Account to enable alerts'}
+                {account.user?.emailVerified ? 'Email when risk increases' : (
+                  <>Email alerts need a verified address. <button type="button" className="field-link" onClick={(e) => { e.preventDefault(); navigate("account"); }}>Verify in Account</button></>
+                )}
               </label>
             )}
             {expanded === item.id && (
@@ -565,6 +660,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
               onClick={() =>
                 void run(deleting.id, async () => {
                   await deleteObjectiveWatch(deleting.id);
+                  setRemoved(deleting);
                   setDeleting(null);
                   setRevision((n) => n + 1);
                 })

@@ -76,6 +76,8 @@ export default function FieldApp() {
   const w = useWorkspace();
   const account = useAccount();
   const [feedback, setFeedback] = useState("");
+  // The "added" message keeps its watchlist link only while it is still showing.
+  const [watchFeedback, setWatchFeedback] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const watchStatus = useObjectiveWatchStatus(
     w.reportSnapshot?.plan ?? null,
@@ -180,7 +182,7 @@ export default function FieldApp() {
       return;
     }
     if (!account.user) {
-      w.setAccountAccessReason(kind === "email" ? "report-email" : "ai");
+      w.setAccountAccessReason(kind === "email" ? "report-email" : kind === "watch" ? "objective-watch" : "ai");
       return;
     }
     setActionBusy(true);
@@ -189,9 +191,11 @@ export default function FieldApp() {
       if (kind === "watch") {
         const { policy } = await saveObjectiveWatch(report);
         watchStatus.markWatched();
-        setFeedback(policy.automaticChecks
+        const added = policy.automaticChecks
           ? "Added to your watchlist. Automatic checks will flag meaningful changes from this report."
-          : "Added to your watchlist. Run checks from the watchlist to compare with this report.");
+          : "Added to your watchlist. Run checks from the watchlist to compare with this report.";
+        setWatchFeedback(added);
+        setFeedback(added);
       } else {
         let token = kind === "save"
           ? w.activeSavedReportShareToken
@@ -214,11 +218,11 @@ export default function FieldApp() {
         }
       }
     } catch (error) {
-      setFeedback(
-        error instanceof Error
-          ? error.message
-          : "Could not complete this action.",
-      );
+      const message = error instanceof Error
+        ? error.message
+        : "Could not complete this action.";
+      if (kind === "watch" && /limit/i.test(message)) setWatchFeedback(message);
+      setFeedback(message);
     } finally {
       setActionBusy(false);
     }
@@ -651,6 +655,9 @@ export default function FieldApp() {
                       actionBusy || w.reportSaveIntentRef.current === "saving"
                     }
                     feedback={feedback}
+                    feedbackAction={feedback && feedback === watchFeedback
+                      ? { label: /limit/i.test(feedback) ? "Manage watchlist" : "View watchlist", onClick: () => navigate("watches") }
+                      : undefined}
                   />
                 </Suspense>
               ) : (
@@ -811,6 +818,12 @@ export default function FieldApp() {
             }
             onClose={w.closeAccountAccessPrompt}
           >
+            {w.accountAccessReason === "objective-watch" && (
+              <p>
+                Sign in to watch this objective. Its plan is re-checked as the
+                forecast updates, and you can review what changed before you go.
+              </p>
+            )}
             {w.accountAccessReason.includes("limit") && (
               <p>
                 Review your report, comparison, and AI allowances in your

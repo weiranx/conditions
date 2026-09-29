@@ -127,6 +127,7 @@ import {
 type AccountAccessReason =
   | "ai"
   | "report-email"
+  | "objective-watch"
   | "guest-report-limit"
   | "account-report-limit"
   | "guest-multi-day-limit"

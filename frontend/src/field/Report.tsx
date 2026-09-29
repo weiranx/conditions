@@ -93,6 +93,7 @@ export function Report({
   onEmail,
   actionBusy,
   feedback,
+  feedbackAction,
 }: {
   report: PersistedReport;
   workspace: Workspace;
@@ -106,6 +107,7 @@ export function Report({
   onEmail: () => void;
   actionBusy: boolean;
   feedback: string;
+  feedbackAction?: { label: string; onClick: () => void };
 }) {
   const [view, setView] = useState<View>(viewFromHash);
   const topRef = useRef<HTMLDivElement>(null);
@@ -338,9 +340,23 @@ export function Report({
             and won’t update. For current conditions, edit the plan and generate a new report.</div>
         </aside>
       ))}
+      {flags.objectiveWatch && !watching && !feedback && !w.viewingHistoryReport && copy.tone === "watch"
+        && !copy.insufficient && (
+        <aside className="sky-notice" aria-label="Watch this objective">
+          <Bell size={20} aria-hidden="true" />
+          <div>Conditions are borderline for this plan. Watch it and we will flag it if the forecast gets worse or better.</div>
+          <button type="button" className="field-button" disabled={actionBusy} onClick={onWatch}>Watch this plan</button>
+        </aside>
+      )}
       {feedback && (
         <p className="sky-notice is-info" role="status">
           {feedback}
+          {feedbackAction && (
+            <>
+              {" "}
+              <button type="button" className="field-button" onClick={feedbackAction.onClick}>{feedbackAction.label}</button>
+            </>
+          )}
         </p>
       )}
       {(dataWarning || copy.warnings.length > 0 || copy.missing.length > 0) && (

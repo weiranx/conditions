@@ -58,3 +58,12 @@
   .sky-watch-actions .sky-icon-only { flex: 0 0 44px; }
 }
 .field-watch-route { display: block; margin-top: 2px; font-size: 13px; }
+
+.field-watch-summary { margin-top: 14px; align-items: center; }
+.field-watch-summary.is-improved { box-shadow: inset 4px 0 0 var(--sky-accent); }
+.field-watch-summary > .field-button { flex: none; }
+.field-watch-measurements em { font-style: normal; font-size: 12px; }
+.field-watch-measurements em.is-better { color: var(--sky-accent); }
+.field-watch-measurements em.is-worse { color: var(--sky-caution); }
+.field-watch-upsell { margin: 0; }
+.field-link { padding: 0; border: 0; background: none; color: var(--sky-accent); font: inherit; text-decoration: underline; cursor: pointer; }

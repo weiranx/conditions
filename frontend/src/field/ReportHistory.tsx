@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowUpRight, BookOpen, Check, Link, LoaderCircle, RefreshCw, Search, Sparkles, X } from 'lucide-react';
+import { ArrowUpRight, Bell, BellRing, BookOpen, Check, Link, LoaderCircle, RefreshCw, Search, Sparkles, X } from 'lucide-react';
 import { parsePersistedReport, type PersistedReport } from '../app/report-storage';
 import { copyTextToClipboard } from '../app/clipboard';
 import { useAccount } from '../hooks/useAccount';
 import { buildSavedReportShareUrl, getSavedReport, listSavedReportsPage, type SavedReportSummary } from '../lib/saved-reports';
+import { saveObjectiveWatch } from '../lib/objective-watches';
+import { planDateHasEnded } from './watch-status';
 import type { Page } from './data';
 import { formatClockForStyle } from '../app/core';
 import type { TimeStyle } from '../app/types';
@@ -23,11 +25,12 @@ function timestamp(value: string | null | undefined, timeStyle: TimeStyle) {
   });
 }
 
-export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, timeStyle = 'ampm' }: {
+export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, watchEnabled = false, timeStyle = 'ampm' }: {
   localReport: PersistedReport | null;
   onOpen: (report: PersistedReport, token?: string, reportId?: string) => void;
   navigate: (page: Page) => void;
   sharingEnabled: boolean;
+  watchEnabled?: boolean;
   timeStyle?: TimeStyle;
 }) {
   const account = useAccount();
@@ -45,6 +48,7 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, t
   const [revision, setRevision] = useState(0);
   const [pending, setPending] = useState('');
   const [copied, setCopied] = useState('');
+  const [watched, setWatched] = useState<Set<string>>(new Set());
   const requestRef = useRef<AbortController | null>(null);
   const actionRef = useRef<AbortController | null>(null);
   const morePendingRef = useRef(false);
@@ -86,6 +90,7 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, t
     setActionError('');
     setNotice('');
     setCopied('');
+    setWatched(new Set());
     return () => { actionRef.current?.abort(); actionRef.current = null; };
   }, [userId]);
 
@@ -237,12 +242,34 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, t
                 </b>
                 {pending === report.id ? <LoaderCircle className="field-history-spinner" size={18} aria-label="Opening report" /> : <ArrowUpRight size={18} aria-hidden="true" />}
               </button>
-              {sharingEnabled && <button className="sky-row-action" disabled={Boolean(pending)} aria-label={`Copy report link for ${report.objectiveName || report.title}`} onClick={() => void run(`share-${report.id}`, async signal => {
-                const success = await copyTextToClipboard(buildSavedReportShareUrl(report.shareToken));
-                if (signal.aborted) return;
-                if (!success) throw new Error('Could not copy this report link. Please try again.');
-                setCopied(report.id); setNotice(`Report link copied for ${report.objectiveName || report.title}.`);
-              })}>{copied === report.id ? <Check size={15} aria-hidden="true" /> : <Link size={15} aria-hidden="true" />}<span>{copied === report.id ? 'Link copied' : 'Copy link'}</span></button>}
+              <div className="sky-row-actions">
+                {sharingEnabled && <button className="sky-row-action" disabled={Boolean(pending)} aria-label={`Copy report link for ${report.objectiveName || report.title}`} onClick={() => void run(`share-${report.id}`, async signal => {
+                  const success = await copyTextToClipboard(buildSavedReportShareUrl(report.shareToken));
+                  if (signal.aborted) return;
+                  if (!success) throw new Error('Could not copy this report link. Please try again.');
+                  setCopied(report.id); setNotice(`Report link copied for ${report.objectiveName || report.title}.`);
+                })}>{copied === report.id ? <Check size={15} aria-hidden="true" /> : <Link size={15} aria-hidden="true" />}<span>{copied === report.id ? 'Link copied' : 'Copy link'}</span></button>}
+                {watchEnabled && (() => {
+                  const ended = !report.forecastDate || planDateHasEnded(report.forecastDate);
+                  const done = watched.has(report.id);
+                  const name = report.objectiveName || report.title;
+                  return <button className="sky-row-action" disabled={Boolean(pending) || ended || done}
+                    title={ended ? 'This plan date has passed' : undefined}
+                    aria-label={`${done ? 'Watching' : 'Watch'} ${name}`}
+                    onClick={() => void run(`watch-${report.id}`, async signal => {
+                      const snapshot = parsePersistedReport(await getSavedReport(report.id, signal));
+                      if (signal.aborted) return;
+                      if (!snapshot) throw new Error('This saved report is incomplete or no longer compatible.');
+                      await saveObjectiveWatch(snapshot);
+                      if (signal.aborted) return;
+                      setWatched(current => new Set(current).add(report.id));
+                      setNotice(`Watching ${name}. Find it in your watchlist.`);
+                    })}>
+                    {done ? <BellRing size={15} aria-hidden="true" /> : <Bell size={15} aria-hidden="true" />}
+                    <span>{done ? 'Watching' : 'Watch'}</span>
+                  </button>;
+                })()}
+              </div>
             </article>
           </div>;
         })}

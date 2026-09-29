@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { AccountContext } from '../src/contexts/account';
 import { Library } from '../src/field/Library';
 import { useObjectiveWatchStatus } from '../src/field/model/useObjectiveWatchStatus';
-import { watchHasEnded, watchNeedsAttention, watchRefreshWait } from '../src/field/watch-status';
+import { untilLabel, watchHasEnded, watchNeedsAttention, watchRefreshWait, watchScoreTrend, watchesToReview } from '../src/field/watch-status';
 
 const policy = { tierKey: 'premium', activeWatchLimit: 10, automaticChecks: true,
   emailAlerts: true, historyDays: 90, manualRefreshCooldownMinutes: 5,
@@ -40,6 +40,7 @@ async function setup(t, handler, units = mph) {
   };
   const root = createRoot(document.getElementById('root'));
   const noop = () => {};
+  globalThis.HTMLElement = dom.window.HTMLElement;
   await act(async () => root.render(<AccountContext.Provider value={{ user: { id: 'user', emailVerified: true } }}>
     <Library kind="watches" localReport={null} onOpen={noop} navigate={noop}
       workspace={{ featureFlags: {}, preferences: { timeStyle: 'ampm' }, handleOpenObjectiveWatch: noop, ...units }} />
@@ -48,6 +49,7 @@ async function setup(t, handler, units = mph) {
     await act(async () => root.unmount());
     dom.window.close();
     Object.assign(globalThis, previous);
+    delete globalThis.HTMLElement;
     delete globalThis.IS_REACT_ACT_ENVIRONMENT;
   });
   return {
@@ -244,6 +246,7 @@ test('the report learns whether its exact plan is already watched', async t => {
     await act(async () => root.unmount());
     dom.window.close();
     Object.assign(globalThis, previous);
+    delete globalThis.HTMLElement;
     delete globalThis.IS_REACT_ACT_ENVIRONMENT;
   });
 
@@ -278,4 +281,70 @@ test('a watch that covers an analyzed route says so, and route reasons read in t
   assert.match(card('Rainier').querySelector('.field-watch-route').textContent, /Also checks 5 checkpoints along Disappointment Cleaver/);
   assert.equal(card('Hood').querySelector('.field-watch-route'), null);
   assert.match(card('Rainier').textContent, /Along the route, peak gusts increased from 32 kph to 68 kph/);
+});
+
+test('names when the next check is due instead of printing a timestamp', () => {
+  const now = Date.parse('2026-09-06T12:00:00Z');
+  assert.equal(untilLabel('2026-09-06T12:00:30Z', now), 'soon');
+  assert.equal(untilLabel('2026-09-06T12:20:00Z', now), 'in 20 minutes');
+  assert.equal(untilLabel('2026-09-06T15:00:00Z', now), 'in 3 hours');
+  assert.equal(untilLabel('2026-09-08T12:00:00Z', now), 'in 2 days');
+  assert.equal(untilLabel(null, now), '');
+});
+
+test('the score trend compares the latest check with the watched report', () => {
+  const baselineReport = (score, assessmentStatus) => ({ safetyData: { safety: { score, assessmentStatus } } });
+  assert.deepEqual(watchScoreTrend(watch('A', { baselineReport: baselineReport(80) })), { delta: -8, baseline: 80 });
+  assert.equal(watchScoreTrend(watch('A', { baselineReport: baselineReport(80, 'insufficient_evidence') })), null);
+  assert.equal(watchScoreTrend(watch('A')), null);
+});
+
+test('routine checks fold their readings away until asked for', async t => {
+  const h = await setup(t, () => ({ payload: { watches: [watch('Rainier')], policy } }));
+  assert.match(h.text(), /No meaningful change/);
+  assert.doesNotMatch(document.querySelector('.field-watch-latest').textContent, /Score 72/);
+  await h.click('Readings');
+  assert.match(document.querySelector('.field-watch-latest').textContent, /Score 72/);
+  await h.click('Fewer details');
+  assert.doesNotMatch(document.querySelector('.field-watch-latest').textContent, /Score 72/);
+});
+
+test('summarizes unreviewed changes and marks every watch reviewed at once', async t => {
+  let reviewed = false;
+  const requests = [];
+  const unreviewed = (worsened) => reviewed ? { count: 0, worsened: false, latest: null, latestWorse: null }
+    : { count: 1, worsened, latest: { checkedAt, reasons: [] }, latestWorse: null };
+  const h = await setup(t, (url, init) => {
+    requests.push(`${init?.method || 'GET'} ${url}`);
+    if (url.endsWith('/review')) { reviewed = true; return { payload: { watch: watch('x'), policy } }; }
+    return { payload: { watches: [watch('A', { unreviewedChanges: unreviewed(true) }), watch('B', { unreviewedChanges: unreviewed(false) })], policy } };
+  });
+  assert.equal(watchesToReview([watch('A', { unreviewedChanges: unreviewed(true) })]).length, 1);
+  assert.match(document.querySelector('.field-watch-summary').textContent, /1 objective has a risk increase since you last looked/);
+  await h.click('Mark all reviewed');
+  assert.equal(requests.filter((entry) => entry.startsWith('POST') && entry.endsWith('/review')).length, 2);
+  assert.equal(document.querySelector('.field-watch-summary'), null);
+  assert.match(h.text(), /Marked 2 watches reviewed/);
+});
+
+test('a removed watch can be added back from its baseline report', async t => {
+  let removed = false;
+  const requests = [];
+  const baselineReport = { safetyData: { safety: { score: 70 } } };
+  const h = await setup(t, (url, init) => {
+    requests.push(`${init?.method || 'GET'} ${url}`);
+    if (init?.method === 'DELETE') { removed = true; return { payload: { ok: true } }; }
+    if (init?.method === 'POST') { removed = false; return { payload: { watch: watch('Rainier'), policy } }; }
+    return { payload: { watches: removed ? [] : [watch('Rainier', { baselineReport })], policy } };
+  });
+  window.HTMLDialogElement.prototype.showModal ||= function showModal() { this.setAttribute('open', ''); };
+  window.HTMLDialogElement.prototype.close ||= function close() { this.removeAttribute('open'); };
+  await act(async () => document.querySelector('[aria-label="Remove watch for Rainier"]').click());
+  await h.click('Remove watch');
+  assert.deepEqual(h.cards(), []);
+  assert.match(h.text(), /Removed Rainier/);
+  await h.click('Undo');
+  assert.ok(requests.some((entry) => entry.startsWith('POST')));
+  assert.deepEqual(h.cards(), ['Rainier']);
+  assert.match(h.text(), /Rainier is back on your watchlist/);
 });

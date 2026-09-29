@@ -17,8 +17,8 @@
 .sky-report-row:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; }
 .sky-report-row:disabled { cursor: default; opacity: 0.7; }
 .sky-report-row > svg { color: var(--sky-secondary); }
-.field-library-entry:has(.sky-row-action) .sky-report-row { padding-right: 118px; grid-template-columns: 48px minmax(0, 1fr) auto; }
-.field-library-entry:has(.sky-row-action) .sky-report-row > svg:last-child { display: none; }
+.field-library-entry:has(.sky-row-actions) .sky-report-row { padding-right: 228px; grid-template-columns: 48px minmax(0, 1fr) auto; }
+.field-library-entry:has(.sky-row-actions) .sky-report-row > svg:last-child { display: none; }
 
 /* A page torn from a calendar. The month is the brand accent: orange is reserved for "over a limit". */
 .sky-date-badge {
@@ -38,8 +38,8 @@
 .sky-score-chip { display: inline-flex; align-items: baseline; gap: 1px; padding: 4px 10px; border-radius: 999px; background: var(--sky-fill); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sky-score-chip small { font-size: 11px; font-weight: 500; color: var(--sky-secondary); }
 .sky-score-chip.is-missing { background: transparent; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; color: var(--sky-missing); }
+.sky-row-actions { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; }
 .sky-row-action {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
   display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 0; border-radius: 999px;
   background: var(--sky-raised); color: var(--sky-label); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   box-shadow: var(--sky-raised-shadow);
@@ -57,7 +57,8 @@
   /* Two lines rather than cutting the start time or generated date mid-word. */
   .sky-report-copy small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; }
   .sky-report-row > svg { display: none; }
-  .field-library-entry:has(.sky-row-action) .sky-report-row { padding-right: 10px; padding-bottom: 50px; }
-  .sky-row-action { top: auto; bottom: 10px; right: auto; left: 66px; transform: none; min-height: 32px; }
+  .field-library-entry:has(.sky-row-actions) .sky-report-row { padding-right: 10px; padding-bottom: 50px; }
+  .sky-row-actions { top: auto; bottom: 10px; right: auto; left: 66px; transform: none; }
+  .sky-row-action { min-height: 32px; }
   .sky-date-badge { width: 44px; height: 48px; }
 }
