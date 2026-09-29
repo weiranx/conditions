@@ -299,6 +299,40 @@ export function gpxTrackForAnalysis(route: Pick<ParsedGpxRoute, 'distanceMiles' 
   ]);
 }
 
+/** One stretch of a route (a day, or the whole route), as the backend times it. */
+export interface GpxStretch {
+  distance_miles: number;
+  gain_ft: number;
+  loss_ft: number;
+  /** Distance-weighted average elevation, for the altitude slowdown; null without elevations. */
+  mean_elevation_ft: number | null;
+}
+
+/** Distance, climb, descent and average elevation of display-track points spanning `distanceMiles`. */
+export function describeGpxStretch(points: GpxTrackPoint[], distanceMiles: number): GpxStretch {
+  const span = points.length > 1 ? points[points.length - 1].progress_percent - points[0].progress_percent : 0;
+  let gain = 0;
+  let loss = 0;
+  let weighted = 0;
+  let weight = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const from = points[index - 1].elev_ft;
+    const to = points[index].elev_ft;
+    if (!Number.isFinite(from) || !Number.isFinite(to)) continue;
+    const rise = (to as number) - (from as number);
+    if (rise > 0) gain += rise; else loss -= rise;
+    const miles = span > 0 ? Math.max(0, distanceMiles * (points[index].progress_percent - points[index - 1].progress_percent) / span) : 0;
+    weighted += ((from as number) + (to as number)) / 2 * miles;
+    weight += miles;
+  }
+  return {
+    distance_miles: Math.max(0, distanceMiles),
+    gain_ft: Math.round(gain),
+    loss_ft: Math.round(loss),
+    mean_elevation_ft: weight > 0 ? Math.round(weighted / weight) : null,
+  };
+}
+
 // Descents cost a third of the climbing rate, as in the backend's route timing.
 const DESCENT_SHARE_OF_ASCENT = 1 / 3;
 

@@ -8,12 +8,34 @@ export interface RouteAnalysisUnits {
   elevation: 'ft' | 'm';
 }
 
+function suggestionTimingQuery(options?: RouteSuggestionOptions): string {
+  const timing = new URLSearchParams();
+  if (options?.pace) {
+    timing.set('pace_min_per_mile', String(options.pace.minutesPerMile));
+    timing.set('ascent_min_per_1000ft', String(options.pace.ascentMinutesPer1000Ft));
+    timing.set('stop_buffer_min', String(options.pace.stopBufferMinutes));
+  }
+  if (Number.isFinite(options?.elevationFt)) timing.set('elevation_ft', String(options?.elevationFt));
+  if (Number.isFinite(options?.altitudeSlowdownPercent)) timing.set('altitude_slowdown_pct', String(options?.altitudeSlowdownPercent));
+  return timing.toString();
+}
+
+/** `pace` and `elevationFt` let the backend estimate each suggestion's time at the traveler's own pace. */
+export interface RouteSuggestionOptions {
+  keepPlan?: boolean;
+  pace?: { minutesPerMile: number; ascentMinutesPer1000Ft: number; stopBufferMinutes: number };
+  elevationFt?: number | null;
+  altitudeSlowdownPercent?: number;
+}
+
 export interface RouteOption {
   name: string;
   distance_rt_miles: number;
   elev_gain_ft: number;
   class: string;
   description: string;
+  /** Whole hours at the traveler's pace, from the backend; absent when length or climb is unknown. */
+  estimated_hours?: number;
 }
 
 export type RouteLeg = 'return';
@@ -212,7 +234,8 @@ export interface UseRouteAnalysisReturn {
   routeShape: RouteShapeChoice;
   setRouteShape: (value: RouteShapeChoice) => void;
   /** With keepPlan, the planned route and its analysis stay while suggestions load. */
-  fetchRouteSuggestions: (peak: string, lat: number, lon: number, options?: { keepPlan?: boolean }) => Promise<void>;
+  fetchRouteSuggestions: (peak: string, lat: number, lon: number, options?: RouteSuggestionOptions) => Promise<void>;
+  refreshRouteSuggestionTimes: (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => Promise<void>;
   fetchRouteAnalysis: (
     peak: string,
     route: string,
@@ -329,7 +352,7 @@ export function useRouteAnalysis(initialState?: {
     nextRequestIdRef.current += 1;
   }, []);
 
-  const fetchRouteSuggestions = useCallback(async (peak: string, lat: number, lon: number, options?: { keepPlan?: boolean }) => {
+  const fetchRouteSuggestions = useCallback(async (peak: string, lat: number, lon: number, options?: RouteSuggestionOptions) => {
     const request = beginRequest({ kind: 'suggestions', routeName: peak });
     setRouteSuggestions(null);
     setRouteError(null);
@@ -340,7 +363,8 @@ export function useRouteAnalysis(initialState?: {
       setCustomRouteName('');
     }
     try {
-      const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`, {
+      const timingQuery = suggestionTimingQuery(options);
+      const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}${timingQuery ? `&${timingQuery}` : ''}`, {
         signal: request.controller.signal,
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to load route suggestions'));
@@ -353,6 +377,24 @@ export function useRouteAnalysis(initialState?: {
       finishRequest(request.id);
     }
   }, [beginRequest, finishRequest, isCurrentRequest]);
+
+  /**
+   * Re-time the suggestions on screen after the traveler's pace changes. It runs
+   * beside any other request without touching loading state, and only replaces
+   * the list when it is still the same routes.
+   */
+  const refreshRouteSuggestionTimes = useCallback(async (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => {
+    try {
+      const timingQuery = suggestionTimingQuery(options);
+      const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}${timingQuery ? `&${timingQuery}` : ''}`, { signal });
+      if (!response.ok || !Array.isArray(payload)) return;
+      const fresh = payload as RouteOption[];
+      setRouteSuggestions((current) => (current && current.length === fresh.length
+        && current.every((route, i) => route.name === fresh[i].name) ? fresh : current));
+    } catch {
+      // The times on screen are still valid for the previous pace.
+    }
+  }, []);
 
   const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string, travelWindowHours: number, units?: RouteAnalysisUnits, options?: RouteAnalysisOptions) => {
     const request = beginRequest({
@@ -464,6 +506,7 @@ export function useRouteAnalysis(initialState?: {
     routeShape,
     setRouteShape,
     fetchRouteSuggestions,
+    refreshRouteSuggestionTimes,
     fetchRouteAnalysis,
     resetRouteState,
     cancelRouteRequest,

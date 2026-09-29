@@ -125,6 +125,7 @@ export function getDefaultUserPreferences(): UserPreferences {
     runnerPaceMinutesPerMile: 30,
     runnerAscentMinutesPer1000Ft: 45,
     runnerStopBufferMinutes: 45,
+    routeAltitudeSlowdownPercent: 5,
     approachElevationAdjustment: true,
   };
 }
@@ -192,6 +193,7 @@ export function normalizeUserPreferences(
       MAX_TRAVEL_WINDOW_HOURS,
     ),
     ...normalizeRouteTiming(parsed, pickRouteTiming(defaults)),
+    routeAltitudeSlowdownPercent: normalizeNumberPreference(parsed.routeAltitudeSlowdownPercent, defaults.routeAltitudeSlowdownPercent, 0, 15),
     approachElevationAdjustment: typeof parsed.approachElevationAdjustment === 'boolean'
       ? parsed.approachElevationAdjustment
       : defaults.approachElevationAdjustment,

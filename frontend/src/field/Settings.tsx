@@ -67,6 +67,14 @@ function RouteTiming({ workspace: w, idPrefix }: { workspace: Workspace; idPrefi
             </Row>
           );
         })}
+        <Row label="Altitude slowdown" htmlFor={`${idPrefix}-altitude`}
+          hint="Suggested-route times run this much slower for every 1,000 ft of average elevation above 8,000 ft, up to 30%. Longer days and rougher route classes add more.">
+          <NumberField id={`${idPrefix}-altitude`} value={p.routeAltitudeSlowdownPercent} unit="% per 1,000 ft" min={0} max={15}
+            onChange={(e) => {
+              if (e.target.value !== "")
+                w.updatePreferences({ routeAltitudeSlowdownPercent: Math.min(15, Math.max(0, Math.round(Number(e.target.value)))) });
+            }} />
+        </Row>
       </div>
     </>
   );

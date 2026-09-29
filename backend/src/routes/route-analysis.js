@@ -27,6 +27,8 @@ const {
   classifyDaylight,
   computeCheckpointFractions,
   computeDistanceProgress,
+  estimateStretchHours,
+  estimateSuggestedRouteHours,
   sanitizeRoutePace,
 } = require('../utils/route-timing');
 
@@ -495,11 +497,55 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         );
         return parseJsonArrayFromAI(text);
       });
-      return res.json(routes);
+      // Suggestions are cached per objective; the time depends on the caller's pace, so it is added per request.
+      const pace = sanitizeRoutePace({
+        minutesPerMile: req.query.pace_min_per_mile,
+        ascentMinutesPer1000Ft: req.query.ascent_min_per_1000ft,
+        stopBufferMinutes: req.query.stop_buffer_min,
+      });
+      const summitElevationFt = Number.isFinite(Number(req.query.elevation_ft)) && req.query.elevation_ft !== ''
+        ? Number(req.query.elevation_ft) : null;
+      return res.json(Array.isArray(routes) && pace ? routes.map((route) => {
+        const hours = estimateSuggestedRouteHours({
+          distanceMiles: route?.distance_rt_miles,
+          gainFt: route?.elev_gain_ft,
+          routeClass: route?.class,
+          summitElevationFt,
+          altitudeSlowdownPercent: req.query.altitude_slowdown_pct === undefined || req.query.altitude_slowdown_pct === '' ? null : Number(req.query.altitude_slowdown_pct),
+        }, pace);
+        return hours === null ? route : { ...route, estimated_hours: hours };
+      }) : routes);
     } catch (err) {
       logger.error({ err }, 'route-suggestions error');
       return res.status(500).json({ error: err.message });
     }
+  });
+
+  // POST /api/route-timing
+  // Body: { pace: { minutesPerMile, ascentMinutesPer1000Ft, stopBufferMinutes }, altitude_slowdown_pct?, stretches: [{ distance_miles, gain_ft, loss_ft?, mean_elevation_ft? }] }
+  // Hours at the traveler's pace for each stretch (a mapped route, or each day of a multi-day one), as the suggested routes are timed.
+  app.post('/api/route-timing', async (req, res) => {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const pace = sanitizeRoutePace(body.pace);
+    if (!pace) return res.status(400).json({ error: 'pace must give minutesPerMile and ascentMinutesPer1000Ft' });
+    if (!Array.isArray(body.stretches) || body.stretches.length === 0 || body.stretches.length > 30) {
+      return res.status(400).json({ error: 'stretches must list between 1 and 30 stretches' });
+    }
+    try {
+      ensureGpxImportEnabled();
+    } catch (error) {
+      return res.status(error.statusCode || 503).json({ error: error.message || 'GPX import is unavailable' });
+    }
+    if (!(await ensureAccountAccess(req, res))) return;
+    return res.json({
+      hours: body.stretches.map((stretch) => estimateStretchHours({
+        distanceMiles: stretch?.distance_miles,
+        gainFt: stretch?.gain_ft,
+        lossFt: stretch?.loss_ft,
+        meanElevationFt: stretch?.mean_elevation_ft,
+        altitudeSlowdownPercent: body.altitude_slowdown_pct === undefined ? null : Number(body.altitude_slowdown_pct),
+      }, pace)),
+    });
   });
 
   // POST /api/route-analysis

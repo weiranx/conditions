@@ -101,13 +101,13 @@ import { followThemePreference } from "../../app/theme";
 import { useHealthChecks } from "../../hooks/useHealthChecks";
 import { requestRouteAnalysis, useRouteAnalysis } from "../../hooks/useRouteAnalysis";
 import type { RouteAnalysisOptions, RouteAnalysisResult } from "../../hooks/useRouteAnalysis";
-import type { StreamEvent } from "../../lib/api-client";
+import { fetchRouteTimes, type StreamEvent } from "../../lib/api-client";
 import { useTripForecast } from "../../hooks/useTripForecast";
 import { useSafetyData } from "../../hooks/useSafetyData";
 import { useSearchSuggestions } from "../../hooks/useSearchSuggestions";
 import { lookupPointPlace, normalizeSuggestionText } from "../../lib/search";
 import { objectiveTerms as resolveObjectiveTerms } from "../../app/objective-terms";
-import { estimateRouteDurationHours, gpxObjectivePoint, gpxTrackForAnalysis, type ParsedGpxRoute } from "../../lib/gpx";
+import { describeGpxStretch, estimateRouteDurationHours, gpxObjectivePoint, gpxTrackForAnalysis, type ParsedGpxRoute } from "../../lib/gpx";
 import { useUrlState, useSyncUrlEffect } from "../../hooks/useUrlState";
 import type { AppView } from "../../hooks/useUrlState";
 import { useReportGeneration } from "./useReportGeneration";
@@ -399,6 +399,7 @@ export function useWorkspace() {
     routeShape,
     setRouteShape,
     fetchRouteSuggestions,
+    refreshRouteSuggestionTimes,
     fetchRouteAnalysis,
     resetRouteState,
     cancelRouteRequest,
@@ -1344,13 +1345,56 @@ export function useWorkspace() {
     );
   };
 
+  // The pace, altitude setting and summit elevation the backend times suggestions with.
+  const suggestionTimingOptions = useCallback(() => {
+    const p = preferencesRef.current;
+    const summitElevationFt = Number(safetyData?.weather.elevation);
+    return {
+      pace: {
+        minutesPerMile: p.runnerPaceMinutesPerMile,
+        ascentMinutesPer1000Ft: p.runnerAscentMinutesPer1000Ft,
+        stopBufferMinutes: p.runnerStopBufferMinutes,
+      },
+      elevationFt: Number.isFinite(summitElevationFt) ? summitElevationFt : null,
+      altitudeSlowdownPercent: p.routeAltitudeSlowdownPercent,
+    };
+  }, [safetyData]);
+  const lastSuggestionRequestRef = useRef<{ peak: string; lat: number; lon: number; timing: string } | null>(null);
+
   const handleFetchRouteSuggestions = useCallback(
     (peak: string, lat: number, lon: number, options?: { keepPlan?: boolean }) => {
       if (!requestAiAccess()) return;
-      void fetchRouteSuggestions(peak, lat, lon, options);
+      const timing = suggestionTimingOptions();
+      lastSuggestionRequestRef.current = { peak, lat, lon, timing: JSON.stringify(timing) };
+      void fetchRouteSuggestions(peak, lat, lon, { ...options, ...timing });
     },
-    [fetchRouteSuggestions, requestAiAccess],
+    [fetchRouteSuggestions, requestAiAccess, suggestionTimingOptions],
   );
+
+  // Changing pace or altitude settings re-times the suggestions already on screen.
+  const hasRouteSuggestions = routeSuggestions !== null && routeSuggestions.length > 0;
+  useEffect(() => {
+    const last = lastSuggestionRequestRef.current;
+    const timing = suggestionTimingOptions();
+    if (!hasRouteSuggestions || !last || last.timing === JSON.stringify(timing)) return undefined;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void refreshRouteSuggestionTimes(last.peak, last.lat, last.lon, timing, controller.signal)
+        .then(() => { if (lastSuggestionRequestRef.current === last) last.timing = JSON.stringify(timing); });
+    }, 500);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    hasRouteSuggestions,
+    preferences.runnerPaceMinutesPerMile,
+    preferences.runnerAscentMinutesPer1000Ft,
+    preferences.runnerStopBufferMinutes,
+    preferences.routeAltitudeSlowdownPercent,
+    refreshRouteSuggestionTimes,
+    suggestionTimingOptions,
+  ]);
 
   const handleFetchRouteAnalysis = useCallback(
     (
@@ -2102,7 +2146,9 @@ export function useWorkspace() {
     setTravelThresholdEditorOpen,
   } = prefHandlers;
 
-  const gpxEstimatedDurationHours = React.useMemo(
+  // The flat-pace figure shows at once and stands in if the backend can't be reached;
+  // the backend's, which allows for altitude and long days, replaces it.
+  const gpxFlatDurationHours = React.useMemo(
     () =>
       importedGpxRoute
         ? estimateRouteDurationHours(importedGpxRoute, {
@@ -2118,6 +2164,32 @@ export function useWorkspace() {
       preferences.runnerStopBufferMinutes,
     ],
   );
+  const [gpxTimed, setGpxTimed] = useState<{ route: ParsedGpxRoute; hours: number } | null>(null);
+  useEffect(() => {
+    if (!importedGpxRoute) return undefined;
+    const controller = new AbortController();
+    const whole = describeGpxStretch(importedGpxRoute.displayTrack || [], importedGpxRoute.distanceMiles);
+    void fetchRouteTimes(
+      {
+        minutesPerMile: preferences.runnerPaceMinutesPerMile,
+        ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+        stopBufferMinutes: preferences.runnerStopBufferMinutes,
+      },
+      preferences.routeAltitudeSlowdownPercent,
+      [{ ...whole, gain_ft: importedGpxRoute.elevationGainFt || whole.gain_ft }],
+      controller.signal,
+    ).then(([hours]) => {
+      if (hours !== null && !controller.signal.aborted) setGpxTimed({ route: importedGpxRoute, hours });
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [
+    importedGpxRoute,
+    preferences.runnerPaceMinutesPerMile,
+    preferences.runnerAscentMinutesPer1000Ft,
+    preferences.runnerStopBufferMinutes,
+    preferences.routeAltitudeSlowdownPercent,
+  ]);
+  const gpxEstimatedDurationHours = gpxTimed && gpxTimed.route === importedGpxRoute ? gpxTimed.hours : gpxFlatDurationHours;
 
   const returnMinutes =
     cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;

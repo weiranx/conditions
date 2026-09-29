@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ArrowRight, BedDouble, Flag, LoaderCircle, LogOut, MapPin, Minus, Mountain, Plus, Search, Upload, X } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import type { ItineraryPickTarget } from "./model/useItinerary";
-import { fetchApi } from "../lib/api-client";
+import { fetchApi, fetchRouteTimes } from "../lib/api-client";
 import { formatClockForStyle, parseCoordinates } from "../app/core";
 import { parseGpxFile } from "../lib/gpx";
 import { searchRequestPath, type SearchNear, type Suggestion } from "../lib/search";
@@ -137,6 +137,17 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
         stopBufferMinutes: w.preferences.runnerStopBufferMinutes,
       });
       if (!split) throw new Error("This GPX track is too short to split into days.");
+      // The backend times each day (altitude, fatigue); the flat-pace figure stands in if it can't be reached.
+      const timed = await fetchRouteTimes(
+        {
+          minutesPerMile: w.preferences.runnerPaceMinutesPerMile,
+          ascentMinutesPer1000Ft: w.preferences.runnerAscentMinutesPer1000Ft,
+          stopBufferMinutes: w.preferences.runnerStopBufferMinutes,
+        },
+        w.preferences.routeAltitudeSlowdownPercent,
+        split.days.map((day) => day.stretch),
+      ).catch(() => [] as Array<number | null>);
+      split.days.forEach((day, index) => { day.travelHours = timed[index] ?? day.travelHours; });
       // The plan's objective is the trailhead in multi-day mode.
       w.selectSuggestion({ name: split.trailhead.name, lat: split.trailhead.lat, lon: split.trailhead.lon });
       it.updateDraft((current) => ({

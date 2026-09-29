@@ -151,7 +151,7 @@ const workspace = (overrides = {}) => ({
   forecastDate: '2026-09-08', alpineStartTime: '23:00', travelWindowHours: 4,
   objectiveTimezone: 'America/Los_Angeles', customRouteName: '', plannedRouteName: '',
   handleAnalyzePlannedRoute: () => {}, setCustomRouteName: () => {}, routeShape: 'auto', setRouteShape: () => {},
-  routeSuggestions: [{ name: 'West ridge', class: 'Class 2', distance_rt_miles: 10, elev_gain_ft: 3000 }],
+  routeSuggestions: [{ name: 'West ridge', class: 'Class 2', distance_rt_miles: 10, elev_gain_ft: 3000, estimated_hours: 9 }],
   formatElevationDisplay: n => `${n} ft`, formatDistanceDisplay: n => `${n} mi`,
   formatElevationDeltaDisplay: n => `+${n} ft`, formatTempDisplay: n => `${n}°F`,
   formatWindDisplay: n => `${n} mph`,
@@ -553,7 +553,7 @@ test('the plan carries the route: a name, suggestions to pick from, or the impor
   assert.equal(step.querySelector('.sky-plan-route-name input').value, 'West ridge');
   const option = step.querySelector('.sky-plan-route-options button');
   assert.equal(option.getAttribute('aria-pressed'), 'true');
-  assert.match(option.textContent, /West ridge.*Class 2 · 10 mi round trip · \+3000 ft gain · about \d+ h at your pace/);
+  assert.match(option.textContent, /West ridge.*Class 2 · 10 mi round trip · \+3000 ft gain · about 9 h at your pace/);
   assert.match(step.textContent, /Sign in to check conditions/);
 
   const gpx = new JSDOM(renderToStaticMarkup(<WorkspacePlan workspace={planWorkspace({ customRouteName: '',

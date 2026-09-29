@@ -291,3 +291,27 @@ export async function fetchPlanEvaluation(report: unknown, plan: Record<string, 
   }
   return (payload as { evaluation?: unknown } | null)?.evaluation ?? null;
 }
+
+/**
+ * Hours at the traveler's pace for each stretch of a mapped route, timed by the
+ * backend as suggested routes are (altitude, fatigue, stops). A stretch it cannot
+ * time comes back null.
+ */
+export async function fetchRouteTimes(
+  pace: { minutesPerMile: number; ascentMinutesPer1000Ft: number; stopBufferMinutes: number },
+  altitudeSlowdownPercent: number,
+  stretches: Array<{ distance_miles: number; gain_ft: number; loss_ft?: number; mean_elevation_ft?: number | null }>,
+  signal?: AbortSignal,
+): Promise<Array<number | null>> {
+  const { response, payload } = await fetchApi('/api/route-timing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pace, altitude_slowdown_pct: altitudeSlowdownPercent, stretches }),
+    signal,
+  });
+  const hours = (payload as { hours?: unknown } | null)?.hours;
+  if (!response.ok || !Array.isArray(hours)) {
+    throw new Error(readApiErrorMessage(payload, `Route timing failed (${response.status})`));
+  }
+  return hours.map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : null));
+}

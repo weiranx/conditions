@@ -157,6 +157,10 @@ test('a GPX track splits into days of equal effort with high points to check', (
   // Half the effort (10 mi + 3 mi of climbing) is reached before the midpoint of the distance.
   assert.ok(split.camps[0].lat < 47.14 && split.camps[0].lat > 47.1, `camp at ${split.camps[0].lat}`);
   assert.equal(split.days.length, 2);
+  // Each day carries the stats the backend times it from: day one climbs 4,000 → 5,800 ft.
+  assert.equal(split.days[0].stretch.gain_ft > 0, true);
+  assert.equal(split.days[0].stretch.loss_ft, 0);
+  assert.equal(split.days[0].stretch.mean_elevation_ft > 4000 && split.days[0].stretch.mean_elevation_ft < 6000, true);
   assert.equal(split.days[0].checkpoints.length, 0);
   assert.equal(split.days[1].checkpoints[0].elevationFt, 7000);
   assert.equal(split.exit.name, 'Loop end');

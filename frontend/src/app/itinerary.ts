@@ -2,7 +2,7 @@ import type { CampNightData, DecisionLevel, MultiDayTripForecastDay, SafetyData,
 import { DATE_FMT, MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from './constants';
 import { addDaysToIsoDate, parseTimeInputMinutes } from './core';
 import { planSettingsParams } from './plan-evaluation';
-import { estimateRouteDurationHours, type ParsedGpxRoute, type RouteTimingProfile } from '../lib/gpx';
+import { describeGpxStretch, estimateRouteDurationHours, type GpxStretch, type ParsedGpxRoute, type RouteTimingProfile } from '../lib/gpx';
 
 /**
  * A multi-day trip: a trailhead, a camp for each night, and an exit. Day i
@@ -325,7 +325,8 @@ export function splitGpxIntoDays(route: ParsedGpxRoute, nights: number, timing: 
   trailhead: ItineraryPoint;
   exit: ItineraryPoint | null;
   camps: ItineraryPoint[];
-  days: Array<{ travelHours: number; checkpoints: ItineraryPoint[] }>;
+  /** `travelHours` is the flat-pace estimate; `stretch` is what the backend times the day from. */
+  days: Array<{ travelHours: number; stretch: GpxStretch; checkpoints: ItineraryPoint[] }>;
 } | null {
   const track = route.displayTrack;
   if (track.length < 2) return null;
@@ -378,6 +379,7 @@ export function splitGpxIntoDays(route: ParsedGpxRoute, nights: number, timing: 
       : [];
     return {
       travelHours: estimateRouteDurationHours({ distanceMiles: Math.max(0, distanceMiles), elevationGainFt: Math.round(gain) }, timing),
+      stretch: describeGpxStretch(segment, Math.max(0, distanceMiles)),
       checkpoints,
     };
   });

@@ -212,3 +212,61 @@ test('user pace is applied and returned, and arrivals after sunset are flagged',
   expect(result.summaries.map((entry) => entry.daylight)).toEqual(['day', 'day', 'day', 'day', 'dark']);
   expect(result.analysis).toContain('outside daylight at Return to Test Trail start (16:00)');
 });
+
+describe('estimateSuggestedRouteHours', () => {
+  const { estimateSuggestedRouteHours } = require('../src/utils/route-timing');
+  const pace = { minutesPerMile: 40, ascentMinutesPer1000Ft: 65, stopBufferMinutes: 90 };
+  const route = { distanceMiles: 10.5, gainFt: 7300, routeClass: 'Class 3' };
+
+  test('adds altitude and class slowdown to the flat pace model', () => {
+    const flat = estimateSuggestedRouteHours({ ...route, routeClass: 'Class 1' }, pace);
+    const high = estimateSuggestedRouteHours({ ...route, summitElevationFt: 14179 }, pace);
+    expect(flat).toBe(20); // 8 h of moving, then 15% slower on the rest
+    expect(high).toBeGreaterThan(flat);
+  });
+
+  test('slows further on long days and with a higher altitude setting', () => {
+    const short = { distanceMiles: 3, gainFt: 1000, routeClass: 'Class 1' };
+    // A short outing is under eight hours of moving, so fatigue adds nothing.
+    expect(estimateSuggestedRouteHours(short, { minutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 0 })).toBe(3); // 150 min
+    const base = { ...route, summitElevationFt: 14179 };
+    const quick = { minutesPerMile: 25, ascentMinutesPer1000Ft: 40, stopBufferMinutes: 30 };
+    expect(estimateSuggestedRouteHours({ ...base, altitudeSlowdownPercent: 10 }, quick))
+      .toBeGreaterThan(estimateSuggestedRouteHours({ ...base, altitudeSlowdownPercent: 0 }, quick));
+  });
+
+  test('is null without a length or climb', () => {
+    expect(estimateSuggestedRouteHours({ distanceMiles: 10, gainFt: null }, pace)).toBeNull();
+    expect(estimateSuggestedRouteHours({ distanceMiles: 0, gainFt: 100 }, pace)).toBeNull();
+  });
+});
+
+test('POST /api/route-timing times each stretch at the traveler pace', async () => {
+  const handlers = {};
+  registerRouteAnalysisRoutes({
+    app: { get: jest.fn(), post: (path, fn) => { handlers[path] = fn; } },
+    askAI: jest.fn(),
+    invokeSafetyHandler: jest.fn(),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    ensureAccountAccess: async () => true,
+    ensureRouteAnalysisEnabled: () => {},
+    ensureGpxImportEnabled: () => {},
+    ensureAIEnabled: () => {},
+    getProductFeatureFlags: () => ({}),
+  });
+  const call = async (body) => {
+    const res = { statusCode: 200, json(payload) { this.payload = payload; return this; }, status(code) { this.statusCode = code; return this; } };
+    await handlers['/api/route-timing']({ body }, res);
+    return res;
+  };
+  const pace = { minutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 30 };
+  const stretch = { distance_miles: 8, gain_ft: 3000, loss_ft: 500 };
+  const low = await call({ pace, stretches: [{ ...stretch, mean_elevation_ft: 5000 }] });
+  const high = await call({ pace, stretches: [{ ...stretch, mean_elevation_ft: 12000 }, { distance_miles: 0, gain_ft: 0 }] });
+  expect(low.payload.hours[0]).toBeGreaterThan(0);
+  expect(high.payload.hours[0]).toBeGreaterThan(low.payload.hours[0]);
+  expect(high.payload.hours[1]).toBeNull();
+  expect((await call({ stretches: [stretch] })).statusCode).toBe(400);
+  expect((await call({ pace, stretches: [] })).statusCode).toBe(400);
+});

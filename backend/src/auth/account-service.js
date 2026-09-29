@@ -267,6 +267,9 @@ const validateAccountPreferences = (value) => {
       240,
       { integer: true },
     ),
+    ...(preferences.routeAltitudeSlowdownPercent === undefined
+      ? {}
+      : { routeAltitudeSlowdownPercent: validatePreferenceNumber(preferences, 'routeAltitudeSlowdownPercent', 0, 15, { integer: true }) }),
     // Optional so clients from before this preference existed keep saving.
     ...(preferences.approachElevationAdjustment === undefined
       ? {}

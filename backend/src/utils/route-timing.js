@@ -38,6 +38,70 @@ const stretchMinutes = (miles, gainFt, lossFt, pace) => miles * pace.minutesPerM
   + (gainFt / 1000) * pace.ascentMinutesPer1000Ft
   + (lossFt / 1000) * pace.ascentMinutesPer1000Ft * DESCENT_SHARE_OF_ASCENT;
 
+// Thin air slows moving pace: 5% per 1,000 ft of average elevation above 8,000 ft, capped.
+const ALTITUDE_SLOWDOWN_START_FT = 8000;
+const DEFAULT_ALTITUDE_SLOWDOWN_PERCENT = 5;
+const MAX_ALTITUDE_SLOWDOWN = 0.3;
+// Fatigue: moving time past a full day's effort goes 15% slower.
+const FATIGUE_AFTER_MINUTES = 8 * 60;
+const FATIGUE_SLOWDOWN = 1.15;
+// Rough or exposed ground is slower than trail: moving-time multiplier by route class.
+const CLASS_SLOWDOWN = Object.freeze({ 1: 1, 2: 1.05, 3: 1.15, 4: 1.3, 5: 1.5 });
+
+const altitudeFactor = (meanElevationFt, slowdownPercent) => {
+  if (knownNumber(meanElevationFt) === null) return 1;
+  const over = Math.max(0, meanElevationFt - ALTITUDE_SLOWDOWN_START_FT) / 1000;
+  return 1 + Math.min(MAX_ALTITUDE_SLOWDOWN, over * slowdownPercent / 100);
+};
+
+const fatigueMinutes = (movingMinutes) => (movingMinutes > FATIGUE_AFTER_MINUTES
+  ? FATIGUE_AFTER_MINUTES + (movingMinutes - FATIGUE_AFTER_MINUTES) * FATIGUE_SLOWDOWN
+  : movingMinutes);
+
+const classFactor = (routeClass) => {
+  const grade = /class\s*(\d)/i.exec(String(routeClass || ''));
+  return grade ? CLASS_SLOWDOWN[grade[1]] || 1 : 1;
+};
+
+/**
+ * Whole hours for one stretch of travel (a day, or a whole outing) at the
+ * traveler's own pace: moving time over the distance, climb and descent,
+ * scaled for altitude and route class, slower still past eight hours of
+ * moving, plus the stop buffer. Altitude uses the stretch's average elevation
+ * (the traveler's own slowdown per 1,000 ft above 8,000 ft, 5% by default);
+ * without one there is no altitude adjustment. Null when the length or climb
+ * is unknown.
+ */
+const estimateStretchHours = ({ distanceMiles, gainFt, lossFt = null, meanElevationFt = null, routeClass = null, altitudeSlowdownPercent = null }, pace) => {
+  const miles = knownNumber(distanceMiles);
+  const gain = knownNumber(gainFt);
+  if (miles === null || miles <= 0 || gain === null || gain < 0 || !pace) return null;
+  const loss = knownNumber(lossFt);
+  const slowdown = knownNumber(altitudeSlowdownPercent);
+  const perThousand = slowdown !== null && slowdown >= 0 && slowdown <= 15 ? slowdown : DEFAULT_ALTITUDE_SLOWDOWN_PERCENT;
+  const moving = fatigueMinutes(stretchMinutes(miles, gain, loss !== null && loss >= 0 ? loss : 0, pace)
+    * altitudeFactor(knownNumber(meanElevationFt), perThousand) * classFactor(routeClass));
+  const total = moving + (pace.stopBufferMinutes || 0);
+  return Math.max(1, Math.min(24, Math.round(total / 60)));
+};
+
+/**
+ * A suggested out-and-back route: it descends what it climbs, and its average
+ * elevation is estimated from the summit and the climb.
+ */
+const estimateSuggestedRouteHours = ({ distanceMiles, gainFt, routeClass, summitElevationFt = null, altitudeSlowdownPercent = null }, pace) => {
+  const summit = knownNumber(summitElevationFt);
+  const gain = knownNumber(gainFt);
+  return estimateStretchHours({
+    distanceMiles,
+    gainFt,
+    lossFt: gain,
+    meanElevationFt: summit !== null && gain !== null ? summit - gain / 2 : null,
+    routeClass,
+    altitudeSlowdownPercent,
+  }, pace);
+};
+
 const hasCoordinates = (point) => knownNumber(point?.lat) !== null && knownNumber(point?.lon) !== null;
 
 /**
@@ -281,5 +345,7 @@ module.exports = {
   classifyDaylight,
   computeCheckpointFractions,
   computeDistanceProgress,
+  estimateStretchHours,
+  estimateSuggestedRouteHours,
   sanitizeRoutePace,
 };

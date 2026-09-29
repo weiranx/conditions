@@ -940,6 +940,8 @@ export interface UserPreferences {
   runnerPaceMinutesPerMile: number;
   runnerAscentMinutesPer1000Ft: number;
   runnerStopBufferMinutes: number;
+  /** Percent slower per 1,000 ft of average elevation above 8,000 ft, in suggested-route times. */
+  routeAltitudeSlowdownPercent: number;
   /** Score approach hours at the estimated trailhead/approach elevation rather than the objective's. */
   approachElevationAdjustment: boolean;
 }
