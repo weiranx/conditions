@@ -79,7 +79,7 @@ const REASONING_EFFORT = parseReasoningEffort(process.env.AI_REASONING_EFFORT);
 // variants reject reduced efforts; GPT-5.1+ replaced "minimal" with "none".
 const supportedReasoningEfforts = (provider, id) => {
   if (provider === 'openai') {
-    if (!/^(?:gpt-5|o[134])(?:[.-]|$)/.test(id) || /(?:^|-)(?:pro|chat)(?:-|$)/.test(id)) return null;
+    if (!/^(?:gpt-[5-9]|o[134])(?:[.-]|$)/.test(id) || /(?:^|-)(?:pro|chat)(?:-|$)/.test(id)) return null;
     if (id.startsWith('o')) return ['low', 'medium', 'high'];
     if (/^gpt-5(?:-|$)/.test(id)) return ['minimal', 'low', 'medium', 'high'];
     return ['none', 'low', 'medium', 'high'];
@@ -90,10 +90,13 @@ const supportedReasoningEfforts = (provider, id) => {
 
 // Only models known to accept an effort get one. A configured effort the model
 // doesn't accept falls back to "low", which every reasoning model here supports.
-const reasoningEffortFor = (provider, model) => {
+// The fast tier has an 8s budget and returns short structured output, so it gets the
+// least thinking the model allows; even "low" can exceed the timeout.
+const reasoningEffortFor = (provider, model, tier = 'primary') => {
   if (!REASONING_EFFORT) return null;
   const supported = supportedReasoningEfforts(provider, String(model || '').toLowerCase());
   if (!supported) return null;
+  if (tier === 'fast') return supported[0];
   return supported.includes(REASONING_EFFORT) ? REASONING_EFFORT : 'low';
 };
 
@@ -225,14 +228,14 @@ const requestOptions = (tier) => ({
   maxRetries: 0,
 });
 
-const withOpenAIReasoning = (params) => {
-  const effort = reasoningEffortFor('openai', params.model);
+const withOpenAIReasoning = (params, tier) => {
+  const effort = reasoningEffortFor('openai', params.model, tier);
   if (effort) params.reasoning = { effort };
   return params;
 };
 
-const withGeminiReasoning = (params) => {
-  const effort = reasoningEffortFor('gemini', params.model);
+const withGeminiReasoning = (params, tier) => {
+  const effort = reasoningEffortFor('gemini', params.model, tier);
   if (effort) params.reasoning_effort = effort;
   return params;
 };
@@ -328,7 +331,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
         model: resolvedModel,
         max_tokens: maxTokens,
         messages,
-      }), requestOptions(tier));
+      }, tier), requestOptions(tier));
       const text = readGeminiText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
@@ -340,7 +343,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
       input: prompt,
     };
     if (system) params.instructions = system;
-    withOpenAIReasoning(params);
+    withOpenAIReasoning(params, tier);
     response = await getOpenAIClient().responses.create(params, requestOptions(tier));
     const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
     await finish('success');
@@ -405,7 +408,7 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
         model: resolvedModel,
         max_tokens: maxTokens,
         messages,
-      }), requestOptions(tier));
+      }, tier), requestOptions(tier));
       const text = readGeminiText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
       await finish('success');
       return text;
@@ -423,7 +426,7 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
       }],
     };
     if (system) params.instructions = system;
-    withOpenAIReasoning(params);
+    withOpenAIReasoning(params, tier);
     response = await getOpenAIClient().responses.create(params, requestOptions(tier));
     const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
     await finish('success');

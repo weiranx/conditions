@@ -128,6 +128,11 @@ describe('AI provider client wrapper', () => {
 
     expect(reasoningEffortFor('openai', 'gpt-5.6-luna')).toBe('low');
     expect(reasoningEffortFor('openai', 'o4-mini')).toBe('low');
+    expect(reasoningEffortFor('openai', 'gpt-6-luna')).toBe('low');
+    expect(reasoningEffortFor('openai', 'gpt-6-luna', 'fast')).toBe('none');
+    expect(reasoningEffortFor('openai', 'gpt-5.6-luna', 'fast')).toBe('none');
+    expect(reasoningEffortFor('openai', 'gpt-5-mini', 'fast')).toBe('minimal');
+    expect(reasoningEffortFor('openai', 'o4-mini', 'fast')).toBe('low');
     expect(reasoningEffortFor('openai', 'gpt-5.5-pro')).toBeNull();
     expect(reasoningEffortFor('openai', 'gpt-5-chat-latest')).toBeNull();
     expect(reasoningEffortFor('openai', 'gpt-4.1')).toBeNull();
