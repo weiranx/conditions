@@ -8,10 +8,11 @@ import { SHORTLIST_KEY, objectiveFrom, readShortlist, shortlistDates, shortlistV
   type ShortlistState, type ShortlistChoice, type ShortlistObjective } from '../app/objective-shortlist';
 import { resolveObjectiveTimeZone } from '../app/planned-start';
 import { addDaysToIsoDate, formatClockForStyle } from '../app/core';
-import { dateLabel, ageLabel } from './data';
+import { dateLabel } from './data';
 import type { MultiDayTripForecastDay } from '../app/types';
 import { longestStretch, sameTripRank } from './trip-days';
 import { SuggestionLabel } from './SuggestionLabel';
+import { revealStart } from './page-scroll';
 import './shortlist.css';
 
 const finite = (value: number | null | undefined): value is number => value != null && Number.isFinite(value);
@@ -26,6 +27,18 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
   const [feedback, setFeedback] = useState('');
   const [storageError, setStorageError] = useState(false);
   const [selected, setSelected] = useState<{ objectiveId: string; date: string } | null>(null);
+  const detail = useRef<HTMLElement>(null);
+  const reveal = useRef(false);
+  // The detail sits below the table and the recommendation: follow a choice made above it.
+  const choose = useCallback((objectiveId: string, date: string) => {
+    reveal.current = true;
+    setSelected({ objectiveId, date });
+  }, []);
+  useEffect(() => {
+    if (!reveal.current) return;
+    reveal.current = false;
+    revealStart(detail.current);
+  }, [selected]);
   useEffect(() => {
     let failed = false;
     try { localStorage.setItem(SHORTLIST_KEY, JSON.stringify(state)); }
@@ -189,11 +202,12 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               </ul>}
               {tied.length > 0 && <div className="compare-ties"><span className="sky-cap">Also ranked first</span><div className="compare-highlight-days">
                 {tied.map(option => <button key={`${option.objectiveId}-${option.day.date}`} type="button" aria-pressed={selected?.objectiveId === option.objectiveId && selected.date === option.day.date}
-                  onClick={() => setSelected({ objectiveId: option.objectiveId, date: option.day.date })}>
+                  onClick={() => choose(option.objectiveId, option.day.date)}>
                   {state.objectives.find(o => o.id === option.objectiveId)?.name} · {dateLabel(option.day.date)}
                 </button>)}
-              </div></div>}</> : <p>No complete, scored hourly forecast is available to rank. Review missing evidence below.</p>}
-            <p className="shortlist-caption">{comparison.results.reduce((count, result) => count + result.days.length, 0)} of {state.objectives.length * dates.length} options returned. Ranked by hazard decision, then the existing report score, then hours with every reading within your limits. Comfort does not affect ranking. Partial results and incomplete hourly windows are excluded. These are point forecasts; review route conditions and official sources before committing.</p>
+              </div></div>}
+              <div><button type="button" className="field-button field-button-primary" onClick={() => choose(best.objectiveId, best.day.date)}>Review this option <ArrowRight size={15} aria-hidden="true" /></button></div></> : <p>No complete, scored hourly forecast is available to rank. Review missing evidence below.</p>}
+            <p className="shortlist-caption">{comparison.results.reduce((count, result) => count + result.days.length, 0)} of {state.objectives.length * dates.length} options returned. Ranked by weather decision, then the existing report score, then hours with every reading within your limits. Comfort does not affect ranking, and avalanche conditions are excluded. Partial results and incomplete hourly windows are excluded. These are point forecasts; review route conditions and official sources before committing.</p>
           </section>}
           <div className="sky-trio sky-section compare-highlights" aria-label="Objective weather tradeoffs" role="group">
             {highlights.map(highlight => {
@@ -206,8 +220,8 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               </div>;
             })}
           </div>
-          <div className="sky-sh sky-section"><h2 className="shortlist-grid-heading">Objectives × dates</h2><p>Select a result for details and Plan A / Plan B.</p></div>
-          <p className="sky-cap shortlist-caption">Scroll across for more dates. Peak gust and rain / snow chance are the highest from departure through the trip; cloud cover is at departure.</p>
+          <div className="sky-sh sky-section"><h2 className="shortlist-grid-heading">Objectives × dates</h2><p>Select a result for rain / snow, cloud cover, comfort, source age, and Plan A / Plan B.</p></div>
+          <p className="sky-cap shortlist-caption">Scroll across for more dates. Peak gust is the highest from departure through the trip.</p>
           <div className="sky-card sky-table-card">
           <div className="compare-table-scroll" role="region" tabIndex={0} aria-label="Objective and date comparison">
             <table className="sky-table compare-table shortlist-table"><caption className="sr-only">Conditions at each objective and date, departing {clockText(state.startTime)} local for {state.hours} hours</caption>
@@ -220,16 +234,14 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
                     const concerns = day ? day.concerns : [];
                     const choice = choiceFor(objective.id, date);
                     return <td key={date} className={selected?.objectiveId === objective.id && selected.date === date ? 'is-selected' : ''}>
-                      {day ? <button className="shortlist-cell" aria-pressed={selected?.objectiveId === objective.id && selected.date === date} aria-label={`Review ${objective.name}, ${dateLabel(date)}`} onClick={() => setSelected({ objectiveId: objective.id, date })}>
+                      {day ? <button className="shortlist-cell" aria-pressed={selected?.objectiveId === objective.id && selected.date === date} aria-label={`Review ${objective.name}, ${dateLabel(date)}`} onClick={() => choose(objective.id, date)}>
                         <span className={`compare-decision is-${tone(day)}`}>{day.decisionLevel}</span>
+                        {best?.objectiveId === objective.id && best.day.date === date && <span className="compare-best-tag">Best option</span>}
                         <strong>{finite(day.score) ? `${day.score}/100` : 'Score unavailable'}</strong>
                         {concerns.length > 0 && <small className="shortlist-concern">{concerns[0]}{concerns.length > 1 && ` +${concerns.length - 1} more`}</small>}
-                        <span>Peak gust {finite(day.peakGustMph) ? w.formatWindDisplay(day.peakGustMph) : 'unavailable'}</span><span>Peak rain / snow {finite(day.peakPrecipChance) ? `${day.peakPrecipChance}%` : 'unavailable'}</span>
+                        <span>Peak gust {finite(day.peakGustMph) ? w.formatWindDisplay(day.peakGustMph) : 'unavailable'}</span>
                         <span>{day.travelTotalHours > 0 ? `${day.travelPassHours}/${day.travelTotalHours} forecast hours within limits` : 'Hourly forecast unavailable'}</span>
-                        <span>Cloud cover {finite(day.cloudCoverPct) ? `${day.cloudCoverPct}%` : 'unavailable'}</span>
-                        <span>Comfort {finite(day.comfortScore) ? `${day.comfortScore}/100` : 'unavailable'}</span>
                         {day.partialData && <small className="compare-data-warning">Partial data</small>}
-                        <small>Issued {ageLabel(day.sourceIssuedTime)}</small>
                         {sameChoice(state.planA, choice) && <span className="compare-selection">Plan A</span>}
                         {sameChoice(state.planB, choice) && <span className="compare-selection">Plan B</span>}
                       </button> : <><strong>{!result && comparison.loading ? 'Waiting…' : 'Unavailable'}</strong><small>{result?.error || (!result && comparison.loading ? 'Queued for comparison.' : 'No forecast for this date. Compare again to retry.')}</small></>}
@@ -240,7 +252,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
             </table>
           </div>
           </div>
-          {selectedDay && selectedObjective && <section className="sky-card sky-section shortlist-detail" aria-label="Selected objective details">
+          {selectedDay && selectedObjective && <section ref={detail} className="sky-card sky-section shortlist-detail" aria-label="Selected objective details">
             <span className="sky-card-head"><span>Selected option</span><span className={`compare-decision is-${tone(selectedDay)}`}>{selectedDay.decisionLevel}</span></span>
             <h2 className="sky-card-lede">{selectedObjective.name}</h2>
             <p className="sky-cap">{dateLabel(selectedDay.date)} · {clockText(state.startTime)} local · {state.hours} hours</p>

@@ -79,6 +79,16 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
     if (started) revealStart(results.current);
   }, [w.tripForecastLoading]);
   const [showMeasurements, setShowMeasurements] = useState(false);
+  const [otherDate, setOtherDate] = useState("");
+  // What the plan looked like when the shown results were computed, to say when they no longer match it.
+  const planKey = JSON.stringify([
+    w.position?.lat, w.position?.lng, w.tripStartDate, w.tripStartTime, w.tripDurationDays, w.travelWindowHours,
+    w.preferences.maxWindGustMph, w.preferences.maxPrecipChance, w.preferences.minFeelsLikeF, w.preferences.maxFeelsLikeF,
+  ]);
+  const [resultKey, setResultKey] = useState<{ loading: boolean; key: string | null }>({ loading: w.tripForecastLoading, key: null });
+  if (resultKey.loading !== w.tripForecastLoading)
+    setResultKey({ loading: w.tripForecastLoading, key: resultKey.loading ? planKey : resultKey.key });
+  const outdated = !w.tripForecastLoading && resultKey.key !== null && resultKey.key !== planKey;
   const days = useMemo(
     () => w.tripForecastLoading ? [] : w.tripForecastRows,
     [w.tripForecastLoading, w.tripForecastRows],
@@ -163,6 +173,17 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
   const bestConcerns = best ? best.concerns : [];
   const selectedEvaluation = selected ? readPlanEvaluation(selected.safetyData.evaluation) : null;
   const selectedConcerns = selected ? selected.concerns : [];
+  const other = days.find((day) => day.date === otherDate && day.date !== selected?.date) ?? null;
+  const headToHead = selected && other ? [
+    { label: "Decision", value: (d: MultiDayTripForecastDay) => d.decisionLevel === "GO" ? "Go" : d.decisionLevel === "NO-GO" ? "No-go" : "Caution" },
+    { label: "Score", value: (d: MultiDayTripForecastDay) => isNumber(d.score) ? `${d.score}/100` : "Unavailable" },
+    { label: "Hours within limits", value: (d: MultiDayTripForecastDay) => d.travelTotalHours > 0 ? `${d.travelPassHours} of ${d.travelTotalHours}` : "Unavailable" },
+    { label: "Main concern", value: (d: MultiDayTripForecastDay) => d.concerns[0] ?? "None" },
+    { label: "Peak gust", value: (d: MultiDayTripForecastDay) => wind(d.peakGustMph) },
+    { label: "Peak rain / snow chance", value: (d: MultiDayTripForecastDay) => percent(d.peakPrecipChance) },
+    { label: "Low / high", value: (d: MultiDayTripForecastDay) => `${w.formatTempDisplay(d.tempLowF)} / ${w.formatTempDisplay(d.tempHighF)}` },
+    { label: "Conditions", value: (d: MultiDayTripForecastDay) => d.weatherDescription || "Unavailable" },
+  ].map((row) => ({ label: row.label, a: row.value(selected), b: row.value(other) })) : [];
   const clock = (minute: number) =>
     formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   const pick = (date: string) => {
@@ -184,6 +205,11 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
           {w.tripForecastError && (
             <p className="sky-notice is-caution" role="alert">
               {w.tripForecastError}
+            </p>
+          )}
+          {outdated && days.length > 0 && (
+            <p className="sky-notice is-info" role="status">
+              The plan changed since these days were compared. Compare again to update them.
             </p>
           )}
           {w.tripForecastNote && (
@@ -243,6 +269,9 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     {days.length} {days.length === 1 ? "day" : "days"} at {w.objectiveName || "the selected objective"} · {departure} daily departure · {w.travelWindowHours} hours
                     {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
                   </p>
+                  <p className="sky-cap compare-limits">
+                    Checked against your limits: gusts ≤ {w.formatWindDisplay(w.preferences.maxWindGustMph)} · rain or snow ≤ {w.preferences.maxPrecipChance}% · feels {w.formatTempDisplay(w.preferences.minFeelsLikeF)} to {w.formatTempDisplay(w.preferences.maxFeelsLikeF)}.
+                  </p>
                   <p className="sky-cap compare-method">
                     Ranked by weather decision, then score, then hours with every reading within your limits. Avalanche conditions are excluded from this comparison; review the full report before choosing a day.
                     {best.partialData && " The leading day has partial data."}
@@ -270,6 +299,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                         aria-pressed={selected?.date === day.date} onClick={() => pick(day.date)}>
                         <span className="sky-day-label">
                           <strong>{dateLabel(day.date)}</strong>
+                          {day === best && <span className="compare-best-tag">Best day</span>}
                           <span className={`sky-status is-${day.decisionLevel === "GO" ? "ok" : "over"}`}>
                             {day.decisionLevel === "GO" ? <Check size={13} aria-hidden="true" /> : <TriangleAlert size={13} aria-hidden="true" />}
                             {day.decisionLevel === "GO" ? "Go" : day.decisionLevel === "NO-GO" ? "No-go" : "Caution"}
@@ -304,7 +334,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                         <p className="sky-cap">{item.format(item.days[0])}</p>
                         {item.days.length < days.length && item.days.length > 1 && <div className="compare-highlight-days">
                           {item.days.map((day) => (
-                            <button key={day.date} aria-pressed={selected?.date === day.date} onClick={() => setSelectedDate(day.date)}>
+                            <button key={day.date} aria-pressed={selected?.date === day.date} onClick={() => pick(day.date)}>
                               {dateLabel(day.date)}{day.decisionLevel === "NO-GO" ? " · blocked" : day.decisionLevel === "CAUTION" ? " · caution" : ""}
                             </button>
                           ))}
@@ -333,6 +363,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                             <th scope="col" key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>
                               <button aria-pressed={selected?.date === day.date} aria-controls={`${tableId}-detail`} onClick={() => setSelectedDate(day.date)}>
                                 <span>{dateLabel(day.date)}</span>
+                                {day === best && <span className="compare-best-tag">Best day</span>}
                                 <span className={`compare-decision is-${decisionTone(day)}`}>{day.decisionLevel}</span>
                                 <strong>{isNumber(day.score) ? day.score : "—"}<small>{isNumber(day.score) ? "/100" : "Score unavailable"}</small></strong>
                               </button>
@@ -407,7 +438,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                       </tbody>
                     </table>
                   </div>
-                  <p className="sky-cap compare-table-note">{departure} departure each day · {w.travelWindowHours}-hour plan. Peak gust and rain / snow chance are the highest forecast from departure through the plan; hours within limits check each forecast hour.</p>
+                  <p className="sky-cap compare-table-note">{departure} departure each day · {w.travelWindowHours}-hour plan. Peak gust and rain / snow chance are the highest forecast from departure through the plan; hours within limits check each forecast hour. Select a day's heading to highlight its column; its full detail follows below.</p>
                 </div>
                 <div className="compare-export">
                   <button className="field-button" onClick={() => void copyBrief()}>Copy trip brief</button>
@@ -436,7 +467,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     <div><dt>Rain / snow expected</dt><dd>{amount(selected.expectedRainIn)} / {amount(selected.expectedSnowIn, true)}</dd></div>
                     <div><dt>Visibility</dt><dd>{selected.visibilityLevel || "Unavailable"}</dd><small>{selected.visibilitySummary}</small></div>
                     <div><dt>Air quality / alerts</dt><dd>{selected.airQualityAqi ?? "—"} AQI · {selected.alertCount} alerts</dd></div>
-                    <div><dt>Daylight</dt><dd>{selected.sunrise || "—"} – {selected.sunset || "—"}</dd><small>{selected.dayLength}</small></div>
+                    <div><dt>Daylight</dt><dd>{selected.sunrise ? formatClockForStyle(selected.sunrise, timeStyle) : "—"} – {selected.sunset ? formatClockForStyle(selected.sunset, timeStyle) : "—"}</dd><small>{selected.dayLength}</small></div>
                     <div><dt>Source freshness</dt><dd>{sentenceCase(ageLabel(selected.sourceIssuedTime))}</dd><small>{selected.partialData ? "Partial data. Verify current sources." : "Forecast evidence available"}</small></div>
                   </dl>
                   {selected.deltas && (
@@ -452,6 +483,34 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     </p>
                   )}
                   {selected.apiWarning && <p className="sky-notice is-caution">{selected.apiWarning}</p>}
+                  {days.length > 1 && (
+                    <div className="compare-versus">
+                      <label>
+                        <span className="sky-cap">Compare {dateLabel(selected.date)} with</span>
+                        <select value={other?.date ?? ""} onChange={(event) => setOtherDate(event.target.value)}>
+                          <option value="">Another day…</option>
+                          {days.filter((day) => day.date !== selected.date).map((day) => (
+                            <option key={day.date} value={day.date}>{dateLabel(day.date)}{day === best ? " (best)" : ""}</option>
+                          ))}
+                        </select>
+                      </label>
+                      {other && (
+                        <table className="sky-table compare-versus-table">
+                          <caption className="sr-only">{dateLabel(selected.date)} compared with {dateLabel(other.date)}</caption>
+                          <thead>
+                            <tr><th scope="col"><span className="sr-only">Measure</span></th><th scope="col">{dateLabel(selected.date)}</th><th scope="col">{dateLabel(other.date)}</th></tr>
+                          </thead>
+                          <tbody>
+                            {headToHead.map((row) => (
+                              <tr key={row.label} className={row.a !== row.b ? "is-different" : undefined}>
+                                <th scope="row">{row.label}</th><td>{row.a}</td><td>{row.b}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
                   <div className="sky-card-actions">
                     <button className="field-button field-button-primary" onClick={() => w.handleUseTripDayInPlanner(selected.date, w.tripStartTime)}>
                       Open this day <ArrowRight size={15} aria-hidden="true" />

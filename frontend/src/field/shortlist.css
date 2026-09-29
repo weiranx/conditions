@@ -69,7 +69,7 @@
 .shortlist-cell .compare-selection { margin-top: 4px; display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; background: var(--sky-accent); color: var(--sky-on-accent); font-size: 11px; font-weight: 700; }
 
 /* Selected option */
-.shortlist-detail { gap: 8px; }
+.shortlist-detail { gap: 8px; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px); }
 .shortlist-detail .sky-card-lede { margin: 0; }
 .shortlist-details { margin: 4px 0; }
 .shortlist-details dd { max-width: 60%; }

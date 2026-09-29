@@ -109,3 +109,31 @@ test('a failed route says why, and the planned route starts the comparison', asy
   await act(async () => { document.querySelector('.compare-routes-add .field-button-primary').click(); });
   assert.match(document.querySelectorAll('.compare-route')[1].querySelector('[role="alert"]').textContent, /provider down/);
 });
+
+test('with no routes yet, the mode says what adding routes does', async (t) => {
+  const document = await mount(t, workspace());
+  assert.match(document.querySelector('.sky-compare-empty').textContent, /Add two or three routes/);
+  assert.equal(document.querySelector('.compare-routes-summary'), null);
+});
+
+test('two checked routes get a side-by-side summary table', async (t) => {
+  const results = {
+    'East Ridge': analysis('East Ridge', [stop(), stop({ name: 'Col', etaTime: '09:00' })]),
+    'West Gully': analysis('West Gully', [stop(), stop({ name: 'Top', etaTime: '10:00' }), stop({ name: 'Ridge', etaTime: '11:00' })]),
+  };
+  const w = workspace({ analyzeRouteForComparison: async (name) => results[name], adoptRouteAnalysis: () => {} });
+  const document = await mount(t, w);
+  for (const name of ['East Ridge', 'West Gully']) {
+    await act(async () => {
+      const input = document.querySelector('.compare-routes-add input');
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, name);
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    await act(async () => { document.querySelector('.compare-routes-add .field-button-primary').click(); });
+  }
+  const table = document.querySelector('.compare-routes-summary table');
+  assert.ok(table);
+  assert.deepEqual([...table.querySelectorAll('thead th')].slice(1).map((th) => th.textContent), ['East Ridge', 'West Gully']);
+  const checkpoints = [...table.querySelectorAll('tbody tr')].find((row) => row.querySelector('th').textContent === 'Checkpoints');
+  assert.deepEqual([...checkpoints.querySelectorAll('td')].map((td) => td.textContent), ['2', '3']);
+});

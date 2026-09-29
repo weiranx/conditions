@@ -87,6 +87,8 @@ export default function CompareRoutes({ workspace: w }: { workspace: Workspace }
   }
 
   const eta = (time: string) => w.formatClockForStyle(time, w.preferences.timeStyle);
+  const summaries: { entry: Entry; facts: string[][] }[] = [];
+  const summaryRows = ["Distance", "Gain", "At your pace", "Turn around by", "Checkpoints"];
   const format = { temp: (f: number) => w.formatTempDisplay(f), wind: (mph: number) => w.formatWindDisplay(mph), eta };
   return (
     <>
@@ -125,6 +127,13 @@ export default function CompareRoutes({ workspace: w }: { workspace: Workspace }
           )}
         </form>
       )}
+      {w.hasObjective && entries.length === 0 && (
+        <div className="sky-card sky-compare-empty">
+          <RouteIcon size={28} aria-hidden="true" />
+          <h2>Add two or three routes</h2>
+          <p>Enter a route name or pick a suggestion. Each is checked at timed checkpoints for your date, start and limits, then shown side by side.</p>
+        </div>
+      )}
       {entries.length > 0 && (
         <div className="compare-routes" aria-label="Compared routes">
           {entries.map((entry) => {
@@ -142,6 +151,7 @@ export default function CompareRoutes({ workspace: w }: { workspace: Workspace }
               timing?.turnaround ? ["Turn around by", eta(timing.turnaround.byPlanEnd)] : null,
               ["Checkpoints", `${route.stops.length}${route.overCount ? ` · ${route.overCount} over` : ""}${route.hazardCount ? ` · ${route.hazardCount} alert or danger` : ""}${route.missingCount ? ` · ${route.missingCount} incomplete` : ""}`],
             ].filter((fact): fact is string[] => Boolean(fact)) : [];
+            if (facts.length) summaries.push({ entry, facts });
             return (
               <section key={entry.id} className={`sky-card compare-route is-${route?.state === "checked" ? route.tone : "missing"}`} aria-label={entry.name}>
                 <div className="compare-route-head">
@@ -184,6 +194,23 @@ export default function CompareRoutes({ workspace: w }: { workspace: Workspace }
               </section>
             );
           })}
+        </div>
+      )}
+      {summaries.length > 1 && (
+        <div className="sky-card sky-table-card compare-routes-summary">
+          <div className="compare-table-scroll" role="region" aria-label="Route summary" tabIndex={0}>
+            <table className="sky-table compare-table">
+              <caption className="sr-only">Compared routes side by side</caption>
+              <thead>
+                <tr><th scope="col"><span className="sr-only">Measure</span></th>{summaries.map(({ entry }) => <th scope="col" key={entry.id}>{entry.name}</th>)}</tr>
+              </thead>
+              <tbody>
+                {summaryRows.map((row) => (
+                  <tr key={row}><th scope="row">{row}</th>{summaries.map(({ entry, facts }) => <td key={entry.id}>{facts.find(([label]) => label === row)?.[1] ?? "—"}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       <p className="sky-cap compare-routes-note">

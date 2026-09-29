@@ -52,6 +52,19 @@
 .sky-day-note > span { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .sky-day-note > small { flex: none; font-size: 12px; color: var(--sky-secondary); }
 
+.compare-best-tag { display: inline-flex; align-items: center; min-height: 20px; padding: 0 8px; border-radius: 999px; background: var(--sky-accent); color: var(--sky-bg); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+
+/* Two days head to head */
+.compare-versus { display: grid; gap: 8px; margin: 4px 0; }
+.compare-versus label { display: grid; gap: 4px; justify-items: start; }
+.compare-versus select { min-height: 40px; max-width: 100%; }
+.compare-versus-table { width: 100%; }
+.compare-versus-table th, .compare-versus-table td { padding: 8px 10px 8px 0; text-align: left; vertical-align: top; font-size: 14px; }
+.compare-versus-table thead th { font-weight: 650; }
+.compare-versus-table tbody th { color: var(--sky-secondary); font-weight: 600; font-size: 13px; }
+.compare-versus-table tr.is-different td { font-weight: 600; }
+.compare-limits { color: var(--sky-secondary); }
+
 /* Tradeoffs */
 .compare-highlights .sky-big.is-small { font-size: 20px; }
 .compare-highlight-days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
@@ -101,6 +114,11 @@
   .sky-trio.compare-highlights { grid-template-columns: minmax(0, 1fr); gap: 10px; }
 }
 
+@media (max-width: 560px) {
+  .compare-table { min-width: 0; }
+  .compare-table td { min-width: 96px; }
+  .compare-table th:first-child { max-width: 96px; white-space: normal; box-shadow: 1px 0 0 var(--sky-separator); }
+}
 @media (max-width: 760px) {
   .sky-day-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label fact" "strip strip"; gap: 6px 10px; }
   .sky-day-label { grid-area: label; }
