@@ -21,6 +21,13 @@ import type { LatLngLiteral } from 'leaflet';
 
 const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
 const MAX_RECENT_SEARCHES = 8;
+const SAVED_PLACES_STORAGE_KEY = 'summitsafe-saved-places';
+const MAX_SAVED_PLACES = 50;
+
+/** The same spot, whatever it was renamed to. */
+function sameSpot(a: Pick<Suggestion, 'lat' | 'lon'>, b: Pick<Suggestion, 'lat' | 'lon'>): boolean {
+  return Math.abs(Number(a.lat) - Number(b.lat)) < 0.0005 && Math.abs(Number(a.lon) - Number(b.lon)) < 0.0005;
+}
 
 export interface UseSearchSuggestionsParams {
   initialSearchQuery: string;
@@ -44,6 +51,12 @@ export interface UseSearchSuggestionsReturn {
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
   recentSearches: Suggestion[];
+  savedPlaces: Suggestion[];
+  isPlaceSaved: (item: Pick<Suggestion, 'lat' | 'lon'>) => boolean;
+  /** Saves the place, or removes it when that spot is already saved. */
+  toggleSavedPlace: (item: Suggestion) => void;
+  /** Keeps a saved place's name in step with a rename of the plan's place. */
+  renameSavedPlace: (item: Pick<Suggestion, 'lat' | 'lon'>, name: string) => void;
   fetchSuggestions: (q: string) => Promise<void>;
   selectSuggestion: (s: Suggestion) => void;
   searchAndSelectFirst: (rawQuery: string) => Promise<boolean>;
@@ -72,6 +85,10 @@ export function useSearchSuggestions({
 
   const [recentSearches, setRecentSearches] = useState<Suggestion[]>(() =>
     readStoredSuggestions(RECENT_SEARCHES_STORAGE_KEY, 'recent'),
+  );
+
+  const [savedPlaces, setSavedPlaces] = useState<Suggestion[]>(() =>
+    readStoredSuggestions(SAVED_PLACES_STORAGE_KEY, 'saved').map((item) => ({ ...item, class: 'saved' })),
   );
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -104,11 +121,12 @@ export function useSearchSuggestions({
 
   const getStoredSuggestionsForQuery = useCallback(
     (query: string, options?: { includePopular?: boolean }) => {
+      const savedMatches = filterSuggestionBucket(savedPlaces, query);
       const recentMatches = filterSuggestionBucket(recentSearches, query).map((item) => ({ ...item, class: 'recent' }));
       const popularMatches = options?.includePopular ? getLocalPopularSuggestions(query) : [];
-      return mergeSuggestionBuckets([recentMatches, popularMatches], 10);
+      return mergeSuggestionBuckets([savedMatches, recentMatches, popularMatches], 10);
     },
-    [recentSearches],
+    [recentSearches, savedPlaces],
   );
 
   const recordRecentSuggestion = useCallback(
@@ -122,6 +140,38 @@ export function useSearchSuggestions({
       );
     },
     [persistRecentSearchList, recentSearches],
+  );
+
+  const isPlaceSaved = useCallback(
+    (item: Pick<Suggestion, 'lat' | 'lon'>) => savedPlaces.some((place) => sameSpot(place, item)),
+    [savedPlaces],
+  );
+
+  const toggleSavedPlace = useCallback(
+    (item: Suggestion) => {
+      const normalized = normalizeStoredSuggestion({ ...item, class: 'saved' }, 'saved');
+      if (!normalized) {
+        return;
+      }
+      const next = savedPlaces.some((place) => sameSpot(place, normalized))
+        ? savedPlaces.filter((place) => !sameSpot(place, normalized))
+        : [normalized, ...savedPlaces].slice(0, MAX_SAVED_PLACES);
+      setSavedPlaces(next);
+      writeStoredSuggestions(SAVED_PLACES_STORAGE_KEY, next, MAX_SAVED_PLACES);
+    },
+    [savedPlaces],
+  );
+
+  const renameSavedPlace = useCallback(
+    (item: Pick<Suggestion, 'lat' | 'lon'>, name: string) => {
+      if (!savedPlaces.some((place) => sameSpot(place, item))) {
+        return;
+      }
+      const next = savedPlaces.map((place) => (sameSpot(place, item) ? { ...place, name } : place));
+      setSavedPlaces(next);
+      writeStoredSuggestions(SAVED_PLACES_STORAGE_KEY, next, MAX_SAVED_PLACES);
+    },
+    [savedPlaces],
   );
 
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -211,7 +261,8 @@ export function useSearchSuggestions({
 
   const selectSuggestion = useCallback(
     (s: Suggestion) => {
-      const label = s.name.split(',')[0];
+      // A saved place keeps the name it was given, commas and all.
+      const label = s.class === 'saved' ? s.name : s.name.split(',')[0];
       const lat = Number(s.lat);
       const lon = Number(s.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
@@ -475,7 +526,7 @@ export function useSearchSuggestions({
   // Clear suggestion cache when recent searches change
   useEffect(() => {
     suggestionCacheRef.current.clear();
-  }, [recentSearches]);
+  }, [recentSearches, savedPlaces]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -557,6 +608,10 @@ export function useSearchSuggestions({
     searchInputRef,
     searchWrapperRef,
     recentSearches,
+    savedPlaces,
+    isPlaceSaved,
+    toggleSavedPlace,
+    renameSavedPlace,
     fetchSuggestions,
     selectSuggestion,
     searchAndSelectFirst,

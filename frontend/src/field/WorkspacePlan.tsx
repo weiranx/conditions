@@ -11,6 +11,7 @@ import {
   Plus,
   Route as RouteIcon,
   Search,
+  Star,
   Upload,
   X,
 } from "lucide-react";
@@ -90,6 +91,15 @@ export function WorkspacePlan({
   const lookingUp = lookupHere && Boolean(lookup?.loading);
   const pointElevation = lookupHere ? lookup?.elevationFt ?? null : null;
   const placeElevation = pointElevation ?? w.searchedPlaceElevationFt ?? null;
+  const placeSaved = w.isPlaceSaved({ lat: w.position.lat, lon: w.position.lng });
+  function toggleSaved() {
+    w.toggleSavedPlace({
+      name: w.objectiveName || w.committedSearchQuery,
+      lat: w.position.lat,
+      lon: w.position.lng,
+      ...(placeElevation !== null ? { elevationFt: placeElevation } : {}),
+    });
+  }
   // A name typed for the place, while it is being renamed.
   const [renaming, setRenaming] = useState<string | null>(null);
   function saveName() {
@@ -349,7 +359,19 @@ export function WorkspacePlan({
                   </button>
                 </span>
               ) : (
-                <span className="sky-plan-place-actions">
+ <span className="sky-plan-place-actions">
+                  {!lookingUp && (
+                    <button
+                      type="button"
+                      className="field-icon-button"
+                      aria-pressed={placeSaved}
+                      aria-label={placeSaved ? "Remove from saved places" : "Save place"}
+                      title={placeSaved ? "Saved — tap to remove" : "Save place"}
+                      onClick={toggleSaved}
+                    >
+                      <Star size={16} aria-hidden="true" fill={placeSaved ? "currentColor" : "none"} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="field-text-button"

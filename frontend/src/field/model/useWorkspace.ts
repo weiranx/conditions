@@ -1192,8 +1192,9 @@ export function useWorkspace() {
       setSearchInputValue(trimmed);
       setCommittedSearchQuery(trimmed);
       setShowSuggestions(false);
+      searchHook.renameSavedPlace({ lat: position.lat, lon: position.lng }, trimmed);
     },
-    [setSearchInputValue, setCommittedSearchQuery, setShowSuggestions],
+    [setSearchInputValue, setCommittedSearchQuery, setShowSuggestions, searchHook, position.lat, position.lng],
   );
 
   const handleMapPositionChange = useCallback(
@@ -2705,6 +2706,9 @@ export function useWorkspace() {
     setSearchInputValue,
     pointLookup,
     searchedPlaceElevationFt,
+    savedPlaces: searchHook.savedPlaces,
+    isPlaceSaved: searchHook.isPlaceSaved,
+    toggleSavedPlace: searchHook.toggleSavedPlace,
     renameObjective,
     committedSearchQuery,
     setCommittedSearchQuery,

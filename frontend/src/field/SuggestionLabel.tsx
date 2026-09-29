@@ -5,9 +5,10 @@ import type { Suggestion } from "../lib/search";
 /** A search result's detail line: "Recent · Peak · 14,411 ft · Mt Rainier NP, WA". */
 function suggestionDetails(item: Suggestion, elevationUnit: ElevationUnit): { title: string; details: string } {
   const coordinate = item.type === "coordinate";
-  const [title, ...region] = coordinate ? [item.name] : item.name.split(",").map((part) => part.trim());
+  // A saved place shows the name it was given, commas and all.
+  const [title, ...region] = coordinate || item.class === "saved" ? [item.name] : item.name.split(",").map((part) => part.trim());
   const details = [
-    item.class === "recent" ? "Recent" : null,
+    item.class === "saved" ? "Saved" : item.class === "recent" ? "Recent" : null,
     coordinate ? "Coordinates" : item.kind,
     typeof item.elevationFt === "number" ? formatElevationForUnit(item.elevationFt, elevationUnit) : null,
     item.where ?? region.join(", "),
