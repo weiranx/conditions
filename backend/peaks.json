@@ -1,32 +1,1557 @@
 [
-  { "name": "Mount Rainier, Washington", "lat": 46.8523, "lon": -121.7603, "elevationFt": 14411 },
-  { "name": "Mount Shasta, California", "lat": 41.4092, "lon": -122.1949, "elevationFt": 14179 },
-  { "name": "Mount Whitney, California", "lat": 36.5785, "lon": -118.2923, "elevationFt": 14505 },
-  { "name": "Grand Teton, Wyoming", "lat": 43.7410, "lon": -110.8024, "elevationFt": 13775 },
-  { "name": "Mount Elbert, Colorado", "lat": 39.1178, "lon": -106.4452, "elevationFt": 14440 },
-  { "name": "Longs Peak, Colorado", "lat": 40.2550, "lon": -105.6151, "elevationFt": 14259 },
-  { "name": "Pikes Peak, Colorado", "lat": 38.8409, "lon": -105.0423, "elevationFt": 14115 },
-  { "name": "Mount Washington, New Hampshire", "lat": 44.2705, "lon": -71.3033, "elevationFt": 6288 },
-  { "name": "Mount Hood, Oregon", "lat": 45.3736, "lon": -121.6960, "elevationFt": 11249 },
-  { "name": "Denali, Alaska", "lat": 63.0692, "lon": -151.0070, "elevationFt": 20310 },
-  { "name": "Mount Baker, Washington", "lat": 48.7767, "lon": -121.8144, "elevationFt": 10781 },
-  { "name": "Mount St. Helens, Washington", "lat": 46.1912, "lon": -122.1944, "elevationFt": 8363 },
-  { "name": "Maroon Bells, Colorado", "lat": 39.0708, "lon": -106.9890, "elevationFt": 14163 },
-  { "name": "Mount Princeton, Colorado", "lat": 38.7492, "lon": -106.2424, "elevationFt": 14197 },
-  { "name": "Mount Yale, Colorado", "lat": 38.8442, "lon": -106.3138, "elevationFt": 14196 },
-  { "name": "Mount Adams, Washington", "lat": 46.2024, "lon": -121.4907, "elevationFt": 12281 },
-  { "name": "Mount Katahdin, Maine", "lat": 45.9044, "lon": -68.9216, "elevationFt": 5267 },
-  { "name": "Mount Mitchell, North Carolina", "lat": 35.7650, "lon": -82.2651, "elevationFt": 6684 },
-  { "name": "Mount Mansfield, Vermont", "lat": 44.5437, "lon": -72.8143, "elevationFt": 4393 },
-  { "name": "Mount Marcy, New York", "lat": 44.1126, "lon": -73.9235, "elevationFt": 5344 },
-  { "name": "Glacier Peak, Washington", "lat": 48.1125, "lon": -121.1138, "elevationFt": 10541 },
-  { "name": "Mount Jefferson, Oregon", "lat": 44.6743, "lon": -121.7996, "elevationFt": 10497 },
-  { "name": "Mount San Antonio (Mt Baldy), California", "lat": 34.2891, "lon": -117.6463, "elevationFt": 10064 },
-  { "name": "San Gorgonio Mountain, California", "lat": 34.0992, "lon": -116.8248, "elevationFt": 11503 },
-  { "name": "Wheeler Peak, New Mexico", "lat": 36.5569, "lon": -105.4169, "elevationFt": 13167 },
-  { "name": "Humphreys Peak, Arizona", "lat": 35.3464, "lon": -111.6780, "elevationFt": 12633 },
-  { "name": "Kings Peak, Utah", "lat": 40.7763, "lon": -110.3729, "elevationFt": 13528 },
-  { "name": "Borah Peak, Idaho", "lat": 44.1374, "lon": -113.8011, "elevationFt": 12662 },
-  { "name": "Granite Peak, Montana", "lat": 45.1633, "lon": -109.8081, "elevationFt": 12799 },
-  { "name": "Gannett Peak, Wyoming", "lat": 43.1842, "lon": -109.6542, "elevationFt": 13804 }
+  {
+    "name": "Mount Rainier, Washington",
+    "lat": 46.8523,
+    "lon": -121.7603,
+    "elevationFt": 14411,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f9/Rainier20200906.jpg/960px-Rainier20200906.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Caleb Riston",
+      "license": "CC0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rainier20200906.jpg"
+    }
+  },
+  {
+    "name": "Mount Shasta, California",
+    "lat": 41.4092,
+    "lon": -122.1949,
+    "elevationFt": 14179,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/22/MtShasta_aerial.JPG/960px-MtShasta_aerial.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Ewen Denney (talk · contribs)",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MtShasta_aerial.JPG"
+    }
+  },
+  {
+    "name": "Mount Whitney, California",
+    "lat": 36.5785,
+    "lon": -118.2923,
+    "elevationFt": 14505,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f9/Mount_Whitney_2003-03-25.jpg/960px-Mount_Whitney_2003-03-25.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Geographer (talk · contribs)",
+      "license": "CC BY 1.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Whitney_2003-03-25.jpg"
+    }
+  },
+  {
+    "name": "Grand Teton, Wyoming",
+    "lat": 43.741,
+    "lon": -110.8024,
+    "elevationFt": 13775,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/89/Grand_Teton_from_Hurricane_Pass_2026.jpg/960px-Grand_Teton_from_Hurricane_Pass_2026.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 993,
+      "author": "Joe Peacock",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grand_Teton_from_Hurricane_Pass_2026.jpg"
+    }
+  },
+  {
+    "name": "Mount Elbert, Colorado",
+    "lat": 39.1178,
+    "lon": -106.4452,
+    "elevationFt": 14440,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1e/Mt._Elbert.jpg/960px-Mt._Elbert.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 468,
+      "author": "Hogs555 (talk · contribs)",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt._Elbert.jpg"
+    }
+  },
+  {
+    "name": "Longs Peak, Colorado",
+    "lat": 40.255,
+    "lon": -105.6151,
+    "elevationFt": 14259,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Fall05-LongsPeakCU_JPG_RSZ_md.jpg/960px-Fall05-LongsPeakCU_JPG_RSZ_md.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 479,
+      "author": "Original uploader was ProfPete (Pete Seel) at en.wikipedia",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fall05-LongsPeakCU_JPG_RSZ_md.jpg"
+    }
+  },
+  {
+    "name": "Pikes Peak, Colorado",
+    "lat": 38.8409,
+    "lon": -105.0423,
+    "elevationFt": 14115,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Beautiful_Image_of_Pikes_Peak_%28IMG_0136%29.jpg/960px-Beautiful_Image_of_Pikes_Peak_%28IMG_0136%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Tokeamour",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Beautiful_Image_of_Pikes_Peak_(IMG_0136).jpg"
+    }
+  },
+  {
+    "name": "Mount Washington, New Hampshire",
+    "lat": 44.2705,
+    "lon": -71.3033,
+    "elevationFt": 6288,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/White_Mountains_12_30_09_81.jpg/960px-White_Mountains_12_30_09_81.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 428,
+      "author": "Harvey Barrison",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:White_Mountains_12_30_09_81.jpg"
+    }
+  },
+  {
+    "name": "Mount Hood, Oregon",
+    "lat": 45.3736,
+    "lon": -121.696,
+    "elevationFt": 11249,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1c/Oregon_Mount_Hood_from_Trillium_Lake_2024.jpg/960px-Oregon_Mount_Hood_from_Trillium_Lake_2024.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 426,
+      "author": "Kevin Crosby",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Oregon_Mount_Hood_from_Trillium_Lake_2024.jpg"
+    }
+  },
+  {
+    "name": "Denali, Alaska",
+    "lat": 63.0692,
+    "lon": -151.007,
+    "elevationFt": 20310,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/91/Wonder_Lake_and_Denali.jpg/960px-Wonder_Lake_and_Denali.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 493,
+      "author": "Denali National Park and Preserve",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wonder_Lake_and_Denali.jpg"
+    }
+  },
+  {
+    "name": "Mount Baker, Washington",
+    "lat": 48.7767,
+    "lon": -121.8144,
+    "elevationFt": 10781,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Mount_Baker_from_Boulder_Creek.jpg/960px-Mount_Baker_from_Boulder_Creek.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 335,
+      "author": "Lhb1239",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Baker_from_Boulder_Creek.jpg"
+    }
+  },
+  {
+    "name": "Mount St. Helens, Washington",
+    "lat": 46.1912,
+    "lon": -122.1944,
+    "elevationFt": 8363,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dc/MSH82_st_helens_plume_from_harrys_ridge_05-19-82.jpg/960px-MSH82_st_helens_plume_from_harrys_ridge_05-19-82.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 433,
+      "author": "Lyn Topinka",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MSH82_st_helens_plume_from_harrys_ridge_05-19-82.jpg"
+    }
+  },
+  {
+    "name": "Maroon Bells, Colorado",
+    "lat": 39.0708,
+    "lon": -106.989,
+    "elevationFt": 14163,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/53/Maroon_Bells_%2811553%29a.jpg/960px-Maroon_Bells_%2811553%29a.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 370,
+      "author": "Rhododendrites",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Maroon_Bells_(11553)a.jpg"
+    }
+  },
+  {
+    "name": "Mount Princeton, Colorado",
+    "lat": 38.7492,
+    "lon": -106.2424,
+    "elevationFt": 14197,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d3/Mtprinceton.JPG/960px-Mtprinceton.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 417,
+      "author": "Hogs555",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mtprinceton.JPG"
+    }
+  },
+  {
+    "name": "Mount Yale, Colorado",
+    "lat": 38.8442,
+    "lon": -106.3138,
+    "elevationFt": 14196,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f0/Mount_Yale_from_Horn_Fork_Basin.jpg/960px-Mount_Yale_from_Horn_Fork_Basin.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "KnowledgeIsPower9281",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Yale_from_Horn_Fork_Basin.jpg"
+    }
+  },
+  {
+    "name": "Mount Adams, Washington",
+    "lat": 46.2024,
+    "lon": -121.4907,
+    "elevationFt": 12281,
+    "wikipedia": "Mount Adams (Washington)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/00/Mount_Adams_Morrison_Creek_ski_tour_%286_May_2025%29.jpg/960px-Mount_Adams_Morrison_Creek_ski_tour_%286_May_2025%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 481,
+      "author": "Buidhe",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Adams_Morrison_Creek_ski_tour_(6_May_2025).jpg"
+    }
+  },
+  {
+    "name": "Mount Katahdin, Maine",
+    "lat": 45.9044,
+    "lon": -68.9216,
+    "elevationFt": 5267,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/16/Katahdin.jpg/960px-Katahdin.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Rubyk at English Wikipedia",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Katahdin.jpg"
+    }
+  },
+  {
+    "name": "Mount Mitchell, North Carolina",
+    "lat": 35.765,
+    "lon": -82.2651,
+    "elevationFt": 6684,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/Mount_Mitchell_from_Mt._Mitchell_overlook_NC.jpg/960px-Mount_Mitchell_from_Mt._Mitchell_overlook_NC.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Username11236",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Mitchell_from_Mt._Mitchell_overlook_NC.jpg"
+    }
+  },
+  {
+    "name": "Mount Mansfield, Vermont",
+    "lat": 44.5437,
+    "lon": -72.8143,
+    "elevationFt": 4393,
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Mount_mansfield_20040926.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 800,
+      "height": 600,
+      "author": "The original uploader was Redjar at English Wikipedia.",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_mansfield_20040926.jpg"
+    }
+  },
+  {
+    "name": "Mount Marcy, New York",
+    "lat": 44.1126,
+    "lon": -73.9235,
+    "elevationFt": 5344,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a8/Mount_Marcy_viewed_from_Mount_Skylight_in_summer.png/960px-Mount_Marcy_viewed_from_Mount_Skylight_in_summer.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Rocfan275",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Marcy_viewed_from_Mount_Skylight_in_summer.png"
+    }
+  },
+  {
+    "name": "Glacier Peak, Washington",
+    "lat": 48.1125,
+    "lon": -121.1138,
+    "elevationFt": 10541,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3b/Glacier_Peak_7118.JPG/960px-Glacier_Peak_7118.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Walter Siegmund",
+      "license": "CC BY 2.5",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Glacier_Peak_7118.JPG"
+    }
+  },
+  {
+    "name": "Mount Jefferson, Oregon",
+    "lat": 44.6743,
+    "lon": -121.7996,
+    "elevationFt": 10497,
+    "wikipedia": "Mount Jefferson (Oregon)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8b/Mt._Jefferson_from_Three_Fingered_Jack.JPG/960px-Mt._Jefferson_from_Three_Fingered_Jack.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Jsayre64",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt._Jefferson_from_Three_Fingered_Jack.JPG"
+    }
+  },
+  {
+    "name": "Mount San Antonio (Mt Baldy), California",
+    "lat": 34.2891,
+    "lon": -117.6463,
+    "elevationFt": 10064,
+    "wikipedia": "Mount San Antonio",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/Mount_San_Antonio_%28Mount_Baldy%29%2C_California.jpg/960px-Mount_San_Antonio_%28Mount_Baldy%29%2C_California.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 853,
+      "author": "Darkest tree",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_San_Antonio_(Mount_Baldy),_California.jpg"
+    }
+  },
+  {
+    "name": "San Gorgonio Mountain, California",
+    "lat": 34.0992,
+    "lon": -116.8248,
+    "elevationFt": 11503,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/San_Gorgonio%2C_snowcapped%2C_clouds.jpg/960px-San_Gorgonio%2C_snowcapped%2C_clouds.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Randy McEoin",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:San_Gorgonio,_snowcapped,_clouds.jpg"
+    }
+  },
+  {
+    "name": "Wheeler Peak, New Mexico",
+    "lat": 36.5569,
+    "lon": -105.4169,
+    "elevationFt": 13167,
+    "wikipedia": "Wheeler Peak (New Mexico)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/Wheeler_Peak%2C_NM.JPG/960px-Wheeler_Peak%2C_NM.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 353,
+      "author": "Davishan99",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wheeler_Peak,_NM.JPG"
+    }
+  },
+  {
+    "name": "Humphreys Peak, Arizona",
+    "lat": 35.3464,
+    "lon": -111.678,
+    "elevationFt": 12633,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6d/San_Francisco_Peaks%2C_winter.jpg/960px-San_Francisco_Peaks%2C_winter.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Bob Blasi; Coconino National Forest",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:San_Francisco_Peaks,_winter.jpg"
+    }
+  },
+  {
+    "name": "Kings Peak, Utah",
+    "lat": 40.7763,
+    "lon": -110.3729,
+    "elevationFt": 13528,
+    "wikipedia": "Kings Peak (Utah)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Kings_Peak%2C_Uinta_Mountains%2C_Duchesne_County%2C_Utah%2C_USA_02.jpg/960px-Kings_Peak%2C_Uinta_Mountains%2C_Duchesne_County%2C_Utah%2C_USA_02.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "John Sowell",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kings_Peak,_Uinta_Mountains,_Duchesne_County,_Utah,_USA_02.jpg"
+    }
+  },
+  {
+    "name": "Borah Peak, Idaho",
+    "lat": 44.1374,
+    "lon": -113.8011,
+    "elevationFt": 12662,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/Mount_Borah_2009.JPG/960px-Mount_Borah_2009.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Leaflet",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Borah_2009.JPG"
+    }
+  },
+  {
+    "name": "Granite Peak, Montana",
+    "lat": 45.1633,
+    "lon": -109.8081,
+    "elevationFt": 12799,
+    "wikipedia": "Granite Peak (Montana)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c5/Granite_Peak_Montana_2.jpg/960px-Granite_Peak_Montana_2.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 433,
+      "author": "jfisher2167",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Granite_Peak_Montana_2.jpg"
+    }
+  },
+  {
+    "name": "Gannett Peak, Wyoming",
+    "lat": 43.1842,
+    "lon": -109.6542,
+    "elevationFt": 13804,
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/54/Gannett_Peak.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 367,
+      "height": 318,
+      "author": "U.S. Forest Service",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gannett_Peak.jpg"
+    }
+  },
+  {
+    "name": "Mount Williamson, California",
+    "lat": 36.656,
+    "lon": -118.3112,
+    "elevationFt": 14403,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6c/Mt_Williamson.jpg/960px-Mt_Williamson.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 312,
+      "author": "Mark Gunn",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt_Williamson.jpg"
+    }
+  },
+  {
+    "name": "Mount Langley, California",
+    "lat": 36.5233,
+    "lon": -118.239,
+    "elevationFt": 14032,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d2/MountLangley.jpg/960px-MountLangley.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 330,
+      "author": "Timwryan (talk · contribs)",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MountLangley.jpg"
+    }
+  },
+  {
+    "name": "Mount Muir, California",
+    "lat": 36.5647,
+    "lon": -118.2913,
+    "elevationFt": 14016,
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/90/Mount_Muir.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 852,
+      "height": 1136,
+      "author": "Poppy",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Muir.jpg"
+    }
+  },
+  {
+    "name": "Mount Sill, California",
+    "lat": 37.0961,
+    "lon": -118.5035,
+    "elevationFt": 14159,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4f/Mount_Sill_cropped.jpg/960px-Mount_Sill_cropped.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 608,
+      "author": "Jonathan Fox",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Sill_cropped.jpg"
+    }
+  },
+  {
+    "name": "Mount Humphreys, California",
+    "lat": 37.2705,
+    "lon": -118.673,
+    "elevationFt": 13992,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/60/Mount_Humphreys.jpg/960px-Mount_Humphreys.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 426,
+      "author": "Hike395 (talk · contribs)",
+      "license": "CC BY 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Humphreys.jpg"
+    }
+  },
+  {
+    "name": "Mount Ritter, California",
+    "lat": 37.6894,
+    "lon": -119.199,
+    "elevationFt": 13156,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6b/Ritter_and_banner.jpg/960px-Ritter_and_banner.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 432,
+      "author": "Mel",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ritter_and_banner.jpg"
+    }
+  },
+  {
+    "name": "Mount Dana, California",
+    "lat": 37.8999,
+    "lon": -119.2211,
+    "elevationFt": 13061,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ed/Dana_from_Gaylor.jpg/960px-Dana_from_Gaylor.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 335,
+      "author": "Jim Bahn",
+      "license": "CC BY 2.5",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dana_from_Gaylor.jpg"
+    }
+  },
+  {
+    "name": "Half Dome, California",
+    "lat": 37.746,
+    "lon": -119.5329,
+    "elevationFt": 8835,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/84/Half_Dome_with_Eastern_Yosemite_Valley_%28Zuschnitt%29.jpg/960px-Half_Dome_with_Eastern_Yosemite_Valley_%28Zuschnitt%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 603,
+      "author": "Thomas Wolf, www.foto-tw.de",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Half_Dome_with_Eastern_Yosemite_Valley_(Zuschnitt).jpg"
+    }
+  },
+  {
+    "name": "Mount Conness, California",
+    "lat": 37.967,
+    "lon": -119.3213,
+    "elevationFt": 12649,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/Mount_Conness%2C_north_aspect.jpg/960px-Mount_Conness%2C_north_aspect.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 481,
+      "author": "Jonathan Fox",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Conness,_north_aspect.jpg"
+    }
+  },
+  {
+    "name": "Mount Tyndall, California",
+    "lat": 36.6557,
+    "lon": -118.3373,
+    "elevationFt": 14025,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Mount_Tyndall_east_aspect.jpg/960px-Mount_Tyndall_east_aspect.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 597,
+      "author": "Tim Berger",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Tyndall_east_aspect.jpg"
+    }
+  },
+  {
+    "name": "Freel Peak, California",
+    "lat": 38.8575,
+    "lon": -119.9001,
+    "elevationFt": 10886,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bd/Freel_Peak_from_Tahoe_Rim_Trail.jpg/960px-Freel_Peak_from_Tahoe_Rim_Trail.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "J Brew",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Freel_Peak_from_Tahoe_Rim_Trail.jpg"
+    }
+  },
+  {
+    "name": "Mount Ralston, California",
+    "lat": 38.8329,
+    "lon": -120.1017,
+    "elevationFt": 9239,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/Ralston_Peak.jpg/960px-Ralston_Peak.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Jonathan Fox",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ralston_Peak.jpg"
+    }
+  },
+  {
+    "name": "Mount Tallac, California",
+    "lat": 38.906,
+    "lon": -120.099,
+    "elevationFt": 9739,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Mt._Tallac_in_Sierra.jpg/960px-Mt._Tallac_in_Sierra.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 392,
+      "author": "Jesse Richmond",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt._Tallac_in_Sierra.jpg"
+    }
+  },
+  {
+    "name": "Sonora Peak, California",
+    "lat": 38.3538,
+    "lon": -119.6352,
+    "elevationFt": 11464,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/83/20040626-1033-0476-SonoraPass-CA.jpg/960px-20040626-1033-0476-SonoraPass-CA.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 479,
+      "author": "H. S. Magnuski (talk · contribs)",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:20040626-1033-0476-SonoraPass-CA.jpg"
+    }
+  },
+  {
+    "name": "Lassen Peak, California",
+    "lat": 40.4881,
+    "lon": -121.505,
+    "elevationFt": 10463,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/Lassen_Peak_in_June_2020.jpg/960px-Lassen_Peak_in_June_2020.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Frank Schulenburg",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Lassen_Peak_in_June_2020.jpg"
+    }
+  },
+  {
+    "name": "Mount Eddy, California",
+    "lat": 41.3196,
+    "lon": -122.479,
+    "elevationFt": 9037,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/Mount_Eddy_from_Mount_Shasta_City.jpg/960px-Mount_Eddy_from_Mount_Shasta_City.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Little Mountain 5",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Eddy_from_Mount_Shasta_City.jpg"
+    }
+  },
+  {
+    "name": "Mount Stuart, Washington",
+    "lat": 47.4751,
+    "lon": -120.9031,
+    "elevationFt": 9413,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2a/Mount_Stuart.jpg/960px-Mount_Stuart.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 520,
+      "author": "Hike395 (talk · contribs)",
+      "license": "CC BY 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Stuart.jpg"
+    }
+  },
+  {
+    "name": "Mount Index, Washington",
+    "lat": 47.7745,
+    "lon": -121.5809,
+    "elevationFt": 5991,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/Mt_Index.jpg/960px-Mt_Index.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 405,
+      "author": "Peter Stevens",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt_Index.jpg"
+    }
+  },
+  {
+    "name": "Sahale Mountain, Washington",
+    "lat": 48.4912,
+    "lon": -121.039,
+    "elevationFt": 8681,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Sahale_Peak.jpg/960px-Sahale_Peak.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 257,
+      "author": "Jeffrey Pang from Madison, NJ, USA",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sahale_Peak.jpg"
+    }
+  },
+  {
+    "name": "Forbidden Peak, Washington",
+    "lat": 48.5115,
+    "lon": -121.0579,
+    "elevationFt": 8815,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/89/Forbidden_Peak_August_1992.jpeg/960px-Forbidden_Peak_August_1992.jpeg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 438,
+      "author": "Ron Clausen (talk · contribs)",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Forbidden_Peak_August_1992.jpeg"
+    }
+  },
+  {
+    "name": "Mount Shuksan, Washington",
+    "lat": 48.8315,
+    "lon": -121.6032,
+    "elevationFt": 9127,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/MyShuksanSunset.jpg/960px-MyShuksanSunset.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 400,
+      "author": "BiggusDiccus",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MyShuksanSunset.jpg"
+    }
+  },
+  {
+    "name": "Mount Daniel, Washington",
+    "lat": 47.5649,
+    "lon": -121.1809,
+    "elevationFt": 7959,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/08/Mount_Daniel_27794.JPG/960px-Mount_Daniel_27794.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Walter Siegmund",
+      "license": "CC BY 2.5",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Daniel_27794.JPG"
+    }
+  },
+  {
+    "name": "Mount Constance, Washington",
+    "lat": 47.7728,
+    "lon": -123.1274,
+    "elevationFt": 7756,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/49/Mt_Constance_Dosewallips_River.JPG/960px-Mt_Constance_Dosewallips_River.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "BlueCanoe",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt_Constance_Dosewallips_River.JPG"
+    }
+  },
+  {
+    "name": "Three Fingered Jack, Oregon",
+    "lat": 44.479,
+    "lon": -121.8431,
+    "elevationFt": 7844,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Three_fingered_jack_from_southwest_on_PCT_P3025.jpeg/960px-Three_fingered_jack_from_southwest_on_PCT_P3025.jpeg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 495,
+      "author": "EncMstr",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Three_fingered_jack_from_southwest_on_PCT_P3025.jpeg"
+    }
+  },
+  {
+    "name": "South Sister, Oregon",
+    "lat": 44.1034,
+    "lon": -121.7692,
+    "elevationFt": 10364,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Three_sisters2.jpg/960px-Three_sisters2.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "USGS Photograph by Lyn Topinka.",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Three_sisters2.jpg"
+    }
+  },
+  {
+    "name": "Broken Top, Oregon",
+    "lat": 44.0829,
+    "lon": -121.6998,
+    "elevationFt": 9177,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/19/Broken_Top.JPG/960px-Broken_Top.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 479,
+      "author": "Unknown",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Broken_Top.JPG"
+    }
+  },
+  {
+    "name": "Mount Thielsen, Oregon",
+    "lat": 43.1528,
+    "lon": -122.0665,
+    "elevationFt": 9183,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/11/Mt._Thielsen.jpg/960px-Mt._Thielsen.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Claytontullos",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt._Thielsen.jpg"
+    }
+  },
+  {
+    "name": "Mount Bachelor, Oregon",
+    "lat": 43.9794,
+    "lon": -121.6885,
+    "elevationFt": 9068,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0c/Mount_Bachelor_closeup.jpg/960px-Mount_Bachelor_closeup.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 426,
+      "author": "DimiTalen",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Bachelor_closeup.jpg"
+    }
+  },
+  {
+    "name": "Mount McLoughlin, Oregon",
+    "lat": 42.4445,
+    "lon": -122.3156,
+    "elevationFt": 9495,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/27/MtMcLoughlin.jpg/960px-MtMcLoughlin.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Little Mountain 5 (talk · contribs)",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MtMcLoughlin.jpg"
+    }
+  },
+  {
+    "name": "Mount Washington, Oregon",
+    "lat": 44.3321,
+    "lon": -121.8385,
+    "elevationFt": 7795,
+    "wikipedia": "Mount Washington (Oregon)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d3/Mount_Washington%2C_OR%2C_USFS.jpg/960px-Mount_Washington%2C_OR%2C_USFS.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "U.S. Forest Service",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Washington,_OR,_USFS.jpg"
+    }
+  },
+  {
+    "name": "Grays Peak, Colorado",
+    "lat": 39.6339,
+    "lon": -105.8176,
+    "elevationFt": 14272,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/73/Grays_and_Torreys_Peaks_2006-08-06.jpg/960px-Grays_and_Torreys_Peaks_2006-08-06.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Daidipya",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grays_and_Torreys_Peaks_2006-08-06.jpg"
+    }
+  },
+  {
+    "name": "Torreys Peak, Colorado",
+    "lat": 39.6428,
+    "lon": -105.8212,
+    "elevationFt": 14268,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/af/Torreys.JPG/960px-Torreys.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 410,
+      "author": "Hogs555",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Torreys.JPG"
+    }
+  },
+  {
+    "name": "Mount Bierstadt, Colorado",
+    "lat": 39.5826,
+    "lon": -105.6688,
+    "elevationFt": 14062,
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/05/2007-07-08-biers-reflectio2.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 750,
+      "height": 500,
+      "author": "Robertbody at English Wikipedia",
+      "license": "CC BY 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:2007-07-08-biers-reflectio2.jpg"
+    }
+  },
+  {
+    "name": "Mount Sneffels, Colorado",
+    "lat": 38.0038,
+    "lon": -107.7923,
+    "elevationFt": 14147,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/MtSneffelsMarch2008.jpg/960px-MtSneffelsMarch2008.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 600,
+      "author": "de Bivort 21:57, 8 April 2008 (UTC)",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MtSneffelsMarch2008.jpg"
+    }
+  },
+  {
+    "name": "Crestone Peak, Colorado",
+    "lat": 37.9667,
+    "lon": -105.5853,
+    "elevationFt": 14295,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/96/Crestone_peak_2.jpg/960px-Crestone_peak_2.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Adam Ginsburg",
+      "license": "CC BY-SA 2.5",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Crestone_peak_2.jpg"
+    }
+  },
+  {
+    "name": "Quandary Peak, Colorado",
+    "lat": 39.3973,
+    "lon": -106.1064,
+    "elevationFt": 14272,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/89/QuandaryPeak.JPG/960px-QuandaryPeak.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 853,
+      "author": "Stargazer7121",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:QuandaryPeak.JPG"
+    }
+  },
+  {
+    "name": "Mount Blue Sky, Colorado",
+    "lat": 39.5883,
+    "lon": -105.6438,
+    "elevationFt": 14272,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/Mevans.JPG/960px-Mevans.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 407,
+      "author": "Hogs555",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mevans.JPG"
+    }
+  },
+  {
+    "name": "Uncompahgre Peak, Colorado",
+    "lat": 38.0717,
+    "lon": -107.4621,
+    "elevationFt": 14308,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Uncompahgre_peak.jpg/960px-Uncompahgre_peak.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Gregstoner88 (talk · contribs)",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Uncompahgre_peak.jpg"
+    }
+  },
+  {
+    "name": "Mount Wilson, Colorado",
+    "lat": 37.8392,
+    "lon": -107.9915,
+    "elevationFt": 14252,
+    "wikipedia": "Mount Wilson (Colorado)",
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/7d/Mount_Wilson_cropped.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 320,
+      "height": 240,
+      "author": "Buaidh",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Wilson_cropped.jpg"
+    }
+  },
+  {
+    "name": "Mount Massive, Colorado",
+    "lat": 39.1875,
+    "lon": -106.4757,
+    "elevationFt": 14421,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/15/Mount_Massive.jpg/960px-Mount_Massive.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Rick Kimpel, Jr.",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Massive.jpg"
+    }
+  },
+  {
+    "name": "Mount Sopris, Colorado",
+    "lat": 39.2632,
+    "lon": -107.1759,
+    "elevationFt": 12965,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/61/Mtsop.JPG/960px-Mtsop.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 407,
+      "author": "Hogs555",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mtsop.JPG"
+    }
+  },
+  {
+    "name": "Cloud Peak, Wyoming",
+    "lat": 44.3821,
+    "lon": -107.1739,
+    "elevationFt": 13167,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/Cloud_Peak_Clear_Creek_Drainage.jpg/960px-Cloud_Peak_Clear_Creek_Drainage.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Srekanitsua",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cloud_Peak_Clear_Creek_Drainage.jpg"
+    }
+  },
+  {
+    "name": "Mount Moran, Wyoming",
+    "lat": 43.8353,
+    "lon": -110.7764,
+    "elevationFt": 12605,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b6/Aerial_image_of_Mount_Moran_%28view_from_the_east%29.jpg/960px-Aerial_image_of_Mount_Moran_%28view_from_the_east%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 406,
+      "author": "Carsten Steger",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Aerial_image_of_Mount_Moran_(view_from_the_east).jpg"
+    }
+  },
+  {
+    "name": "Middle Teton, Wyoming",
+    "lat": 43.73,
+    "lon": -110.8114,
+    "elevationFt": 12805,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/Middle_Teton_from_Hurricane_Pass_2026.jpg/960px-Middle_Teton_from_Hurricane_Pass_2026.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 660,
+      "author": "Joe Peacock",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Middle_Teton_from_Hurricane_Pass_2026.jpg"
+    }
+  },
+  {
+    "name": "Devils Tower, Wyoming",
+    "lat": 44.5906,
+    "lon": -104.7153,
+    "elevationFt": 5112,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1b/Columnar-jointed_porphyritic_phonolite_%28Eocene%2C_49_Ma%3B_Devils_Tower%2C_Wyoming%2C_USA%29_48.jpg/960px-Columnar-jointed_porphyritic_phonolite_%28Eocene%2C_49_Ma%3B_Devils_Tower%2C_Wyoming%2C_USA%29_48.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 423,
+      "author": "James St. John",
+      "license": "CC BY 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Columnar-jointed_porphyritic_phonolite_(Eocene,_49_Ma;_Devils_Tower,_Wyoming,_USA)_48.jpg"
+    }
+  },
+  {
+    "name": "Hallett Peak, Colorado",
+    "lat": 40.3031,
+    "lon": -105.6859,
+    "elevationFt": 12703,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b4/Hallet%27s_Peak_reflected_in_Lake_Haiyaha_at_darn_in_Rocky_Mountain_National_Park._NPS-Debra_Miller_%2818659267056%29.jpg/960px-Hallet%27s_Peak_reflected_in_Lake_Haiyaha_at_darn_in_Rocky_Mountain_National_Park._NPS-Debra_Miller_%2818659267056%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 426,
+      "author": "NPS Natural Resources",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hallet%27s_Peak_reflected_in_Lake_Haiyaha_at_darn_in_Rocky_Mountain_National_Park._NPS-Debra_Miller_(18659267056).jpg"
+    }
+  },
+  {
+    "name": "Mount Timpanogos, Utah",
+    "lat": 40.3908,
+    "lon": -111.6459,
+    "elevationFt": 11749,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/Mount_Timpanogos_-_01-07-08.jpg/960px-Mount_Timpanogos_-_01-07-08.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 425,
+      "author": "a4gpa from Provo, UT, USA",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Timpanogos_-_01-07-08.jpg"
+    }
+  },
+  {
+    "name": "Mount Sherman, Colorado",
+    "lat": 39.225,
+    "lon": -106.1697,
+    "elevationFt": 14043,
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/41/MountSherman.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 600,
+      "height": 450,
+      "author": "Stargazer7121",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MountSherman.JPG"
+    }
+  },
+  {
+    "name": "Mount Lindsey, Colorado",
+    "lat": 37.5847,
+    "lon": -105.4408,
+    "elevationFt": 14048,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Mount_Lindsey_and_Iron_Nipple.jpg/960px-Mount_Lindsey_and_Iron_Nipple.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "David Herrera from Albuquerque, NM, Bernalillo",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Lindsey_and_Iron_Nipple.jpg"
+    }
+  },
+  {
+    "name": "Blanca Peak, Colorado",
+    "lat": 37.5772,
+    "lon": -105.4858,
+    "elevationFt": 14350,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/41/MtBlancaEast.jpg/960px-MtBlancaEast.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "No machine-readable author provided. Meniscus~commonswiki assumed (based on copyright claims).",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MtBlancaEast.jpg"
+    }
+  },
+  {
+    "name": "Charleston Peak, Nevada",
+    "lat": 36.2716,
+    "lon": -115.6956,
+    "elevationFt": 11916,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/58/Mount_Charleston_and_Trout_Canyon_aerial.jpg/960px-Mount_Charleston_and_Trout_Canyon_aerial.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 373,
+      "author": "Dicklyon",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Charleston_and_Trout_Canyon_aerial.jpg"
+    }
+  },
+  {
+    "name": "Mount Wilson, Arizona",
+    "lat": 35.9966,
+    "lon": -114.6119,
+    "elevationFt": 5446,
+    "wikipedia": "Mount Wilson (Arizona)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f9/Mount_Wilson_AZ_1.jpg/960px-Mount_Wilson_AZ_1.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Stan Shebs",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Wilson_AZ_1.jpg"
+    }
+  },
+  {
+    "name": "Mount Graham, Arizona",
+    "lat": 32.7017,
+    "lon": -109.8714,
+    "elevationFt": 10719,
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Mount_graham_in_2020.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 957,
+      "height": 566,
+      "author": "Jbparrish",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_graham_in_2020.jpg"
+    }
+  },
+  {
+    "name": "Algonquin Peak, New York",
+    "lat": 44.1436,
+    "lon": -73.9867,
+    "elevationFt": 5115,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/38/AlgonquinAdkLoj.jpg/960px-AlgonquinAdkLoj.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Sirmont (talk) (Uploads)",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:AlgonquinAdkLoj.jpg"
+    }
+  },
+  {
+    "name": "Mount Adams, New Hampshire",
+    "lat": 44.3206,
+    "lon": -71.2914,
+    "elevationFt": 5793,
+    "wikipedia": "Mount Adams (New Hampshire)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3e/Mount_Adams_NH_from_Madison.jpg/960px-Mount_Adams_NH_from_Madison.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Paulba Legend (talk)",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Adams_NH_from_Madison.jpg"
+    }
+  },
+  {
+    "name": "Mount Monadnock, New Hampshire",
+    "lat": 42.8614,
+    "lon": -72.1081,
+    "elevationFt": 3166,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fb/Mount_Monadnock_as_seen_from_Bald_Rock.jpg/960px-Mount_Monadnock_as_seen_from_Bald_Rock.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 425,
+      "author": "Jonwmcinenrey",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Monadnock_as_seen_from_Bald_Rock.jpg"
+    }
+  },
+  {
+    "name": "Cadillac Mountain, Maine",
+    "lat": 44.3513,
+    "lon": -68.2265,
+    "elevationFt": 1542,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bb/Cadillac_Mountain_from_Champlain_Mountain_-_panoramio.jpg/960px-Cadillac_Mountain_from_Champlain_Mountain_-_panoramio.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Fredlyfish4",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cadillac_Mountain_from_Champlain_Mountain_-_panoramio.jpg"
+    }
+  },
+  {
+    "name": "Clingmans Dome, Tennessee",
+    "lat": 35.5628,
+    "lon": -83.4986,
+    "elevationFt": 6644,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/Clingmans_Dome_Sevierville_TN.jpg/960px-Clingmans_Dome_Sevierville_TN.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 390,
+      "author": "Username11236",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Clingmans_Dome_Sevierville_TN.jpg"
+    }
+  },
+  {
+    "name": "Mount Le Conte, Tennessee",
+    "lat": 35.6542,
+    "lon": -83.4367,
+    "elevationFt": 6593,
+    "wikipedia": "Mount Le Conte (Tennessee)",
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Mt._LeConte_Clingmans_Dome_05-31-20.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 823,
+      "height": 565,
+      "author": "Bneu2013",
+      "license": "CC0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt._LeConte_Clingmans_Dome_05-31-20.jpg"
+    }
+  },
+  {
+    "name": "Grandfather Mountain, North Carolina",
+    "lat": 36.1111,
+    "lon": -81.8114,
+    "elevationFt": 5965,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/af/Grandfather_Mountain-27527-1.jpg/960px-Grandfather_Mountain-27527-1.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 400,
+      "author": "Ken Thomas",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grandfather_Mountain-27527-1.jpg"
+    }
+  },
+  {
+    "name": "Split Mountain, California",
+    "lat": 37.0209,
+    "lon": -118.4224,
+    "elevationFt": 14064,
+    "wikipedia": "Split Mountain (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/Split_Mountain.jpg/960px-Split_Mountain.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Jonathan Fox",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Split_Mountain.jpg"
+    }
+  },
+  {
+    "name": "Mount Tom, California",
+    "lat": 37.3385,
+    "lon": -118.6585,
+    "elevationFt": 13658,
+    "wikipedia": "Mount Tom (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/Mount-tom.jpg/960px-Mount-tom.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Eeekster",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount-tom.jpg"
+    }
+  },
+  {
+    "name": "Mount Agassiz, California",
+    "lat": 37.1119,
+    "lon": -118.5308,
+    "elevationFt": 13899,
+    "wikipedia": "Mount Agassiz (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/Mount_Agassiz_southeast_face.jpg/960px-Mount_Agassiz_southeast_face.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Justin",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Agassiz_southeast_face.jpg"
+    }
+  },
+  {
+    "name": "Mount Lyell, California",
+    "lat": 37.7394,
+    "lon": -119.2716,
+    "elevationFt": 13114,
+    "wikipedia": "Mount Lyell (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Mt_Lyell_from_Donahue_shoulder.jpg/960px-Mt_Lyell_from_Donahue_shoulder.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Dcrjsr",
+      "license": "CC BY 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt_Lyell_from_Donahue_shoulder.jpg"
+    }
+  },
+  {
+    "name": "Cathedral Peak, California",
+    "lat": 37.8478,
+    "lon": -119.4056,
+    "elevationFt": 10912,
+    "wikipedia": "Cathedral Peak (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/Cathedral_Peak_and_Lake_in_Yosemite.jpg/960px-Cathedral_Peak_and_Lake_in_Yosemite.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 369,
+      "author": "Frank Kovalchek from Anchorage, Alaska, USA",
+      "license": "CC BY 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cathedral_Peak_and_Lake_in_Yosemite.jpg"
+    }
+  },
+  {
+    "name": "Mount Darwin, California",
+    "lat": 37.167,
+    "lon": -118.6724,
+    "elevationFt": 13837,
+    "wikipedia": "Mount Darwin (California)",
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Mount_Darwin.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 600,
+      "height": 480,
+      "author": "MtDarwinUpload (talk · contribs)",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Darwin.jpg"
+    }
+  },
+  {
+    "name": "Mount Russell, California",
+    "lat": 36.5907,
+    "lon": -118.289,
+    "elevationFt": 14094,
+    "wikipedia": "Mount Russell (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/05/Mt_Russel_from_Whitney_summit.jpg/960px-Mt_Russel_from_Whitney_summit.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 521,
+      "author": "Mitch Barrie",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt_Russel_from_Whitney_summit.jpg"
+    }
+  },
+  {
+    "name": "Mount Baxter, California",
+    "lat": 36.8615,
+    "lon": -118.3621,
+    "elevationFt": 13141,
+    "wikipedia": "Mount Baxter (California)",
+    "image": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/33/Acrodectes_Baxter.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+      "width": 599,
+      "height": 299,
+      "author": "Tetsuo Fukuchi",
+      "license": "Copyrighted free use",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Acrodectes_Baxter.jpg"
+    }
+  },
+  {
+    "name": "Mount Gilbert, California",
+    "lat": 37.1364,
+    "lon": -118.5982,
+    "elevationFt": 13107,
+    "wikipedia": "Mount Gilbert (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3e/Mts._Johnson_and_Gilbert.jpg/960px-Mts._Johnson_and_Gilbert.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 492,
+      "author": "lovz2hike",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mts._Johnson_and_Gilbert.jpg"
+    }
+  },
+  {
+    "name": "Mount Emerson, California",
+    "lat": 37.2447,
+    "lon": -118.6597,
+    "elevationFt": 13205,
+    "wikipedia": "Mount Emerson (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Mount_Emerson_Summit_Ridge.JPG/960px-Mount_Emerson_Summit_Ridge.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 853,
+      "author": "Adorabutton",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Emerson_Summit_Ridge.JPG"
+    }
+  },
+  {
+    "name": "Basin Mountain, California",
+    "lat": 37.2961,
+    "lon": -118.6604,
+    "elevationFt": 13182,
+    "wikipedia": "Basin Mountain (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1a/Bishop-march-3401-Pano.jpg/960px-Bishop-march-3401-Pano.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 371,
+      "author": "Annette Bernhardt",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bishop-march-3401-Pano.jpg"
+    }
+  },
+  {
+    "name": "Capitol Peak, Colorado",
+    "lat": 39.1503,
+    "lon": -107.0829,
+    "elevationFt": 14131,
+    "wikipedia": "Capitol Peak (Colorado)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Capitol_Peak_CO.jpg/960px-Capitol_Peak_CO.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Xpda",
+      "license": "CC BY 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Capitol_Peak_CO.jpg"
+    }
+  },
+  {
+    "name": "Mount of the Holy Cross, Colorado",
+    "lat": 39.4669,
+    "lon": -106.4817,
+    "elevationFt": 14006,
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a5/Mount_of_the_Holy_Cross%2C_2009.jpg/960px-Mount_of_the_Holy_Cross%2C_2009.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 427,
+      "author": "Jeremiah LaRocco",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_of_the_Holy_Cross,_2009.jpg"
+    }
+  },
+  {
+    "name": "Mount Owen, Wyoming",
+    "lat": 43.7469,
+    "lon": -110.7975,
+    "elevationFt": 12927,
+    "wikipedia": "Mount Owen (Wyoming)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a4/Mt_Owen_Grand_Teton_GTNP1.jpg/960px-Mt_Owen_Grand_Teton_GTNP1.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 441,
+      "author": "Acroterion",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt_Owen_Grand_Teton_GTNP1.jpg"
+    }
+  },
+  {
+    "name": "Boundary Peak, Nevada",
+    "lat": 37.8461,
+    "lon": -118.3513,
+    "elevationFt": 13146,
+    "wikipedia": "Boundary Peak (Nevada)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6d/Boundary_Peak_Nevada_USA.jpg/960px-Boundary_Peak_Nevada_USA.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "An63ca (talk · contribs)",
+      "license": "Public domain",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Boundary_Peak_Nevada_USA.jpg"
+    }
+  },
+  {
+    "name": "Mount Ellen, Utah",
+    "lat": 38.1097,
+    "lon": -110.8138,
+    "elevationFt": 11506,
+    "wikipedia": "Mount Ellen (Utah)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ae/Mount_Ellen_Ridge%2C_Garfield_County%2C_Utah.jpg/960px-Mount_Ellen_Ridge%2C_Garfield_County%2C_Utah.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 480,
+      "author": "Bob Palin",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Ellen_Ridge,_Garfield_County,_Utah.jpg"
+    }
+  },
+  {
+    "name": "Mount Goode, California",
+    "lat": 37.123,
+    "lon": -118.5681,
+    "elevationFt": 13091,
+    "wikipedia": "Mount Goode (California)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5b/Mount_Goode_from_Long_Lake.jpg/960px-Mount_Goode_from_Long_Lake.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 428,
+      "author": "Marty B",
+      "license": "CC BY-SA 2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Goode_from_Long_Lake.jpg"
+    }
+  },
+  {
+    "name": "Mount Olympus, Washington",
+    "lat": 47.8013,
+    "lon": -123.7108,
+    "elevationFt": 7979,
+    "wikipedia": "Mount Olympus (Washington)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d1/Mt_Olympus.jpg/960px-Mt_Olympus.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 345,
+      "author": "AlphaOrionis42",
+      "license": "CC BY-SA 4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mt_Olympus.jpg"
+    }
+  },
+  {
+    "name": "Mount Nebo, Utah",
+    "lat": 39.8216,
+    "lon": -111.7599,
+    "elevationFt": 11933,
+    "wikipedia": "Mount Nebo (Utah)",
+    "image": {
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/60/Mount_Nebo_Utah.jpg/960px-Mount_Nebo_Utah.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+      "width": 640,
+      "height": 408,
+      "author": "No machine-readable author provided. C.Maylett assumed (based on copyright claims).",
+      "license": "CC BY-SA 3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Nebo_Utah.jpg"
+    }
+  }
 ]

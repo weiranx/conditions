@@ -1,8 +1,9 @@
 const { createCache, normalizeTextKey } = require('../utils/cache');
 const { logger } = require('../utils/logger');
 const { describePoint } = require('../utils/point-place');
+const { attachFallbackImages } = require('../utils/objective-image');
 const { fetchSolarDay } = require('../utils/solar');
-const { matchCatalogPeaks, parseSearchBias, popularCatalogPeaks, rankPlaceResults } = require('../utils/place-search');
+const { attachWhere, describeWhere, matchCatalogPeaks, parseSearchBias, popularCatalogPeaks, rankPlaceResults } = require('../utils/place-search');
 
 const nominatimSearchCache = createCache({ name: 'nominatim-search', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 300 });
 
@@ -14,7 +15,14 @@ const parsePoint = (query) => {
   return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
 };
 
-const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks, fetchElevationFt, solarCache }) => {
+const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks, fetchElevationFt, solarCache, photoRegions = [] }) => {
+  const withPlaces = (results) => attachWhere(attachFallbackImages(results, photoRegions), photoRegions);
+  // A route or trip can cross boundaries: `points` are every place it goes.
+  app.post('/api/where', (req, res) => {
+    const { name, points } = req.body || {};
+    res.json({ where: describeWhere({ name: typeof name === 'string' ? name : '', points }, photoRegions) });
+  });
+
   // Dawn, sunrise and sunset on the planned day, so the start can be chosen against the light.
   app.get('/api/search/daylight', async (req, res) => {
     const point = parsePoint(req.query);
@@ -48,12 +56,12 @@ const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peak
     const query = typeof q === 'string' ? q.trim().slice(0, 120) : '';
 
     if (!query) {
-      return res.json(popularCatalogPeaks(peaks, 5));
+      return res.json(withPlaces(popularCatalogPeaks(peaks, 5)));
     }
 
     const localMatches = matchCatalogPeaks(peaks, query);
 
-    if (query.length < 3) return res.json(localMatches.slice(0, MAX_RESULTS));
+    if (query.length < 3) return res.json(withPlaces(localMatches.slice(0, MAX_RESULTS)));
 
     try {
       const fetchOptions = { headers: defaultFetchHeaders };
@@ -75,10 +83,10 @@ const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peak
         .filter((value, index, array) => array.findIndex((entry) => entry.name === value.name) === index)
         .slice(0, MAX_RESULTS);
 
-      return res.json(uniqueResults);
+      return res.json(withPlaces(uniqueResults));
     } catch (error) {
       logger.warn({ err: error, query }, 'Nominatim search failed; serving local catalog matches only');
-      return res.json(localMatches.slice(0, MAX_RESULTS));
+      return res.json(withPlaces(localMatches.slice(0, MAX_RESULTS)));
     }
   });
 };

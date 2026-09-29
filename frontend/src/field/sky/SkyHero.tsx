@@ -15,7 +15,7 @@ type Formatters = {
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, headline, reason, bridge, limitingChecks = [], note, actions, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, headline, reason, bridge, limitingChecks = [], note, actions, photo, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
@@ -34,6 +34,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   /** Extra context under the reason, e.g. hours checked below the summit. */
   note?: ReactNode;
   actions?: ReactNode;
+  /** The objective's photo, shown behind the sky with its credit. */
+  photo?: { name: string; fallback?: boolean; url: string; author: string; license: string; sourceUrl: string };
   format: Formatters;
 }) {
   const [ref, width] = useWidth<HTMLElement>(960);
@@ -145,7 +147,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   const tone = level === "GO" ? "go" : level === "NO-GO" ? "stop" : "watch";
 
   return (
-    <header className="sky-hero" ref={ref} style={{ ["--sky-scene" as string]: `${scene}px`, ["--sky-ridge" as string]: `${ridge}px` }}>
+    <header className={`sky-hero${photo ? " has-photo" : ""}`} ref={ref} style={{ ["--sky-scene" as string]: `${scene}px`, ["--sky-ridge" as string]: `${ridge}px` }}>
+      {photo && <img className="sky-hero-photo" src={photo.url} alt="" decoding="async" />}
       <svg
         className="sky-canvas"
         viewBox={`0 0 ${width} ${heroHeight}`}
@@ -327,6 +330,11 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
         </div>
       </div>
       {hasHours && <span className="sky-hint" aria-hidden="true">Hover or drag across the sky to check any hour</span>}
+      {photo && (
+        <p className="sky-hero-credit">
+          {photo.fallback && <>{photo.name} · </>}Photo: {photo.author} · <a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.license}, Wikimedia Commons</a>
+        </p>
+      )}
     </header>
   );
 }

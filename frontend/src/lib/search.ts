@@ -11,6 +11,22 @@ export interface Suggestion {
   kind?: string;
   /** Mapped summit or feature elevation, when OpenStreetMap or the catalog has one. */
   elevationFt?: number;
+  /** Where the place is: its national forest or park, else county or town, then state ("Inyo NF, CA"). */
+  where?: string;
+  /** A photo of the place with its license and credit, from the server's catalog. */
+  image?: SuggestionImage;
+}
+
+export interface SuggestionImage {
+  /** The place pictured; with `fallback`, the region around the searched place. */
+  name?: string;
+  fallback?: boolean;
+  url: string;
+  width: number;
+  height: number;
+  author: string;
+  license: string;
+  sourceUrl: string;
 }
 
 const LOCAL_POPULAR_SUGGESTIONS: Suggestion[] = [
@@ -101,8 +117,13 @@ export function uniqueSuggestionPlaces(items: Suggestion[]): Suggestion[] {
       return;
     }
     const kept = output[index];
-    if ((kept.kind === undefined && item.kind !== undefined) || (kept.elevationFt === undefined && item.elevationFt !== undefined)) {
-      output[index] = { ...kept, kind: kept.kind ?? item.kind, elevationFt: kept.elevationFt ?? item.elevationFt };
+    if (
+      (kept.kind === undefined && item.kind !== undefined) ||
+      (kept.elevationFt === undefined && item.elevationFt !== undefined) ||
+      (kept.image === undefined && item.image !== undefined) ||
+      (kept.where === undefined && item.where !== undefined)
+    ) {
+      output[index] = { ...kept, kind: kept.kind ?? item.kind, elevationFt: kept.elevationFt ?? item.elevationFt, image: kept.image ?? item.image, where: kept.where ?? item.where };
     }
   });
   return output;

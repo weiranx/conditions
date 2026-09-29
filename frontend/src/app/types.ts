@@ -222,6 +222,8 @@ export interface SafetyData {
     snowVision?: boolean;
   };
   location: { lat: number; lon: number };
+  /** A photo of the objective (a catalog peak) or, with `fallback`, of the forest or park it is in; with its license and credit. */
+  objectiveImage?: { name: string; fallback?: boolean; url: string; width: number; height: number; author: string; license: string; sourceUrl: string };
   forecast?: {
     selectedDate?: string;
     requestedStartTime?: string | null;

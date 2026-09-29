@@ -2,7 +2,7 @@ import { formatElevationForUnit } from "../app/core";
 import type { ElevationUnit } from "../app/types";
 import type { Suggestion } from "../lib/search";
 
-/** A search result's detail line: "Recent · Peak · 14,411 ft · Pierce County, Washington". */
+/** A search result's detail line: "Recent · Peak · 14,411 ft · Mt Rainier NP, WA". */
 function suggestionDetails(item: Suggestion, elevationUnit: ElevationUnit): { title: string; details: string } {
   const coordinate = item.type === "coordinate";
   const [title, ...region] = coordinate ? [item.name] : item.name.split(",").map((part) => part.trim());
@@ -10,7 +10,7 @@ function suggestionDetails(item: Suggestion, elevationUnit: ElevationUnit): { ti
     item.class === "recent" ? "Recent" : null,
     coordinate ? "Coordinates" : item.kind,
     typeof item.elevationFt === "number" ? formatElevationForUnit(item.elevationFt, elevationUnit) : null,
-    region.join(", "),
+    item.where ?? region.join(", "),
   ].filter(Boolean);
   return { title: title ?? item.name, details: details.join(" · ") };
 }
@@ -20,8 +20,11 @@ export function SuggestionLabel({ item, elevationUnit }: { item: Suggestion; ele
   const { title, details } = suggestionDetails(item, elevationUnit);
   return (
     <span className="field-suggestion-label">
-      <strong>{title}</strong>
-      {details && <small>{details}</small>}
+      {item.image && <img className="field-suggestion-thumb" src={item.image.url} alt="" loading="lazy" decoding="async" />}
+      <span className="field-suggestion-text">
+        <strong>{title}</strong>
+        {details && <small>{details}</small>}
+      </span>
     </span>
   );
 }

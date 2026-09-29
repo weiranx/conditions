@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -47,6 +47,7 @@ import {
   parseReportSectionHash,
   buildReportSectionHash,
 } from "../app/report-sections";
+import { useWhere } from "../hooks/useWhere";
 import { ageLabel, dateLabel } from "./data";
 import { Forecast } from "./Forecast";
 import { Conditions } from "./Conditions";
@@ -173,6 +174,15 @@ export function Report({
       saved: w.viewingHistoryReport,
     })
     : null;
+  // A route can cross boundaries, so the areas come from everywhere it goes.
+  const routePoints = w.routeAnalysis?.routeGeometry ?? w.routeAnalysis?.waypoints;
+  const { lat: objectiveLat, lon: objectiveLon } = data.location;
+  const hasRoute = Boolean(flags.routeAnalysis);
+  const wherePoints = useMemo(
+    () => [{ lat: objectiveLat, lon: objectiveLon }, ...(hasRoute && routePoints ? routePoints : [])],
+    [objectiveLat, objectiveLon, hasRoute, routePoints],
+  );
+  const where = useWhere(report.plan.objectiveName, wherePoints);
   const eta = (time: string) => w.formatClockForStyle(time, w.preferences.timeStyle);
 
   useEffect(() => {
@@ -409,6 +419,7 @@ export function Report({
   const subtitle = (
     <>
       {/* Line breaks fall between the parts, never inside "7:00 AM" or "13,775 ft". */}
+      {where && <>{where} · </>}
       {route && <>via {route.name} · </>}
       <span className="sky-nowrap">{dateLabel(report.plan.forecastDate)}</span> · <span className="sky-nowrap">starts {w.displayStartTime}</span> · <span className="sky-nowrap">{report.plan.travelWindowHours} hours</span>
       <span className="sky-subtitle-meta">
@@ -558,6 +569,7 @@ export function Report({
           limitingChecks={copy.limitingChecks}
           note={<>{approachNote}{routeNote}</>}
           actions={actions}
+          photo={data.objectiveImage}
           format={{
             temp: (f) => w.formatTempDisplay(f),
             wind: (mph) => w.formatWindDisplay(mph),

@@ -128,7 +128,7 @@ describe('search route cache', () => {
   test('a query that spells out a bias does not share results with the biased search', async () => {
     const { registerSearchRoutes } = require('../src/routes/search');
     let handler;
-    const app = { get: (_path, fn) => { handler = fn; } };
+    const app = { get: (_path, fn) => { handler = fn; }, post: () => {} };
     const urls = [];
     const fetchWithTimeout = async (url) => {
       urls.push(url);
@@ -143,5 +143,41 @@ describe('search route cache', () => {
     expect(urls).toHaveLength(2);
     expect(unbiased[0].name).toContain('Kent County');
     expect(biased[0].name).toContain('King County');
+  });
+});
+
+describe('attachWhere', () => {
+  const { attachWhere, shortAreaName } = require('../src/utils/place-search');
+  const { prepareRegions } = require('../src/utils/objective-image');
+  const regions = prepareRegions([
+    { name: 'Inyo National Forest', rings: [[[-119, 37], [-118, 37], [-118, 38], [-119, 38]]], image: { url: 'x' } },
+  ]);
+
+  test('names the national forest or park and the state abbreviation', () => {
+    const [result] = attachWhere([{ name: 'Mount Whitney, California', lat: 37.5, lon: -118.5 }], regions);
+    expect(result.where).toBe('Inyo NF, CA');
+  });
+
+  test('falls back to county or town with the state abbreviated', () => {
+    const [result] = attachWhere([{ name: 'San Diego, San Diego County, California', lat: 32.7, lon: -117.1 }], regions);
+    expect(result.where).toBe('San Diego County, CA');
+  });
+
+  test('shortens forest and park names', () => {
+    expect(shortAreaName('Mount Rainier National Park')).toBe('Mt Rainier NP');
+  });
+});
+
+describe('describeWhere', () => {
+  const { describeWhere } = require('../src/utils/place-search');
+  const { prepareRegions } = require('../src/utils/objective-image');
+  const box = (name, lon) => ({ name, rings: [[[lon, 37], [lon + 1, 37], [lon + 1, 38], [lon, 38]]], image: { url: 'x' } });
+  const regions = prepareRegions([box('Inyo National Forest', -119), box('Sequoia National Park', -118)]);
+
+  test('lists every area a route crosses in order, then the state', () => {
+    const points = [{ lat: 37.5, lon: -118.5 }, { lat: 37.5, lon: -117.5 }, { lat: 37.6, lon: -117.6 }];
+    expect(describeWhere({ name: 'Mount Whitney, California', points }, regions)).toBe('Inyo NF, Sequoia NP, CA');
+    expect(describeWhere({ name: 'Mount Whitney, California', points: points.slice(1) }, regions)).toBe('Sequoia NP, CA');
+    expect(describeWhere({ name: 'Trip, California', points: [{ lat: 37.5, lon: -118.5 }, { lat: 37.5, lon: -117.5 }] }, regions)).toBe('Inyo NF, Sequoia NP, CA');
   });
 });

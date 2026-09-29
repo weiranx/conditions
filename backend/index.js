@@ -83,6 +83,8 @@ const { database } = require('./src/db/database');
 const { appDataStore } = require('./src/db/app-data-store');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
+const { findObjectiveImage, prepareRegions } = require('./src/utils/objective-image');
+const PHOTO_REGIONS = prepareRegions(require('./regions.json'));
 
 // Extracted modules
 const { calculateSafetyScore } = require('./src/utils/safety-score');
@@ -716,7 +718,8 @@ const safetyHandler = async (req, res) => {
       return;
     }
     await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
-    res.json(responsePayload);
+    const objectiveImage = findObjectiveImage(POPULAR_PEAKS, PHOTO_REGIONS, parsedLat, parsedLon);
+    res.json(objectiveImage ? { ...responsePayload, objectiveImage } : responsePayload);
   } catch (error) {
     if (req.safetySignal?.aborted || res.headersSent) {
       return;
@@ -926,6 +929,7 @@ registerSearchRoutes({
   peaks: POPULAR_PEAKS,
   fetchElevationFt: (lat, lon) => fetchObjectiveElevationFt(lat, lon, { headers: DEFAULT_FETCH_HEADERS }),
   solarCache,
+  photoRegions: PHOTO_REGIONS,
 });
 registerFeatureFlagRoutes(app);
 const accountTierService = createAccountTierService({ database });

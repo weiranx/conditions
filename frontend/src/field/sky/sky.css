@@ -28,6 +28,15 @@
 }
 .sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; touch-action: pan-y; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
 .sky-canvas text { pointer-events: none; }
+/* The photo shows through the sky; the scrim and skyline stay opaque so text and the hour strip keep their contrast. */
+.sky-hero.has-photo .sky-canvas > rect:nth-of-type(-n+2) { opacity: 0.72; }
+.sky-hero.has-photo .sky-canvas > rect:nth-of-type(3) { opacity: 1; }
+.sky-hero-credit {
+  position: absolute; right: 24px; bottom: calc(var(--sky-ridge) + 36px); z-index: 1; text-align: right;
+  margin: 0; font-size: 11px; line-height: 1.4; color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 4px rgba(0, 20, 40, 0.6);
+}
+.sky-hero-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .sky-canvas:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
 .sky-hero-in {
   position: relative;

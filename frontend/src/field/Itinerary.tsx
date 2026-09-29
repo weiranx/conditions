@@ -26,6 +26,7 @@ import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Chat } from "./Chat";
 import { activityProfile } from "../app/activity-profiles";
 import { formatClockForStyle, parseTimeInputMinutes } from "../app/core";
+import { useWhere } from "../hooks/useWhere";
 import { ageLabel, dateLabel } from "./data";
 import "./itinerary.css";
 
@@ -79,6 +80,18 @@ export function Itinerary({
     () => (chatAvailable && chatContext ? JSON.stringify(chatContext) : ""),
     [chatAvailable, chatContext],
   );
+  const tripPoints = useMemo(
+    () => [
+      draft.trailhead,
+      ...draft.camps.map((camp) => camp.point),
+      draft.exit,
+      ...draft.days.flatMap((day) => day.checkpoints),
+      ...draft.bailPoints,
+      ...(draft.track ?? []),
+    ].filter((point): point is { lat: number; lon: number } => point != null),
+    [draft],
+  );
+  const tripWhere = useWhere(draft.trailhead?.name ?? "", tripPoints);
   if (!result || !assessment) return null;
   const verdict = VERDICT_COPY[assessment.level];
   const { headline } = assessment;
@@ -106,6 +119,7 @@ export function Itinerary({
       <header className="field-page-heading sky-trip-heading">
         <span className="field-kicker">Trip brief · {activity}</span>
         <h1 id={`${id}-title`}>{tripName}</h1>
+        {tripWhere && <p className="sky-trip-where">{tripWhere}</p>}
         <p>
           {nights + 1} days, {nights} {nights === 1 ? "night" : "nights"} · {dateLabel(result.stages[0].date)} to{" "}
           {dateLabel(result.stages[result.stages.length - 1].date)} · checked {ageLabel(result.checkedAt)}

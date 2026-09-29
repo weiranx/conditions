@@ -3997,9 +3997,23 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
 }
 .field-suggestion-label {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.field-suggestion-text {
+  display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+.field-suggestion-thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--f-muted);
 }
 .field-suggestion-label strong {
   font-weight: 600;

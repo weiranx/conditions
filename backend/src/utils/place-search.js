@@ -3,7 +3,47 @@
 // kind of place and its summit elevation, backcountry features ahead of towns, and
 // shops and offices left out.
 
+const { findRegion } = require('./objective-image');
+
 const FEET_PER_METER = 3.28084;
+
+const STATE_ABBREVIATIONS = {
+  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA', Colorado: 'CO', Connecticut: 'CT',
+  Delaware: 'DE', Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN', Iowa: 'IA',
+  Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD', Massachusetts: 'MA', Michigan: 'MI',
+  Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO', Montana: 'MT', Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH',
+  'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH',
+  Oklahoma: 'OK', Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC', 'South Dakota': 'SD',
+  Tennessee: 'TN', Texas: 'TX', Utah: 'UT', Vermont: 'VT', Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV',
+  Wisconsin: 'WI', Wyoming: 'WY', 'District of Columbia': 'DC',
+};
+
+/** "Inyo National Forest" → "Inyo NF", "Mount Rainier National Park" → "Mt Rainier NP". */
+const shortAreaName = (name) =>
+  String(name)
+    .replace(/\bNational Forest\b/, 'NF')
+    .replace(/\bNational Park\b/, 'NP')
+    .replace(/\bMount\b/, 'Mt');
+
+/** "Mount Si, King County, Washington" → "King County, WA": the last two name parts, state abbreviated. */
+const whereFromName = (name) => {
+  const parts = String(name).split(',').map((part) => part.trim()).filter(Boolean).slice(1);
+  if (!parts.length) return null;
+  return parts.map((part) => STATE_ABBREVIATIONS[part] || part).join(', ');
+};
+
+/**
+ * Says where each result is: the national forest or park it lies in, else its county or town,
+ * then the state ("Inyo NF, CA", "San Diego County, CA"). `regions` are prepared polygons.
+ */
+const attachWhere = (results, regions = []) =>
+  results.map((result) => {
+    const fromName = whereFromName(result.name);
+    const region = findRegion(regions, Number(result.lat), Number(result.lon));
+    const state = fromName ? fromName.split(', ').pop() : null;
+    const where = region ? [shortAreaName(region.name), state].filter(Boolean).join(', ') : fromName;
+    return where ? { ...result, where } : result;
+  });
 
 const normalizeSearchText = (value = '') =>
   String(value)
@@ -172,7 +212,27 @@ const parseSearchBias = (value) => {
   };
 };
 
+const MAX_WHERE_POINTS = 200;
+
+/**
+ * Where a route or multi-day trip is: every national forest or park its points fall in, in the
+ * order it reaches them, then the state ("Inyo NF, Sequoia NP, CA"). The name gives the state.
+ */
+const describeWhere = ({ name, points }, regions = []) => {
+  const areas = [];
+  (Array.isArray(points) ? points.slice(0, MAX_WHERE_POINTS) : []).forEach((point) => {
+    const region = findRegion(regions, Number(point?.lat), Number(point?.lon));
+    const short = region ? shortAreaName(region.name) : null;
+    if (short && !areas.includes(short)) areas.push(short);
+  });
+  const fromName = whereFromName(name);
+  const state = fromName ? fromName.split(', ').pop() : null;
+  if (!areas.length) return fromName;
+  return [...areas, state].filter(Boolean).join(', ');
+};
+
 module.exports = {
+  describeWhere,
   parseSearchBias,
   normalizeSearchText,
   nameMatchesQuery,
@@ -180,5 +240,8 @@ module.exports = {
   popularCatalogPeaks,
   parseElevationFt,
   compactPlaceName,
+  attachWhere,
+  shortAreaName,
+  whereFromName,
   rankPlaceResults,
 };
