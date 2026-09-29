@@ -97,8 +97,11 @@ export function MiniSky({ hours, sunrise, sunset, clock }: {
           })}
         </g>
       </svg>
-      <span>{clock(hours[0].minute)}</span>
-      <span className="is-end">{clock(hours[hours.length - 1].minute + 60)}</span>
+      <span className="is-window">Start {clock(hours[0].minute)}</span>
+      <span className="is-window is-end">Done {clock(hours[hours.length - 1].minute + 60)}</span>
+      {sunrise !== null && sunset !== null && (
+        <span className="is-sun">Sunrise {clock(sunrise)} · Sunset {clock(sunset)}</span>
+      )}
     </div>
   );
 }
