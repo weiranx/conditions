@@ -105,7 +105,7 @@ import type { StreamEvent } from "../../lib/api-client";
 import { useTripForecast } from "../../hooks/useTripForecast";
 import { useSafetyData } from "../../hooks/useSafetyData";
 import { useSearchSuggestions } from "../../hooks/useSearchSuggestions";
-import { normalizeSuggestionText } from "../../lib/search";
+import { lookupPointPlace, normalizeSuggestionText } from "../../lib/search";
 import { objectiveTerms as resolveObjectiveTerms } from "../../app/objective-terms";
 import { estimateRouteDurationHours, gpxObjectivePoint, gpxTrackForAnalysis, type ParsedGpxRoute } from "../../lib/gpx";
 import { useUrlState, useSyncUrlEffect } from "../../hooks/useUrlState";
@@ -597,8 +597,20 @@ export function useWorkspace() {
     [setTripStartDate, setTripStartTime],
   );
 
+  // A point chosen on the map or from the device: its looked-up name and elevation.
+  const [pointLookup, setPointLookup] = useState<{
+    lat: number;
+    lng: number;
+    loading: boolean;
+    elevationFt: number | null;
+  } | null>(null);
+  const pointLookupAbortRef = useRef<AbortController | null>(null);
   const updateObjectivePosition = useCallback(
     (nextPosition: LatLngLiteral, label?: string) => {
+      // Any new objective ends the lookup for the previous point.
+      pointLookupAbortRef.current?.abort();
+      pointLookupAbortRef.current = null;
+      setPointLookup(null);
       clearWakeRetry();
       resetSavedReportTracking();
       setViewingHistoryReport(false);
@@ -683,16 +695,27 @@ export function useWorkspace() {
   } = searchHook;
   // Summit, route high point or other objective, so the report names the ends
   // of the approach correctly. A searched place keeps its kind in recent searches.
-  const objectiveTerms = useMemo(() => {
-    const searched = searchHook.recentSearches.find((place) =>
+  const searchedPlace = useMemo(
+    () => searchHook.recentSearches.find((place) =>
       Math.abs(Number(place.lat) - position.lat) < 0.0005 &&
       Math.abs(Number(place.lon) - position.lng) < 0.0005 &&
-      normalizeSuggestionText(place.name.split(",")[0] ?? "") === normalizeSuggestionText(objectiveName));
-    return resolveObjectiveTerms({
-      route: importedGpxRoute ? { hasElevation: importedGpxRoute.maxElevationFt !== null } : null,
-      place: searched ?? (objectiveName ? { name: objectiveName } : null),
-    });
-  }, [searchHook.recentSearches, position.lat, position.lng, objectiveName, importedGpxRoute]);
+      normalizeSuggestionText(place.name.split(",")[0] ?? "") === normalizeSuggestionText(objectiveName)) ?? null,
+    [searchHook.recentSearches, position.lat, position.lng, objectiveName],
+  );
+  const objectiveTerms = useMemo(() => resolveObjectiveTerms({
+    route: importedGpxRoute ? { hasElevation: importedGpxRoute.maxElevationFt !== null } : null,
+    place: searchedPlace ?? (objectiveName ? { name: objectiveName } : null),
+  }), [searchedPlace, objectiveName, importedGpxRoute]);
+  // The mapped elevation of a searched summit or feature at the objective, for
+  // the plan's place card; it stays when the traveler renames the place.
+  const searchedPlaceElevationFt = useMemo(() => {
+    const place = searchedPlace ?? searchHook.recentSearches.find((candidate) =>
+      Math.abs(Number(candidate.lat) - position.lat) < 0.0005 &&
+      Math.abs(Number(candidate.lon) - position.lng) < 0.0005 &&
+      candidate.elevationFt != null);
+    const feet = Number(place?.elevationFt);
+    return place?.elevationFt != null && Number.isFinite(feet) ? feet : null;
+  }, [searchedPlace, searchHook.recentSearches, position.lat, position.lng]);
   const objectiveDraftDirty =
     hasObjective &&
     normalizeSuggestionText(searchQuery) !==
@@ -1137,6 +1160,41 @@ export function useWorkspace() {
   // the report silently reloads for a completely different, unrelated location. Mirror the
   // same label + search-box sync that handleUseCurrentLocation already does below, so the
   // change is obvious rather than silent.
+  // Names a picked point after the summit or map feature there, unless the
+  // plan has moved on: another place, a typed search, or a brief under way.
+  const namePickedPoint = useCallback(
+    (nextPosition: LatLngLiteral, placeholder: string, coordinateLabel: string) => {
+      const controller = new AbortController();
+      pointLookupAbortRef.current = controller;
+      setPointLookup({ ...nextPosition, loading: true, elevationFt: null });
+      lookupPointPlace(nextPosition.lat, nextPosition.lng, controller.signal)
+        .catch(() => ({ name: null, elevationFt: null }))
+        .then(({ name, elevationFt }) => {
+          if (controller.signal.aborted) return;
+          pointLookupAbortRef.current = null;
+          setPointLookup({ ...nextPosition, loading: false, elevationFt });
+          if (!name) return;
+          setObjectiveName((current) => (current === placeholder ? name : current));
+          setSearchInputValue((current) => (current === coordinateLabel ? name : current));
+          setCommittedSearchQuery((current) => (current === coordinateLabel ? name : current));
+        });
+    },
+    [setSearchInputValue, setCommittedSearchQuery],
+  );
+
+  // A name the traveler gives the objective ("North ridge camp"); the point stays.
+  const renameObjective = useCallback(
+    (name: string) => {
+      const trimmed = name.trim().slice(0, 120);
+      if (!trimmed) return;
+      setObjectiveName(trimmed);
+      setSearchInputValue(trimmed);
+      setCommittedSearchQuery(trimmed);
+      setShowSuggestions(false);
+    },
+    [setSearchInputValue, setCommittedSearchQuery, setShowSuggestions],
+  );
+
   const handleMapPositionChange = useCallback(
     (nextPosition: LatLngLiteral) => {
       const coordinateLabel = `${nextPosition.lat.toFixed(4)}, ${nextPosition.lng.toFixed(4)}`;
@@ -1145,6 +1203,7 @@ export function useWorkspace() {
       setCommittedSearchQuery(coordinateLabel);
       setShowSuggestions(false);
       setActiveSuggestionIndex(-1);
+      namePickedPoint(nextPosition, "Dropped pin", coordinateLabel);
     },
     [
       updateObjectivePosition,
@@ -1152,8 +1211,20 @@ export function useWorkspace() {
       setCommittedSearchQuery,
       setShowSuggestions,
       setActiveSuggestionIndex,
+      namePickedPoint,
     ],
   );
+
+  // A brief started for the point keeps the name it was requested with.
+  useEffect(() => {
+    if (!loading && !safetyData) return;
+    if (!pointLookupAbortRef.current) return;
+    pointLookupAbortRef.current.abort();
+    pointLookupAbortRef.current = null;
+    // Ends the lookup's pending state; the brief now owns the point.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPointLookup((current) => (current ? { ...current, loading: false } : current));
+  }, [loading, safetyData]);
 
   const handleUseCurrentLocation = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -1179,6 +1250,7 @@ export function useWorkspace() {
         setCommittedSearchQuery(coordinateLabel);
         setShowSuggestions(false);
         setActiveSuggestionIndex(-1);
+        namePickedPoint(nextPosition, "Current location", coordinateLabel);
         recordRecentSuggestion({
           name: coordinateLabel,
           lat,
@@ -2558,6 +2630,10 @@ export function useWorkspace() {
     runTripForecast,
     updateObjectivePosition,
     searchQuery,
+    setSearchInputValue,
+    pointLookup,
+    searchedPlaceElevationFt,
+    renameObjective,
     committedSearchQuery,
     setCommittedSearchQuery,
     suggestions,

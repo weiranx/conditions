@@ -87,6 +87,8 @@ function planWorkspace(overrides = {}) {
     activeSuggestionIndex: -1,
     hasObjective: false,
     objectiveDraftDirty: false,
+    position: { lat: 46.8523, lng: -121.7603 },
+    committedSearchQuery: '',
     featureFlags: { gpxImport: false },
     itinerary: { mode: 'day' },
     forecastDate: '2026-09-06',

@@ -14,6 +14,7 @@ const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 const { finiteNumber, serializeWaypointReports } = require('../utils/route-briefing');
 const { toFiniteOrNull } = require('../utils/numbers');
 const { parseClockToMinutes } = require('../utils/time');
+const { EXACT_PLACE_KM, reverseGeocodePlace } = require('../utils/point-place');
 const {
   DEFAULT_ROUTE_PACE,
   appendLoopEnd,
@@ -373,26 +374,6 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
 
 // Checkpoint labels that only say where along the route a point is.
 const GENERIC_CHECKPOINT_NAME = /^(?:route (?:start|finish)|high point|low point|\d{1,3}% checkpoint|route checkpoint \d+|.+ (?:start|checkpoint \d+))$/i;
-// Map features whose names mean something on the ground; roads and admin areas don't.
-const NAMEABLE_CATEGORIES = new Set(['natural', 'tourism', 'leisure', 'waterway', 'water', 'mountain_pass', 'amenity', 'place']);
-const EXACT_PLACE_KM = 0.1;
-const NEARBY_PLACE_KM = 0.4;
-
-// The named map feature at a point (Nominatim reverse, cached), or null.
-const reverseGeocodePlace = (lat, lon, fetchWithTimeout, fetchHeaders) => nominatimGeocodeCache.getOrFetch(
-  `reverse|${Number(lat).toFixed(4)}|${Number(lon).toFixed(4)}`,
-  async () => {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&lat=${lat}&lon=${lon}`;
-    const res = await fetchWithTimeout(url, { headers: fetchHeaders });
-    if (!res?.ok) return null;
-    const place = await res.json();
-    const name = String(place?.name || '').trim().slice(0, 80);
-    if (!name || !NAMEABLE_CATEGORIES.has(String(place?.category || ''))) return null;
-    const km = haversineKm(lat, lon, Number(place.lat), Number(place.lon));
-    return Number.isFinite(km) && km <= NEARBY_PLACE_KM ? { name, km } : null;
-  },
-).catch(() => null);
-
 /**
  * Give checkpoints that only have a positional label ("40% checkpoint", "Route
  * start") the name of a map feature at or near them: "Crystal Lake", or "Near

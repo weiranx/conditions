@@ -52,6 +52,20 @@ test('GET /api/safety rejects invalid date format', async () => {
   expect(String(res.body.error || '')).toMatch(/Invalid date format/i);
 });
 
+test('GET /api/search/point rejects coordinates that are not a point on Earth', async () => {
+  for (const query of ['lat=north&lon=-121', 'lat=95&lon=-121', 'lon=-121']) {
+    const res = await request(app).get(`/api/search/point?${query}`);
+    expect(res.status).toBe(400);
+  }
+});
+
+test('GET /api/search/daylight needs a point and a day', async () => {
+  for (const query of ['lat=46.8&lon=-121.7', 'lat=46.8&lon=-121.7&date=tomorrow', 'lat=north&lon=-121&date=2026-10-01']) {
+    const res = await request(app).get(`/api/search/daylight?${query}`);
+    expect(res.status).toBe(400);
+  }
+});
+
 test('GET /api/search supports short local queries without external dependencies', async () => {
   const res = await request(app).get('/api/search?q=ra');
   expect(res.status).toBe(200);

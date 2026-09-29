@@ -1,3 +1,6 @@
+import { fetchApi } from './api-client';
+
+
 export interface Suggestion {
   name: string;
   lat: string | number;
@@ -155,4 +158,37 @@ export function searchRequestPath(query: string, near?: SearchNear | null): stri
     params.set('near', `${Math.round(near.lat)},${Math.round(near.lon)}`);
   }
   return `/api/search?${params.toString()}`;
+}
+
+/** What the server knows about a point chosen on the map; either field may be null. */
+export interface PointPlace {
+  name: string | null;
+  elevationFt: number | null;
+}
+
+/** Names a map point after the summit or map feature on or near it, with its elevation. */
+export async function lookupPointPlace(lat: number, lon: number, signal?: AbortSignal): Promise<PointPlace> {
+  const params = new URLSearchParams({ lat: lat.toFixed(5), lon: lon.toFixed(5) });
+  const { response, payload } = await fetchApi(`/api/search/point?${params.toString()}`, { signal });
+  const body = (payload || {}) as Partial<PointPlace>;
+  if (!response.ok) return { name: null, elevationFt: null };
+  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : null;
+  const elevationFt = Number.isFinite(Number(body.elevationFt)) && body.elevationFt !== null ? Number(body.elevationFt) : null;
+  return { name, elevationFt };
+}
+
+/** Dawn (civil twilight), sunrise and sunset on a day, as the point's local clock ("7:01:40 AM"); null when unknown. */
+export interface PlanDaylight {
+  dawn: string | null;
+  sunrise: string | null;
+  sunset: string | null;
+}
+
+export async function lookupDaylight(lat: number, lon: number, date: string, signal?: AbortSignal): Promise<PlanDaylight> {
+  const params = new URLSearchParams({ lat: lat.toFixed(4), lon: lon.toFixed(4), date });
+  const { response, payload } = await fetchApi(`/api/search/daylight?${params.toString()}`, { signal });
+  const body = (payload || {}) as Partial<PlanDaylight>;
+  const clock = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+  if (!response.ok) return { dawn: null, sunrise: null, sunset: null };
+  return { dawn: clock(body.dawn), sunrise: clock(body.sunrise), sunset: clock(body.sunset) };
 }

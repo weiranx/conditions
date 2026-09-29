@@ -106,7 +106,7 @@ When the plan changes after a report loads (limits, units, approach, target elev
 - **Avalanche**: Avalanche.org map/product feeds, center-link scraping fallback
 - **Solar**: `api.sunrisesunset.io`
 - **Snowpack**: NRCS AWDB/SNOTEL, NOAA NOHRSC
-- **Search/Elevation**: OpenStreetMap Nominatim, USGS/Open-Meteo
+- **Search/Elevation**: OpenStreetMap Nominatim, USGS/Open-Meteo; map points are named from the peak catalog, Nominatim reverse and USGS place names (GNIS)
 
 ### User preferences
 

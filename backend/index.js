@@ -924,6 +924,8 @@ registerSearchRoutes({
   fetchWithTimeout,
   defaultFetchHeaders: DEFAULT_FETCH_HEADERS,
   peaks: POPULAR_PEAKS,
+  fetchElevationFt: (lat, lon) => fetchObjectiveElevationFt(lat, lon, { headers: DEFAULT_FETCH_HEADERS }),
+  solarCache,
 });
 registerFeatureFlagRoutes(app);
 const accountTierService = createAccountTierService({ database });

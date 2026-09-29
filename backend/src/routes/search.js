@@ -1,12 +1,48 @@
 const { createCache, normalizeTextKey } = require('../utils/cache');
 const { logger } = require('../utils/logger');
+const { describePoint } = require('../utils/point-place');
+const { fetchSolarDay } = require('../utils/solar');
 const { matchCatalogPeaks, parseSearchBias, popularCatalogPeaks, rankPlaceResults } = require('../utils/place-search');
 
 const nominatimSearchCache = createCache({ name: 'nominatim-search', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 300 });
 
 const MAX_RESULTS = 8;
 
-const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks }) => {
+const parsePoint = (query) => {
+  const lat = Number(query.lat);
+  const lon = Number(query.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+};
+
+const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks, fetchElevationFt, solarCache }) => {
+  // Dawn, sunrise and sunset on the planned day, so the start can be chosen against the light.
+  app.get('/api/search/daylight', async (req, res) => {
+    const point = parsePoint(req.query);
+    const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : null;
+    if (!point || !date) return res.status(400).json({ error: 'lat, lon and date (YYYY-MM-DD) are required.' });
+    if (!solarCache) return res.json({ dawn: null, sunrise: null, sunset: null });
+    try {
+      const day = await fetchSolarDay({ ...point, date, solarCache, fetchWithTimeout, fetchOptions: { headers: defaultFetchHeaders } });
+      return res.json({ dawn: day.dawn, sunrise: day.sunrise, sunset: day.sunset });
+    } catch (error) {
+      logger.warn({ err: error, ...point, date }, 'Daylight lookup failed');
+      return res.json({ dawn: null, sunrise: null, sunset: null });
+    }
+  });
+
+  // A point chosen on the map: what to call it and how high it is.
+  app.get('/api/search/point', async (req, res) => {
+    const point = parsePoint(req.query);
+    if (!point) return res.status(400).json({ error: 'lat and lon must be valid coordinates.' });
+    const { lat, lon } = point;
+    try {
+      return res.json(await describePoint({ lat, lon, peaks, fetchWithTimeout, fetchHeaders: defaultFetchHeaders, fetchElevationFt }));
+    } catch (error) {
+      logger.warn({ err: error, lat, lon }, 'Point lookup failed');
+      return res.json({ name: null, elevationFt: null });
+    }
+  });
+
   app.get('/api/search', async (req, res) => {
     const { q, near } = req.query;
     const query = typeof q === 'string' ? q.trim().slice(0, 120) : '';

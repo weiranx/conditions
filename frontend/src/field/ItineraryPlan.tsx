@@ -19,6 +19,7 @@ import {
   type ItineraryPoint,
 } from "../app/itinerary";
 import { dateLabel } from "./data";
+import { PlanDateChips } from "./PlanDateChips";
 import "./itinerary.css";
 
 const MAX_BAIL_POINTS = 4;
@@ -34,21 +35,15 @@ export function ItineraryWhen({ workspace: w }: { workspace: Workspace }) {
     it.updateDraft((current) => ({ ...current, days: current.days.map((day) => ({ ...day, ...patch })) }));
   const setNights = (value: number) => it.updateDraft((current) => setItineraryNights(current, Math.min(value, it.maxNights)));
   return (
+    <>
+    <PlanDateChips
+      label="First day"
+      value={draft.startDate}
+      today={w.todayDate}
+      last={w.maxForecastDate}
+      onChange={(value) => it.updateDraft((current) => ({ ...current, startDate: value }))}
+    />
     <div className="field-input-grid field-plan-schedule sky-trip-when">
-      <label>
-        Start date
-        <input
-          type="date"
-          min={w.todayDate}
-          max={w.maxForecastDate}
-          required
-          value={draft.startDate}
-          onChange={(event) => {
-            const value = event.target.value;
-            if (/^\d{4}-\d{2}-\d{2}$/.test(value)) it.updateDraft((current) => ({ ...current, startDate: value }));
-          }}
-        />
-      </label>
       <div className="field-plan-duration">
         <span aria-hidden="true">Nights</span>
         <span className="field-duration-control">
@@ -92,6 +87,7 @@ export function ItineraryWhen({ workspace: w }: { workspace: Workspace }) {
         {nights >= it.maxNights && nights < 6 && " The forecast does not reach further yet."}
       </p>
     </div>
+    </>
   );
 }
 

@@ -5,9 +5,17 @@ import { hasRouteNumber } from "./route-planning";
 /**
  * Suggested routes for the objective, shared by the plan and the Route chapter.
  * Each shows its grade, length, climb, a time at the traveler's own pace, and the
- * one-line description; picking one makes it the planned route.
+ * one-line description; picking one makes it the planned route (and, in the
+ * plan, sets how long the outing is).
  */
-export function RouteSuggestions({ workspace: w }: { workspace: Workspace }) {
+export function RouteSuggestions({
+  workspace: w,
+  onChoose,
+}: {
+  workspace: Workspace;
+  /** Told the chosen route's name and its time at the traveler's pace, when both are known. */
+  onChoose?: (name: string, hours: number | null) => void;
+}) {
   const findingRoutes = w.routeLoadingState?.kind === "suggestions";
   if (findingRoutes || !w.routeSuggestions) return null;
   if (w.routeSuggestions.length === 0) {
@@ -33,7 +41,10 @@ export function RouteSuggestions({ workspace: w }: { workspace: Workspace }) {
             type="button"
             key={`${route.name}-${i}`}
             aria-pressed={w.customRouteName === route.name}
-            onClick={() => w.setCustomRouteName(route.name)}
+            onClick={() => {
+              w.setCustomRouteName(route.name);
+              onChoose?.(route.name, hours);
+            }}
           >
             <strong>{route.name}</strong>
             <small>

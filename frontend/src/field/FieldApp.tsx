@@ -37,6 +37,8 @@ import {
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { buildTripOverlay } from "./itinerary-overlay";
+import { lookupPointPlace } from "../lib/search";
+import type { ItineraryPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer } from "./touch";
@@ -231,14 +233,52 @@ export default function FieldApp() {
   const multiDay = it.mode === "multi";
   // The trip being built, or the one last checked, drawn over the map.
   const tripOverlay = multiDay ? buildTripOverlay(it.draft, it.assessment) : null;
+  // An imported GPX track sets the objective at its high point; a stray tap
+  // must not throw the track away.
+  const pinLocked = !multiDay && Boolean(w.importedGpxRoute);
+  // A pick that replaced a place can be undone while the pin stays where it fell.
+  const [undoPick, setUndoPick] = useState<{ name: string; lat: number; lng: number; at: string } | null>(null);
+  const pinKey = w.hasObjective ? `${w.position.lat},${w.position.lng}` : "";
+  const canUndoPick = undoPick !== null && undoPick.at === pinKey && !multiDay;
+  function undoMapPick() {
+    if (!undoPick) return;
+    const { name, lat, lng } = undoPick;
+    setUndoPick(null);
+    if (name === "Dropped pin" || name === "Current location") w.handleMapPositionChange({ lat, lng });
+    else w.selectSuggestion({ name, lat, lon: lng, class: "recent" });
+  }
   // A map tap sets whichever trip point is waiting for one, else the objective.
   function pickOnMap(lat: number, lon: number) {
     const target = it.pickTarget;
     if (!multiDay || !target) {
+      if (pinLocked) return;
+      setUndoPick(w.hasObjective && !w.objectiveDraftDirty
+        ? { name: w.objectiveName, lat: w.position.lat, lng: w.position.lng, at: `${lat},${lon}` }
+        : null);
       w.handleMapPositionChange({ lat, lng: lon });
       return;
     }
-    const point = { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon, elevationFt: null };
+    const coordinates = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    const point = { name: coordinates, lat, lon, elevationFt: null };
+    // Then name it after what is there, if it still has its coordinates label.
+    void lookupPointPlace(lat, lon).then(({ name, elevationFt }) => {
+      if (!name && elevationFt === null) return;
+      const named = (candidate: ItineraryPoint | null) =>
+        candidate && candidate.lat === lat && candidate.lon === lon
+          ? {
+              ...candidate,
+              name: name && candidate.name === coordinates ? name : candidate.name,
+              elevationFt: candidate.elevationFt ?? elevationFt,
+            }
+          : candidate;
+      it.updateDraft((draft) => ({
+        ...draft,
+        camps: draft.camps.map((camp) => ({ ...camp, point: named(camp.point) })),
+        exit: named(draft.exit),
+        bailPoints: draft.bailPoints.map((bail) => named(bail)!),
+        days: draft.days.map((day) => ({ ...day, checkpoints: day.checkpoints.map((checkpoint) => named(checkpoint)!) })),
+      }));
+    }).catch(() => {});
     it.updateDraft((draft) => {
       if (target.kind === "camp") {
         return { ...draft, camps: draft.camps.map((camp, index) => (index === target.index ? { point, layover: false } : camp)) };
@@ -297,25 +337,51 @@ export default function FieldApp() {
   function editTrip() {
     navigate("home");
   }
+  // On a phone the map opens over the page to choose a point; elsewhere it sits beside the plan.
+  const [mapSheet, setMapSheet] = useState(false);
   function chooseOnMap() {
     w.setShowSuggestions(false);
+    if (window.matchMedia?.("(max-width: 650px)").matches) {
+      setMapSheet(true);
+      mapRef.current?.focus({ preventScroll: true });
+      return;
+    }
     mapRef.current?.focus({ preventScroll: true });
     mapRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
   }
   function returnToPlan() {
+    setMapSheet(false);
     const search = w.searchInputRef.current;
-    const form = search?.form;
-    const target = w.hasObjective && !w.objectiveDraftDirty
-      ? form?.querySelector<HTMLInputElement>('input[type="date"]')
-      : search;
+    const form = search?.form ?? document.querySelector<HTMLFormElement>(".field-plan-form");
+    const target = search && !(w.hasObjective && !w.objectiveDraftDirty)
+      ? search
+      : form?.querySelector<HTMLElement>('.sky-plan-place .field-text-button, .sky-date-chips input:checked');
     target?.focus({ preventScroll: true });
     form?.scrollIntoView({ block: "start", behavior: "instant" });
   }
+  useEffect(() => {
+    if (!mapSheet) return;
+    // The page behind the sheet stays put; Escape closes it.
+    document.documentElement.classList.add("field-map-sheet-open");
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMapSheet(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => {
+      document.documentElement.classList.remove("field-map-sheet-open");
+      window.removeEventListener("keydown", close);
+    };
+  }, [mapSheet]);
+  const lookup = w.pointLookup;
+  const lookupHere = lookup !== null && lookup.lat === w.position.lat && lookup.lng === w.position.lng;
+  const lookingUp = lookupHere && lookup.loading;
+  const pinElevation = lookupHere ? lookup.elevationFt : null;
   const map = (
     <div
-      className="field-planner-map"
+      className={`field-planner-map${mapSheet ? " is-sheet" : ""}`}
       ref={mapRef}
-      role="region"
+      role={mapSheet ? "dialog" : "region"}
+      aria-modal={mapSheet || undefined}
       aria-labelledby="field-objective-map-title"
       tabIndex={-1}
     >
@@ -331,15 +397,33 @@ export default function FieldApp() {
                   : it.pickTarget.kind === "bail"
                     ? "Tap the map to add a bail point"
                     : `Tap the map to add a high point for day ${it.pickTarget.day + 1}`
-              : plan.lat === null
-                ? "Choose a location on the map"
-                : `${plan.lat.toFixed(4)}°, ${plan.lon?.toFixed(4)}° selected`}
+              : pinLocked
+                ? "Your GPX track sets this point. Remove the route to drop a pin elsewhere."
+                : plan.lat === null
+                  ? `${touch ? "Tap" : "Click"} the map to drop a pin`
+                  : lookingUp
+                    ? "Finding what’s here…"
+                    : `${plan.name || "Selected point"}${pinElevation !== null ? ` · ${w.formatElevationDisplay(pinElevation)}` : ""}`}
+            {canUndoPick && (
+              <>
+                {" "}
+                <button type="button" className="field-text-button field-map-undo" onClick={undoMapPick}>
+                  Undo, back to {undoPick.name}
+                </button>
+              </>
+            )}
           </span>
         </div>
-        <button type="button" className="field-text-button" onClick={returnToPlan}>
-          <ArrowLeft size={15} aria-hidden="true" />
-          Back to plan
-        </button>
+        {mapSheet ? (
+          <button type="button" className="field-button field-button-primary field-map-done" onClick={returnToPlan}>
+            Done
+          </button>
+        ) : (
+          <button type="button" className="field-text-button field-map-back" onClick={returnToPlan}>
+            <ArrowLeft size={15} aria-hidden="true" />
+            Back to plan
+          </button>
+        )}
       </div>
       <Suspense
         fallback={<div className="field-map-loading">Loading map…</div>}
@@ -349,14 +433,15 @@ export default function FieldApp() {
           workspace={w}
           trip={tripOverlay}
           onPick={pickOnMap}
+          pinLocked={pinLocked}
         />
       </Suspense>
       <div className="field-map-note">
         <Layers size={16} />
         <p>
           {touch
-            ? "Tap to select a point, then return to your plan. Move or zoom the map with two fingers."
-            : "Select a point, then return to your plan. Switch map layers for terrain, roads, or satellite imagery."}
+            ? "Tap to drop the pin, or drag it to fine-tune. Move or zoom the map with two fingers."
+            : "Click to drop the pin, or drag it to fine-tune. Switch layers for terrain, roads, or satellite imagery."}
         </p>
       </div>
     </div>

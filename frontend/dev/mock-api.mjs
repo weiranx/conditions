@@ -345,6 +345,37 @@ export function createMockApi({ databasePath } = {}) {
       persist();
       return ok({ user: db.user, ...session() });
     }
+    if (p === "/api/search/daylight") {
+      if (!Number.isFinite(Number(q.lat)) || !Number.isFinite(Number(q.lon)) || !/^\d{4}-\d{2}-\d{2}$/.test(q.date || ""))
+        return fail(400, "lat, lon and date (YYYY-MM-DD) are required.");
+      // Days shorten by about two minutes at each end through the autumn demo dates.
+      const day = Number(q.date.slice(8, 10));
+      const clock = (minutes) => {
+        const h = Math.floor(minutes / 60);
+        return `${((h + 11) % 12) + 1}:${String(minutes % 60).padStart(2, "0")}:00 ${h < 12 ? "AM" : "PM"}`;
+      };
+      return ok({ dawn: clock(390 + day), sunrise: clock(420 + day), sunset: clock(1130 - day * 2) });
+    }
+    if (p === "/api/search/point") {
+      const lat = Number(q.lat);
+      const lon = Number(q.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon))
+        return fail(400, "lat and lon must be valid coordinates.");
+      // Kilometres, near enough for picking the closest demo peak.
+      const km = (peak) => Math.hypot((peak.lat - lat) * 111, (peak.lon - lon) * 111 * Math.cos((lat * Math.PI) / 180));
+      const nearest = [...peaks].sort((a, b) => km(a) - km(b))[0];
+      const distance = nearest ? km(nearest) : Infinity;
+      // Elsewhere a stand-in landmark, the same one for the same spot.
+      const landmarks = ["Bear Lake", "Granite Pass", "Eagle Peak", "Hidden Spring", "Cougar Ridge", "Snow Creek"];
+      const spot = Math.abs(Math.round(lat * 50) * 31 + Math.round(lon * 50));
+      const name = nearest && distance <= 0.4 ? nearest.name
+        : nearest && distance <= 10 ? `Near ${nearest.name}`
+          : `Near ${landmarks[spot % landmarks.length]}`;
+      const elevationFt = nearest && distance <= 25
+        ? Math.round(nearest.elevation - Math.min(distance, 12) * 650)
+        : 3200;
+      return ok({ name, elevationFt });
+    }
     if (p === "/api/search")
       return ok(
         peaks

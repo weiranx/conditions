@@ -31,9 +31,9 @@ export interface UseSearchSuggestionsParams {
 
 export interface UseSearchSuggestionsReturn {
   searchQuery: string;
-  setSearchQuery: (value: string) => void;
+  setSearchQuery: (value: string | ((current: string) => string)) => void;
   committedSearchQuery: string;
-  setCommittedSearchQuery: (value: string) => void;
+  setCommittedSearchQuery: (value: string | ((current: string) => string)) => void;
   suggestions: Suggestion[];
   setSuggestions: React.Dispatch<React.SetStateAction<Suggestion[]>>;
   showSuggestions: boolean;
@@ -93,7 +93,7 @@ export function useSearchSuggestions({
   // Separate components: query text could otherwise spell out another query's area.
   const cacheKeyFor = useCallback((query: string) => JSON.stringify([normalizeSuggestionText(query), nearKey]), [nearKey]);
 
-  const setSearchQuery = useCallback((value: string) => {
+  const setSearchQuery = useCallback((value: string | ((current: string) => string)) => {
     setSearchQueryState(value);
   }, []);
 

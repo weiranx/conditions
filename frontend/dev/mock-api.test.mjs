@@ -361,3 +361,18 @@ test("metering a generated report does not add it to history", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a map point is named after the demo peak on or near it, with an elevation", async () => {
+  const api = createMockApi();
+  const summit = await api.handle("/api/search/point?lat=46.8524&lon=-121.7604");
+  assert.equal(summit.payload.name, "Mount Rainier");
+  const slope = await api.handle("/api/search/point?lat=46.82&lon=-121.70");
+  assert.equal(slope.payload.name, "Near Mount Rainier");
+  assert.ok(slope.payload.elevationFt > 0 && slope.payload.elevationFt < 14411);
+  const elsewhere = await api.handle("/api/search/point?lat=40&lon=-100");
+  assert.match(elsewhere.payload.name, /^Near /, "every point gets a name");
+  const again = await api.handle("/api/search/point?lat=40&lon=-100");
+  assert.equal(again.payload.name, elsewhere.payload.name);
+  const invalid = await api.handle("/api/search/point?lat=north&lon=-100");
+  assert.equal(invalid.status, 400);
+});

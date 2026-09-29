@@ -1,5 +1,5 @@
 const { buildPrecedingNight } = require('./weather-data');
-const { normalizeCoordKey, normalizeCoordDateKey } = require('./cache');
+const { normalizeCoordKey } = require('./cache');
 const { withCircuitBreaker } = require('./http-client');
 const { FT_PER_METER } = require('./geo');
 const { parseIsoTimeToMs, buildPlannedStartIso, clampTravelWindowHours } = require('./time');
@@ -11,6 +11,7 @@ const {
   resolveNoaaCloudCover,
 } = require('./weather-normalizers');
 const { toFiniteOrNull } = require('./numbers');
+const { fetchSolarDay } = require('./solar');
 const { buildVisibilityRisk, buildElevationForecastBands } = require('./visibility-risk');
 const {
   blendNoaaWeatherWithFallback,
@@ -72,21 +73,8 @@ async function fetchWeatherPipeline({
 
   const fetchSolarData = async (solarDate) => {
     try {
-      const solarCacheKey = normalizeCoordDateKey(parsedLat, parsedLon, solarDate);
-      return await solarCache.getOrFetch(solarCacheKey, async () => {
-        const solarRes = await fetchWithTimeout(
-          `https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`,
-          fetchOptions,
-        );
-        if (!solarRes.ok) throw new Error(`Solar API returned ${solarRes.status}`);
-        const solarJson = await solarRes.json();
-        if (solarJson.status !== 'OK') throw new Error('Solar API status not OK');
-        return {
-          sunrise: solarJson.results.sunrise,
-          sunset: solarJson.results.sunset,
-          dayLength: solarJson.results.day_length,
-        };
-      });
+      const { sunrise, sunset, dayLength } = await fetchSolarDay({ lat: parsedLat, lon: parsedLon, date: solarDate, solarCache, fetchWithTimeout, fetchOptions });
+      return { sunrise, sunset, dayLength };
     } catch (error) {
       logger.error({ err: error }, 'Solar API error');
       return null;

@@ -46,69 +46,28 @@
 .sky-stepper:disabled { opacity: 0.4; cursor: default; }
 .sky-stepper:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: -3px; }
 
-.sky-plan-activities { margin: 28px 0 0; padding: 0; border: 0; min-width: 0; container-type: inline-size; }
+.sky-plan-activities { margin: 28px 0 0; padding: 0; border: 0; min-width: 0; }
 .sky-plan-activities > legend { float: left; width: 100%; }
-.sky-activity-grid { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; }
+/* Every activity is one tap away: compact chips that wrap, icon beside the name. */
+.sky-activity-grid { clear: both; display: flex; flex-wrap: wrap; gap: 6px; }
 .field-plan-form.sky-plan label.sky-activity {
-  position: relative; display: grid; gap: 10px; align-content: start; min-height: 92px; padding: 12px 14px 14px;
-  border-radius: 16px; background: var(--sky-surface, var(--f-paper)); border: 1px solid var(--sky-field-border, var(--f-line));
-  color: var(--sky-label, var(--f-ink)); font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  position: relative; display: inline-flex; align-items: center; gap: 7px; min-height: 40px; margin: 0; padding: 0 13px 0 9px;
+  border-radius: 999px; background: var(--sky-field, var(--f-paper)); box-shadow: inset 0 0 0 1px var(--sky-field-border, var(--f-line));
+  color: var(--sky-label, var(--f-ink)); font-size: 14px; font-weight: 550; line-height: 1.2; white-space: nowrap; cursor: pointer;
+  transition: box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
-.field-plan-form.sky-plan label.sky-activity:hover { border-color: var(--sky-field-border-hover); }
-.field-plan-form.sky-plan .sky-activity input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }
-/* Each activity's glyph sits in a small well that fills with the accent when chosen. */
-.sky-activity svg {
-  box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px;
-  background: var(--sky-fill, var(--f-wash)); color: var(--sky-secondary, var(--f-muted));
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
+.field-plan-form.sky-plan label.sky-activity:hover { box-shadow: inset 0 0 0 1px var(--sky-field-border-hover, var(--f-line)); }
+.field-plan-form.sky-plan .sky-activity input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; pointer-events: none; }
+.sky-activity svg { flex: none; color: var(--sky-secondary, var(--f-muted)); }
 .field-plan-form.sky-plan label.sky-activity.is-checked {
-  border-color: var(--sky-accent, var(--f-primary)); background: var(--sky-accent-tint, var(--f-paper));
-  box-shadow: 0 0 0 1px var(--sky-accent, var(--f-primary));
+  background: var(--sky-accent-fill, var(--f-primary)); color: var(--sky-on-accent, var(--f-primary-ink));
+  box-shadow: none; font-weight: 650;
 }
-.sky-activity.is-checked svg { background: var(--sky-accent-fill, var(--f-primary)); color: var(--sky-on-accent, var(--f-primary-ink)); }
-/* A check in the corner marks the choice without relying on colour alone. */
-.sky-activity.is-checked::before {
-  content: ""; position: absolute; top: 10px; right: 10px; width: 18px; height: 18px; border-radius: 50%; background: var(--sky-accent, var(--f-primary));
-}
-.sky-activity.is-checked::after {
-  content: ""; position: absolute; top: 13px; right: 16.5px; width: 4px; height: 8px;
-  border: solid var(--sky-on-accent, var(--f-primary-ink)); border-width: 0 2px 2px 0; transform: rotate(45deg);
-}
+.sky-activity.is-checked svg { color: inherit; }
 .sky-activity:has(input:focus-visible) { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; }
-.sky-activity-toggle {
-  display: inline-flex; align-items: center; gap: 4px; margin: 10px 0 0; padding: 6px 2px; border: 0; background: none;
-  font: inherit; font-size: 14px; font-weight: 600; color: var(--sky-accent, var(--f-primary)); cursor: pointer;
-}
-.sky-activity-toggle:hover { text-decoration: underline; }
-.sky-activity-toggle:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; border-radius: 6px; }
 .field-plan-form.sky-plan .field-form-submit { margin-top: 24px; min-height: 52px; border-radius: 14px; font-size: 17px; }
-
 @media (max-width: 650px) {
-  /* Icon beside the name, so the choices take less height and the submit button
-     is closer on a phone. Two columns only where each half fits "Mountaineering";
-     a 375px phone lists them as one column of single-line rows. */
-  .sky-activity-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 8px; }
-  .field-plan-form.sky-plan label.sky-activity {
-    grid-template-columns: 30px minmax(0, 1fr); align-items: center; align-content: center;
-    gap: 10px; min-height: 48px; padding: 8px 12px; font-size: 14px; line-height: 1.3;
-  }
-  .sky-activity svg { width: 18px; height: 18px; padding: 6px; border-radius: 9px; }
-  /* The filled glyph well marks the choice here; a corner check would crowd the name. */
-  .sky-activity.is-checked::before, .sky-activity.is-checked::after { content: none; }
-}
-/* A narrow form column (Compare, or the plan card on a small laptop) has no room for
-   two cards side by side: "Mountaineering" overflowed them, and one card per row made
-   eight tall cards. List the choices as rows, icon beside the name. */
-@container (max-width: 300px) {
-  .sky-activity-grid { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .field-plan-form.sky-plan label.sky-activity {
-    grid-template-columns: 30px minmax(0, 1fr); align-items: center; align-content: center;
-    gap: 10px; min-height: 48px; padding: 7px 12px; font-size: 14px; line-height: 1.3;
-  }
-  .sky-activity svg { width: 18px; height: 18px; padding: 6px; border-radius: 9px; }
-  .sky-activity.is-checked::before, .sky-activity.is-checked::after { content: none; }
+  .field-plan-form.sky-plan label.sky-activity { min-height: 44px; }
 }
 
 /* ---------- Workspace: map card, quick locations, recent brief ---------- */
@@ -170,7 +129,8 @@
 .sky-plan-limits > summary::-webkit-details-marker { display: none; }
 .sky-plan-limits > summary:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; }
 .sky-plan-limits-title { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; font-weight: 650; }
-.sky-plan-limits-edit { font-weight: 600; color: var(--sky-accent, var(--f-primary)); }
+.sky-plan-limits-edit { flex: none; font-size: 13px; font-weight: 600; color: var(--sky-accent, var(--f-primary)); }
+.sky-plan-lens { font-size: 13px; line-height: 1.45; color: var(--sky-secondary, var(--f-muted)); }
 .sky-plan-limits[open] .sky-plan-limits-edit { visibility: hidden; }
 .sky-plan-limit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .sky-plan-limit-chips > span {
@@ -183,23 +143,70 @@
   font: inherit; font-size: 13px; font-weight: 600; color: var(--sky-accent, var(--f-primary)); cursor: pointer;
 }
 
-/* Optional fourth step: a route to check at timed checkpoints once the brief is ready. */
-.sky-plan-route { margin: 28px 0 0; }
+/* Trip length leads the form: it decides whether step 1 is a place or a trailhead. */
+.field-plan-form.sky-plan > fieldset > .sky-trip-mode { display: flex; margin: 0 0 22px; }
+.field-plan-form.sky-plan > fieldset > .sky-trip-mode label { flex: 1; justify-content: center; min-height: 40px; }
+
+/* The chosen place, with its route attached; "Change" brings the search back. */
+.sky-plan-place {
+  border-radius: 16px; background: var(--sky-surface, var(--f-paper));
+  box-shadow: inset 0 0 0 1px var(--sky-field-border, var(--f-line));
+}
+.sky-plan-place-head { display: flex; align-items: center; gap: 12px; padding: 12px 10px 12px 12px; }
+.sky-plan-place-icon {
+  display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 11px;
+  background: var(--sky-accent-tint, var(--f-wash)); color: var(--sky-accent, var(--f-primary));
+}
+.sky-plan-place-name { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.sky-plan-place-name strong { font-size: 16px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.sky-plan-place-name small { font-size: 12.5px; color: var(--sky-secondary, var(--f-muted)); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sky-plan-place-head .field-text-button { flex: none; min-height: 44px; padding: 0 10px; }
+.sky-plan-place > .field-route-import { margin: 0 12px 12px; }
+.field-location-status .sky-plan-keep { display: inline; min-height: 0; padding: 0; font-size: inherit; }
+
+/* Every forecast day as a chip; the week wraps into rows rather than hiding days off to the side. */
+.sky-date-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; margin: 0 0 16px; }
+.field-plan-form.sky-plan .sky-date-chips label {
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 1px;
+  min-width: 0; min-height: 50px; margin: 0; padding: 6px 10px; border-radius: 12px; cursor: pointer;
+  background: var(--sky-field, var(--f-paper)); box-shadow: inset 0 0 0 1px var(--sky-field-border, var(--f-line));
+  color: var(--sky-label, var(--f-ink)); transition: box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.sky-date-chips label:hover { box-shadow: inset 0 0 0 1px var(--sky-field-border-hover, var(--f-line)); }
+.sky-date-chips strong { font-size: 14px; font-weight: 600; }
+.sky-date-chips small { font-size: 12px; color: var(--sky-secondary, var(--f-muted)); font-variant-numeric: tabular-nums; }
+.field-plan-form.sky-plan .sky-date-chips label.is-checked {
+  background: var(--sky-accent-tint, var(--f-paper)); box-shadow: inset 0 0 0 2px var(--sky-accent, var(--f-primary));
+}
+.sky-date-chips input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.sky-date-chips label:has(input:focus-visible) { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 1px; }
+
+/* The window the brief checks, in words: when you are back. */
+.sky-plan-window { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 12px 0 0; font-size: 13px; }
+.sky-plan-window strong { font-size: 15px; font-weight: 650; color: var(--sky-label, var(--f-ink)); }
+.sky-plan-window span { color: var(--sky-secondary, var(--f-muted)); }
+
+/* A route belongs to the place: named, suggested, or a GPX track, checked at timed checkpoints once the brief is ready. */
+.sky-plan-route { padding: 0 12px; border-top: 1px solid var(--sky-separator, var(--f-line)); }
+.sky-plan-route[open] { padding-bottom: 12px; }
 .sky-plan-route > summary {
-  display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 10px; min-height: 48px; cursor: pointer; list-style: none;
 }
 .sky-plan-route > summary::-webkit-details-marker { display: none; }
-.field-plan-form.sky-plan .sky-plan-route > summary .sky-plan-step { margin: 0; }
+.sky-plan-route-label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 650; }
+.sky-plan-route-label svg { color: var(--sky-secondary, var(--f-muted)); }
 .sky-plan-route > summary small {
   min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 14px; color: var(--sky-secondary, var(--f-muted));
 }
 .sky-plan-route > summary::after {
-  content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px; border: solid var(--sky-secondary, var(--f-muted));
+  content: ""; flex: none; width: 7px; height: 7px; margin: 0 6px; border: solid var(--sky-secondary, var(--f-muted));
   border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px);
 }
 .sky-plan-route[open] > summary::after { transform: rotate(-135deg); }
 .sky-plan-route > summary:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; border-radius: 8px; }
+.sky-plan-route-gpx { margin-top: 10px; }
+.sky-plan-route > .field-route-import { margin-top: 4px; }
 .sky-plan-route-name { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; }
 .sky-plan-route-name label { flex: 1 1 220px; display: grid; gap: 6px; font-size: 13px; font-weight: 550; }
 .field-app .field-plan-form .sky-plan-route-name input {
@@ -226,3 +233,40 @@
 .sky-plan-route-description { font-size: 13px; line-height: 1.45; color: var(--sky-label, var(--f-ink)); }
 .sky-plan-route-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; }
 .sky-plan-route-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--sky-secondary, var(--f-muted)); }
+
+/* Rename and Change sit together at the end of the place card. */
+.sky-plan-place-actions { display: flex; flex: none; align-items: center; }
+.sky-plan-place-actions .field-text-button { min-height: 44px; padding: 0 8px; }
+.sky-plan-rename input {
+  width: 100%; min-height: 40px; padding: 0 10px; border: 1px solid var(--sky-accent, var(--f-primary)); border-radius: 10px;
+  background: var(--sky-field, var(--f-paper)); color: var(--sky-label, var(--f-ink)); font: inherit; font-size: 16px; font-weight: 600;
+  box-shadow: var(--sky-focus-ring);
+}
+.sky-plan-rename input:focus-visible { outline: none; }
+@media (max-width: 420px) {
+  .sky-plan-place-head { flex-wrap: wrap; }
+  .sky-plan-place-actions { margin-left: auto; }
+}
+
+/* The light on the planned day, beside the start it helps choose. */
+.sky-plan-daylight {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 8px 0 0;
+  font-size: 13px; color: var(--sky-secondary, var(--f-muted)); font-variant-numeric: tabular-nums;
+}
+.sky-plan-daylight .field-text-button { min-height: 32px; padding: 0; font-size: 13px; }
+
+/* Later days are outlooks: a lighter, dashed chip, and a note when one is chosen. */
+.field-plan-form.sky-plan .sky-date-chips label.is-outlook:not(.is-checked) {
+  background: transparent; box-shadow: none; border: 1px dashed var(--sky-field-border-hover, var(--f-line));
+}
+.sky-date-chips label.is-outlook strong { font-weight: 550; }
+.sky-date-outlook { margin: -8px 0 14px; font-size: 13px; line-height: 1.45; color: var(--sky-secondary, var(--f-muted)); }
+
+.field-plan-form.sky-plan .sky-plan-compare-days { margin-top: 16px; }
+.sky-plan-route-note .field-text-button { margin-left: 6px; }
+.sky-plan-place-title { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.field-app .field-plan-form .sky-plan-rename-button {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; margin: -6px 0; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--sky-secondary, var(--f-muted)); cursor: pointer;
+}
+.field-app .field-plan-form .sky-plan-rename-button:hover { background: var(--sky-fill, var(--f-wash)); color: var(--sky-label, var(--f-ink)); }

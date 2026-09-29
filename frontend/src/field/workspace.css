@@ -519,38 +519,9 @@
 .field-duration-control input:focus-visible {
   outline: none;
 }
-/* Keep long activity names readable in narrow planner and comparison panels. */
-@container plan (max-width: 330px) {
-  .field-plan-form .field-plan-schedule > .field-plan-duration,
-  .field-plan-form .field-plan-schedule > .field-plan-activity {
-    grid-column: 1 / -1;
-  }
-  .field-plan-form .field-plan-schedule > .field-plan-duration {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .field-plan-schedule .field-duration-control {
-    width: 132px;
-    margin-top: 0;
-  }
-}
-@media screen and (max-width: 650px) {
-  .field-plan-form .field-plan-schedule > .field-plan-duration,
-  .field-plan-form .field-plan-schedule > .field-plan-activity {
-    grid-column: 1 / -1;
-  }
-  .field-plan-form .field-plan-schedule > .field-plan-duration {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .field-plan-schedule .field-duration-control {
-    width: 132px;
-    margin-top: 0;
-  }
+/* Leave at and Out for share a row down to the narrowest phones (mobile.css stacks them there). */
+@container plan (max-width: 300px) {
+  .field-plan-form .field-plan-schedule { grid-template-columns: minmax(0, 1fr); }
 }
 @media (min-width: 1201px) {
   .field-planner-grid {
@@ -860,14 +831,62 @@
     backdrop-filter: none;
   }
 }
-.field-map-pin span {
+.field-map-pin svg {
   display: block;
-  width: 22px;
-  height: 22px;
-  background: #2878d7;
-  border: 4px solid white;
-  border-radius: 50%;
-  box-shadow: 0 1px 6px #12365477;
+  width: 32px;
+  height: 42px;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px #12365466);
+  transform-origin: 50% 100%;
+  animation: field-pin-drop 0.32s cubic-bezier(0.3, 1.4, 0.6, 1);
+}
+.field-map-pin path {
+  fill: #d8452f;
+  stroke: white;
+  stroke-width: 2;
+}
+.field-map-pin circle {
+  fill: white;
+}
+.leaflet-marker-draggable.field-map-pin {
+  cursor: grab;
+}
+.leaflet-marker-draggable.field-map-pin:active {
+  cursor: grabbing;
+}
+@keyframes field-pin-drop {
+  from { transform: translateY(-14px) scale(0.9); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-map-pin svg { animation: none; }
+}
+/* The chosen point's name, kept above its pin. */
+.field-map .leaflet-tooltip.field-map-pin-label {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: #16211c;
+  color: white;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 1px 4px #0005;
+}
+.field-map .leaflet-tooltip.field-map-pin-label::before {
+  border-top-color: #16211c;
+}
+/* A crosshair says a click here places the pin. */
+.field-map-surface.is-picking .field-map.leaflet-container {
+  cursor: crosshair;
+}
+/* Beside the plan there is nothing to go back to. */
+@media (min-width: 651px) {
+  .field-planner-map-heading > .field-map-back {
+    display: none;
+  }
 }
 .field-map .leaflet-tooltip {
   font-family: inherit;
@@ -1674,3 +1693,41 @@
 }
 
 .field-model-select{display:grid;gap:10px;flex:1;min-width:0}.field-model-select select,.field-model-select input{width:100%;min-width:0}.field-admin-setting:has(.field-model-select)>.field-action-row{align-items:flex-end}.field-admin-setting:has(.field-model-select){min-width:0}@media(max-width:650px){.field-admin-setting:has(.field-model-select)>.field-action-row{display:grid;grid-template-columns:1fr;width:100%}.field-model-select select{min-height:44px}}
+/* Phones: choosing on the map opens it over the page, with Done to go back. */
+.field-app .field-planner-map.is-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-radius: 0;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.field-planner-map.is-sheet .field-map-surface {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.field-app .field-planner-map.is-sheet .field-map {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.field-planner-map.is-sheet .field-map-done {
+  min-height: 44px;
+  padding: 0 22px;
+}
+.field-map-sheet-open,
+.field-map-sheet-open body {
+  overflow: hidden;
+}
+/* The app's bars sit in a higher layer than the page; the sheet has the screen to itself. */
+.field-map-sheet-open .field-app .field-sidebar,
+.field-map-sheet-open .field-app .field-topbar,
+.field-map-sheet-open .mock-controls {
+  visibility: hidden;
+}

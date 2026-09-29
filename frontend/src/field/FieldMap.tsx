@@ -38,11 +38,13 @@ function FitTrip({ trip }: { trip: TripOverlay }) {
   }, [map, key]);
   return null;
 }
+// A map pin whose tip marks the point; it drops in each time the point moves.
 const pin = L.divIcon({
   className: "field-map-pin",
-  html: "<span></span>",
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
+  html: '<svg viewBox="0 0 32 42" aria-hidden="true"><path d="M16 1C7.7 1 1 7.6 1 15.8 1 27 16 41 16 41s15-14 15-25.2C31 7.6 24.3 1 16 1z"/><circle cx="16" cy="15.5" r="5.5"/></svg>',
+  iconSize: [32, 42],
+  iconAnchor: [16, 41],
+  tooltipAnchor: [0, -40],
 });
 function Position({
   lat,
@@ -66,6 +68,18 @@ function Position({
         { padding: [35, 35], maxZoom: 15 },
       );
   }, [map, route]);
+  return null;
+}
+// Leaflet measures its box once; a map that grows (the phone's full-screen
+// sheet) must be told, or tiles stop at the old edge.
+function FollowSize() {
+  const map = useMap();
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
   return null;
 }
 function Pick({ onPick }: { onPick?: (lat: number, lon: number) => void }) {
@@ -104,12 +118,15 @@ export default function FieldMap({
   onPick,
   workspace: w,
   trip,
+  pinLocked = false,
 }: {
   plan: Plan;
   onPick?: (lat: number, lon: number) => void;
   workspace?: Workspace;
   /** A multi-day trip: its camps, exits and high points, drawn over the objective. */
   trip?: TripOverlay | null;
+  /** The objective comes from something else (a GPX track), so it cannot be dragged. */
+  pinLocked?: boolean;
 }) {
   const [localStyle, setLocalStyle] = useState<MapStyle>("topo");
   const [nonce, setNonce] = useState(0);
@@ -123,6 +140,9 @@ export default function FieldMap({
     ];
   const lat = plan.lat ?? 46.8523;
   const lon = plan.lon ?? -121.7603;
+  const lookup = w?.pointLookup;
+  const lookingUp = Boolean(lookup?.loading && lookup.lat === plan.lat && lookup.lng === plan.lon);
+  const pinLabel = lookingUp ? "Finding what’s here…" : plan.name || "Selected objective";
   const events = useMemo(
     () => ({
       dragend: (e: L.DragEndEvent) => {
@@ -133,7 +153,7 @@ export default function FieldMap({
     [onPick],
   );
   return (
-    <div className={`field-map-surface is-${style}`}>
+    <div className={`field-map-surface is-${style}${onPick && !pinLocked ? " is-picking" : ""}`}>
       <div className="field-map-tools">
         <div role="group" aria-label="Map layer">
           {(["topo", "street", "satellite"] as const)
@@ -185,6 +205,7 @@ export default function FieldMap({
           route={plan.route}
         />
         <Pick onPick={onPick} />
+        <FollowSize />
         {trip && trip.points.length > 0 && (
           <>
             <FitTrip trip={trip} />
@@ -213,12 +234,17 @@ export default function FieldMap({
         )}
         {plan.lat !== null && (
           <Marker
+            key={`${lat},${lon}`}
             position={[lat, lon]}
             icon={pin}
-            draggable={!!onPick}
+            draggable={!!onPick && !pinLocked}
             eventHandlers={events}
+            zIndexOffset={1000}
           >
-            <Tooltip>{plan.name || "Selected objective"}</Tooltip>
+            {/* The name stays in view, so a pin is never an unnamed dot. */}
+            <Tooltip permanent direction="top" className="field-map-pin-label">
+              {pinLabel}
+            </Tooltip>
           </Marker>
         )}
         {plan.route && (
