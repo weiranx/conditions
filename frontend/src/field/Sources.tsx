@@ -7,12 +7,37 @@ import { compareReports, type ReportComparison } from "../app/report-changes";
 import { getReportComparisonBaseline } from "../lib/saved-reports";
 import { parsePersistedReport } from "../app/report-storage";
 import { ScoreExplanation } from "./ScoreExplanation";
-import { Details, SourceLink } from "./Details";
+import { SourceLink } from "./Details";
+import { Evidence } from "./Evidence";
+import { evidenceFormat } from "./evidence-format";
 import { dateLabel } from "./data";
 import { FreshnessChart } from "./sky/FreshnessChart";
 
+const FIELD_NAMES: Record<string, string> = {
+  temp: "temperature",
+  feelsLike: "feels-like",
+  dewPoint: "dew point",
+  description: "conditions",
+  windSpeed: "wind",
+  windGust: "gusts",
+  windDirection: "wind direction",
+  pressure: "pressure",
+  humidity: "humidity",
+  cloudCover: "cloud cover",
+  precipChance: "rain / snow chance",
+  isDaytime: "daylight",
+};
+
 export function Sources({ workspace: w }: { workspace: Workspace }) {
   const flags = resolveReportFeatureFlags(w.safetyData?.featureFlags);
+  const f = evidenceFormat(w);
+  // Group the readings by the source that supplied them: "NOAA: temperature, wind, …".
+  const fieldSourceRows = Object.entries(
+    Object.entries(w.safetyData?.weather.sourceDetails?.fieldSources ?? {}).reduce<Record<string, string[]>>((groups, [field, source]) => {
+      if (source && source !== "Unavailable") (groups[source] ??= []).push(FIELD_NAMES[field] ?? field.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase());
+      return groups;
+    }, {}),
+  ).map(([source, fields]) => [source, fields.join(", ")] as const);
   const [comparison, setComparison] = useState<ReportComparison | null>(null);
   const [comparisonError, setComparisonError] = useState("");
   const report = w.reportSnapshot;
@@ -134,7 +159,13 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
                 Both days use a {w.formatClockForStyle(w.dayOverDay.startTime, w.preferences.timeStyle)} local start
                 and a {w.dayOverDay.travelWindowHours}-hour travel window.
               </p>
-              <Details title="What changed" value={w.dayOverDay.changes} open />
+              {w.dayOverDay.changes.length > 0 ? (
+                <ul className="sky-bullets">
+                  {w.dayOverDay.changes.map((change) => <li key={change}>{w.localizeUnitText(change)}</li>)}
+                </ul>
+              ) : (
+                <p className="sky-cap">No meaningful forecast changes.</p>
+              )}
             </section>
           )}
         </div>
@@ -160,11 +191,21 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
             {w.nwsTotalAlertCount} in the full feed.
           </p>
           {w.nwsAlerts.map((alert, i) => (
-            <Details
+            <Evidence
               key={i}
-              title={`${alert.event || "Official alert"} · ${alert.severity || "Severity unavailable"}`}
-              value={alert}
-            />
+              title={[alert.event || "Official alert", alert.severity].filter(Boolean).join(" · ")}
+              rows={[
+                ["Starts", f.time(alert.onset || alert.effective)],
+                ["Ends", f.time(alert.ends || alert.expires)],
+                ["Issued by", alert.senderName],
+                ["Area", alert.areaDesc],
+              ]}
+              links={[{ url: alert.link, label: "Full alert" }]}
+            >
+              {alert.headline && <p className="sky-cap is-body">{alert.headline}</p>}
+              {alert.description && <p className="sky-cap sky-alert-text">{alert.description}</p>}
+              {alert.instruction && <p className="sky-cap sky-alert-text"><strong>What to do:</strong> {alert.instruction}</p>}
+            </Evidence>
           ))}
           {!w.nwsAlerts.length && (
             <p className="sky-cap">
@@ -176,14 +217,16 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
         <section className="sky-card" aria-labelledby="sky-sources-provenance">
           <span className="sky-card-head"><span id="sky-sources-provenance">Forecast provenance</span></span>
           <p className="sky-cap is-body">{w.weatherSourceDisplay}</p>
-          <Details
-            title="Weather field sources and forecast context"
-            value={{
-              sources: w.safetyData?.weather.sourceDetails,
-              evidence: w.safetyData?.safety.weatherProvenance,
-              forecast: w.safetyData?.forecast,
-              timeZone: w.objectiveTimezone,
-            }}
+          <Evidence
+            title="Which source supplied each reading"
+            rows={[
+              ...fieldSourceRows,
+              ["Supplemented by", w.safetyData?.weather.sourceDetails?.supplementalSources?.join(", ")],
+              ["Forecast issued", f.time(w.safetyData?.weather.issuedTime)],
+              ["Forecast available", w.safetyData?.forecast?.availableRange?.start && w.safetyData.forecast.availableRange.end
+                ? [...new Set([dateLabel(w.safetyData.forecast.availableRange.start), dateLabel(w.safetyData.forecast.availableRange.end)])].join(" to ") : null],
+              ["Time zone", w.objectiveTimezone],
+            ]}
           />
           <details className="field-detail-disclosure">
             <summary>Complete report data</summary>

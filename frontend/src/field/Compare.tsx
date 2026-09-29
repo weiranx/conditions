@@ -1,6 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { copyTextToClipboard } from "../app/clipboard";
-import { Details } from "./Details";
 import { ArrowRight, Check, Sunrise, TriangleAlert } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { WorkspacePlan } from "./WorkspacePlan";
@@ -457,9 +456,6 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     <button className="field-button field-button-primary" onClick={() => w.handleUseTripDayInPlanner(selected.date, w.tripStartTime)}>
                       Open this day <ArrowRight size={15} aria-hidden="true" />
                     </button>
-                  </div>
-                  <div className="sky-evidence">
-                    <Details title="Daily thresholds, weather, and comparison measurements" value={{ ...selected, safetyData: undefined }} />
                   </div>
                 </article>
               )}

@@ -6,7 +6,7 @@ import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
 import type { RouteAnalysisStage, RouteLoadingState, RouteShapeChoice } from "../hooks/useRouteAnalysis";
 import { useAiAvailability } from "../hooks/useAiAvailability";
-import { Details } from "./Details";
+import { Evidence } from "./Evidence";
 import { dateLabel } from "./data";
 import {
   buildCheckpointProfile,
@@ -639,13 +639,17 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               </div>
             )}
           </section>
-          <Details
-            title="Terrain sampling and route provenance"
-            value={{
-              terrain: result.terrainProfile,
-              source: result.routeSourceDetails,
-              route: result.routeMetadata,
-            }}
+          <Evidence
+            title="How the route was sampled"
+            rows={[
+              ["Matched route", result.routeSourceDetails?.matchedName],
+              ["Points sampled", typeof result.terrainProfile?.sampledPointCount === "number" ? String(result.terrainProfile.sampledPointCount) : null],
+              ["Distance sampled", typeof result.terrainProfile?.sampledDistanceMiles === "number" ? w.formatDistanceDisplay(result.terrainProfile.sampledDistanceMiles) : null],
+              ["Climbing sampled", typeof result.terrainProfile?.sampledElevationGainFt === "number" ? w.formatElevationDisplay(result.terrainProfile.sampledElevationGainFt) : null],
+              ["Steepest grade", typeof result.terrainProfile?.maxSampledGradePct === "number" ? `${Math.round(result.terrainProfile.maxSampledGradePct)}%` : null],
+              ["Main travel aspects", result.terrainProfile?.dominantTravelAspects?.join(", ")],
+            ]}
+            notes={[result.terrainProfile?.note]}
           />
         </>
       )}

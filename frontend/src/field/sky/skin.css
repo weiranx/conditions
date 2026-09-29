@@ -175,3 +175,10 @@
 .field-app .sky-report .condition-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .field-app .sky-report .condition-legend span::before { content: ""; width: 16px; border-top: 2.25px solid var(--sky-label); }
 .field-app .sky-report .condition-legend .is-reference::before { border-top: 1.5px dashed var(--sky-secondary); }
+
+/* Written-out evidence under a card. */
+.field-app .sky-evidence-body > .sky-list { margin: 2px 0 4px; }
+.field-app .sky-evidence-body > .sky-bullets { margin: 4px 0 8px; }
+.field-app .sky-evidence-body > .sky-cap { margin: 6px 0; }
+.sky-evidence-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 10px; }
+.sky-alert-text { white-space: pre-line; }

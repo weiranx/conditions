@@ -18,7 +18,10 @@ import {
 } from "./ConditionCharts";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
-import { Details, SourceLink } from "./Details";
+import { SourceLink } from "./Details";
+import { Evidence } from "./Evidence";
+import { evidenceFormat } from "./evidence-format";
+import { FieldFeedEvidence } from "./FieldFeedEvidence";
 import { ComfortScore } from "./ComfortScore";
 import { shortHour, type SkyHour } from "./sky/sky-model";
 import { PrecipMountain } from "./sky/PrecipMountain";
@@ -100,6 +103,11 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
     ...(freezingFt !== null && freezingFt > 0 ? [{ label: "Freezing level", ft: freezingFt, tone: "cold" as const }] : []),
     ...(snowLevelFt !== null && snowLevelFt > 0 ? [{ label: "Snow level", ft: snowLevelFt, tone: "snow" as const }] : []),
   ];
+  const f = evidenceFormat(w);
+  const heatMetrics = data.heatRisk?.metrics;
+  const air = data.airQuality;
+  const tempContext = data.weather.temperatureContext24h;
+  const moon = data.atmosphere?.moon;
   const skyClock = (minute: number) =>
     w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   return (
@@ -169,7 +177,17 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               />
             </div>
             <div className="sky-evidence">
-              <Details title="Precipitation intervals and source data" value={w.rainfallPayload} />
+              <Evidence
+                title="Expected precipitation and source"
+                rows={[
+                  [`Rain in your ${rainfall.expectedTravelWindowHours}-hour window`, rainfall.expectedRainWindowDisplay],
+                  [`Snow in your ${rainfall.expectedTravelWindowHours}-hour window`, rainfall.expectedSnowWindowDisplay],
+                  ["Source", w.rainfallPayload?.source],
+                  ["Issued", f.time(w.rainfallPayload?.issuedTime)],
+                ]}
+                notes={[rainfall.noteLine, rainfall.expectedNoteLine]}
+                links={[{ url: w.rainfallPayload?.link }]}
+              />
             </div>
           </section>
         </div>
@@ -185,7 +203,20 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
             <ExposureCard className="is-heat" icon={<ThermometerSun size={16} aria-hidden="true" />} title="Heat exposure"
               value={heatRisk.label || "Unavailable"} tone={heatRisk.status}
               note={heatRisk.guidance}
-              evidence={<Details title="Heat-stress measurements" value={data.heatRisk} />}>
+              evidence={<Evidence
+                title="What sets the heat risk"
+                points={f.texts(data.heatRisk?.reasons)}
+                rows={[
+                  ["Temperature", f.temp(heatMetrics?.tempF)],
+                  ["Feels like", f.temp(heatMetrics?.feelsLikeF)],
+                  ["Humidity", f.percent(heatMetrics?.humidity)],
+                  ["Hottest in the next 12 hours", f.temp(heatMetrics?.peakTemp12hF)],
+                  ["Hottest feels-like, next 12 hours", f.temp(heatMetrics?.peakFeelsLike12hF)],
+                  [heatMetrics?.lowerTerrainLabel ? `Feels like at ${heatMetrics.lowerTerrainLabel}` : "Feels like lower down",
+                    [f.temp(heatMetrics?.lowerTerrainFeelsLikeF), f.elevation(heatMetrics?.lowerTerrainElevationFt)].filter(Boolean).join(" at ") || null],
+                  ["Source", data.heatRisk?.source],
+                ]}
+              />}>
               <ConditionTrend label={trailheadTemps ? `Temperature, ${w.objectiveTerms.start} to ${w.objectiveTerms.top}` : `Temperature at the ${w.objectiveTerms.top}`}
                 values={trailheadTemps ?? hours.map((hour) => hour.temp)} format={w.formatTempDisplay} start={start} end={end}
                 compare={trailhead ? {
@@ -202,7 +233,22 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               note={(fireRisk.level ?? 0) >= 1 && data.fireRisk?.reasons?.[0]
                 ? `${w.localizeUnitText(data.fireRisk.reasons[0])} ${data.fireRisk.guidance || ""}`.trim()
                 : data.fireRisk?.guidance}
-              evidence={<Details title="What sets the fire risk" value={data.fireRisk} />}>
+              evidence={<Evidence
+                title="What sets the fire risk"
+                points={f.texts(data.fireRisk?.reasons)}
+                rows={[["Source", data.fireRisk?.source]]}
+              >
+                {Boolean(data.fireRisk?.alertsConsidered?.length) && (
+                  <ul className="sky-bullets">
+                    {data.fireRisk!.alertsConsidered!.map((alert, i) => (
+                      <li key={i}>
+                        {[alert.event, alert.severity, f.time(alert.expires) && `until ${f.time(alert.expires)}`].filter(Boolean).join(" · ")}
+                        {" "}<SourceLink url={alert.link}>Alert</SourceLink>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Evidence>}>
               <ConditionTrend label="Relative humidity" values={hours.map((hour) => hour.humidity)} format={percent} start={start} end={end} domain={[0, 100]}
                 hours={hourTicks} bands={[{ from: 0, to: 30, label: "dry, fire spreads faster", tone: "caution" }]} />
             </ExposureCard>
@@ -213,7 +259,24 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               tone={airQualityFutureNotApplicable || !aqiKnown ? "missing" : aqi > 100 ? "over" : "ok"}
               status={airQualityFutureNotApplicable ? "Not for your date" : data.airQuality?.category || undefined}
               note={airQualityFutureNotApplicable ? "Current AQI does not represent the selected future date." : !aqiKnown ? "Unavailable" : undefined}
-              evidence={<Details title="Air-quality sources, timing, and pollutants" value={data.airQuality} />}>
+              evidence={<Evidence
+                title="Pollutants, timing, and source"
+                rows={[
+                  ["Reading", air?.dataType === "modeled_forecast" ? "Modeled forecast" : air?.dataType === "observed_nowcast" ? "Current observation" : null],
+                  ["Measured", f.observed(air?.measuredTime)],
+                  ["Valid for", f.time(air?.validTime)],
+                  ["Main pollutant", air?.observation?.dominant?.parameter],
+                  ["Reporting area", air?.observation?.dominant?.reportingArea],
+                  ["Fine particles (PM2.5)", f.number(air?.pm25, " µg/m³")],
+                  ["Coarse particles (PM10)", f.number(air?.pm10, " µg/m³")],
+                  ["Ozone", f.number(air?.ozone, " µg/m³")],
+                  ["Forecast", air?.forecast && (f.number(air.forecast.usAqi) || air.forecast.category)
+                    ? [f.number(air.forecast.usAqi, " AQI"), air.forecast.category, f.time(air.forecast.validTime)].filter(Boolean).join(" · ")
+                    : null],
+                  ["Source", air?.source],
+                ]}
+                notes={[air?.note, air?.observation?.note]}
+              />}>
               {!airQualityFutureNotApplicable && (
                 <ConditionScale label="US air-quality index" value={data.airQuality?.usAqi} maximum={500} bands={AQI_BANDS} />
               )}
@@ -222,7 +285,15 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
           <ExposureCard className="is-visibility" icon={<Eye size={16} aria-hidden="true" />} title="Visibility"
             value={visibility.level === "Unknown" ? "Unavailable" : visibility.level} tone={visibility.status}
             note={visibility.detail}
-            evidence={<Details title="Visibility risk and active hours" value={data.weather.visibilityRisk} />}>
+            evidence={<Evidence
+              title="What limits visibility"
+              points={f.texts(visibility.factors)}
+              rows={[
+                ["Hours affected", visibility.activeHours !== null && visibility.windowHours !== null
+                  ? `${visibility.activeHours} of ${visibility.windowHours}` : null],
+                ["Source", visibility.source],
+              ]}
+            />}>
             <ConditionTrend label="Cloud cover" values={hours.map((hour) => hour.cloudCover)} format={percent} start={start} end={end} domain={[0, 100]}
               hours={hourTicks} kind="bars" />
           </ExposureCard>
@@ -235,8 +306,21 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
                 ? "The day's maximum; it may fall outside your hours. A low reading at an early start says little about later."
                 : "The start-time reading alone cannot describe sun exposure later in the day."}
               evidence={<>
-                <Details title="UV, freezing level, and atmospheric context" value={data.atmosphere} />
-                <Details title="24-hour temperature context" value={data.weather.temperatureContext24h} />
+                <Evidence
+                  title="More sun, sky, and temperature"
+                  rows={[
+                    ["UV category", data.atmosphere?.uvCategory],
+                    ["Wind chill", f.temp(data.atmosphere?.windChill)],
+                    ["Thunderstorm chance", [f.percent(data.atmosphere?.thunderProbability), data.atmosphere?.thunderCategory].filter(Boolean).join(" · ") || null],
+                    ["Precipitation type", data.atmosphere?.precipType?.label],
+                    ["24-hour low", f.temp(tempContext?.minTempF)],
+                    ["24-hour high", f.temp(tempContext?.maxTempF)],
+                    ["Overnight low", f.temp(tempContext?.overnightLowF)],
+                    ["Daytime high", f.temp(tempContext?.daytimeHighF)],
+                    ["Moon", moon?.name ? [moon.name, typeof moon.illumination === "number" && `${f.percent(moon.illumination <= 1 ? moon.illumination * 100 : moon.illumination)} lit`].filter(Boolean).join(" · ") : null],
+                  ]}
+                  notes={[f.text(data.atmosphere?.precipType?.reason)]}
+                />
               </>}>
               <dl className="sky-list is-compact report-atmosphere-facts">
                 <div><dt>UV near your start</dt><dd>{uvDisplay(data.atmosphere?.uvIndex)}</dd></div>
@@ -290,20 +374,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               </p>
             )}
             <div className="sky-evidence is-list">
-              {(
-                [
-                  ["Nearby weather station", data.localConditions?.weatherObservation],
-                  ["Radar and lightning", data.localConditions?.radar],
-                  ["Trail and road access", data.localConditions?.access],
-                  ["Land-manager closures", data.localConditions?.closures],
-                  ["Wildfire incidents and detections", data.localConditions?.wildfire],
-                  ["Stream crossings and flow", data.localConditions?.streamflow],
-                  ["Smoke observations and forecast", data.localConditions?.smoke],
-                  ["Coastal tides", data.localConditions?.tides],
-                ] as const
-              ).map(([title, value]) => (
-                <Details key={title} title={title} value={value} />
-              ))}
+              <FieldFeedEvidence local={data.localConditions} f={f} />
             </div>
           </div>
         </section>

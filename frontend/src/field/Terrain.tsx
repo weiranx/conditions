@@ -2,11 +2,14 @@ import { SurfacePrediction } from "./SurfacePrediction";
 import { lazy, Suspense, useState } from "react";
 import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
+import type { AvalancheProblem } from "../app/types";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { planFromReport } from "./data";
 import { WindCompass } from "./WindCompass";
-import { Details, SourceLink } from "./Details";
+import { SourceLink } from "./Details";
+import { Evidence } from "./Evidence";
+import { evidenceFormat, readable } from "./evidence-format";
 import { AiExplanationSkeleton, SnowAnalysis } from "./AiExplanation";
 import { MountainSection } from "./sky/MountainSection";
 import { AvalancheMountain, type AvalancheBandKey } from "./sky/AvalancheMountain";
@@ -213,6 +216,11 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
       return aspectHit === "no" || bandHit === "no" ? "no" : aspectHit === "yes" && bandHit === "yes" ? "yes" : "maybe";
     },
   }));
+  const f = evidenceFormat(w);
+  const problemSize = (size: AvalancheProblem["size"]) => {
+    const values = (Array.isArray(size) ? size : size === undefined || size === null || size === "" ? [] : [size]).map((value) => String(value).replace(/^D/i, ""));
+    return values.length ? `D${[...new Set([values[0], values[values.length - 1]])].join("–D")}` : null;
+  };
   const snowDepth = data.snowpack?.snotel?.snowDepthIn == null
     ? "Unavailable"
     : formatSnowDepthForElevationUnit(data.snowpack.snotel.snowDepthIn, w.preferences.elevationUnit);
@@ -358,7 +366,17 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
           <div className="sky-prose">
             <SurfacePrediction condition={data.terrainCondition} localize={w.localizeUnitText} />
           </div>
-          <Details title="Surface, freeze/thaw, and travel evidence" value={data.terrainCondition} />
+          <Evidence
+            title="Why this surface"
+            points={[...f.texts(data.terrainCondition?.reasons), ...f.texts(data.terrainCondition?.snowProfile?.reasons)]}
+            rows={[
+              ["Expected impact", readable(data.terrainCondition?.impact)],
+              ["Recommended travel", f.text(data.terrainCondition?.recommendedTravel)],
+              ["Snow surface", data.terrainCondition?.snowProfile?.label],
+              ["Source", data.terrainCondition?.source],
+            ]}
+            notes={[f.text(data.terrainCondition?.snowProfile?.summary)]}
+          />
         </section>
         {flags.windLoadingDetails && w.windLoadingApplies && (
           <section className="sky-card" aria-labelledby="sky-terrain-wind">
@@ -377,9 +395,10 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               <div><dt>Elevation focus</dt><dd>{w.windLoadingElevationFocus}</dd></div>
               <div><dt>Peak gust</dt><dd>{w.formatWindDisplay(w.windGustMph)}<small>{w.resolvedWindDirectionSource}</small></dd></div>
             </dl>
-            <Details
-              title="Wind loading notes and overlapping avalanche problems"
-              value={{ summary: w.windLoadingSummary, notes: w.windLoadingNotes, overlap: w.aspectOverlapProblems }}
+            <Evidence
+              title="Wind loading notes"
+              points={[...w.windLoadingNotes, ...w.aspectOverlapProblems.map((problem) => `Overlaps the bulletin's ${problem}`)]}
+              notes={[w.windLoadingSummary !== w.windLoadingActionLine ? w.windLoadingSummary : null]}
             />
           </section>
         )}
@@ -436,10 +455,11 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                     <h3><span className="sky-problem-num" aria-hidden="true">{i + 1}</span>{problem.name}</h3>
                     <p className="sky-problem-where">{problemTerrain[i].description}</p>
                     <p>{problem.discussion || problem.problem_description}</p>
-                    <Details
-                      title="Affected aspects, elevations, size, and likelihood"
-                      value={{ likelihood: problem.likelihood, size: problem.size, location: problem.location }}
-                    />
+                    {(problem.likelihood || problemSize(problem.size)) && (
+                      <p className="sky-cap">
+                        {[problem.likelihood && `Likelihood: ${readable(problem.likelihood)}`, problemSize(problem.size) && `Size: ${problemSize(problem.size)}`].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                     </div>
                   </article>
                 ))}
@@ -449,7 +469,20 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               <p className="sky-cap is-body">{avalanche.notApplicableReason || "No avalanche forecast applies to this plan."}</p>
             )}
             <SourceLink url={w.safeAvalancheLink}>Read the complete bulletin</SourceLink>
-            <Details title="Avalanche forecast coverage and validity" value={data.avalanche} />
+            <Evidence
+              title="Bulletin coverage and timing"
+              rows={[
+                ["Center", data.avalanche?.center],
+                ["Zone", data.avalanche?.zone],
+                ["Published", f.observed(data.avalanche?.publishedTime)],
+                ["Expires", f.time(data.avalanche?.expiresTime)],
+                ["Coverage", data.avalanche?.coverageStatus && data.avalanche.coverageStatus !== "reported" ? readable(data.avalanche.coverageStatus) : null],
+              ]}
+              notes={[
+                data.avalanche?.staleWarning ? `This bulletin is more than ${data.avalanche.staleWarning === "72h" ? "72" : "48"} hours old.` : null,
+                avalanche.relevant ? data.avalanche?.relevanceReason : null,
+              ]}
+            />
           </div>
         </section>
       )}
@@ -535,7 +568,29 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 {snowpack.interpretation?.bullets.map((text, i) => <li key={i}>{text}</li>)}
               </ul>
             )}
-            <Details title="Snowpack quality, history, and observation details" value={data.snowpack} />
+            <Evidence
+              title="Observation dates and nearby stations"
+              rows={[
+                ["SNOTEL observed", f.time(data.snowpack?.snotel?.observedDate)],
+                ["NOHRSC model time", f.time(data.snowpack?.nohrsc?.sampledTime)],
+                ["CDEC observed", f.time(data.snowpack?.cdec?.observedDate)],
+                ["Snow-cover image", f.time(data.snowpack?.viirs?.observedTime)],
+                ["Nearby stations, median depth", data.snowpack?.snotelConsensus && (data.snowpack.snotelConsensus.stationCount ?? 0) > 1
+                  ? `${f.depth(data.snowpack.snotelConsensus.medianDepthIn) ?? "—"} across ${data.snowpack.snotelConsensus.stationCount} stations` : null],
+              ]}
+              points={(data.snowpack?.snotelStations ?? []).map((station) => [
+                station.stationName,
+                f.elevation(station.elevationFt),
+                f.distance(station.distanceKm),
+                f.depth(station.snowDepthIn) && `${f.depth(station.snowDepthIn)} deep`,
+              ].filter(Boolean).join(" · "))}
+              notes={[
+                f.text(data.snowpack?.historical?.summary),
+                f.text(data.snowpack?.snotel?.note),
+                f.text(data.snowpack?.nohrsc?.note),
+                f.text(data.snowpack?.cdec?.note),
+              ]}
+            />
           </div>
         </section>
       )}
