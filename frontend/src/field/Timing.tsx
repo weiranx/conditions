@@ -9,6 +9,7 @@ import { buildSkyHours, isOverHour, type SkyHour } from "./sky/sky-model";
 import { StartTimeline, type TimelineRow } from "./sky/StartTimeline";
 import { durationLabel } from "./sky/status";
 import type { ApproachSummary } from "../app/types";
+import { Fold } from "./sky/Fold";
 
 const LEVEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
@@ -214,7 +215,8 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
         </section>
       )}
 
-      <div className="sky-duo sky-section">
+      <Fold id="sky-timing-daylight-limits" title="Daylight and your limits" hint="Sunrise, sunset and the limits behind these checks.">
+      <div className="sky-duo">
         {flags.daylightTimeline && (
           <section className="sky-card report-daylight-panel" aria-labelledby="sky-timing-daylight">
             <span className="sky-card-head"><span id="sky-timing-daylight">Your day outside</span></span>
@@ -258,6 +260,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
           </details>
         </section>
       </div>
+      </Fold>
 
       {flags.contingencyPlanning && w.safetyData?.contingency?.status === "ok" && (
         <div className="sky-section">

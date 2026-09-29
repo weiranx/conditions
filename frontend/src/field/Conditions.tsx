@@ -28,6 +28,7 @@ import { PrecipMountain } from "./sky/PrecipMountain";
 import { capitalize } from "../app/objective-terms";
 import { knownFeet } from "./sky/status";
 import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
+import { Fold } from "./sky/Fold";
 
 /** US EPA AQI categories. */
 const AQI_BANDS = [
@@ -338,11 +339,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
       </section>
 
       {flags.fieldObservations && (
-        <section className="sky-section" aria-labelledby="sky-field-title">
-          <div className="sky-sh">
-            <h2 id="sky-field-title">Field reports and access</h2>
-            <p>Nearby stations and reports may not describe your exact route.</p>
-          </div>
+        <Fold id="sky-field-title" title="Field reports and access">
           <div className="sky-card sky-field-card">
             <span className="sky-card-head">
               <span className="sky-exposure-title"><Radio size={16} aria-hidden="true" />Station, radar, water, smoke and access</span>
@@ -377,7 +374,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               <FieldFeedEvidence local={data.localConditions} f={f} />
             </div>
           </div>
-        </section>
+        </Fold>
       )}
     </div>
   );

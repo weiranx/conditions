@@ -251,7 +251,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
               return (
                 <g key={i}>
                   <rect x={x(i) + 1.5} y={stripY} width={Math.max(1, cw - 3)} height="8" rx="4"
-                    fill={over ? `url(#${gradientId}p)` : h.tone === "missing" ? "none" : "rgba(255,255,255,.22)"}
+                    fill={over ? `url(#${gradientId}p)` : h.tone === "missing" ? "none" : "rgba(91,208,138,.9)"}
                     stroke={over ? "#FF9A4D" : h.tone === "missing" ? "rgba(255,255,255,.6)" : "none"}
                     strokeWidth="1.2" strokeDasharray={h.tone === "missing" && !over ? "3 3" : undefined} />
                   {h.approachAdjusted && (

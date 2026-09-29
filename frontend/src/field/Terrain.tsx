@@ -22,6 +22,7 @@ const parseClock = (time: string) => parseTimeInputMinutes(time) ?? parseHourLab
 import { StatusTag } from "./sky/BriefSections";
 import { knownFeet } from "./sky/status";
 import { shortHour, type SkyHour } from "./sky/sky-model";
+import { Fold } from "./sky/Fold";
 const FieldMap = lazy(() => import("./FieldMap"));
 
 function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
@@ -47,11 +48,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
   const hourText = (i: number) => w.formatClockForStyle(hours[i]?.time, w.preferences.timeStyle);
   const roseSelected = selection.aspect && roseRing >= 0 ? { aspect: selection.aspect, ring: roseRing } : null;
   return (
-    <section className="sky-section" aria-labelledby="sky-terrain-day">
-      <div className="sky-sh">
-        <h2 id="sky-terrain-day">Terrain through the day</h2>
-        <p>Slopes from above: aspects around, elevation as rings with the highest innermost. Select a slope for the reasons.</p>
-      </div>
+    <Fold id="sky-terrain-day" title="Terrain through the day" hint="Slopes from above, hour by hour.">
       <div className="sky-card sky-terrain-window">
       <details className="sky-details">
         <summary>How to read this view</summary>
@@ -169,7 +166,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
         </p>
       )}
       </div>
-    </section>
+    </Fold>
   );
 }
 
@@ -488,11 +485,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
       )}
 
       {flags.snowpackDetails && (
-        <section className="sky-section" aria-labelledby="sky-terrain-snow">
-          <div className="sky-sh">
-            <h2 id="sky-terrain-snow">Snow observations</h2>
-            <p>{snowpack.statusLabel}</p>
-          </div>
+        <Fold id="sky-terrain-snow" title="Snow observations" hint="Stations, models and satellite.">
           <div className="sky-card">
             <span className="sky-card-head"><span>{snowpack.interpretation?.headline || "Snowpack assessment"}</span></span>
             {snowpack.depthConflict && (
@@ -592,7 +585,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               ]}
             />
           </div>
-        </section>
+        </Fold>
       )}
 
       {flags.satelliteImagery && flags.snowpackDetails && (

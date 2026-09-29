@@ -29,8 +29,8 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
     <div className="sky-approach-note">
       <Mountain size={16} aria-hidden="true" />
       <p>
-        <strong>{spans || `${summary.adjustedHours} h`} checked at your estimated elevation</strong>, {range}, not
-        the {terms.top} ({APPROACH_SOURCE_LABEL[source]}).{" "}
+        <strong>{spans || `${summary.adjustedHours} h`}</strong> is judged lower down, near {range}, not at
+        the {terms.top} <span className="sky-approach-source">({APPROACH_SOURCE_LABEL[source]})</span>.{" "}
         {onEdit && (
           <button type="button" onClick={onEdit}>
             {source === "estimated" ? `Set ${terms.start}` : "Edit approach"}
@@ -38,7 +38,7 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
         )}
         {inversion && (
           <span className="sky-approach-inversion">
-            {" "}Clear, calm conditions: {inversion} may be colder at the {terms.start} than at the {terms.top}.
+            Clear, calm conditions: {inversion} may be colder at the {terms.start} than at the {terms.top}.
           </span>
         )}
       </p>

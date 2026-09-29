@@ -479,8 +479,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     selected={selectedIndex} onSelect={setCheckpoint} />
                 </div>
               )}
+              <details className="sky-details sky-route-itinerary-fold">
+              <summary>Checkpoint itinerary · {result.summaries.length} {result.summaries.length === 1 ? "stop" : "stops"}</summary>
               <div className="sky-route-itinerary-head">
-                <h3>Checkpoint itinerary</h3>
                 <p>{describeRouteTiming(result.timing)} Times are local to the objective.</p>
               </div>
               {result.summaries.length === 0 ? (
@@ -555,6 +556,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                   })}
                 </ol>
               )}
+              </details>
               {selected && (
                 <div className={`field-checkpoint forecast-readout is-${selectedTone}`} id="field-route-checkpoint-detail" role="region" aria-label="Selected checkpoint" aria-live="polite">
                   <div className="forecast-readout-main">

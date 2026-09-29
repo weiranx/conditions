@@ -38,6 +38,7 @@ import {
 import { HourChart, type HourChartKind, type HourGuide, type HourTone } from "./sky/HourChart";
 import { buildSkyHours, shortHour, type PlannedRow } from "./sky/sky-model";
 import { plainReason } from "./sky/status";
+import { Fold } from "./sky/Fold";
 
 export function WeatherSymbol({ point, size = 22 }: { point: Pick<WeatherTrendPoint, "condition" | "isDaytime">; size?: number }) {
   const condition = (point.condition || "").toLowerCase();
@@ -247,11 +248,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
         </div>
       </section>
 
-      <section className="sky-section" aria-labelledby="sky-weather-table">
-        <div className="sky-sh">
-          <h2 id="sky-weather-table">Every hour against your limits</h2>
-          <p>Select an hour to see all of its readings above.</p>
-        </div>
+      <Fold id="sky-weather-table" title="Every hour against your limits" hint="Tap an hour to see all its readings.">
         <div className="sky-card sky-table-card">
           <table className="sky-table">
             <thead>
@@ -302,10 +299,9 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
             </tbody>
           </table>
         </div>
-      </section>
+      </Fold>
 
-      <section className="sky-section" aria-labelledby="sky-weather-window">
-        <div className="sky-sh"><h2 id="sky-weather-window">Across your window</h2></div>
+      <Fold id="sky-weather-window" title="Across your window" hint="Temperature range, clear-sky share, hours within limits.">
         <div className="sky-trio">
           <div className="sky-card">
             <span className="sky-card-head"><span>Temperature range</span></span>
@@ -340,7 +336,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
             <p className="sky-cap">{insight.conditionTrendLabel}</p>
           </div>
         </div>
-      </section>
+      </Fold>
     </div>
   );
 }

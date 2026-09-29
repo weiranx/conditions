@@ -1,5 +1,8 @@
-import { BookOpen, Check, ChevronRight, CircleHelp, TriangleAlert } from "lucide-react";
-import type { ReactNode } from "react";
+import { Bell, BookOpen, Check, Smile, ChevronRight, CircleHelp, CloudSun, Mountain, Route as RouteIcon, Snowflake, Sunset, TriangleAlert, Wind } from "lucide-react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { Fold } from "./Fold";
+import { TilePopup, type TileDetail } from "./TilePopup";
+import { AirDetail, AlertsDetail, AvalancheDetail, DaylightDetail, TerrainDetail, WeatherDetail, type WeatherMetric } from "./TileDetails";
 import type { Workspace } from "../model/useWorkspace";
 import { durationLabel, knownFeet, plainRule, type CheckStatus } from "./status";
 import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
@@ -7,7 +10,7 @@ import { describeCheckpointBreach, describeCheckpointHazard, type PlannedRouteSu
 import { RouteStrip } from "./RouteStrip";
 import { activityProfile, orderActivityChecks, type ActivityCheck, type ActivityNumber } from "../../app/activity-profiles";
 import type { ActivityType } from "../../app/types";
-import { REPORT_CHAPTERS, chapterLabel, type ReportChapter } from "./report-chapters";
+import { chapterLabel, type ReportChapter } from "./report-chapters";
 
 export type BriefChapter = ReportChapter;
 type Status = CheckStatus;
@@ -31,35 +34,30 @@ function SectionCard({ to, onOpen, className, children }: {
   );
 }
 
+/** Each check's icon, as on a weather tile. */
+const CHECK_ICONS: Record<string, typeof Bell> = {
+  Weather: CloudSun, Alerts: Bell, Daylight: Sunset, "Terrain & snow": Mountain, Avalanche: Snowflake, "Air & fire": Wind, Route: RouteIcon,
+};
+
+/** Tiles open a popup with their detail; without a provider they go straight to their section. */
+const TileContext = createContext<((detail: TileDetail) => void) | null>(null);
+
 function CheckCard({ title, status, statusText, caption, children, to, onOpen, className = "" }: {
   title: string; status: Status; statusText: string; caption: string; children?: ReactNode;
   to: BriefChapter; onOpen: (chapter: BriefChapter) => void; className?: string;
 }) {
+  const Icon = CHECK_ICONS[title];
+  const pick = useContext(TileContext);
+  // The route has its own section to work in; every other tile opens as a popup first.
+  const open = pick && title !== "Route"
+    ? () => pick({ title, icon: Icon, status, value: statusText, caption, visual: children, to })
+    : onOpen;
   return (
-    <SectionCard to={to} onOpen={onOpen} className={`sky-check${status === "missing" ? " is-missing" : ""}${className ? ` ${className}` : ""}`}>
-      <span className="sky-card-head"><span>{title}</span><StatusTag status={status}>{statusText}</StatusTag></span>
+    <SectionCard to={to} onOpen={open} className={`sky-check sky-tile${status === "missing" ? " is-missing" : ""}${className ? ` ${className}` : ""}`}>
+      <span className="sky-card-head">{Icon && <Icon size={14} aria-hidden="true" />}<span>{title}</span><StatusTag status={status}>{statusText}</StatusTag></span>
       {children}
       <span className="sky-cap">{caption}</span>
     </SectionCard>
-  );
-}
-
-/** Where a value sits against a single limit: the out-of-limit side is shaded. */
-function LimitScale({ value, limit, side, lo, hi, limitLabel, note, label }: {
-  value: number; limit: number; side: "above" | "below"; lo: number; hi: number; limitLabel: string; note: string; label: string;
-}) {
-  const x = (v: number) => Math.max(0, Math.min(240, ((v - lo) / (hi - lo)) * 240));
-  const over = side === "above" ? value > limit : value < limit;
-  return (
-    <svg className="sky-viz" viewBox="0 0 240 54" role="img" aria-label={label}>
-      <rect x="0" y="18" width="240" height="12" rx="6" className="f-fill" />
-      <rect x={side === "above" ? x(limit) : 0} y="18" width={side === "above" ? 240 - x(limit) : x(limit)} height="12"
-        className="f-caution" opacity=".22" />
-      <line x1={x(limit)} y1="10" x2={x(limit)} y2="38" className="s-label" strokeWidth="2" />
-      <text x={Math.max(24, Math.min(216, x(limit)))} y="8" textAnchor="middle" className="t-label">{limitLabel}</text>
-      <circle cx={x(value)} cy="24" r="7" className={over ? "f-caution" : "f-secondary"} />
-      <text x="240" y="50" textAnchor="end" className={over ? "t-caution" : undefined}>{note}</text>
-    </svg>
   );
 }
 
@@ -108,19 +106,16 @@ function routeCheck(route: PlannedRouteSummary, format: { temp: (f: number) => s
   return { status: "ok" as Status, statusText: "Within limits", caption: `All ${stops.length} checkpoint forecasts are within your limits.${back}` };
 }
 
-export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridge, onOpen, onReadAll, sections = [], route = null, gearEnabled, activity, showMore = true }: {
+export function BriefSections({ w, hours, clock, onOpen, onReadAll, route = null, gearEnabled, activity, showMore = true, more = null }: {
   w: Workspace;
   hours: SkyHour[];
   clock: (minute: number) => string;
-  scoreValue: number | null;
-  insufficient: boolean;
-  bridge: string;
   onOpen: (chapter: BriefChapter) => void;
   onReadAll: () => void;
-  /** The report sections list; the full report already contains every section. */
+  /** Extra brief parts (AI explanation, assistant) shown under More beside the pack list. */
+  more?: ReactNode;
+  /** The full-report link; the full report already contains every section. */
   showMore?: boolean;
-  /** The report's sections in reading order, as the chapter tabs show them. */
-  sections?: BriefChapter[];
   /** The route chosen in the plan; the checks then lead with it. */
   route?: PlannedRouteSummary | null;
   gearEnabled: boolean;
@@ -128,21 +123,13 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   activity: ActivityType;
 }) {
   const data = w.safetyData!;
-  const { avalanche, fireRisk, heatRisk, rainfall, snowpack, sourceFreshness, terrainCondition } = w.interpretation!;
+  const { avalanche, fireRisk, rainfall, snowpack, sourceFreshness, terrainCondition } = w.interpretation!;
   const prefs = w.preferences;
-  const gustLimit = prefs.maxWindGustMph;
-  const precipLimit = prefs.maxPrecipChance;
-  const gusts = hours.filter((h) => measured(h.gust));
-  const peak = gusts.reduce<SkyHour | null>((a, h) => (!a || h.gust > a.gust ? h : a), null);
-  const gustMax = Math.max(gustLimit * 1.6, (peak?.gust ?? 0) * 1.15, 10);
   const overRuns = skyRuns(hours).filter((run) => run.tone === "over");
   const overCount = hours.filter(isOverHour).length;
   const missingCount = hours.filter((h) => h.tone === "missing" && !isOverHour(h)).length;
   const firstOver = hours.find(isOverHour);
 
-  // Precipitation totals over the planned window, when the source supplied them.
-  const rainIn = data.rainfall?.expected?.rainWindowIn;
-  const snowIn = data.rainfall?.expected?.snowWindowIn;
 
   // Daylight: sunrise, sunset, start and return in minutes after midnight.
   const sunrise = w.sunriseMinutesForPlan;
@@ -191,30 +178,58 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     return [px, py] as const;
   };
 
+  // The night before the start sets the snow surface (backend surface-evidence.js).
+  const signals = data.terrainCondition?.signals;
+  const refreeze = REFREEZE[signals?.refreezeQuality ?? "unknown"] ?? REFREEZE.unknown;
+  const nightLow = signals?.freezeThawMinTempF;
+  const freezingLevel = data.atmosphere?.freezingLevelFt;
+  const objectiveFt = knownFeet(data.weather?.elevation);
+  const freezingAbove = measured(freezingLevel) && objectiveFt !== null && freezingLevel > objectiveFt;
+  const snowFirst = activity === "ski-touring" || activity === "snow-climbing";
+  const refreezeCaption = snowFirst && signals?.refreezeQuality
+    ? `Overnight refreeze: ${refreeze.big.toLowerCase()}.${measured(nightLow) ? ` Night low ${w.formatTempDisplay(nightLow)}.` : ""} ${
+      refreeze === REFREEZE.weak && measured(nightLow) && nightLow > 32 ? "It stays above freezing, so the snow won't firm up." : refreeze.caption}${freezingAbove ? " The freezing level sits above the objective." : ""}`
+    : "";
+
+  // The weather tile: what the sky does, how low and high it gets, and how it feels.
+  const temps = hours.filter((h) => measured(h.temp)).map((h) => h.temp);
+  const lowTemp = temps.length ? Math.min(...temps) : null;
+  const highTemp = temps.length ? Math.max(...temps) : null;
+  const conditionCounts = new Map<string, number>();
+  for (const h of hours) if (h.condition) conditionCounts.set(h.condition, (conditionCounts.get(h.condition) ?? 0) + 1);
+  const commonCondition = [...conditionCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  // A rough spell is what the traveller needs to hear about, so it names the sky before the calm hours do.
+  const skyCondition = firstOver?.condition || commonCondition || "";
+  const comfort = data.pleasantness;
+  const comfortScore = comfort && measured(comfort.score) && comfort.score >= 0 && comfort.score <= 100 ? comfort.score : null;
+
   // Every check is shown; the activity sets the order and a failing check leads.
   const checks: { key: ActivityCheck; over: boolean; card: ReactNode }[] = [
     { key: "weather", over: overCount > 0, card: (
       <CheckCard key="weather" title="Weather" to="forecast" onOpen={onOpen}
         status={overCount ? "over" : missingCount ? "missing" : "ok"}
-        statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` : "Within limits"}
-        caption={firstOver ? (firstOver.failedRules[0] ? plainRule(firstOver.failedRules[0]) : "A planned hour crosses your limits.")
+        statusText={skyCondition || (overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` : hours.length ? "Within limits" : "Unavailable")}
+        caption={firstOver ? `${firstOver.failedRules[0] ? plainRule(firstOver.failedRules[0]) : "A planned hour crosses your limits"}${overRuns.length === 1 ? ` · ${spanLabel(hours, overRuns[0], clock)}` : ""}`
           : missingCount ? `${missingCount} planned ${missingCount === 1 ? "hour has" : "hours have"} incomplete readings, so ${missingCount === 1 ? "it" : "they"} can't be confirmed within your limits.`
           : hours.length ? "Every planned hour is within your limits." : "Hourly forecast unavailable."}>
-        {hours.length > 0 && (
-          <svg className="sky-viz" viewBox="0 0 240 64" role="img"
-            aria-label={`Rain chance by hour against your ${precipLimit}% limit: ${hours.map((h) => `${clock(h.minute)} ${measured(h.precipChance) ? `${h.precipChance}%` : "unavailable"}`).join(", ")}.`}>
-            {hours.map((h, i) => {
-              const bw = 240 / hours.length;
-              const v = measured(h.precipChance) ? h.precipChance : 0;
-              const bh = Math.max(3, (v / 100) * 44);
-              return <rect key={i} x={i * bw + 2} y={48 - bh} width={Math.max(1, bw - 4)} height={bh} rx="3"
-                className={isOverHour(h) ? "f-caution" : h.tone === "missing" ? "f-none s-missing" : "f-okfill"} strokeDasharray={h.tone === "missing" ? "2 2" : undefined} />;
-            })}
-            <line x1="0" x2="240" y1={48 - (precipLimit / 100) * 44} y2={48 - (precipLimit / 100) * 44} className="s-secondary" strokeDasharray="3 3" />
-            <text x="0" y={Math.max(9, 48 - (precipLimit / 100) * 44 - 5)} textAnchor="start" className="t-limit">rain limit {precipLimit}%</text>
-            <text x="0" y="62">{clock(hours[0].minute)}</text>
-            <text x="240" y="62" textAnchor="end">{clock(hours[hours.length - 1].minute + 60)}</text>
-          </svg>
+        {(lowTemp !== null || comfortScore !== null) && (
+          <span className="sky-wx">
+            {lowTemp !== null && highTemp !== null && (
+              <span className="sky-hilo" role="img" aria-label={`Low ${w.formatTempDisplay(lowTemp)}, high ${w.formatTempDisplay(highTemp)}`}>
+                <span>L {w.formatTempDisplay(lowTemp)}</span>
+                <span className="sky-hilo-bar" aria-hidden="true" />
+                <span>H {w.formatTempDisplay(highTemp)}</span>
+              </span>
+            )}
+            {comfort && (
+              <span className="sky-comfort">
+                <Smile size={14} aria-hidden="true" />
+                <span>Comfort</span>
+                <strong>{comfortScore === null ? "Unknown" : comfort.label}</strong>
+                {comfortScore !== null && <span className="sky-comfort-meter" role="img" aria-label={`Comfort ${Math.round(comfortScore)} of 100`}><span style={{ width: `${comfortScore}%` }} /></span>}
+              </span>
+            )}
+          </span>
         )}
       </CheckCard>
     ) },
@@ -249,7 +264,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     { key: "terrain", over: terrain === "over", card: (
       <CheckCard key="terrain" title="Terrain & snow" to="terrain" onOpen={onOpen} status={terrain}
         statusText={surface || "Unavailable"}
-        caption={bands.length > 1 ? "Temperature by elevation at your start." : snowpack.bestDepthDisplay ? `Best snow depth estimate: ${snowpack.bestDepthDisplay}.` : "Surface and snow assessment."}>
+        caption={refreezeCaption || (bands.length > 1 ? "Temperature by elevation at your start." : snowpack.bestDepthDisplay ? `Best snow depth estimate: ${snowpack.bestDepthDisplay}.` : "Surface and snow assessment.")}>
         {bands.length > 1 && (
           <ol className="sky-ladder" aria-label="Temperature by elevation at your planned time">
             {[...bands].reverse().slice(0, 3).map((b) => (
@@ -296,196 +311,82 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const profile = activityProfile(activity);
   const leads = profile.report.leads;
 
-  // Feels-like extremes over the planned hours, for the cold and heat numbers.
+  const packItems = gearEnabled && gear.length > 0 ? (
+    <section className="sky-section" aria-labelledby="sky-pack">
+      <div className="sky-sh"><h2 id="sky-pack">Pack for today</h2>
+        <button type="button" className="sky-link sky-sh-link" onClick={() => onOpen("gear")}>
+          {gearTotal > gear.length ? `All ${gearTotal} in Gear & actions` : "Open Gear & actions"}<ChevronRight size={16} aria-hidden="true" />
+        </button></div>
+      <div className="sky-pack">
+        {gear.map((item, i) => item && (
+          <button type="button" key={`${item.title}-${i}`} className="sky-card sky-item" onClick={() => onOpen("gear")}>
+            <span className="sky-item-cat">{item.category}</span>
+            <span className="sky-item-name">{item.title}</span>
+            <span className="sky-cap">{w.localizeUnitText(item.reason || item.detail)}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  ) : null;
+
+  // The activity's two headline numbers, each against your limit.
+  const gustLimit = prefs.maxWindGustMph;
+  const peak = hours.filter((h) => measured(h.gust)).reduce<SkyHour | null>((a, h) => (!a || h.gust > a.gust ? h : a), null);
   const thermal = hours.filter((h) => h.thermalComplete && measured(h.feelsLike));
   const coldest = thermal.reduce<SkyHour | null>((a, h) => (!a || h.feelsLike < a.feelsLike ? h : a), null);
   const warmest = thermal.reduce<SkyHour | null>((a, h) => (!a || h.feelsLike > a.feelsLike ? h : a), null);
   const floor = prefs.minFeelsLikeF;
   const ceiling = prefs.maxFeelsLikeF;
-  // The night before the start sets the snow surface (backend surface-evidence.js).
-  const signals = data.terrainCondition?.signals;
-  const refreeze = REFREEZE[signals?.refreezeQuality ?? "unknown"] ?? REFREEZE.unknown;
-  const nightLow = signals?.freezeThawMinTempF;
-  const freezingLevel = data.atmosphere?.freezingLevelFt;
-  const objectiveFt = knownFeet(data.weather?.elevation);
-  const freezingAbove = measured(freezingLevel) && objectiveFt !== null && freezingLevel > objectiveFt;
-  const snowFirst = activity === "ski-touring" || activity === "snow-climbing";
-
-  const numberCards: Record<ActivityNumber, ReactNode> = {
-    gust: (
-      <SectionCard key="gust" to="forecast" onOpen={onOpen} className="sky-number">
-        <span className="sky-card-head"><span>Peak gust</span>
-          {peak ? <StatusTag status={peak.gust > gustLimit ? "over" : "ok"}>{peak.gust > gustLimit ? "Over" : "Within"}</StatusTag> : <StatusTag status="missing">Unavailable</StatusTag>}
-        </span>
-        <span className={`sky-big${peak && peak.gust > gustLimit ? " is-over" : ""}`}>{peak ? w.formatWindDisplay(peak.gust) : "—"}</span>
-        {peak && (
-          <svg className="sky-viz" viewBox="0 0 240 54" role="img"
-            aria-label={`Peak gust ${w.formatWindDisplay(peak.gust)} at ${clock(peak.minute)}; your limit is ${w.formatWindDisplay(gustLimit)}.`}>
-            <rect x="0" y="18" width="240" height="12" rx="6" className="f-fill" />
-            <rect x="0" y="18" width={Math.min(240, (Math.min(peak.gust, gustLimit) / gustMax) * 240)} height="12" rx="6" className="f-secondary" opacity=".45" />
-            {peak.gust > gustLimit && <rect x={(gustLimit / gustMax) * 240} y="18" width={((peak.gust - gustLimit) / gustMax) * 240} height="12" className="f-caution" />}
-            <line x1={(gustLimit / gustMax) * 240} y1="10" x2={(gustLimit / gustMax) * 240} y2="38" className="s-label" strokeWidth="2" />
-            <text x={(gustLimit / gustMax) * 240} y="8" textAnchor="middle" className="t-label">your limit</text>
-            <text x="240" y="50" textAnchor="end" className={peak.gust > gustLimit ? "t-caution" : undefined}>at {clock(peak.minute)}</text>
-          </svg>
-        )}
-      </SectionCard>
-    ),
-    precip: (
-      <SectionCard key="precip" to="forecast" onOpen={onOpen} className="sky-number">
-        <span className="sky-card-head"><span>{snowFirst ? "Snow and rain" : "Rain and snow"}</span><span className="sky-muted">{rainfall.expectedTravelWindowHours}-hour totals</span></span>
-        <span className="sky-gauges">
-          {(snowFirst ? ["snow", "rain"] as const : ["rain", "snow"] as const).map((label) => {
-            const g = label === "rain"
-              ? { value: rainIn, scale: 0.5, display: rainfall.expectedRainWindowDisplay }
-              : { value: snowIn, scale: 4, display: rainfall.expectedSnowWindowDisplay };
-            return (
-              <span key={label} className="sky-gauge">
-                <svg viewBox="0 0 26 72" className="sky-viz" role="img"
-                  aria-label={measured(g.value) ? `Expected ${label} ${g.display}` : `Expected ${label} unavailable`}>
-                  <rect x="1" y="1" width="24" height="70" rx="8" className={measured(g.value) ? "f-fill" : "f-none s-missing"} strokeDasharray={measured(g.value) ? undefined : "3 3"} />
-                  {measured(g.value) && g.value > 0 && (
-                    <rect x="1" y={71 - Math.max(8, Math.min(1, g.value / g.scale) * 70)} width="24" height={Math.max(8, Math.min(1, g.value / g.scale) * 70)} rx="6"
-                      className={label === "rain" ? "f-cold" : "f-cold-fill s-cold"} strokeWidth="1.5" />
-                  )}
-                </svg>
-                <span><span className="sky-big is-small">{measured(g.value) ? g.display : "—"}</span><span className="sky-cap">{label}</span></span>
-              </span>
-            );
-          })}
-        </span>
-      </SectionCard>
-    ),
-    cold: (
-      <SectionCard key="cold" to="forecast" onOpen={onOpen} className="sky-number">
-        <span className="sky-card-head"><span>Coldest feels-like</span>
-          {coldest ? <StatusTag status={coldest.feelsLike < floor ? "over" : "ok"}>{coldest.feelsLike < floor ? "Below floor" : "Within"}</StatusTag> : <StatusTag status="missing">Unavailable</StatusTag>}
-        </span>
-        <span className={`sky-big${coldest && coldest.feelsLike < floor ? " is-over" : ""}`}>{coldest ? w.formatTempDisplay(coldest.feelsLike) : "—"}</span>
-        {coldest && (
-          <LimitScale value={coldest.feelsLike} limit={floor} side="below"
-            lo={Math.min(floor - 25, coldest.feelsLike - 5)} hi={Math.max(floor + 45, coldest.feelsLike + 5)}
-            limitLabel="your floor" note={`at ${clock(coldest.minute)}`}
-            label={`Coldest feels-like ${w.formatTempDisplay(coldest.feelsLike)} at ${clock(coldest.minute)}; your floor is ${w.formatTempDisplay(floor)}.`} />
-        )}
-      </SectionCard>
-    ),
-    heat: (
-      <SectionCard key="heat" to="forecast" onOpen={onOpen} className="sky-number">
-        <span className="sky-card-head"><span>Warmest feels-like</span>
-          {warmest ? <StatusTag status={warmest.feelsLike > ceiling ? "over" : "ok"}>{warmest.feelsLike > ceiling ? "Over" : "Within"}</StatusTag> : <StatusTag status="missing">Unavailable</StatusTag>}
-        </span>
-        <span className={`sky-big${warmest && warmest.feelsLike > ceiling ? " is-over" : ""}`}>{warmest ? w.formatTempDisplay(warmest.feelsLike) : "—"}</span>
-        {warmest && (
-          <LimitScale value={warmest.feelsLike} limit={ceiling} side="above"
-            lo={Math.min(ceiling - 45, warmest.feelsLike - 5)} hi={Math.max(ceiling + 20, warmest.feelsLike + 5)}
-            limitLabel="your limit" note={`at ${clock(warmest.minute)}`}
-            label={`Warmest feels-like ${w.formatTempDisplay(warmest.feelsLike)} at ${clock(warmest.minute)}; your limit is ${w.formatTempDisplay(ceiling)}.`} />
-        )}
-        {/* The interpretation falls back to "Low" without an assessment; only show a measured one. */}
-        {data.heatRisk && (measured(data.heatRisk.level) || data.heatRisk.label) && <span className="sky-cap">Heat risk {heatRisk.label.toLowerCase()}.</span>}
-      </SectionCard>
-    ),
-    refreeze: (
-      <SectionCard key="refreeze" to="terrain" onOpen={onOpen} className="sky-number">
-        <span className="sky-card-head"><span>Overnight refreeze</span><StatusTag status={refreeze.status}>{refreeze.text}</StatusTag></span>
-        <span className={`sky-big${refreeze.status === "over" ? " is-over" : ""}`}>{refreeze.big}</span>
-        <svg className="sky-viz" viewBox="0 0 240 40" role="img" aria-label={`Overnight refreeze: ${refreeze.big === "—" ? "unavailable" : refreeze.big.toLowerCase()}.`}>
-          {(["weak", "fair", "strong"] as const).map((key, i) => (
-            <g key={key}>
-              <rect x={i * 82} y="4" width="76" height="16" rx="5"
-                className={signals?.refreezeQuality === key ? (key === "weak" ? "f-caution" : "f-label") : "f-fill"} />
-              <text x={i * 82 + 38} y="36" textAnchor="middle">{REFREEZE[key].big}</text>
-            </g>
-          ))}
-        </svg>
-        <span className="sky-cap">
-          {measured(nightLow) ? `Night before the start: low ${w.formatTempDisplay(nightLow)}. ` : ""}
-          {refreeze === REFREEZE.weak && measured(nightLow) && nightLow > 32 ? "It stays above freezing, so the snow won't firm up." : refreeze.caption}
-          {freezingAbove ? " The freezing level sits above the objective." : ""}
-        </span>
-      </SectionCard>
-    ),
+  const [firstPrecip, secondPrecip] = snowFirst
+    ? [["snow", rainfall.expectedSnowWindowDisplay], ["rain", rainfall.expectedRainWindowDisplay]]
+    : [["rain", rainfall.expectedRainWindowDisplay], ["snow", rainfall.expectedSnowWindowDisplay]];
+  const tiles: Record<ActivityNumber, { label: string; value: string; note: string; over: boolean; to: BriefChapter }> = {
+    gust: { label: "Peak gust", value: peak ? w.formatWindDisplay(peak.gust) : "—", to: "forecast",
+      note: peak ? `at ${clock(peak.minute)} · limit ${w.formatWindDisplay(gustLimit)}` : "Unavailable", over: Boolean(peak && peak.gust > gustLimit) },
+    precip: { label: `${firstPrecip[0] === "rain" ? "Rain" : "Snow"} expected`, value: String(firstPrecip[1]), to: "forecast", over: false,
+      note: `${secondPrecip[1]} ${secondPrecip[0]} · ${rainfall.expectedTravelWindowHours}-hour window` },
+    cold: { label: "Coldest feels-like", value: coldest ? w.formatTempDisplay(coldest.feelsLike) : "—", to: "forecast",
+      note: coldest ? `at ${clock(coldest.minute)} · floor ${w.formatTempDisplay(floor)}` : "Unavailable", over: Boolean(coldest && coldest.feelsLike < floor) },
+    heat: { label: "Warmest feels-like", value: warmest ? w.formatTempDisplay(warmest.feelsLike) : "—", to: "forecast",
+      note: warmest ? `at ${clock(warmest.minute)} · limit ${w.formatTempDisplay(ceiling)}` : "Unavailable", over: Boolean(warmest && warmest.feelsLike > ceiling) },
+    refreeze: { label: "Overnight refreeze", value: refreeze.big, to: "terrain", over: refreeze.status === "over",
+      note: measured(nightLow) ? `night low ${w.formatTempDisplay(nightLow)}` : refreeze.text },
   };
 
-  // Each section's state in a few words, so the list says where to look first.
-  const weatherOver = overCount > 0;
-  const airOver = fireHigh || (measured(aqi) && aqi > 100);
-  const avalancheOver = avalancheLevel !== null && avalancheLevel >= 3;
-  const avalancheMissing = avalanche.relevant && avalancheLevel === null;
-  const routeState = route ? routeCheck(route, routeFormat) : null;
-  const sectionState: Record<BriefChapter, { status: Status | "none"; text: string }> = {
-    forecast: weatherOver ? { status: "over", text: overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : `${overCount} hours over` }
-      : airOver ? { status: "over", text: fireHigh ? `Fire risk ${String(fireRisk.label || "high").toLowerCase()}` : `AQI ${aqi}` }
-        : missingCount ? { status: "missing", text: `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` }
-          : !hours.length ? { status: "missing", text: "Hourly forecast unavailable" }
-            : !measured(aqi) ? { status: "missing", text: "Air quality unavailable" } : { status: "ok", text: "Within limits" },
-    timing: !daylightKnown ? { status: "missing", text: "Daylight unavailable" }
-      : spare! < 0 ? { status: "over", text: `Back ${durationLabel(spare!)} after sunset` } : { status: "ok", text: `${durationLabel(spare!)} of daylight spare` },
-    terrain: avalancheOver ? { status: "over", text: `Avalanche ${["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel!] || `level ${avalancheLevel}`}` }
-      : terrain === "over" ? { status: "over", text: surface || "Hazardous surface" }
-        : avalancheMissing ? { status: "missing", text: "No avalanche rating" }
-          : { status: terrain, text: surface || "Surface unavailable" },
-    route: routeState ? { status: routeState.status, text: routeState.statusText } : { status: "none", text: "Check a route’s checkpoints" },
-    sources: alertCount > 0 ? { status: "over", text: `${alertCount} active ${alertCount === 1 ? "alert" : "alerts"}` }
-      : alertsMissing ? { status: "missing", text: "Alerts not confirmed" }
-        : sourceFreshness.hasWarning ? { status: "missing", text: "Review source freshness" } : { status: "ok", text: "Sources current" },
-    gear: { status: "none", text: gearTotal ? `${gearTotal} recommendations` : "What to settle first" },
+  const ordered = orderActivityChecks(checks, activity);
+  const [detail, setDetail] = useState<TileDetail | null>(null);
+  // What each tile shows when opened: the readings behind its value.
+  const detailsFor = (title: string): ReactNode => {
+    switch (title) {
+      case "Weather": return <WeatherDetail w={w} hours={hours} />;
+      case "Daylight": return <DaylightDetail w={w} />;
+      case "Alerts": return <AlertsDetail w={w} />;
+      case "Terrain & snow": return <TerrainDetail w={w} />;
+      case "Avalanche": return <AvalancheDetail w={w} />;
+      case "Air & fire": return <AirDetail w={w} />;
+      default: return undefined;
+    }
   };
+  const metricFor: Partial<Record<ActivityNumber, WeatherMetric>> = { gust: "gust", precip: "precip", cold: "feels", heat: "feels" };
 
   return (
-    <>
-      {showMore && sections.length > 0 && (
-        <section className="sky-section" aria-labelledby="sky-sections">
-          <div className="sky-sh"><h2 id="sky-sections">Report sections</h2><p>{leads ? `Ordered for ${profile.label.toLowerCase()}. ` : ""}Open one for the full evidence.</p></div>
-          <nav className="sky-sections" aria-labelledby="sky-sections">
-            {sections.map((id) => {
-              const chapter = REPORT_CHAPTERS.find((c) => c.id === id)!;
-              const state = sectionState[id];
-              const Icon = chapter.icon;
-              return (
-                <button key={id} type="button" className={`sky-section-link is-${state.status}`} onClick={() => onOpen(id)}>
-                  <span className="sky-section-icon"><Icon size={18} aria-hidden="true" /></span>
-                  <span><strong>{chapter.label}</strong><small>{state.text}</small></span>
-                  <ChevronRight size={18} aria-hidden="true" />
-                </button>
-              );
-            })}
-            <button type="button" className="sky-section-link is-none" onClick={onReadAll}>
-              <span className="sky-section-icon"><BookOpen size={18} aria-hidden="true" /></span>
-              <span><strong>Full report</strong><small>Every section on one page</small></span>
-              <ChevronRight size={18} aria-hidden="true" />
+    <TileContext.Provider value={(tile) => setDetail({ ...tile, details: tile.details ?? detailsFor(tile.title) })}>
+      <div className="sky-numbers" role="group" aria-label="Key numbers">
+        {profile.report.numbers.map((key) => {
+          const tile = tiles[key];
+          return (
+            <button key={key} type="button" className={`sky-card sky-tile sky-number-tile${tile.over ? " is-over" : ""}`} onClick={() => setDetail({ title: tile.label, status: tile.over ? "over" : "ok", value: tile.value, caption: tile.note, to: tile.to,
+              details: metricFor[key] ? <WeatherDetail w={w} hours={hours} initial={metricFor[key]} /> : <TerrainDetail w={w} /> })}>
+              <span className="sky-tile-label">{tile.label}</span>
+              <span className="sky-big">{tile.value}</span>
+              <span className="sky-cap">{tile.note}</span>
             </button>
-          </nav>
-        </section>
-      )}
-
-      <section className="sky-section" aria-labelledby="sky-numbers">
-        <div className="sky-sh"><h2 id="sky-numbers">The numbers</h2><p>{profile.report.numbersNote}</p></div>
-        <div className="sky-nums">
-          {profile.report.numbers.map((key) => numberCards[key])}
-          <SectionCard to="sources" onOpen={onOpen} className="sky-number sky-score">
-            <span className="sky-card-head"><span>Safety score</span><span className="sky-muted">{scoreValue === null ? "Not scored" : data.safety.tier || "hazards only"}</span></span>
-            <span className="sky-score-row">
-              <svg viewBox="0 0 88 88" className="sky-viz sky-ring" role="img" aria-label={scoreValue === null ? "Safety score unavailable" : `Safety score ${scoreValue} of 100`}>
-                <circle cx="44" cy="44" r="36" fill="none" className="s-okfill" strokeWidth="10" />
-                {scoreValue !== null && <circle cx="44" cy="44" r="36" fill="none" className="s-accent" strokeWidth="10" strokeLinecap="round"
-                  strokeDasharray={`${(scoreValue / 100) * 226.2} 226.2`} transform="rotate(-90 44 44)" />}
-                <text x="44" y="51" textAnchor="middle" className="t-ring">{scoreValue ?? "—"}</text>
-              </svg>
-              <span className="sky-cap is-body">
-                {insufficient ? "There isn't enough evidence to score this plan."
-                  : bridge || (overCount ? `The score rates hazards on their own. The decision also checks your limits: ${overCount} ${overCount === 1 ? "hour crosses" : "hours cross"} them.`
-                    : "The score rates hazards on their own; the decision also checks your limits and timing.")}
-              </span>
-            </span>
-            {data.safety.evidenceQuality && <span className="sky-cap">Evidence quality: {data.safety.evidenceQuality}</span>}
-          </SectionCard>
-        </div>
-      </section>
+          );
+        })}
+      </div>
 
       <section className="sky-section" aria-labelledby="sky-checks">
-        <div className="sky-sh"><h2 id="sky-checks">Checks</h2><p>{leads ? `Ordered for ${profile.label.toLowerCase()}: ${leads} first. ` : ""}Each card opens its section.</p></div>
+        <div className="sr-only"><h2 id="sky-checks">Checks</h2><p>{leads ? `Ordered for ${profile.label.toLowerCase()}: ${leads} first. ` : ""}Problems first; tap one for the evidence.</p></div>
         <div className="sky-checks">
           {route && (
             <CheckCard title="Route" className="is-route" to="route" onOpen={onOpen} {...routeCheck(route, routeFormat)}>
@@ -498,27 +399,24 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
               )}
             </CheckCard>
           )}
-          {orderActivityChecks(checks, activity).map((check) => check.card)}
+          {ordered.map((check) => check.card)}
         </div>
+        {showMore && (
+          <button type="button" className="sky-link sky-full-link" onClick={onReadAll}>
+            <BookOpen size={16} aria-hidden="true" />Read the full report<ChevronRight size={16} aria-hidden="true" />
+          </button>
+        )}
       </section>
 
-      {gearEnabled && gear.length > 0 && (
-        <section className="sky-section" aria-labelledby="sky-pack">
-          <div className="sky-sh"><h2 id="sky-pack">Pack for today</h2>
-            <button type="button" className="sky-link sky-sh-link" onClick={() => onOpen("gear")}>
-              {gearTotal > gear.length ? `All ${gearTotal} in Gear & actions` : "Open Gear & actions"}<ChevronRight size={16} aria-hidden="true" />
-            </button></div>
-          <div className="sky-pack">
-            {gear.map((item, i) => item && (
-              <button type="button" key={`${item.title}-${i}`} className="sky-card sky-item" onClick={() => onOpen("gear")}>
-                <span className="sky-item-cat">{item.category}</span>
-                <span className="sky-item-name">{item.title}</span>
-                <span className="sky-cap">{w.localizeUnitText(item.reason || item.detail)}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+      {showMore && (packItems || more) && (
+        <Fold id="sky-more" title="More" hint={[packItems ? "pack list" : null, more ? "AI explanation, assistant, insights" : null].filter(Boolean).join(" · ")}>
+          {packItems}
+          {more}
+        </Fold>
       )}
-    </>
+      {detail && (
+        <TilePopup detail={detail} onClose={() => setDetail(null)} onOpen={(chapter) => { setDetail(null); onOpen(chapter); }} />
+      )}
+    </TileContext.Provider>
   );
 }

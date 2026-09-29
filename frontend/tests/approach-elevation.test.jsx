@@ -91,7 +91,7 @@ test('the brief note says which hours were checked below the summit and how to c
   const html = renderToStaticMarkup(
     <ApproachNote hours={hours} summary={summary} source="estimated" clock={clock} elevation={elevation} onEdit={() => {}} />,
   );
-  assert.match(html, /5 AM–7 AM checked at your estimated elevation/);
+  assert.match(html, /5 AM–7 AM<\/strong> is judged lower down/);
   assert.match(html, /~9,500 ft–10,900 ft/);
   assert.match(html, /trailhead estimated/);
   assert.match(html, /Set trailhead/);
@@ -117,7 +117,7 @@ test('a GPX route is described by its start and high point, not a trailhead and 
   const { hours, summary } = approachScenario();
   const terms = { kind: 'route', start: 'start', top: 'high point' };
   const note = renderToStaticMarkup(<ApproachNote hours={hours} summary={summary} source="estimated" clock={clock} elevation={elevation} onEdit={() => {}} terms={terms} />);
-  assert.match(note, /not the\s+high point/);
+  assert.match(note, /not at\s+the\s+high point/);
   assert.match(note, /Set start/);
   assert.match(note, /may be colder at the start than at the high point/);
   assert.doesNotMatch(note, /summit|trailhead</);

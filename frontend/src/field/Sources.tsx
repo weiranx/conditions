@@ -12,6 +12,7 @@ import { Evidence } from "./Evidence";
 import { evidenceFormat } from "./evidence-format";
 import { dateLabel } from "./data";
 import { FreshnessChart } from "./sky/FreshnessChart";
+import { Fold } from "./sky/Fold";
 
 const FIELD_NAMES: Record<string, string> = {
   temp: "temperature",
@@ -106,11 +107,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
         </div>
       </section>
 
-      <section className="sky-section" aria-labelledby="sky-sources-fresh">
-        <div className="sky-sh">
-          <h2 id="sky-sources-fresh">How fresh is each source</h2>
-          <p>When it was issued or observed.</p>
-        </div>
+      <Fold id="sky-sources-fresh" title="How fresh is each source" hint="When each forecast and bulletin was issued.">
         <div className="sky-card">
           {freshness.hasWarning && <p className="sky-notice is-missing">{freshness.warningSummary}</p>}
           <FreshnessChart rows={freshness.rows} age={(issued) => w.formatAgeFromNow(issued)} stamp={(issued) => w.formatPubTime(issued)} />
@@ -127,7 +124,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
             )}
           </div>
         </div>
-      </section>
+      </Fold>
 
       {(comparison || comparisonError || w.dayOverDay) && (
         <div className="sky-duo sky-section">

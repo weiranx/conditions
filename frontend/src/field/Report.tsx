@@ -31,6 +31,7 @@ import { summarizePlannedRoute } from "./route-planning";
 import { BriefSections } from "./sky/BriefSections";
 import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
+import { plainHeadline } from "./sky/plain-headline";
 import { minutesToTwentyFourHourClock } from "../app/core";
 import { activityProfile, reportActivity, type ActivityChapter } from "../app/activity-profiles";
 import "./sky/sky.css";
@@ -152,6 +153,8 @@ export function Report({
   const clock = (minute: number) =>
     w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   const copy = evaluation.verdict;
+  // Say what crosses your limits and when, in plain words; the decision's own headline covers the rest.
+  const headline = plainHeadline(skyHours, clock) ?? decision.headline;
   // The route chosen in the plan, once the report has a Route chapter to show it.
   const route = flags.routeAnalysis
     ? summarizePlannedRoute({
@@ -240,29 +243,6 @@ export function Report({
   }
   const actions = (
     <div className="field-report-actions">
-      {flags.reportHistory && (
-        <button disabled={actionBusy || Boolean(w.activeSavedReportId)} onClick={onSave}>
-          {w.activeSavedReportId ? <Check size={14} /> : <Download size={14} />}
-          <span className="sky-action-label">{w.activeSavedReportId ? "Saved" : "Save"}</span>
-        </button>
-      )}
-      {flags.reportSharing && (
-        <button disabled={actionBusy} onClick={onShare}>
-          <Link size={14} />
-          <span className="sky-action-label">{w.copiedLink ? "Copied" : "Share"}</span>
-        </button>
-      )}
-      {flags.objectiveWatch && (watching && onOpenWatchlist ? (
-        <button onClick={onOpenWatchlist} title="Open this plan in your watchlist">
-          <BellRing size={14} />
-          <span className="sky-action-label">Watching</span>
-        </button>
-      ) : (
-        <button disabled={actionBusy} onClick={onWatch}>
-          <Bell size={14} />
-          <span className="sky-action-label">Watch</span>
-        </button>
-      ))}
       <details
         className="report-actions-menu"
         onKeyDown={(event) => {
@@ -287,6 +267,29 @@ export function Report({
           <span className="sr-only">More actions</span>
         </summary>
         <div className="report-actions-popover">
+          {flags.reportHistory && (
+            <button disabled={actionBusy || Boolean(w.activeSavedReportId)} onClick={onSave}>
+              {w.activeSavedReportId ? <Check size={16} /> : <Download size={16} />}
+              {w.activeSavedReportId ? "Saved" : "Save report"}
+            </button>
+          )}
+          {flags.reportSharing && (
+            <button disabled={actionBusy} onClick={onShare}>
+              <Link size={16} />
+              {w.copiedLink ? "Link copied" : "Share link"}
+            </button>
+          )}
+          {flags.objectiveWatch && (watching && onOpenWatchlist ? (
+            <button onClick={onOpenWatchlist} title="Open this plan in your watchlist">
+              <BellRing size={16} />
+              Watching
+            </button>
+          ) : (
+            <button disabled={actionBusy} onClick={onWatch}>
+              <Bell size={16} />
+              Watch this plan
+            </button>
+          ))}
           <button
             disabled={actionBusy}
             onClick={onEmail}
@@ -315,6 +318,11 @@ export function Report({
       </button>
     </div>
   );
+  const dataWarning = data.partialData || data.apiWarning || evaluation.interpretation.sourceFreshness.hasWarning
+    ? data.apiWarning ||
+      evaluation.interpretation.sourceFreshness.warningSummary ||
+      "Some sources returned incomplete data. Check the official forecasts before committing."
+    : "";
   const notices = (
     <>
       {w.viewingHistoryReport && (w.restoredReportSource === "itinerary" ? (
@@ -335,28 +343,19 @@ export function Report({
           {feedback}
         </p>
       )}
-      {(data.partialData || data.apiWarning || evaluation.interpretation.sourceFreshness.hasWarning) && (
-        <div className="sky-notice is-missing" role="status">
+      {(dataWarning || copy.warnings.length > 0 || copy.missing.length > 0) && (
+        <div className="sky-notice is-caution" role="status" aria-label="Warnings and evidence gaps">
           <TriangleAlert size={20} aria-hidden="true" />
           <div>
-            {data.apiWarning ||
-              evaluation.interpretation.sourceFreshness.warningSummary ||
-              "Some sources returned incomplete data. Check the official forecasts before committing."}
-          </div>
-          <button type="button" className="sky-link" onClick={() => go("sources")}>Checks &amp; sources</button>
-        </div>
-      )}
-      {(copy.warnings.length > 0 || copy.missing.length > 0) && (
-        <div className="sky-notice is-caution" aria-label="Warnings and evidence gaps">
-          <TriangleAlert size={20} aria-hidden="true" />
-          <div>
-            {copy.warnings.length > 0 && <>
+            {dataWarning && <p>{dataWarning}</p>}
+            {copy.warnings.length > 0 && <p>
               <strong>Field reports to check.</strong>{" "}
               {copy.warnings.map((signal) => `${signal.title}: ${signal.detail}`).join(" · ")}{" "}
               Check when each report was made and whether it applies to your route.
-            </>}
-            {copy.missing.length > 0 && <span> {copy.missing.map((signal) => signal.title).join(" · ")}. Missing data does not mean conditions are clear.</span>}
+            </p>}
+            {copy.missing.length > 0 && <p>{copy.missing.map((signal) => signal.title).join(" · ")}. Missing data does not mean conditions are clear.</p>}
           </div>
+          {dataWarning && <button type="button" className="sky-link" onClick={() => go("sources")}>Checks &amp; sources</button>}
         </div>
       )}
       {passed && activeView !== "brief" && (
@@ -395,9 +394,11 @@ export function Report({
     <>
       {/* Line breaks fall between the parts, never inside "7:00 AM" or "13,775 ft". */}
       {route && <>via {route.name} · </>}
-      <span className="sky-nowrap">{dateLabel(report.plan.forecastDate)}</span> · <span className="sky-nowrap">{w.displayStartTime} start</span> · <span className="sky-nowrap">{report.plan.travelWindowHours} hours</span>
-      {data.weather.elevation != null && <> · <span className="sky-nowrap">{w.formatElevationDisplay(Number(data.weather.elevation))}</span></>}
-      <span className="sky-generated"> · Generated {ageLabel(data.generatedAt)}</span>
+      <span className="sky-nowrap">{dateLabel(report.plan.forecastDate)}</span> · <span className="sky-nowrap">starts {w.displayStartTime}</span> · <span className="sky-nowrap">{report.plan.travelWindowHours} hours</span>
+      <span className="sky-subtitle-meta">
+        {data.weather.elevation != null && <><span className="sky-nowrap">{w.formatElevationDisplay(Number(data.weather.elevation))}</span> · </>}
+        <span className="sky-generated">Generated {ageLabel(data.generatedAt)}</span>
+      </span>
     </>
   );
   // On the brief the passed start leads the hero, before the decision it dates.
@@ -442,165 +443,9 @@ export function Report({
     if (id === "route" && flags.routeAnalysis) return <Route key="route" workspace={w} />;
     return null;
   };
-  return (
-    <div className={`field-report sky-report is-${activeView === "brief" ? "brief" : "chapter"}`} ref={topRef}>
-      {activeView === "brief" ? (
-        <SkyHero
-          hours={skyHours}
-          sunrise={w.sunriseMinutesForPlan}
-          sunset={w.sunsetMinutesForPlan}
-          kicker={`${w.restoredReportSource === "itinerary" ? "Trip day report" : w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"} · ${activity.label}`}
-          title={report.plan.objectiveName}
-          subtitle={subtitle}
-          status={passedStatus}
-          level={decision.level}
-          headline={decision.headline}
-          reason={copy.reason}
-          bridge={copy.bridge}
-          limitingChecks={copy.limitingChecks}
-          note={<>{approachNote}{routeNote}</>}
-          actions={actions}
-          format={{
-            temp: (f) => w.formatTempDisplay(f),
-            wind: (mph) => w.formatWindDisplay(mph),
-            elevation: (ft) => w.formatElevationDisplay(ft),
-            clock,
-            timeStyle: w.preferences.timeStyle,
-          }}
-        />
-      ) : (
-        <header className="sky-chapter-head">
-          <div className="sky-chapter-bar">
-            <button type="button" className="sky-back" onClick={() => go("brief")}>
-              <ArrowLeft size={18} aria-hidden="true" />
-              Brief
-            </button>
-            {actions}
-          </div>
-          <div className="sky-chapter-title">
-            <div>
-              <span className="sky-kicker">{report.plan.objectiveName} · {dateLabel(report.plan.forecastDate)}</span>
-              <h1 tabIndex={-1}>{fullReport ? "Full report" : activeChapter?.label}</h1>
-            </div>
-            <DayStrip hours={skyHours} approach={plannedApproach} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
-          </div>
-          {!fullReport && (
-            <nav className="sky-chapter-tabs" aria-label="Report sections" ref={tabsRef}>
-              {visibleChapters.map((c) => (
-                <button key={c.id} type="button" aria-current={activeView === c.id ? "page" : undefined} onClick={() => go(c.id)}>
-                  {c.label}
-                </button>
-              ))}
-              <button type="button" onClick={() => go("all")}>All sections</button>
-            </nav>
-          )}
-        </header>
-      )}
-      <div className="sky-body">
-        {notices}
-        {activeView === "brief" && (
-          <BriefSections
-            w={w}
-            hours={skyHours}
-            clock={clock}
-            scoreValue={copy.scoreValue}
-            insufficient={copy.insufficient}
-            bridge={copy.bridge}
-            onOpen={(next) => go(next)}
-            onReadAll={() => go("all")}
-            sections={visibleChapters.map((c) => c.id)}
-            route={route}
-            gearEnabled={flags.gearRecommendations}
-            activity={reportActivity(report)}
-          />
-        )}
-        {fullReport && (
-          <div className="report-overview sky-full-summary">
-            <section className={`sky-verdict-card is-${copy.tone}`} aria-labelledby="sky-full-verdict">
-              <span className={`sky-pill is-${copy.tone}`}>
-                {copy.tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
-                <span><span className="sr-only">Trip decision: </span>{decision.level === "GO" ? "Go" : decision.level === "NO-GO" ? "No-go" : "Caution"}</span>
-              </span>
-              <h2 id="sky-full-verdict">{decision.headline}</h2>
-              <p className="sky-verdict-reason">{copy.reason}</p>
-              {copy.bridge && <p className="sky-cap">{copy.bridge}</p>}
-              {copy.limitingChecks.length > 0 && (
-                <ul className="sky-limiting" aria-label="Checks setting the decision">
-                  {copy.limitingChecks.map((check) => <li key={check}>{check}</li>)}
-                </ul>
-              )}
-              {approachNote}
-              {routeNote}
-              <p className="sky-cap">{subtitle}</p>
-            </section>
-            <BriefSections
-              w={w}
-              hours={skyHours}
-              clock={clock}
-              scoreValue={copy.scoreValue}
-              insufficient={copy.insufficient}
-              bridge={copy.bridge}
-              onOpen={(next) => go(next)}
-              onReadAll={() => go("all")}
-              route={route}
-              gearEnabled={flags.gearRecommendations}
-              activity={reportActivity(report)}
-              showMore={false}
-            />
-          </div>
-        )}
-        <div className="field-chapter-content" id="field-report-detail">
-          <Suspense
-            fallback={
-              <p className="field-loading" role="status">
-                Loading section…
-              </p>
-            }
-          >
-            {fullReport
-              ? visibleChapters.filter((c) => c.id !== "gear").map((c) => (
-                <section key={c.id} className="sky-chapter-block" aria-labelledby={`sky-chapter-${c.id}`}>
-                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`}>{c.label}</h2>
-                  {chapterContent(c.id)}
-                </section>
-              ))
-              : activeChapter && chapterContent(activeChapter.id)}
-            {fullReport && flags.gearRecommendations && (
-              <h2 className="sky-chapter-name sky-chapter-block">Gear &amp; actions</h2>
-            )}
-            {flags.gearRecommendations && (
-              <GearActions
-                key={JSON.stringify([report.plan, data.generatedAt, data.gear])}
-                hidden={!fullReport && activeView !== "gear"}
-                recommendations={w.gearRecommendations}
-                decision={decision}
-                actionLine={w.decisionActionLine}
-                onSources={() => go("sources")}
-                activityLabel={data.forecast?.activity ? activity.label : null}
-                localize={w.localizeUnitText}
-              />
-            )}
-          </Suspense>
-        </div>
-        {activeChapter && (
-          <nav className="sky-pager" aria-label="Chapters">
-            {chapterIndex > 0 ? (
-              <button type="button" onClick={() => go(visibleChapters[chapterIndex - 1].id)}>
-                <span>Previous</span><strong>‹ {visibleChapters[chapterIndex - 1].label}</strong>
-              </button>
-            ) : (
-              <button type="button" onClick={() => go("brief")}><span>Back to</span><strong>‹ Brief</strong></button>
-            )}
-            {chapterIndex < visibleChapters.length - 1 ? (
-              <button type="button" className="is-next" onClick={() => go(visibleChapters[chapterIndex + 1].id)}>
-                <span>Next</span><strong>{visibleChapters[chapterIndex + 1].label} ›</strong>
-              </button>
-            ) : (
-              <button type="button" className="is-next" onClick={() => go("brief")}><span>Done</span><strong>Brief ›</strong></button>
-            )}
-          </nav>
-        )}
-        {activeView === "brief" && (w.aiBriefNarrative || (ai.aiBrief && !w.viewingHistoryReport)) && (
+  const briefMore = (
+    <>
+        {(w.aiBriefNarrative || (ai.aiBrief && !w.viewingHistoryReport)) && (
           <section
             className="field-panel ai-brief"
             aria-labelledby="ai-brief-title"
@@ -665,7 +510,7 @@ export function Report({
             )}
           </section>
         )}
-        {activeView === "brief" && (ai.reportChat || w.reportChatMessages.length > 0) && (
+        {(ai.reportChat || w.reportChatMessages.length > 0) && (
           <Suspense fallback={<p>Loading report assistant…</p>}>
             <Chat
               key={w.reportChatSessionKey}
@@ -677,7 +522,160 @@ export function Report({
             />
           </Suspense>
         )}
-        {(activeView === "brief" || fullReport) && (
+      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} />
+    </>
+  );
+  return (
+    <div className={`field-report sky-report is-${activeView === "brief" ? "brief" : "chapter"}`} ref={topRef}>
+      {activeView === "brief" ? (
+        <SkyHero
+          hours={skyHours}
+          sunrise={w.sunriseMinutesForPlan}
+          sunset={w.sunsetMinutesForPlan}
+          kicker={`${w.restoredReportSource === "itinerary" ? "Trip day report" : w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"} · ${activity.label}`}
+          title={report.plan.objectiveName}
+          subtitle={subtitle}
+          status={passedStatus}
+          level={decision.level}
+          headline={headline}
+          reason={copy.reason}
+          limitingChecks={copy.limitingChecks}
+          note={<>{approachNote}{routeNote}</>}
+          actions={actions}
+          format={{
+            temp: (f) => w.formatTempDisplay(f),
+            wind: (mph) => w.formatWindDisplay(mph),
+            elevation: (ft) => w.formatElevationDisplay(ft),
+            clock,
+            timeStyle: w.preferences.timeStyle,
+          }}
+        />
+      ) : (
+        <header className="sky-chapter-head">
+          <div className="sky-chapter-bar">
+            <button type="button" className="sky-back" onClick={() => go("brief")}>
+              <ArrowLeft size={18} aria-hidden="true" />
+              Brief
+            </button>
+            {actions}
+          </div>
+          <div className="sky-chapter-title">
+            <div>
+              <span className="sky-kicker">{report.plan.objectiveName} · {dateLabel(report.plan.forecastDate)}</span>
+              <h1 tabIndex={-1}>{fullReport ? "Full report" : activeChapter?.label}</h1>
+            </div>
+            <DayStrip hours={skyHours} approach={plannedApproach} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
+          </div>
+          {!fullReport && (
+            <nav className="sky-chapter-tabs" aria-label="Report sections" ref={tabsRef}>
+              {visibleChapters.map((c) => (
+                <button key={c.id} type="button" aria-current={activeView === c.id ? "page" : undefined} onClick={() => go(c.id)}>
+                  {c.label}
+                </button>
+              ))}
+              <button type="button" onClick={() => go("all")}>All sections</button>
+            </nav>
+          )}
+        </header>
+      )}
+      <div className="sky-body">
+        {notices}
+        {activeView === "brief" && (
+          <BriefSections
+            w={w}
+            hours={skyHours}
+            clock={clock}
+            onOpen={(next) => go(next)}
+            onReadAll={() => go("all")}
+            route={route}
+            gearEnabled={flags.gearRecommendations}
+            activity={reportActivity(report)}
+            more={briefMore}
+          />
+        )}
+        {fullReport && (
+          <div className="report-overview sky-full-summary">
+            <section className={`sky-verdict-card is-${copy.tone}`} aria-labelledby="sky-full-verdict">
+              <span className={`sky-pill is-${copy.tone}`}>
+                {copy.tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
+                <span><span className="sr-only">Trip decision: </span>{decision.level === "GO" ? "Go" : decision.level === "NO-GO" ? "No-go" : "Caution"}</span>
+              </span>
+              <h2 id="sky-full-verdict">{headline}</h2>
+              <p className="sky-verdict-reason">{copy.reason}</p>
+              {copy.limitingChecks.length > 0 && (
+                <ul className="sky-limiting" aria-label="Checks setting the decision">
+                  {copy.limitingChecks.map((check) => <li key={check}>{check}</li>)}
+                </ul>
+              )}
+              {approachNote}
+              {routeNote}
+              <p className="sky-cap">{subtitle}</p>
+            </section>
+            <BriefSections
+              w={w}
+              hours={skyHours}
+              clock={clock}
+              onOpen={(next) => go(next)}
+              onReadAll={() => go("all")}
+              route={route}
+              gearEnabled={flags.gearRecommendations}
+              activity={reportActivity(report)}
+              showMore={false}
+            />
+          </div>
+        )}
+        <div className="field-chapter-content" id="field-report-detail">
+          <Suspense
+            fallback={
+              <p className="field-loading" role="status">
+                Loading section…
+              </p>
+            }
+          >
+            {fullReport
+              ? visibleChapters.filter((c) => c.id !== "gear").map((c) => (
+                <section key={c.id} className="sky-chapter-block" aria-labelledby={`sky-chapter-${c.id}`}>
+                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`}>{c.label}</h2>
+                  {chapterContent(c.id)}
+                </section>
+              ))
+              : activeChapter && chapterContent(activeChapter.id)}
+            {fullReport && flags.gearRecommendations && (
+              <h2 className="sky-chapter-name sky-chapter-block">Gear &amp; actions</h2>
+            )}
+            {flags.gearRecommendations && (
+              <GearActions
+                key={JSON.stringify([report.plan, data.generatedAt, data.gear])}
+                hidden={!fullReport && activeView !== "gear"}
+                recommendations={w.gearRecommendations}
+                decision={decision}
+                actionLine={w.decisionActionLine}
+                onSources={() => go("sources")}
+                activityLabel={data.forecast?.activity ? activity.label : null}
+                localize={w.localizeUnitText}
+              />
+            )}
+          </Suspense>
+        </div>
+        {activeChapter && (
+          <nav className="sky-pager" aria-label="Chapters">
+            {chapterIndex > 0 ? (
+              <button type="button" onClick={() => go(visibleChapters[chapterIndex - 1].id)}>
+                <span>Previous</span><strong>‹ {visibleChapters[chapterIndex - 1].label}</strong>
+              </button>
+            ) : (
+              <button type="button" onClick={() => go("brief")}><span>Back to</span><strong>‹ Brief</strong></button>
+            )}
+            {chapterIndex < visibleChapters.length - 1 ? (
+              <button type="button" className="is-next" onClick={() => go(visibleChapters[chapterIndex + 1].id)}>
+                <span>Next</span><strong>{visibleChapters[chapterIndex + 1].label} ›</strong>
+              </button>
+            ) : (
+              <button type="button" className="is-next" onClick={() => go("brief")}><span>Done</span><strong>Brief ›</strong></button>
+            )}
+          </nav>
+        )}
+        {fullReport && (
           <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} />
         )}
         <p className="field-muted">
