@@ -721,10 +721,13 @@ test('re-timing the suggestions on screen says whether new times arrived, and le
     ['30', '45', '45', '14411', '8'],
   );
 
-  // A different set of routes is not this list, so it is not replaced.
+  // A different set of routes is not this list, so it is not replaced, and the new times did not arrive:
+  // they must not be recorded as applied, or the stale times would count as current until a setting changes.
   reply = () => new Response(JSON.stringify([route('East face', 5)]), { headers: { 'content-type': 'application/json' } });
-  await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing));
-  assert.deepEqual(hook.routeSuggestions.map((r) => r.name), ['West ridge']);
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing)), false);
+  reply = () => new Response(JSON.stringify([route('West ridge', 12), route('East face', 5)]), { headers: { 'content-type': 'application/json' } });
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing)), false, 'a longer list is not this list either');
+  assert.deepEqual(hook.routeSuggestions.map((r) => [r.name, r.estimated_hours]), [['West ridge', 11]]);
 });
 
 // Last in the file: the published availability is shared module state.
