@@ -478,26 +478,37 @@ const createSnowpackService = ({
     };
   };
 
+  // The weeks of earlier years that the comparison reads: the week ending on this date in each of the last
+  // ten years, exactly the samples extractHistoricalAverageAwdbValue can pick.
+  const historicalWindows = (asOfIso) => {
+    const parts = parseIsoDateParts(asOfIso);
+    if (!parts) return [];
+    return Array.from({ length: HISTORICAL_BASELINE_LOOKBACK_YEARS }, (_, index) => {
+      const endDate = buildHistoricalTargetIsoForYear(parts.year - 1 - index, parts.month, parts.day);
+      return { beginDate: shiftIsoDateUtc(endDate, -HISTORICAL_MATCH_WINDOW_DAYS), endDate };
+    });
+  };
+
   // What one station says about the target date. It depends on the station and the date, not on where the
   // report is for, so nearby objectives and the days of a trip share it.
   //
-  // The 10-year history is the slow part of a report: the USDA server sends about 50 kB a second. Only
-  // snow water equivalent and depth are compared with earlier years, so the history asks for those two and
-  // the current precipitation and temperature come from a short window beside it.
+  // The comparison with earlier years is the slow part of a report: the USDA server sends about 50 kB a
+  // second, so ten years of daily readings take many seconds, and the comparison uses ten weeks of them. The
+  // weeks are asked for one request each, all at once, and arrive in about a second. Current precipitation
+  // and temperature come from a short window beside them.
   const fetchSnotelStationDetail = (station, targetDate, fetchOptions) => {
     const stationTriplet = String(station.stationTriplet || '');
     const todayIso = formatIsoDateUtc(new Date());
     const asOfIso = targetDate || todayIso;
     return snotelStationDetailCache.getOrFetch(`${stationTriplet}|${asOfIso}`, async () => {
-      // The request belongs to every report that shares the entry, not to the one that started it.
+      // The requests belong to every report that shares the entry, not to the one that started it.
       const options = { headers: fetchOptions?.headers };
-      const fetchStationData = async (elements, lookbackDays) => {
-        const beginDate = shiftIsoDateUtc(asOfIso, -lookbackDays);
+      const fetchStationData = async (elements, beginDate, endDate) => {
         const dataUrl =
           `https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=${encodeURIComponent(stationTriplet)}` +
           `&elements=${elements}&duration=DAILY` +
           `${beginDate ? `&beginDate=${encodeURIComponent(beginDate)}` : ''}` +
-          `${targetDate ? `&endDate=${encodeURIComponent(targetDate)}` : ''}` +
+          `${endDate ? `&endDate=${encodeURIComponent(endDate)}` : ''}` +
           '&periodRef=END';
         const dataRes = await fetchWithTimeout(dataUrl, options);
         if (!dataRes.ok) {
@@ -507,20 +518,41 @@ const createSnowpackService = ({
         const stationData = Array.isArray(dataJson) ? dataJson[0] : null;
         return Array.isArray(stationData?.data) ? stationData.data : [];
       };
-      const [recentData, historyData] = await Promise.all([
-        fetchStationData('WTEQ,SNWD,PREC,TOBS', SNOTEL_CURRENT_LOOKBACK_DAYS),
-        fetchStationData('WTEQ,SNWD', HISTORICAL_FETCH_LOOKBACK_DAYS),
+      // With ten requests at once a stray failure is likelier than with one, and it would cost the report its history.
+      const fetchWindow = async ({ beginDate, endDate }) => {
+        try {
+          return await fetchStationData('WTEQ,SNWD', beginDate, endDate);
+        } catch {
+          return fetchStationData('WTEQ,SNWD', beginDate, endDate);
+        }
+      };
+      const [recentData, ...windowData] = await Promise.all([
+        fetchStationData('WTEQ,SNWD,PREC,TOBS', shiftIsoDateUtc(asOfIso, -SNOTEL_CURRENT_LOOKBACK_DAYS), targetDate),
+        ...historicalWindows(asOfIso).map(fetchWindow),
       ]);
       const elementCodeOf = (entry) => String(entry?.stationElement?.elementCode || '').toUpperCase();
-      const mapByElement = {};
-      // Snow water equivalent and depth are read from the history, so a station that reported them only before
-      // the current window still shows its latest value, as one request for the whole period did.
-      for (const entry of [...recentData, ...historyData]) {
+      const historyValues = new Map();
+      for (const entry of windowData.flat()) {
         const elementCode = elementCodeOf(entry);
-        if (!elementCode) {
-          continue;
+        if (elementCode && Array.isArray(entry?.values)) {
+          historyValues.set(elementCode, [...(historyValues.get(elementCode) || []), ...entry.values]);
         }
-        mapByElement[elementCode] = extractLatestAwdbValue(entry?.values, asOfIso);
+      }
+
+      const mapByElement = {};
+      const readLatest = (entries) => {
+        for (const entry of entries) {
+          const elementCode = elementCodeOf(entry);
+          if (elementCode) {
+            mapByElement[elementCode] = extractLatestAwdbValue(entry?.values, asOfIso);
+          }
+        }
+      };
+      readLatest(recentData);
+      // A station that has reported no snow readings for a month still shows its latest ones, as when one request
+      // covered ten years; this is the slow request, made only for a station like that.
+      if (!mapByElement.WTEQ && !mapByElement.SNWD) {
+        readLatest(await fetchStationData('WTEQ,SNWD', shiftIsoDateUtc(asOfIso, -HISTORICAL_FETCH_LOOKBACK_DAYS), targetDate));
       }
 
       const snowDepthIn = toFiniteOrNull(mapByElement.SNWD?.value);
@@ -528,10 +560,8 @@ const createSnowpackService = ({
       const precipIn = toFiniteOrNull(mapByElement.PREC?.value);
       const obsTempF = toFiniteOrNull(mapByElement.TOBS?.value);
       const observedDate = mapByElement.SNWD?.date || mapByElement.WTEQ?.date || mapByElement.PREC?.date || mapByElement.TOBS?.date || null;
-      const snwdEntry = historyData.find((entry) => elementCodeOf(entry) === 'SNWD');
-      const wteqEntry = historyData.find((entry) => elementCodeOf(entry) === 'WTEQ');
-      const snowDepthHistorical = extractHistoricalAverageAwdbValue(snwdEntry?.values || [], asOfIso);
-      const sweHistorical = extractHistoricalAverageAwdbValue(wteqEntry?.values || [], asOfIso);
+      const snowDepthHistorical = extractHistoricalAverageAwdbValue(historyValues.get('SNWD') || [], asOfIso);
+      const sweHistorical = extractHistoricalAverageAwdbValue(historyValues.get('WTEQ') || [], asOfIso);
       const depthComparison = compareCurrentToHistoricalAverage(snowDepthIn, snowDepthHistorical?.average);
       const sweComparison = compareCurrentToHistoricalAverage(sweIn, sweHistorical?.average);
       const overallComparison =

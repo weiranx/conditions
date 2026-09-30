@@ -372,3 +372,48 @@ describe('provider raw-payload caches', () => {
     expect(outsideHorizon.note).toMatch(/outside the provider forecast horizon/i);
   });
 });
+
+describe('getOrFetch shouldStore', () => {
+  const { createCache } = require('../src/utils/cache');
+
+  test('a value that is not stored still reaches everyone waiting on it, and is asked for again next time', async () => {
+    const cache = createCache({ name: 'should-store', ttlMs: 60000 });
+    const load = jest.fn(async () => ({ good: false }));
+    const options = { shouldStore: (value) => value.good };
+
+    const answers = await Promise.all([cache.getOrFetch('k', load, options), cache.getOrFetch('k', load, options)]);
+    expect(answers).toEqual([{ good: false }, { good: false }]);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(cache.has('k')).toBe(false);
+
+    load.mockResolvedValueOnce({ good: true });
+    await expect(cache.getOrFetch('k', load, options)).resolves.toEqual({ good: true });
+    await expect(cache.getOrFetch('k', load, options)).resolves.toEqual({ good: true });
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  test('a stale value is kept when its refresh is not worth storing', async () => {
+    jest.useFakeTimers({ now: 1000, doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      const cache = createCache({ name: 'should-store-stale', ttlMs: 1000, staleTtlMs: 5000 });
+      cache.set('k', { good: true, n: 1 });
+      jest.setSystemTime(3000);
+      const load = jest.fn(async () => ({ good: false, n: 2 }));
+
+      await expect(cache.getOrFetch('k', load, { shouldStore: (value) => value.good })).resolves.toEqual({ good: true, n: 1 });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(cache.get('k').value).toEqual({ good: true, n: 1 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('without the option every value is stored, as before', async () => {
+    const cache = createCache({ name: 'default-store', ttlMs: 60000 });
+    const load = jest.fn(async () => null);
+    await cache.getOrFetch('k', load);
+    await cache.getOrFetch('k', load);
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+});

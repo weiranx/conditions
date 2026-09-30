@@ -6,6 +6,7 @@ const { createEvidenceFetcher } = require('../src/utils/evidence-fetch');
 const { buildAirNowUrl, parseAirNowObservations } = require('../src/utils/airnow-observations');
 const { createUsgsWaterService } = require('../src/utils/usgs-water');
 const { haversineKm } = require('../src/utils/geo');
+const { createCache } = require('../src/utils/cache');
 const { sanitizeReportForFeatureFlags } = require('../src/utils/report-feature-filter');
 const now = Date.parse('2026-09-16T21:00:00Z');
 const fresh = '2026-09-16T20:50:00Z';
@@ -115,6 +116,37 @@ test('NWS discussion preserves regional prose and rejects an expired product', a
   issuanceTime = '2026-09-14T12:00:00Z';
   const expired = await createSupplementalEvidenceService({ fetchWithTimeout, now: () => now })(args);
   expect(expired.discussion).toMatchObject({ available: false, status: 'no_data' });
+});
+
+test('regional forecast lookups reuse the weather pipeline\'s cached NOAA point instead of asking NOAA again', async () => {
+  const shared = { '46.8523,-121.7603': { properties: { gridId: 'SEW' } } };
+  const pointsCache = { getOrFetch: jest.fn(async (key, load) => shared[key] ?? load()) };
+  const fetchWithTimeout = jest.fn(async (url) => new Response(JSON.stringify(
+    url.includes('/types/') ? { '@graph': [{ id: '12345678-1234-1234-1234-123456789012', issuanceTime: fresh }] }
+      : { productCode: 'AFD', issuanceTime: fresh, productText: 'Regional winds increase tomorrow.' },
+  )));
+  const args = { lat: 46.8523, lon: -121.7603, featureFlags: { fieldObservations: false, airQualityDetails: false }, targetTimeIso: fresh };
+  const result = await createSupplementalEvidenceService({ fetchWithTimeout, now: () => now, pointsCache })(args);
+
+  expect(result.discussion).toMatchObject({ available: true, office: 'SEW' });
+  expect(fetchWithTimeout.mock.calls.some(([url]) => url.includes('/points/'))).toBe(false);
+  expect(pointsCache.getOrFetch).toHaveBeenCalledWith('46.8523,-121.7603', expect.any(Function));
+});
+
+test('a point that is not cached yet is fetched at four decimals and stored for the other services', async () => {
+  // The real cache, which also joins the lookups that the forecast discussion and the station list make at once.
+  const pointsCache = createCache({ name: 'test-noaa-points', ttlMs: 60000 });
+  const fetchWithTimeout = jest.fn(async (url) => new Response(JSON.stringify(
+    url.includes('/points/') ? { properties: { gridId: 'SEW' } }
+      : url.includes('/types/') ? { '@graph': [{ id: '12345678-1234-1234-1234-123456789012', issuanceTime: fresh }] }
+        : { productCode: 'AFD', issuanceTime: fresh, productText: 'Regional winds increase tomorrow.' },
+  )));
+  const args = { lat: 46.85234, lon: -121.76038, featureFlags: { fieldObservations: false, airQualityDetails: false }, targetTimeIso: fresh };
+  await createSupplementalEvidenceService({ fetchWithTimeout, now: () => now, pointsCache })(args);
+
+  const pointUrls = fetchWithTimeout.mock.calls.map(([url]) => url).filter((url) => url.includes('/points/'));
+  expect(pointUrls).toEqual(['https://api.weather.gov/points/46.8523,-121.7604']);
+  expect(pointsCache.get('46.8523,-121.7604').value).toEqual({ properties: { gridId: 'SEW' } });
 });
 
 test('source failures never expose credential-bearing fetch errors', async () => {

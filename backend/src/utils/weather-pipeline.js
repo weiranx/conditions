@@ -94,6 +94,12 @@ async function fetchWeatherPipeline({
   // it. Start that fetch now rather than after the NOAA round trips.
   prefetchOpenMeteoWeather?.({ lat: parsedLat, lon: parsedLon, fetchOptions });
 
+  // The objective's elevation needs only its coordinates, and NOAA's point metadata seldom carries one, so this
+  // lookup usually decides how soon the forecast is ready. Start it beside the NOAA request instead of after it.
+  // It never rejects, and the result is cached for the fallback path below.
+  const objectiveElevationPromise = Promise.resolve(fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions));
+  objectiveElevationPromise.catch(() => {});
+
   // NOAA is a single critical-path upstream hit on every request; when a breaker is
   // injected, fast-fail once it's been chronically failing instead of piling on more
   // doomed requests. Tests/callers that don't inject one simply skip the breaker check.
@@ -103,8 +109,9 @@ async function fetchWeatherPipeline({
     // 1. Get NOAA grid data (cached 24h)
     const pointsCacheKey = normalizeCoordKey(parsedLat, parsedLon);
     const pointsData = await noaaPointsCache.getOrFetch(pointsCacheKey, () => runNoaaFetch(async () => {
+      // NOAA rounds a point to four decimals and answers a longer one with a redirect: one more round trip.
       const pointsRes = await fetchWithTimeout(
-        `https://api.weather.gov/points/${parsedLat},${parsedLon}`,
+        `https://api.weather.gov/points/${parsedLat.toFixed(4)},${parsedLon.toFixed(4)}`,
         fetchOptions,
       );
       if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
@@ -121,14 +128,10 @@ async function fetchWeatherPipeline({
     const hourlyForecastUrl = pointsData.properties.forecastHourly;
     gridDataUrl = pointsData?.properties?.forecastGridData || null;
 
-    // The elevation fallback lookup (only needed when NOAA points metadata omits elevation)
-    // and the hourly forecast fetch are independent — both only need `pointsData`, which is
-    // already resolved at this point. Run them concurrently instead of sequentially to save
-    // a network round trip.
+    // The elevation lookup is only used when NOAA points metadata omits elevation. It is already under
+    // way, and the hourly forecast fetch only needs `pointsData`, so the two finish together.
     const needsFallbackElevation = !Number.isFinite(objectiveElevationFt);
-    const elevationFallbackPromise = needsFallbackElevation
-      ? fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions)
-      : null;
+    const elevationFallbackPromise = needsFallbackElevation ? objectiveElevationPromise : null;
 
     // 2. Get Forecasts (cached 20m)
     const hourlyDataPromise = noaaForecastCache.getOrFetch(hourlyForecastUrl, () => runNoaaFetch(async () => {

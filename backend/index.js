@@ -174,7 +174,7 @@ const { fetchAtmosphericSignals, prefetchOpenMeteoAtmosphere } = createAtmospher
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
 
-const fetchSupplementalEvidence = createSupplementalEvidenceService({ fetchWithTimeout, synopticToken: process.env.SYNOPTIC_API_TOKEN || null });
+const fetchSupplementalEvidence = createSupplementalEvidenceService({ fetchWithTimeout, synopticToken: process.env.SYNOPTIC_API_TOKEN || null, pointsCache: noaaPointsCache });
 
 const tideStationCache = createCache({ name: 'co-ops-stations', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });
 const npsParkCache = createCache({ name: 'nps-parks', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });

@@ -56,7 +56,9 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
     _evictOldest();
   }
 
-  async function getOrFetch(key, fetchFn) {
+  // `shouldStore` lets a caller hand a value to everyone waiting on it without remembering it, for an answer
+  // that is good enough now but should be asked for again soon.
+  async function getOrFetch(key, fetchFn, { shouldStore = () => true } = {}) {
     const cached = get(key);
     if (cached && !cached.stale) {
       return cached.value;
@@ -66,7 +68,7 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
       if (!inflight.has(key)) {
         const bgPromise = Promise.resolve()
           .then(() => fetchFn())
-          .then((val) => { set(key, val); return val; })
+          .then((val) => { if (shouldStore(val)) set(key, val); return val; })
           .catch((err) => {
             logger.warn({ cache: name, key, err }, 'Background cache revalidation failed; serving stale value');
             return cached.value;
@@ -83,7 +85,7 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
     const promise = Promise.resolve()
       .then(() => fetchFn())
       .then((val) => {
-        set(key, val);
+        if (shouldStore(val)) set(key, val);
         inflight.delete(key);
         return val;
       })
