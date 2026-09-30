@@ -268,7 +268,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               <div><dt>Comfort · separate from hazards</dt><dd>{finite(selectedDay.comfortScore) ? `${selectedDay.comfortScore}/100 · ${selectedDay.comfortLabel}` : 'Comfort unavailable'}</dd></div>
               <div><dt>Source confidence</dt><dd>{finite(selectedDay.safetyData.safety.confidence) ? `${Math.round(selectedDay.safetyData.safety.confidence!)}%` : 'Unavailable'}{selectedDay.partialData ? ' · Partial data' : ''}</dd></div>
               <div><dt>Weather issued</dt><dd>{selectedDay.sourceIssuedTime ? new Date(selectedDay.sourceIssuedTime).toLocaleString() : 'Unavailable'}</dd></div>
-              <div><dt>Active alerts</dt><dd>{selectedDay.alertCount}</dd></div>
+              <div><dt>Active alerts</dt><dd>{selectedDay.alertCount ?? 'Unavailable'}</dd></div>
             </dl>
             {!!selectedDay.safetyData.safety.confidenceReasons?.length && <p className="shortlist-caption">{selectedDay.safetyData.safety.confidenceReasons.join(' ')}</p>}
             <div className="field-action-row shortlist-actions">

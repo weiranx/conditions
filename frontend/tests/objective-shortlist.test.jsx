@@ -125,6 +125,7 @@ test('comparison is explicit, sequential, and preserves local time, hours and qu
   const body = JSON.parse(h.requests[0].init.body);
   assert.equal(body.startTime, '07:00'); assert.equal(body.travelWindowHours, 8); assert.equal(body.durationDays, 2);
   assert.equal(body.includeAvalanche, true); assert.equal(body.plan.max_gust_mph, String(preferences.maxWindGustMph));
+  assert.equal(body.activity, preferences.defaultActivity, 'each objective\'s days are scored for the traveler\'s activity');
   assert.ok(h.requests[0].init.headers['Idempotency-Key']);
   await respond(h.requests[0], { days: [tripDay()] });
   assert.equal(h.requests.length, 2);

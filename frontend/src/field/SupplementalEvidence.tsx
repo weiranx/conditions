@@ -1,10 +1,10 @@
-import type { SafetyData, SupplementalDiscussionSection, SupplementalSource } from '../app/types';
+import type { SafetyData, SupplementalDiscussionSection, SupplementalSource, TimeStyle } from '../app/types';
 import { SourceLink } from './Details';
 import './supplemental-evidence.css';
 
 const HOUR = 3600000;
-const timestamp = (value?: string) => value && Number.isFinite(Date.parse(value))
-  ? new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+const timestamp = (value: string | undefined, timeStyle: TimeStyle) => value && Number.isFinite(Date.parse(value))
+  ? new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', hour12: timeStyle !== '24h' })
   : 'Time unavailable';
 const status = (source: SupplementalSource) => source.available ? 'Available'
   : source.status === 'not_configured' ? 'Not configured'
@@ -51,11 +51,14 @@ function Discussion({ source }: { source: SupplementalSource }) {
   </>;
 }
 
-export function SupplementalEvidence({ evidence, localize = (text) => text }: {
+export function SupplementalEvidence({ evidence, localize = (text) => text, timeStyle = 'ampm' }: {
   evidence?: SafetyData['supplementalEvidence'];
   localize?: (text: string) => string;
+  /** The traveler's clock; times are otherwise written as the browser's locale would. */
+  timeStyle?: TimeStyle;
 }) {
   if (!evidence || !Object.values(evidence).some(Boolean)) return null;
+  const stamp = (value?: string) => timestamp(value, timeStyle);
   const entries = Object.entries(evidence).filter((entry): entry is [string, SupplementalSource] => Boolean(entry[1]));
   const start = entries.map(([, source]) => time(source.targetTime)).find((value) => value !== null) ?? null;
   const checked = entries.map(([, source]) => time(source.checkedTime)).find((value) => value !== null) ?? null;
@@ -65,7 +68,7 @@ export function SupplementalEvidence({ evidence, localize = (text) => text }: {
 
   return <section className="field-panel supplemental-evidence" aria-labelledby="supplemental-evidence-title">
     <h2 id="supplemental-evidence-title">Additional source evidence</h2>
-    <p className="field-muted">Use these sources to cross-check the report. They do not change its safety score.{start !== null ? ` Listed by relevance to your ${timestamp(new Date(start).toISOString())} start.` : ''}</p>
+    <p className="field-muted">Use these sources to cross-check the report. They do not change its safety score.{start !== null ? ` Listed by relevance to your ${stamp(new Date(start).toISOString())} start.` : ''}</p>
     {available.map(([key, source]) => {
       const valid = time(source.validTime);
       const observedLater = key === 'synoptic' && !nearStart && start !== null && checked !== null;
@@ -78,12 +81,12 @@ export function SupplementalEvidence({ evidence, localize = (text) => text }: {
         <p>{localize(`${station.distanceKm} km away${station.elevationFt != null ? ` · ${station.elevationFt} ft elevation` : ''}${station.elevationDifferenceFt != null ? ` · ${Math.abs(station.elevationDifferenceFt)} ft ${station.elevationDifferenceFt >= 0 ? 'above' : 'below'} objective` : ''}`)}</p>
         <dl>{Object.entries(station.readings || {}).map(([name, reading]) => <div key={name}>
           <dt>{name === 'temperatureF' ? 'Temperature' : name === 'gustMph' ? 'Wind gust' : 'Wind speed'}</dt>
-          <dd>{localize(`${reading.value} ${name === 'temperatureF' ? '°F' : 'mph'}`)} <small>· {timestamp(reading.observedTime)}</small></dd>
+          <dd>{localize(`${reading.value} ${name === 'temperatureF' ? '°F' : 'mph'}`)} <small>· {stamp(reading.observedTime)}</small></dd>
         </div>)}</dl>
       </div>);
       return <article key={key}>
         <div className="supplemental-evidence-heading"><h3>{source.source}</h3><span>{status(source)}</span></div>
-        <p className="field-muted">{kinds[source.kind]}{source.issuedTime ? ` · Issued ${timestamp(source.issuedTime)}` : ''}</p>
+        <p className="field-muted">{kinds[source.kind]}{source.issuedTime ? ` · Issued ${stamp(source.issuedTime)}` : ''}</p>
         {observedLater && <p>These readings are from {fromStart(checked, start).replace(' your start', '')} your start, so they show conditions now, not during the trip. Use them to judge whether today&apos;s forecast is running high or low.</p>}
         {stations?.length ? (observedLater ? <details><summary>Show {stations.length} current station reading{stations.length === 1 ? '' : 's'}</summary>{stations}</details> : stations) : null}
         {source.station && <p>{localize(`${source.station.name} (${source.station.id}) · ${source.station.distanceKm} km away${source.station.elevationFt != null ? ` · ${source.station.elevationFt} ft elevation` : ''}`)}</p>}
@@ -93,13 +96,13 @@ export function SupplementalEvidence({ evidence, localize = (text) => text }: {
           <tbody>{source.points.map((point) => {
             const t = time(point.validTime);
             return <tr key={point.validTime} className={point.validTime === closest ? 'is-closest' : undefined}>
-              <th scope="row">{timestamp(point.validTime)}{start !== null && t !== null ? <small>{fromStart(t, start)}</small> : null}</th>
+              <th scope="row">{stamp(point.validTime)}{start !== null && t !== null ? <small>{fromStart(t, start)}</small> : null}</th>
               {[point.windMph.p10, point.windMph.p50, point.windMph.p90].map((value, i) => <td key={i}>{localize(`${value} mph`)}</td>)}
             </tr>;
           })}</tbody>
         </table></div> : null}
         {source.nearSurfaceUgM3 != null && <>
-          <p>Valid {timestamp(source.validTime)}{start !== null && valid !== null ? ` (${fromStart(valid, start)})` : ''}{source.gridDistanceKm != null ? localize(` · Model grid point ${source.gridDistanceKm} km away`) : ''}</p>
+          <p>Valid {stamp(source.validTime)}{start !== null && valid !== null ? ` (${fromStart(valid, start)})` : ''}{source.gridDistanceKm != null ? localize(` · Model grid point ${source.gridDistanceKm} km away`) : ''}</p>
           <dl><div><dt>Near-surface smoke</dt><dd>{source.nearSurfaceUgM3} µg/m³</dd></div><div><dt>Total-column smoke</dt><dd>{source.columnMgM2 ?? 'Unavailable'} mg/m²</dd></div></dl>
         </>}
         {key === 'discussion' && source.text ? <Discussion source={source} /> : null}

@@ -20,6 +20,11 @@ function suggestionTimingQuery(options?: RouteSuggestionOptions): string {
   return timing.toString();
 }
 
+/** The same routes in the same order, whatever their times: only then can a re-timed list replace the one on screen. */
+function sameRoutes(current: RouteOption[] | null, fresh: RouteOption[]): boolean {
+  return current !== null && current.length === fresh.length && current.every((route, i) => route.name === fresh[i].name);
+}
+
 /** `pace` and `elevationFt` let the backend estimate each suggestion's time at the traveler's own pace. */
 export interface RouteSuggestionOptions {
   keepPlan?: boolean;
@@ -235,7 +240,7 @@ export interface UseRouteAnalysisReturn {
   setRouteShape: (value: RouteShapeChoice) => void;
   /** With keepPlan, the planned route and its analysis stay while suggestions load. */
   fetchRouteSuggestions: (peak: string, lat: number, lon: number, options?: RouteSuggestionOptions) => Promise<void>;
-  refreshRouteSuggestionTimes: (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => Promise<void>;
+  refreshRouteSuggestionTimes: (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => Promise<boolean>;
   fetchRouteAnalysis: (
     peak: string,
     route: string,
@@ -325,6 +330,11 @@ export function useRouteAnalysis(initialState?: {
   const [routeShape, setRouteShape] = useState<RouteShapeChoice>(initialState?.routeShape ?? 'auto');
   const activeRequestRef = useRef<{ id: number; controller: AbortController } | null>(null);
   const nextRequestIdRef = useRef(0);
+  // The routes on screen when a re-timing reply arrives.
+  const routeSuggestionsRef = useRef(routeSuggestions);
+  useEffect(() => {
+    routeSuggestionsRef.current = routeSuggestions;
+  }, [routeSuggestions]);
 
   const beginRequest = useCallback((loadingState: Omit<RouteLoadingState, 'startedAt'>) => {
     activeRequestRef.current?.controller.abort();
@@ -381,18 +391,22 @@ export function useRouteAnalysis(initialState?: {
   /**
    * Re-time the suggestions on screen after the traveler's pace changes. It runs
    * beside any other request without touching loading state, and only replaces
-   * the list when it is still the same routes.
+   * the list when it is still the same routes. Resolves true only when the new times
+   * replaced the ones on screen; false when the request failed, was given up, or came
+   * back with different routes (the times on screen are unchanged).
    */
-  const refreshRouteSuggestionTimes = useCallback(async (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => {
+  const refreshRouteSuggestionTimes = useCallback(async (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal): Promise<boolean> => {
     try {
       const timingQuery = suggestionTimingQuery(options);
       const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}${timingQuery ? `&${timingQuery}` : ''}`, { signal });
-      if (!response.ok || !Array.isArray(payload)) return;
+      if (signal?.aborted || !response.ok || !Array.isArray(payload)) return false;
       const fresh = payload as RouteOption[];
-      setRouteSuggestions((current) => (current && current.length === fresh.length
-        && current.every((route, i) => route.name === fresh[i].name) ? fresh : current));
+      if (!sameRoutes(routeSuggestionsRef.current, fresh)) return false;
+      setRouteSuggestions((current) => (sameRoutes(current, fresh) ? fresh : current));
+      return true;
     } catch {
       // The times on screen are still valid for the previous pace.
+      return false;
     }
   }, []);
 

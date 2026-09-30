@@ -167,10 +167,23 @@ function comparison(decisions, overrides = {}) {
     handlePlannerTimeChange: () => () => void 0,
     objectiveTimezone: "America/Los_Angeles",
     handleInputChange: () => void 0,
+    isPlaceSaved: () => false,
+    toggleSavedPlace: () => void 0,
     ...overrides,
   };
   return renderToStaticMarkup(<Compare workspace={w} />);
 }
+test("a day whose alert feed missed is unavailable, never zero alerts", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "GO", score: 90, alertCount: null },
+    { date: "2026-09-07", decisionLevel: "GO", score: 80, alertCount: 0 },
+  ]);
+  assert.match(html, /Active alerts<\/th><td[^>]*>Unavailable<\/td><td[^>]*>0<\/td>/, "the table tells them apart");
+  assert.match(html, /AQI · alerts unavailable/, "the selected day says so too");
+  assert.doesNotMatch(html, /null|NaN/);
+  const zero = comparison([{ date: "2026-09-06", decisionLevel: "GO", score: 90, alertCount: 0 }]);
+  assert.match(zero, /AQI · 0 alerts/);
+});
 test("comparison ranks decision level ahead of numeric score", () => {
   const html = comparison([
     { date: "2026-09-06", decisionLevel: "NO-GO", score: 99 },
@@ -350,6 +363,25 @@ test("daylight chart accepts solar times with seconds from the report", () => {
   const sun = document.querySelector('.daylight-sun');
   assert.ok(Math.abs(parseFloat(sun.style.left) - 386 / 1440 * 100) < 0.001);
   assert.ok(Math.abs(parseFloat(sun.style.width) - 762 / 1440 * 100) < 0.001);
+});
+
+test("daylight chart reads on the traveler's clock, not the provider's", () => {
+  const chart = (timeStyle) => renderToStaticMarkup(
+    <DaylightChart start="07:00" hours={10} sunrise="6:26:22 AM" sunset="7:08:07 PM" timeStyle={timeStyle} />,
+  );
+  const twentyFour = chart("24h");
+  assert.match(twentyFour, /06:26<\/span>|06:26 sunrise/);
+  assert.match(twentyFour, /19:08 sunset/);
+  assert.match(twentyFour, /aria-label="Daylight from 06:26 to 19:08\. Trip begins at 07:00 for 10 hours\.?"/);
+  assert.match(twentyFour, /<span>00:00<\/span><span>12:00<\/span><span>24:00<\/span>/);
+  assert.doesNotMatch(twentyFour, /[AP]M/);
+  const twelve = chart("ampm");
+  assert.match(twelve, /6:26 AM sunrise/);
+  assert.match(twelve, /7:08 PM sunset/);
+  assert.match(twelve, /aria-label="Daylight from 6:26 AM to 7:08 PM\. Trip begins at 7:00 AM for 10 hours\.?"/);
+  assert.match(twelve, /<span>12:00 AM<\/span><span>12:00 PM<\/span><span>12:00 AM<\/span>/);
+  // Without a style the provider's own text stays as it was.
+  assert.match(renderToStaticMarkup(<DaylightChart start="07:00" hours={10} sunrise="6:26 AM" sunset="7:08 PM" />), /6:26 AM sunrise/);
 });
 
 test("daylight chart marks overnight trips and refuses missing solar data", () => {
@@ -538,6 +570,19 @@ test('supplemental sources distinguish unavailable data, probabilities, zero smo
   assert.equal(renderToStaticMarkup(<SupplementalEvidence />), '');
 });
 
+test('supplemental source times follow the traveler\'s clock', async () => {
+  const { SupplementalEvidence } = await import('../src/field/SupplementalEvidence');
+  const evidence = { nbm: { source: 'NOAA NBM', kind: 'probabilistic_forecast', available: true, status: 'ok', issuedTime: '2026-09-17T15:00:00Z',
+    points: [{ validTime: '2026-09-17T21:00:00Z', windMph: { p10: 1, p50: 2, p90: 3 } }] } };
+  const render = (timeStyle) => renderToStaticMarkup(<SupplementalEvidence evidence={evidence} timeStyle={timeStyle} />);
+  const meridiem = /\b\d{1,2}:\d{2}\s?[AP]M\b/;
+  assert.match(render('ampm'), meridiem);
+  assert.match(render(), meridiem, '12-hour is the app\'s default clock');
+  const twentyFour = render('24h');
+  assert.match(twentyFour, /Issued [A-Z][a-z]{2} \d{1,2}, \d{2}:\d{2}/);
+  assert.doesNotMatch(twentyFour, meridiem);
+});
+
 test('supplemental sources lead with trip-relevant evidence for a later start', async () => {
   const { SupplementalEvidence } = await import('../src/field/SupplementalEvidence');
   const timing = { checkedTime: '2026-09-16T21:00:00Z', targetTime: '2026-09-19T14:00:00Z' };
@@ -596,6 +641,14 @@ test('source insights are actionable, traceable and escape provider text', () =>
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /https:\/\/www.nps.gov\/alerts/);
+});
+test('the times a source insight cites follow the traveler\'s clock', () => {
+  const data = makeReport({}, 'field-alerts');
+  data.reportInsights = { version: 1, summary: '', items: [{ ...accessInsight, evidence: [{ ...accessInsight.evidence[0], time: '2026-09-17T15:00:00Z' }] }] };
+  const time = (timeStyle) => (renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} timeStyle={timeStyle} />).match(/<time[^>]*>([^<]*)<\/time>/) || [])[1];
+  assert.match(time('ampm'), /\b[AP]M\b/);
+  assert.match(time('24h'), /\d{2}:\d{2}/);
+  assert.doesNotMatch(time('24h'), /\b[AP]M\b/);
 });
 test('access review hides with field observations turned off', () => {
   const data = makeReport({}, 'field-alerts');

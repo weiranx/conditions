@@ -1,4 +1,4 @@
-import { useId, type ChangeEvent, type FocusEvent } from "react";
+import { useId, useState, type ChangeEvent, type FocusEvent } from "react";
 import { RotateCcw } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { ACTIVITY_PROFILES } from "../app/activity-profiles";
@@ -41,6 +41,47 @@ export function NumberField({ id, value, unit, min, max, step, onChange, onBlur 
       <input id={id} type="number" inputMode="decimal" value={value} min={min} max={max} step={step} onChange={onChange} onBlur={onBlur} />
       <span aria-hidden="true">{unit}</span>
     </span>
+  );
+}
+
+/**
+ * A number typed freely. A value inside the range applies as it is typed; leaving the field
+ * clamps what was typed into the range, and puts the applied value back when it was left empty.
+ * Bound straight to the setting instead, backspacing "30" to "3" snapped up to the minimum and
+ * the next digit made "55".
+ */
+export function DraftNumberField({ id, value, unit, min, max, integer = false, onApply }: {
+  id: string;
+  value: number;
+  unit: string;
+  min: number;
+  max: number;
+  integer?: boolean;
+  onApply: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const read = (text: string) => {
+    const typed = Number(text);
+    return text.trim() === "" || !Number.isFinite(typed) ? null : integer ? Math.round(typed) : typed;
+  };
+  return (
+    <NumberField
+      id={id}
+      value={draft ?? value}
+      unit={unit}
+      min={min}
+      max={max}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        const typed = read(event.target.value);
+        if (typed !== null && typed >= min && typed <= max) onApply(typed);
+      }}
+      onBlur={(event) => {
+        const typed = read(event.target.value);
+        if (typed !== null) onApply(Math.min(max, Math.max(min, typed)));
+        setDraft(null);
+      }}
+    />
   );
 }
 

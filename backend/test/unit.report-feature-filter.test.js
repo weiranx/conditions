@@ -3,9 +3,14 @@
 const {
   getScoreFeatureSnapshot,
   removeAvalancheNarrativeReferences,
+  removeAvalancheReferences,
+  removeDisabledFeatureReferences,
   reportMatchesScoreFeatures,
   sanitizeReportForFeatureFlags,
 } = require('../src/utils/report-feature-filter');
+const { buildPlanContext } = require('../src/utils/plan-context');
+const { evaluatePlan } = require('../src/utils/plan-evaluation');
+const { makeReport } = require('./fixtures/plan-report');
 
 describe('report feature filtering', () => {
   test('removes disabled avalanche inputs from the full downstream report boundary', () => {
@@ -146,5 +151,118 @@ describe('report feature filtering', () => {
     )).toBe(
       'BIG PICTURE: Wind gusts reach 45 mph.\nBEST MOVE: Use sheltered terrain.',
     );
+  });
+});
+
+describe('alerts through the feature filter', () => {
+  const reportWith = (alerts) => ({
+    weather: { description: 'Clear', trend: [] },
+    safety: { score: 90, factors: [] },
+    alerts: { source: 'NOAA/NWS Active Alerts', highestSeverity: 'Unknown', ...alerts },
+  });
+  // The three ways a report reaches the filter with a feature turned off.
+  const filters = {
+    'sanitize (avalanche off)': (report) => sanitizeReportForFeatureFlags(report, { avalancheDetails: false }),
+    'removeAvalancheReferences': (report) => removeAvalancheReferences(report),
+    'removeDisabledFeatureReferences (fire off)': (report) => removeDisabledFeatureReferences(report, { fireRiskDetails: false }),
+  };
+
+  test.each(Object.keys(filters))('%s: an alert feed that was down is not turned into "no alerts"', (name) => {
+    const { alerts } = filters[name](reportWith({ status: 'unavailable', activeCount: 0, totalActiveCount: 0, alerts: [] }));
+    expect(alerts.status).toBe('unavailable');
+    expect(alerts.activeCount).toBe(0);
+    expect(alerts.highestSeverity).toBe('Unknown');
+  });
+
+  test.each(Object.keys(filters))('%s: "none at your start" keeps its meaning and the alerts that exist elsewhere', (name) => {
+    const { alerts } = filters[name](reportWith({
+      status: 'none_for_selected_start',
+      activeCount: 0,
+      totalActiveCount: 3,
+      note: 'No currently issued alert is active at the selected start time.',
+      alerts: [],
+    }));
+    expect(alerts.status).toBe('none_for_selected_start');
+    expect(alerts.totalActiveCount).toBe(3);
+    expect(alerts.note).toMatch(/selected start time/);
+  });
+
+  test('removing every listed alert leaves "none"', () => {
+    const report = reportWith({
+      status: 'ok',
+      activeCount: 1,
+      totalActiveCount: 1,
+      highestSeverity: 'Severe',
+      alerts: [{ event: 'Avalanche Warning', severity: 'Severe' }],
+    });
+    const { alerts } = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    expect(alerts).toMatchObject({ status: 'none', activeCount: 0, totalActiveCount: 0, alerts: [] });
+    expect(alerts.highestSeverity).toBeUndefined();
+  });
+
+  // The fetch keeps the six most severe alerts and counts them all, so a filter can remove every listed alert while others stay active.
+  const listedSix = (event) => Array.from({ length: 6 }, (_, i) => ({ event: `${event} ${i + 1}`, severity: 'Extreme' }));
+  const beyondTheSix = { status: 'ok', activeCount: 8, totalActiveCount: 9, highestSeverity: 'Extreme' };
+
+  test.each(['sanitize (avalanche off)', 'removeAvalancheReferences'])('%s: alerts beyond the six listed stay active when every listed one is filtered out', (name) => {
+    const { alerts } = filters[name](reportWith({ ...beyondTheSix, alerts: listedSix('Avalanche Warning') }));
+    // Two alerts were never in the capped list. They are still active; how severe they are is unknown.
+    expect(alerts).toMatchObject({ status: 'ok', activeCount: 2, totalActiveCount: 3, highestSeverity: 'Unknown', alerts: [] });
+  });
+
+  test('the same holds when the feature that hides the listed alerts is fire', () => {
+    const { alerts } = sanitizeReportForFeatureFlags(reportWith({ ...beyondTheSix, alerts: listedSix('Red Flag Warning') }), { fireRiskDetails: false });
+    expect(alerts).toMatchObject({ status: 'ok', activeCount: 2, totalActiveCount: 3, highestSeverity: 'Unknown', alerts: [] });
+  });
+
+  test('when only alerts outside the selected start remain, the status says so instead of "none"', () => {
+    const report = reportWith({
+      status: 'ok',
+      activeCount: 2,
+      totalActiveCount: 5,
+      highestSeverity: 'Extreme',
+      alerts: [{ event: 'Avalanche Warning', severity: 'Extreme' }, { event: 'Avalanche Watch', severity: 'Severe' }],
+    });
+    const { alerts } = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    expect(alerts).toMatchObject({ status: 'none_for_selected_start', activeCount: 0, totalActiveCount: 3, alerts: [] });
+    expect(alerts.highestSeverity).toBeUndefined();
+  });
+
+  test('a block that still has active alerts is not read downstream as "No active"', () => {
+    const report = makeReport();
+    report.alerts = { source: 'NOAA/NWS Active Alerts', ...beyondTheSix, alerts: listedSix('Avalanche Warning') };
+    const filtered = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    const evaluation = evaluatePlan(filtered, buildPlanContext({ start: '07:00', travel_window_hours: '10', approach: 'off' }, filtered));
+    expect(evaluation.decision.cautions.join(' ')).toMatch(/2 active NWS alerts overlap the selected start/);
+    const row = evaluation.interpretation.sourceFreshness.rows.find((entry) => entry.label === 'Alerts');
+    expect(row.displayValue).not.toBe('No active');
+    expect(row.state).not.toBe('fresh');
+  });
+
+  test('removing some alerts lowers the counts by that many, even beyond the six listed', () => {
+    const listed = [
+      { event: 'Avalanche Warning', severity: 'Extreme' },
+      { event: 'High Wind Warning', severity: 'Moderate' },
+      { event: 'Winter Weather Advisory', severity: 'Minor' },
+      { event: 'Wind Advisory', severity: 'Minor' },
+      { event: 'Frost Advisory', severity: 'Minor' },
+      { event: 'Dense Fog Advisory', severity: 'Minor' },
+    ];
+    const report = reportWith({ status: 'ok', activeCount: 8, totalActiveCount: 9, highestSeverity: 'Extreme', alerts: listed });
+    const { alerts } = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    expect(alerts.alerts.map((alert) => alert.event)).not.toContain('Avalanche Warning');
+    expect(alerts).toMatchObject({ status: 'ok', activeCount: 7, totalActiveCount: 8, highestSeverity: 'Moderate' });
+  });
+
+  test('a filter that removes nothing leaves the counts as they were', () => {
+    const report = reportWith({
+      status: 'ok',
+      activeCount: 8,
+      totalActiveCount: 9,
+      highestSeverity: 'Moderate',
+      alerts: [{ event: 'High Wind Warning', severity: 'Moderate' }],
+    });
+    const { alerts } = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    expect(alerts).toMatchObject({ status: 'ok', activeCount: 8, totalActiveCount: 9, highestSeverity: 'Moderate' });
   });
 });

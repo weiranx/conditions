@@ -35,6 +35,8 @@ export function useObjectiveShortlist(state: ShortlistState, preferences: UserPr
             headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
             body: JSON.stringify({ lat: objective.lat, lon: objective.lon, objectiveName: objective.name,
               startDate: state.startDate, startTime: state.startTime, durationDays: dates.length, travelWindowHours: state.hours,
+              // Each day is scored for the traveler's activity, as Compare days does.
+              activity: preferences.defaultActivity,
               // Objectives are compared on every hazard, avalanche included.
               includeAvalanche: true, plan: planSettingsParams(preferences) }),
           });

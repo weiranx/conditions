@@ -226,3 +226,21 @@ describe('day over day', () => {
     expect(changes).toContain('Precip chance changed +40%.');
   });
 });
+
+describe('the planned activity', () => {
+  // Activity weights each hazard in a report's score, so a comparison has to score every
+  // report for the traveler's activity, as the report on screen was.
+  test('reaches every report a departure comparison evaluates', async () => {
+    const invoke = fakeSafetyHandler();
+    await request(makeApp(invoke)).get('/api/start-time-scenarios').query({ ...PLAN, activity: 'trail-running' });
+    expect(invoke.mock.calls.map(([query]) => query.activity)).toEqual(['trail-running', 'trail-running', 'trail-running']);
+  });
+
+  test('reaches both days of a day-over-day comparison', async () => {
+    const invoke = fakeSafetyHandler();
+    await request(makeApp(invoke)).get('/api/day-over-day').query({ ...PLAN, activity: 'mountaineering' });
+    const previous = new Date(Date.parse(`${DATE}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+    expect(invoke.mock.calls.map(([query]) => [query.date, query.activity]).sort())
+      .toEqual([[previous, 'mountaineering'], [DATE, 'mountaineering']].sort());
+  });
+});

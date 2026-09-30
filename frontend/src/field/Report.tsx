@@ -549,7 +549,7 @@ export function Report({
             />
           </Suspense>
         )}
-      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} />
+      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
     </>
   );
   return (
@@ -704,7 +704,7 @@ export function Report({
           </nav>
         )}
         {fullReport && (
-          <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} />
+          <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
         )}
         <p className="field-muted">
           Backcountry Conditions is a planning aid, not a guarantee of safety. Check

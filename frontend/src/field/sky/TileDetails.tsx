@@ -82,7 +82,7 @@ export function DaylightDetail({ w }: { w: Workspace }) {
   const style = w.preferences.timeStyle;
   return (
     <div>
-      <DaylightChart start={w.alpineStartTime} hours={w.travelWindowHours} sunrise={solar?.sunrise} sunset={solar?.sunset} />
+      <DaylightChart start={w.alpineStartTime} hours={w.travelWindowHours} sunrise={solar?.sunrise} sunset={solar?.sunset} timeStyle={style} />
       <Facts rows={[
         ["Start", w.displayStartTime],
         ["Back", `${w.formatClockForStyle(w.returnTimeDisplay, style)}${w.returnExtendsPastMidnight ? " (+1 day)" : ""}`],
@@ -106,7 +106,7 @@ export function AlertsDetail({ w }: { w: Workspace }) {
           <strong>{alert.event || "Alert"}</strong>
           {alert.severity && <span className="sky-popup-tag">{alert.severity}</span>}
           {alert.headline && <p>{alert.headline}</p>}
-          {(alert.ends || alert.expires) && <small>Until {new Date(alert.ends || alert.expires!).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</small>}
+          {(alert.ends || alert.expires) && <small>Until {new Date(alert.ends || alert.expires!).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit", hour12: w.preferences.timeStyle !== "24h" })}</small>}
         </article>
       ))}
       <Facts rows={[["Source", alerts?.source], ["More alerts", (alerts?.totalActiveCount ?? 0) > list.length ? String((alerts?.totalActiveCount ?? 0) - list.length) : null]]} />

@@ -160,6 +160,19 @@ test('refresh, disabling, and failed requests never expose stale departures', as
   assert.equal(h.current.loading, false);
 });
 
+test('both comparisons are scored for the planned activity, and change with it', async t => {
+  const base = props({ preferences: { ...preferences, defaultActivity: 'mountaineering' } });
+  const input = { ...base, hasObjective: true, view: 'planner', safetyData: base.sourceReport,
+    viewingHistoryReport: false, loading: false, startTimeComparisonsEnabled: true };
+  const h = await mountHook(t, useReportComparisons, input);
+  const activities = () => h.requests.map(request => [request.url.pathname, request.url.searchParams.get('activity')]).sort();
+  assert.deepEqual(activities(), [['/api/day-over-day', 'mountaineering'], ['/api/start-time-scenarios', 'mountaineering']],
+    'the activity weights each score, so a comparison without it would not match the report on screen');
+  const count = h.requests.length;
+  await h.render({ ...input, preferences: { ...input.preferences, defaultActivity: 'trail-running' } });
+  assert.deepEqual(h.requests.slice(count).map(request => request.url.searchParams.get('activity')).sort(), ['trail-running', 'trail-running']);
+});
+
 test('saved snapshots and a report being regenerated do not trigger comparisons', async t => {
   const base = props();
   const input = { ...base, hasObjective: true, view: 'planner', safetyData: base.sourceReport,

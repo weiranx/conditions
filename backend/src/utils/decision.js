@@ -9,6 +9,7 @@
 
 const { computeFeelsLikeF } = require('./weather-normalizers');
 const {
+  formatClockForStyle,
   formatTemperature,
   formatWind,
   isFiniteNumber,
@@ -194,6 +195,8 @@ const evaluateDecision = (report, context) => {
   const minFeelsLikeThreshold = limits.minFeelsLikeF;
   const formatWindValue = (valueMph) => formatWind(valueMph, units.wind);
   const formatTempValue = (valueF) => formatTemperature(valueF, units.temperature);
+  // Start, return and sunset read on the traveler's clock; sunset arrives as the provider wrote it ("7:30 PM").
+  const formatClockValue = (value) => formatClockForStyle(value, units.timeStyle);
   const displayMaxGustThreshold = formatWindValue(maxGustThreshold);
   const displayMinFeelsLikeThreshold = formatTempValue(minFeelsLikeThreshold);
 
@@ -312,7 +315,7 @@ const evaluateDecision = (report, context) => {
   }
   if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
     const inversionNote = coldestIsInversion
-      ? `${coldestFeelsLikeHour ? ` at ${coldestFeelsLikeHour}` : ''} low on the approach: clear, calm conditions can pool colder air in the valley than higher up`
+      ? `${coldestFeelsLikeHour ? ` at ${formatClockValue(coldestFeelsLikeHour)}` : ''} low on the approach: clear, calm conditions can pool colder air in the valley than higher up`
       : '';
     addCaution(`Apparent temperature falls near ${formatTempValue(feelsLike)}${inversionNote}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
   }
@@ -387,7 +390,7 @@ const evaluateDecision = (report, context) => {
   if (daylightEnabled && turnaroundMinutes !== null && sunsetMinutes !== null) {
     const margin = sunsetMinutes - turnaroundMinutes;
     if (margin < 0) {
-      addCaution(`Turnaround time is ${Math.abs(margin)} minutes after sunset (${report?.solar?.sunset || 'time unavailable'}). Move the start earlier or shorten the route; do not make darkness the default plan.`);
+      addCaution(`Turnaround time is ${Math.abs(margin)} minutes after sunset (${report?.solar?.sunset ? formatClockValue(report.solar.sunset) : 'time unavailable'}). Move the start earlier or shorten the route; do not make darkness the default plan.`);
     } else if (margin < 30) {
       addCaution(`Turnaround margin is only ${margin} minutes before sunset. Move the turnaround earlier and preserve at least 30 minutes for delays.`);
     }
@@ -416,7 +419,7 @@ const evaluateDecision = (report, context) => {
       detail: hasStormSignal
         ? (startHasStormSignal
           ? `The start-time forecast mentions storms: ${normalizedConditionText}.`
-          : `The forecast mentions storms at ${stormSignalHour}, inside your travel window.`)
+          : `The forecast mentions storms at ${formatClockValue(stormSignalHour)}, inside your travel window.`)
         : `Forecast: ${normalizedConditionText}. No thunder, lightning, or hail mentioned.`,
       action: hasStormSignal ? 'Leave exposed terrain before the storm arrives; descend at the first thunder, lightning, or rapid cloud growth.' : undefined,
     },
@@ -427,7 +430,7 @@ const evaluateDecision = (report, context) => {
       detail: precip === null
         ? 'Precipitation chance unavailable.'
         : peakPrecipHour
-          ? `Peak ${precip}% at ${peakPrecipHour} in window (limit ${maxPrecipThreshold}%).`
+          ? `Peak ${precip}% at ${formatClockValue(peakPrecipHour)} in window (limit ${maxPrecipThreshold}%).`
           : `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
       action: precip !== null && precip > maxPrecipThreshold ? 'Allow extra time, carry traction and weather protection, and turn around if footing or visibility deteriorates.' : undefined,
     },
@@ -438,7 +441,7 @@ const evaluateDecision = (report, context) => {
       detail: gust === null
         ? 'Wind gust data unavailable.'
         : peakGustHour
-          ? `Peak ${formatWindValue(gust)} at ${peakGustHour} in window (limit ${displayMaxGustThreshold}).`
+          ? `Peak ${formatWindValue(gust)} at ${formatClockValue(peakGustHour)} in window (limit ${displayMaxGustThreshold}).`
           : `Now ${formatWindValue(gust)} (limit ${displayMaxGustThreshold}).`,
       action: gust !== null && gust > maxGustThreshold ? 'Use sheltered terrain, secure loose gear, and turn around if balance or communication becomes difficult.' : undefined,
     },
@@ -447,7 +450,7 @@ const evaluateDecision = (report, context) => {
       label: 'Plan finishes at least 30 min before sunset',
       ok: daylightOkay,
       detail: hasDaylightInputs
-        ? `${cutoffTime} start${turnaroundMinutes !== null && turnaroundTime ? ` • back by ${turnaroundTime}` : ''} • ${report?.solar?.sunset || 'unknown'} sunset • ${
+        ? `${formatClockValue(cutoffTime)} start${turnaroundMinutes !== null && turnaroundTime ? ` • back by ${formatClockValue(turnaroundTime)}` : ''} • ${report?.solar?.sunset ? formatClockValue(report.solar.sunset) : 'unknown'} sunset • ${
           daylightMarginMinutes === null
             ? 'margin unavailable'
             : daylightMarginMinutes < 0
@@ -466,7 +469,7 @@ const evaluateDecision = (report, context) => {
       detail: feelsLike === null
         ? 'Feels-like data unavailable.'
         : coldestFeelsLikeHour
-          ? `Coldest ${formatTempValue(feelsLike)} at ${coldestFeelsLikeHour} in window (limit ${displayMinFeelsLikeThreshold}).`
+          ? `Coldest ${formatTempValue(feelsLike)} at ${formatClockValue(coldestFeelsLikeHour)} in window (limit ${displayMinFeelsLikeThreshold}).`
           : `Now ${formatTempValue(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
       action: feelsLike !== null && feelsLike < minFeelsLikeThreshold ? 'Add insulation and hand protection, reduce exposed time, and set a warming checkpoint.' : undefined,
     },

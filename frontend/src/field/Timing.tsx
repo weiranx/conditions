@@ -225,6 +225,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
               hours={w.travelWindowHours}
               sunrise={w.safetyData?.solar?.sunrise}
               sunset={w.safetyData?.solar?.sunset}
+              timeStyle={w.preferences.timeStyle}
             />
             <dl className="sky-list">
               <div>
@@ -235,8 +236,8 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
                 </dd>
               </div>
               <div><dt>Daylight remaining at start</dt><dd>{w.interpretation?.daylightFromStart.label ?? "N/A"}</dd></div>
-              <div><dt>Sunrise</dt><dd>{w.safetyData?.solar?.sunrise || "Unavailable"}</dd></div>
-              <div><dt>Sunset</dt><dd>{w.safetyData?.solar?.sunset || "Unavailable"}</dd></div>
+              <div><dt>Sunrise</dt><dd>{w.safetyData?.solar?.sunrise ? w.formatClockForStyle(w.safetyData.solar.sunrise, w.preferences.timeStyle) : "Unavailable"}</dd></div>
+              <div><dt>Sunset</dt><dd>{w.safetyData?.solar?.sunset ? w.formatClockForStyle(w.safetyData.solar.sunset, w.preferences.timeStyle) : "Unavailable"}</dd></div>
             </dl>
           </section>
         )}

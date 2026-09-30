@@ -1456,7 +1456,8 @@ export interface MultiDayTripForecastDay {
   dayLength: string | null;
   visibilityLevel: string | null;
   visibilitySummary: string | null;
-  alertCount: number;
+  /** Null when the alert feed did not answer for this day: no alerts on record, not zero. */
+  alertCount: number | null;
   airQualityAqi: number | null;
   airQualityCategory: string | null;
   comfortScore: number | null;

@@ -11,6 +11,7 @@ import {
   buildCheckpointProfile,
   compareCheckpointToObjective,
   describeStaleRouteAnalysis,
+  elevationForRouteTiming,
   objectiveHourAt,
 } from '../src/field/route-planning';
 import { formatClockForStyle } from '../src/app/core';
@@ -542,6 +543,7 @@ const planWorkspace = (overrides = {}) => ({
   todayDate: '2026-09-08', maxForecastDate: '2026-09-15', travelWindowHoursDraft: '4',
   routeLoading: false, routeLoadingState: null, routeError: null, accountUser: null,
   customRouteName: 'West ridge', plannedRouteName: 'West ridge', importedGpxRoute: null,
+  isPlaceSaved: () => false, toggleSavedPlace: () => {},
   ...overrides,
 });
 
@@ -663,6 +665,69 @@ test('looking for alternative routes keeps the planned route and its analysis; t
   await act(async () => hook.fetchRouteSuggestions('Peak', 46, -121));
   assert.equal(hook.customRouteName, '');
   assert.equal(hook.routeAnalysis, null);
+});
+
+test('route times use the report\'s elevation, else the plan\'s own place, and never call unknown sea level', () => {
+  assert.equal(elevationForRouteTiming(14505, 14000), 14505);
+  assert.equal(elevationForRouteTiming(null, 14411), 14411, 'a report without an elevation falls back to the place');
+  assert.equal(elevationForRouteTiming(undefined, 7200), 7200, 'no report yet while planning: the place the plan form shows');
+  assert.equal(elevationForRouteTiming('abc', 6000), 6000);
+  assert.equal(elevationForRouteTiming(0, 5000), 0, 'a report at sea level is kept');
+  assert.equal(elevationForRouteTiming(null, null), null);
+  assert.equal(elevationForRouteTiming(Number.NaN, Number.NaN), null);
+});
+
+test('re-timing the suggestions on screen says whether new times arrived, and leaves them alone when not', async (t) => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
+  const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const route = (name, hours) => ({ name, class: 'Class 2', distance_rt_miles: 10, elev_gain_ft: 3000, estimated_hours: hours });
+  const requests = [];
+  let reply = () => new Response(JSON.stringify([route('West ridge', 11)]), { headers: { 'content-type': 'application/json' } });
+  globalThis.fetch = async (url) => { requests.push(String(url)); return reply(); };
+  let hook;
+  function Probe() {
+    hook = useRouteAnalysis({ routeSuggestions: [route('West ridge', 9)] });
+    return null;
+  }
+  const root = createRoot(document.getElementById('root'));
+  t.after(async () => {
+    await act(async () => root.unmount());
+    dom.window.close(); Object.assign(globalThis, previous); delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+  await act(async () => root.render(<Probe />));
+  const timing = { pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 45 }, elevationFt: 14411, altitudeSlowdownPercent: 8 };
+  const hours = () => hook.routeSuggestions.map((r) => r.estimated_hours);
+
+  // A server error, a reply that is not a list and a request given up all leave the times alone.
+  reply = () => new Response(JSON.stringify({ error: 'no' }), { status: 400, headers: { 'content-type': 'application/json' } });
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing)), false);
+  reply = () => new Response(JSON.stringify({ routes: [] }), { headers: { 'content-type': 'application/json' } });
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing)), false);
+  const given = new AbortController();
+  given.abort();
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing, given.signal)), false);
+  assert.deepEqual(hours(), [9]);
+
+  // New times replace the list, and the request carries the pace, elevation and altitude setting.
+  reply = () => new Response(JSON.stringify([route('West ridge', 11)]), { headers: { 'content-type': 'application/json' } });
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing)), true);
+  assert.deepEqual(hours(), [11]);
+  const query = new URL(requests.at(-1), 'http://localhost').searchParams;
+  assert.deepEqual(
+    [query.get('pace_min_per_mile'), query.get('ascent_min_per_1000ft'), query.get('stop_buffer_min'), query.get('elevation_ft'), query.get('altitude_slowdown_pct')],
+    ['30', '45', '45', '14411', '8'],
+  );
+
+  // A different set of routes is not this list, so it is not replaced, and the new times did not arrive:
+  // they must not be recorded as applied, or the stale times would count as current until a setting changes.
+  reply = () => new Response(JSON.stringify([route('East face', 5)]), { headers: { 'content-type': 'application/json' } });
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing)), false);
+  reply = () => new Response(JSON.stringify([route('West ridge', 12), route('East face', 5)]), { headers: { 'content-type': 'application/json' } });
+  assert.equal(await act(async () => hook.refreshRouteSuggestionTimes('Peak', 46, -121, timing)), false, 'a longer list is not this list either');
+  assert.deepEqual(hook.routeSuggestions.map((r) => [r.name, r.estimated_hours]), [['West ridge', 11]]);
 });
 
 // Last in the file: the published availability is shared module state.

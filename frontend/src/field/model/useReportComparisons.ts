@@ -31,6 +31,7 @@ export function useReportComparisons({
   const startTimeScenarios = useStartTimeScenarios({
     enabled: enabled && startTimeComparisonsEnabled, sourceReport: safetyData,
     forecastDate, currentStartTime, position, travelWindowHours: preferences.travelWindowHours, planSettingsQuery,
+    activity: preferences.defaultActivity,
   });
   return { dayOverDay, startTimeScenarios };
 }
