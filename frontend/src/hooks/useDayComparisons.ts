@@ -30,7 +30,7 @@ export function useDayComparisons({
   preferences,
 }: UseDayComparisonsParams): UseDayComparisonsReturn {
   const [result, setResult] = useState<{ key: string; source: SafetyData; comparison: DayOverDayComparison | null } | null>(null);
-  const { temperatureUnit, windSpeedUnit } = preferences;
+  const { temperatureUnit, windSpeedUnit, defaultActivity: activity } = preferences;
   const selectedDate = safetyData?.forecast?.selectedDate || forecastDate;
   const startTime = (safetyData && reportRequestedStartTime(safetyData)) || currentStartTime;
   const travelWindowHours = comparisonTravelHours(preferences.travelWindowHours);
@@ -39,7 +39,7 @@ export function useDayComparisons({
       && Number.isFinite(parseOptionalFiniteNumber(safetyData.safety?.score)),
   );
   const comparisonKey = comparisonEnabled
-    ? JSON.stringify([selectedDate, startTime, travelWindowHours, position.lat, position.lng, temperatureUnit, windSpeedUnit])
+    ? JSON.stringify([selectedDate, startTime, travelWindowHours, position.lat, position.lng, temperatureUnit, windSpeedUnit, activity])
     : null;
 
   useEffect(() => {
@@ -51,6 +51,8 @@ export function useDayComparisons({
       date: selectedDate,
       start: startTime,
       travel_window_hours: String(travelWindowHours),
+      // The activity weights each day's score, so both days are scored as the report on screen is.
+      activity,
       temp_unit: temperatureUnit,
       wind_unit: windSpeedUnit,
     });
@@ -68,7 +70,7 @@ export function useDayComparisons({
       if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison });
     })();
     return () => controller.abort();
-  }, [comparisonKey, selectedDate, startTime, travelWindowHours, safetyData, position.lat, position.lng, temperatureUnit, windSpeedUnit]);
+  }, [comparisonKey, selectedDate, startTime, travelWindowHours, safetyData, position.lat, position.lng, temperatureUnit, windSpeedUnit, activity]);
 
   return { dayOverDay: result?.key === comparisonKey && result?.source === safetyData ? result.comparison : null };
 }
