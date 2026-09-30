@@ -201,6 +201,19 @@ test("scenario changes return missing data, actionable fields, errors, and recov
   assert.equal((await api.handle(path)).status, 200);
   assert.equal((await api.handle("/api/not-a-real-endpoint")).status, 501);
 });
+test("the connect-an-app page can review a request, list connections and disconnect", async () => {
+  const api = createMockApi();
+  const review = await api.handle("/api/auth/mcp/request/" + "a".repeat(43));
+  assert.equal(review.status, 200);
+  assert.equal(review.payload.clientName, "Claude");
+  assert.equal(review.payload.userId, (await api.handle("/api/auth/session")).payload.user.id);
+  const approved = await api.handle("/api/auth/mcp/approve", "POST", { allow: true });
+  assert.equal(new URL(approved.payload.redirect).origin, new URL(review.payload.callbackUri).origin, "returns only to the reviewed address");
+  const [connection] = (await api.handle("/api/auth/mcp/connections")).payload.connections;
+  assert.equal(connection.clientName, "Claude");
+  await api.handle("/api/auth/mcp/disconnect", "POST", { id: connection.id });
+  assert.deepEqual((await api.handle("/api/auth/mcp/connections")).payload.connections, []);
+});
 test("admin feature flags persist and appear in report responses", async () => {
   const api = createMockApi();
   await api.handle("/api/admin/feature-flags", "PATCH", {

@@ -273,7 +273,7 @@ export function WorkspacePlan({
             ))}
           </div>
         )}
-        <h3 className="sky-plan-step"><span aria-hidden="true">1</span>{multiDay ? "Trailhead" : "Where"}</h3>
+        <h2 className="sky-plan-step"><span aria-hidden="true">1</span>{multiDay ? "Trailhead" : "Where"}</h2>
         {gpxAllowed && (
           <input
             type="file"
@@ -343,9 +343,9 @@ export function WorkspacePlan({
                     )}
                   </span>
                   <small>
-                    {placeElevation !== null && <>{w.formatElevationDisplay(placeElevation)} · </>}
+                    {placeElevation !== null && <><span>{w.formatElevationDisplay(placeElevation)}</span> · </>}
                     {w.position.lat.toFixed(4)}, {w.position.lng.toFixed(4)}
-                    {w.objectiveTimezone && <> · {w.objectiveTimezone.replace(/_/g, " ")}</>}
+                    {w.objectiveTimezone && <> · <span>{w.objectiveTimezone.replace(/_/g, " ")}</span></>}
                   </small>
                 </div>
               )}
@@ -560,7 +560,7 @@ export function WorkspacePlan({
           </>
         )}
         <div className="field-form-divider">
-          <h3 className="sky-plan-step"><span aria-hidden="true">2</span>When</h3>
+          <h2 className="sky-plan-step"><span aria-hidden="true">2</span>When</h2>
           {!comparison && !multiDay && (
             <button
               className="field-text-button"

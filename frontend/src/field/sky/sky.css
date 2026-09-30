@@ -49,6 +49,9 @@
 .sky-hero-text { min-width: 0; max-width: 640px; }
 .sky-kicker { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
 .sky-hero .sky-hero-title { margin: 6px 0 0; font-family: var(--sky-display); font-size: 54px; line-height: 1.02; font-weight: 500; letter-spacing: -0.022em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
+/* A long place name steps the title down, so it does not take over the hero. */
+.sky-hero .sky-hero-title[data-length="long"] { font-size: 42px; }
+.sky-hero .sky-hero-title[data-length="xl"] { font-size: 34px; line-height: 1.08; }
 .sky-subtitle { margin: 8px 0 0; font-size: 15px; color: rgba(255, 255, 255, 0.92); font-variant-numeric: tabular-nums; }
 .sky-generated, .sky-nowrap { white-space: nowrap; }
 /* Date, start and length read first; where and how fresh sit quietly beneath. */
@@ -214,6 +217,9 @@
 .sky-notice.is-caution { box-shadow: inset 4px 0 0 var(--sky-caution); }
 .sky-notice.is-caution > svg { color: var(--sky-caution); }
 .sky-notice.is-info { justify-content: center; font-weight: 500; }
+/* The alert above a screen when a request fails: a caution notice with a way to dismiss it. */
+.sky-app-alert { margin: 16px 0; }
+.sky-app-alert .sky-link { flex: none; min-height: 36px; padding: 0 4px; }
 .sky-link { border: 0; background: none; color: var(--sky-accent); font-weight: 600; font-size: 15px; min-height: 44px; cursor: pointer; white-space: nowrap; }
 
 .sky-section { margin-top: 36px; }
@@ -329,6 +335,17 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
 .sky-viz .s-accent { stroke: var(--sky-accent); }
 .sky-viz .s-okfill { stroke: var(--sky-ok-fill); }
 .sky-viz .s-missing { stroke: var(--sky-missing); stroke-width: 1.5; }
+/* The daylight arc's sunrise and sunset, under the drawing; plain text, so a narrow tile cannot shrink it. */
+.sky-viz-ends { display: flex; justify-content: space-between; margin-top: 2px; padding-inline: 1%; font-size: 12px; line-height: 1.2; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.sky-checks .sky-viz-ends { max-width: 320px; }
+.sky-popup-visual .sky-viz-ends { max-width: 360px; margin-inline: auto; }
+/* The five-step avalanche danger scale; the current step is filled. */
+.sky-danger { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 4px; }
+.sky-checks .sky-danger { max-width: 320px; }
+.sky-popup-visual .sky-danger { max-width: 360px; margin-inline: auto; }
+.sky-danger > span { display: grid; place-items: center; height: 26px; border-radius: 8px; background: var(--sky-fill); color: var(--sky-secondary); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sky-danger > .is-current { background: var(--sky-label); color: var(--sky-surface); }
+.sky-danger > .is-over { background: var(--sky-caution); color: var(--sky-surface); }
 
 .sky-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 12px; align-items: end; margin-top: 4px; }
 .sky-gauge { display: flex; gap: 10px; align-items: flex-end; }
@@ -363,6 +380,8 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
   .sky-hero { margin: 0 calc(50% - 50vw); border-radius: 0 0 24px 24px; }
   .sky-hero-in { padding: 16px 16px calc(var(--sky-scene) + var(--sky-ridge)); }
   .sky-hero .sky-hero-title { font-size: 42px; }
+  .sky-hero .sky-hero-title[data-length="long"] { font-size: 34px; }
+  .sky-hero .sky-hero-title[data-length="xl"] { font-size: 28px; }
   .sky-hero h2 { font-size: 23px; }
   .sky-hero-actions { justify-content: flex-start; margin: 0 0 14px; }
   .sky-report .field-report-actions > button, .sky-report .field-report-actions summary { min-height: 44px; }
@@ -387,15 +406,30 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
   .sky-checks .sky-viz { max-width: 300px; }
   .sky-pack { gap: 10px; }
   .sky-card { padding: 14px; border-radius: 18px; }
-  .sky-notice { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 12px; align-items: start; }
+  /* An icon takes a narrow first column with everything else stacked beside it. A notice with
+     no icon is a plain block, so its words never fall into the icon column. */
+  .sky-notice { display: block; }
+  .sky-notice:has(> svg) { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 12px; align-items: start; }
   .sky-notice > svg { margin-top: 2px; }
-  .sky-notice .sky-link { grid-column: 2; justify-self: start; min-height: 36px; padding: 0; }
+  .sky-notice:has(> svg) > :not(svg) { grid-column: 2; }
+  .sky-notice > :is(.sky-link, .field-button) { justify-self: start; }
+  .sky-notice .sky-link { min-height: 36px; padding: 0; }
+  /* Two tiles across: a smaller label keeps "Terrain & snow" on the icon's line, and an elevation
+     row stacks its name over the height so "8,500 ft" is never split. */
+  .sky-tile .sky-card-head { font-size: 11px; letter-spacing: 0.04em; padding-right: 14px; }
+  .sky-tile .sky-ladder li { align-items: center; }
+  .sky-tile .sky-ladder li > span { display: grid; gap: 1px; }
+  .sky-tile .sky-ladder small { margin-left: 0; }
   .sky-action-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .sky-report .field-report-actions > button:not(.is-prominent) { padding: 0; width: 44px; justify-content: center; }
   .sky-chapter-tabs { margin: 0 calc(50% - 50vw); padding-inline: 20px; }
   .sky-chapter-title h1 { font-size: 38px; }
   .sky-daystrip { width: 100%; }
   .sky-pager { gap: 10px; }
+}
+/* On the narrowest phones a tile has no room for an icon beside a label like "Terrain & snow". */
+@media (max-width: 370px) {
+  .sky-tile .sky-card-head > svg { display: none; }
 }
 @media print {
   .sky-hero { color: #000; background: none; }
@@ -409,7 +443,7 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
 .sky-ladder li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--sky-separator); }
 .sky-ladder li:last-child { border-bottom: 0; }
 .sky-ladder span { font-size: 14px; font-weight: 550; }
-.sky-ladder small { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--sky-secondary); }
+.sky-ladder small { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--sky-secondary); white-space: nowrap; }
 .sky-ladder strong { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .sky-ladder li.is-cold strong { color: var(--sky-cold); }
 .sky-viz .t-limit { font-size: 11px; font-weight: 600; fill: var(--sky-secondary); }

@@ -166,6 +166,23 @@ test("every check is a tile with its value up front", () => {
   assert.match(html, /sky-card-head"><svg/, "each tile leads with its icon");
 });
 
+// A tile's drawing is scaled to the tile: SVG text at 11px rendered at about 7px in a phone's two-column
+// grid, and the sunset dot sat on its own label. Labels that must stay readable are plain text.
+test("the avalanche tile draws the danger scale as five numbered steps with the current one marked", () => {
+  const tile = checkCard(brief(briefWorkspace({}, { ...NO_ALERTS, avalanche: { relevant: true, dangerLevel: 3 } })), "Avalanche");
+  const steps = [...tile.matchAll(/<span aria-hidden="true" title="[A-Za-z]+"[^>]*>([1-5])<\/span>/g)].map((step) => step[1]);
+  assert.deepEqual(steps, ["1", "2", "3", "4", "5"], "numerals rather than abbreviated words");
+  assert.match(tile, /class="is-over">3<\/span>/, "the current step is marked, and Considerable reads as over the line");
+  assert.match(tile, /aria-label="Avalanche danger 3 of 5\."/);
+  assert.doesNotMatch(tile.match(/<span class="sky-danger".*?<\/span><\/span>/)[0], /<svg|<text/, "no chart text to shrink with the tile");
+});
+
+test("the daylight tile puts sunrise and sunset under the arc as text, not inside the drawing", () => {
+  const tile = checkCard(brief(briefWorkspace({}, NO_ALERTS)), "Daylight");
+  assert.doesNotMatch(tile.match(/<svg.*?<\/svg>/s)[0], /<text/, "no chart text to shrink with the tile");
+  assert.match(tile, /class="sky-viz-ends" aria-hidden="true"><span>06:52<\/span><span>19:30<\/span>/);
+});
+
 test("a failing check leads whatever the activity puts first", () => {
   const w = briefWorkspace({ returnMinutes: 1200 }, NO_ALERTS);
   assert.equal(checkOrder(brief(w, undefined, "ski-touring"))[0], "Daylight");

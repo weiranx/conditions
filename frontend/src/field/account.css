@@ -92,9 +92,13 @@
 .sky-auth-card > .sky-usage { margin-top: 6px; padding: 14px 0 0; border-radius: 0; background: none; box-shadow: none; border-top: 1px solid var(--sky-separator); text-align: left; }
 .sky-auth-card > .sky-usage .sky-usage-value { font-size: 24px; }
 
-/* Inside the sign-in dialog the card sits flat. */
+/* Inside the sign-in dialog the card sits flat, as wide as the dialog's own title and lede, which
+   stand in for the card's avatar and heading. */
 .field-dialog .sky-account { gap: 20px; }
-.field-dialog .sky-auth-card { margin: 0; padding: 4px 0 0; box-shadow: none; background: none; }
+.field-dialog .sky-auth-card { margin: 0; padding: 4px 0 0; box-shadow: none; background: none; text-align: left; }
+.field-dialog .sky-auth-card > :is(.sky-avatar, h2) { display: none; }
+.field-dialog .sky-auth-card > .sky-auth-sub { margin-top: 8px; }
+.field-app .field-dialog:has(.sky-auth-card) { width: min(480px, calc(100vw - 32px)); }
 
 @media (max-width: 850px) {
   .sky-usage-grid { grid-template-columns: 1fr; }
