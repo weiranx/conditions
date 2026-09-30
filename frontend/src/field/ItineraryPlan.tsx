@@ -11,6 +11,8 @@ import { SuggestionLabel } from "./SuggestionLabel";
 import {
   MAX_DAY_CHECKPOINTS,
   campPoint,
+  isCoordinateLabel,
+  pointLabel,
   setItineraryNights,
   splitGpxIntoDays,
   stageStraightLineMiles,
@@ -213,7 +215,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
               <DayRow
                 workspace={w}
                 index={index}
-                fromName={from?.name || (index === 0 ? "Trailhead" : `Camp ${index}`)}
+                fromName={pointLabel(from, index === 0 ? "Trailhead" : `Camp ${index}`)}
+                miles={stage && !stage.layover ? stageStraightLineMiles(stage) : null}
                 longDay={Boolean(longDay)}
                 onChange={(patch) => setDay(index, patch)}
                 onPickOnMap={pickOnMap}
@@ -226,13 +229,14 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                   </span>
                   {draft.camps[index].layover ? (
                     <p className="sky-trip-layover">
-                      Stay at {campPoint(draft, index)?.name || "the same camp"} another night.
+                      Stay at {pointLabel(campPoint(draft, index), "the same camp")} another night.
                       <button type="button" className="field-text-button" onClick={() => setLayover(index, false)}>
                         Move on instead
                       </button>
                     </p>
                   ) : (
                     <PlaceField
+                      onResolve={it.nameAt}
                       elevationUnit={w.preferences.elevationUnit}
                       near={placeSearchNear(w)}
                       label={`Camp for night ${index + 1}`}
@@ -257,6 +261,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                   {draft.exit || choosingExit ? (
                     <>
                       <PlaceField
+                        onResolve={it.nameAt}
                         elevationUnit={w.preferences.elevationUnit}
                         near={placeSearchNear(w)}
                         label="Exit trailhead"
@@ -281,7 +286,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                     </>
                   ) : (
                     <p className="sky-trip-layover">
-                      Back to {draft.trailhead?.name || "the trailhead"}.
+                      Back to {pointLabel(draft.trailhead, "the trailhead")}.
                       <button type="button" className="field-text-button" onClick={() => setChoosingExit(true)}>
                         End somewhere else
                       </button>
@@ -318,6 +323,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
         </ul>
         {draft.bailPoints.length < MAX_BAIL_POINTS && (
           <PlaceField
+            onResolve={it.nameAt}
             elevationUnit={w.preferences.elevationUnit}
             near={placeSearchNear(w)}
             label="Add a bail point"
@@ -338,6 +344,7 @@ function DayRow({
   workspace: w,
   index,
   fromName,
+  miles,
   longDay,
   onChange,
   onPickOnMap,
@@ -345,6 +352,8 @@ function DayRow({
   workspace: Workspace;
   index: number;
   fromName: string;
+  /** Straight-line distance from the day's start to its camp; null while either is missing or on a layover. */
+  miles: number | null;
   longDay: boolean;
   onChange: (patch: Partial<ItineraryDraft["days"][number]>) => void;
   onPickOnMap?: (target: ItineraryPickTarget) => void;
@@ -359,6 +368,7 @@ function DayRow({
         <span className="sky-trip-day-label">Day {index + 1}</span>
         <span className="sky-trip-day-summary">
           {layover ? "Layover" : `From ${fromName}`} · {formatClockForStyle(day.start, w.preferences.timeStyle)} · {day.travelHours} h
+          {miles !== null && miles >= 0.1 && ` · ${w.formatDistanceDisplay(miles)} direct`}
           {day.checkpoints.length > 0 && ` · ${day.checkpoints.length} high point${day.checkpoints.length > 1 ? "s" : ""}`}
         </span>
       </summary>
@@ -403,6 +413,7 @@ function DayRow({
       ))}
       {day.checkpoints.length < MAX_DAY_CHECKPOINTS && (
         <PlaceField
+          onResolve={it.nameAt}
           elevationUnit={w.preferences.elevationUnit}
           near={placeSearchNear(w)}
           label="Add a pass or high point"
@@ -429,6 +440,7 @@ export function PlaceField({
   value,
   onChange,
   onPickOnMap,
+  onResolve,
   picking = false,
   elevationUnit,
   near,
@@ -440,6 +452,8 @@ export function PlaceField({
   value: ItineraryPoint | null;
   onChange: (point: ItineraryPoint | null) => void;
   onPickOnMap?: () => void;
+  /** Called with a chosen point that still lacks a place name or elevation. */
+  onResolve?: (lat: number, lon: number) => void;
   picking?: boolean;
 }) {
   const id = useId();
@@ -447,6 +461,7 @@ export function PlaceField({
   const [results, setResults] = useState<Suggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [editing, setEditing] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   const coordinates = parseCoordinates(query);
   const typedCoordinates = coordinates !== null;
   // Read when a search runs; a moved trailhead need not restart one in flight.
@@ -476,8 +491,15 @@ export function PlaceField({
     };
   }, [query, typedCoordinates]);
 
+  // "Change" swaps the place for an empty search; type into it straight away.
+  useEffect(() => {
+    if (editing) input.current?.focus();
+  }, [editing]);
+
   const choose = (point: ItineraryPoint) => {
     onChange(point);
+    // A point with no place name or elevation of its own (typed coordinates) is looked up.
+    if (isCoordinateLabel(point.name) || point.elevationFt === null) onResolve?.(point.lat, point.lon);
     setQuery("");
     setResults([]);
     setEditing(false);
@@ -503,6 +525,7 @@ export function PlaceField({
         {searching ? <LoaderCircle size={16} className="field-spin" aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
         <input
           id={`${id}-input`}
+          ref={input}
           value={query}
           placeholder={`${label}: search or lat, lon`}
           autoComplete="off"

@@ -37,8 +37,6 @@ import {
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { buildTripOverlay } from "./itinerary-overlay";
-import { lookupPointPlace } from "../lib/search";
-import type { ItineraryPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer, shareOrCopyLink } from "./touch";
@@ -268,25 +266,8 @@ export default function FieldApp() {
     }
     const coordinates = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
     const point = { name: coordinates, lat, lon, elevationFt: null };
-    // Then name it after what is there, if it still has its coordinates label.
-    void lookupPointPlace(lat, lon).then(({ name, elevationFt }) => {
-      if (!name && elevationFt === null) return;
-      const named = (candidate: ItineraryPoint | null) =>
-        candidate && candidate.lat === lat && candidate.lon === lon
-          ? {
-              ...candidate,
-              name: name && candidate.name === coordinates ? name : candidate.name,
-              elevationFt: candidate.elevationFt ?? elevationFt,
-            }
-          : candidate;
-      it.updateDraft((draft) => ({
-        ...draft,
-        camps: draft.camps.map((camp) => ({ ...camp, point: named(camp.point) })),
-        exit: named(draft.exit),
-        bailPoints: draft.bailPoints.map((bail) => named(bail)!),
-        days: draft.days.map((day) => ({ ...day, checkpoints: day.checkpoints.map((checkpoint) => named(checkpoint)!) })),
-      }));
-    }).catch(() => {});
+    // It is named after what is there once the lookup returns.
+    it.nameAt(lat, lon);
     it.updateDraft((draft) => {
       if (target.kind === "camp") {
         return { ...draft, camps: draft.camps.map((camp, index) => (index === target.index ? { point, layover: false } : camp)) };

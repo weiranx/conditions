@@ -9,11 +9,14 @@ import {
   buildItineraryStages,
   campPoint,
   createItineraryDraft,
+  isCoordinateLabel,
   itineraryGaps,
   maxNightsWithinForecast,
+  nameDraftPointsAt,
   parseItineraryDraft,
   parseItineraryResults,
   parseSavedTrip,
+  pointLabel,
   buildSavedTrip,
   setItineraryNights,
   splitGpxIntoDays,
@@ -252,4 +255,58 @@ test('a saved trip keeps the backend’s assessment and reads back whole', () =>
   assert.equal(restored.result.assessment.headline.title, 'Day 2 limits the trip');
   assert.equal(restored.result.results[1].report.forecast.selectedDate, check.results[1].report.forecast.selectedDate);
   assert.equal(parseSavedTrip({ draft, result: { stages: [], results: [1] } }), null);
+});
+
+test('a point with only its coordinates for a name reads as a fallback label, never as coordinates', () => {
+  assert.ok(isCoordinateLabel('46.835, -121.71'));
+  assert.ok(isCoordinateLabel(' -46.8,121 '));
+  assert.ok(!isCoordinateLabel('Camp 4'));
+  assert.ok(!isCoordinateLabel('Lake 7, 7,500 ft'));
+  assert.equal(pointLabel({ name: '46.835, -121.71' }, 'Camp 1'), 'Camp 1');
+  assert.equal(pointLabel({ name: '' }, 'Camp 1'), 'Camp 1');
+  assert.equal(pointLabel(null, 'Camp 1'), 'Camp 1');
+  assert.equal(pointLabel({ name: 'Nada Lake' }, 'Camp 1'), 'Nada Lake');
+});
+
+test('a place lookup names points still labelled with their coordinates, and fills a missing elevation only', () => {
+  const bare = { name: '47.49, -120.76', lat: 47.49, lon: -120.76, elevationFt: null };
+  const chosen = { name: 'My favourite spot', lat: 47.48, lon: -120.82, elevationFt: 7600 };
+  const draft = draftFor((base) => ({
+    ...base,
+    camps: [{ point: bare, layover: false }, { point: chosen, layover: false }],
+    bailPoints: [{ ...bare }],
+    days: base.days.map((day, index) => (index === 1 ? { ...day, checkpoints: [{ ...bare, name: 'High point' }] } : day)),
+  }));
+  const named = nameDraftPointsAt(draft, 47.49, -120.76, { name: 'Nada Lake', elevationFt: 4950 });
+  assert.deepEqual(named.camps[0].point, { ...bare, name: 'Nada Lake', elevationFt: 4950 });
+  assert.equal(named.bailPoints[0].name, 'Nada Lake');
+  assert.equal(named.days[1].checkpoints[0].name, 'High point', 'a name the traveler gave stays');
+  assert.equal(named.days[1].checkpoints[0].elevationFt, 4950);
+  // Another place is untouched, and so is a chosen name at the same spot.
+  assert.deepEqual(named.camps[1].point, chosen);
+  const same = nameDraftPointsAt(draft, 47.48, -120.82, { name: 'Somewhere else', elevationFt: 1 });
+  assert.deepEqual(same.camps[1].point, chosen);
+  assert.equal(same.trailhead, draft.trailhead);
+});
+
+test('the brief gives a trip at a glance and calls a camp with no name by its number', () => {
+  const draft = draftFor((base) => ({
+    ...base,
+    camps: [{ point: { ...CAMP_1, name: '47.49, -120.76' }, layover: false }, { point: CAMP_2, layover: false }],
+  }));
+  const check = checked(['clear', 'storm', 'clear'], { draft });
+  const workspace = workspaceFor(check);
+  workspace.itinerary.draft = draft;
+  const html = renderToStaticMarkup(
+    <AiAccessContext.Provider value={{ requestAiAccess: () => true }}>
+      <Itinerary workspace={workspace} onEdit={() => {}} />
+    </AiAccessContext.Provider>,
+  );
+  const glance = html.slice(html.indexOf('sky-trip-glance'), html.indexOf('Day by day'));
+  assert.equal((glance.match(/sky-trip-glance-day/g) || []).length, 3, 'a row for each day');
+  assert.equal((glance.match(/sky-trip-glance-night/g) || []).length, 2, 'and for each night');
+  assert.match(glance, /Night 2/);
+  assert.match(html, /Snow Lakes TH → Camp 1/);
+  assert.match(html, /Camp 1 →/);
+  assert.doesNotMatch(html, /47\.49, -120\.76/);
 });

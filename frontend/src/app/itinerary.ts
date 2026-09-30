@@ -138,6 +138,46 @@ export function campPoint(draft: Pick<ItineraryDraft, 'camps' | 'trailhead'>, ni
 
 export const itineraryExit = (draft: ItineraryDraft) => draft.exit ?? draft.trailhead;
 
+const COORDINATE_LABEL = /^\s*-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?\s*$/;
+
+/** True for a name that is only the point's own "lat, lon", which says nothing about the place. */
+export const isCoordinateLabel = (name: string | null | undefined) => COORDINATE_LABEL.test(name ?? '');
+
+/** A point's place name for reading, or `fallback` ("Camp 2") while it has none but its coordinates. */
+export function pointLabel(point: { name?: string | null } | null | undefined, fallback: string): string {
+  const name = point?.name?.trim() ?? '';
+  return name && !isCoordinateLabel(name) ? name : fallback;
+}
+
+/**
+ * The draft with `lookup`'s place name and elevation filled in for every point
+ * at (lat, lon) other than the trailhead: a name only replaces a bare coordinates label, and an
+ * elevation only fills a gap, so nothing the traveler chose is overwritten.
+ */
+export function nameDraftPointsAt(
+  draft: ItineraryDraft,
+  lat: number,
+  lon: number,
+  lookup: { name: string | null; elevationFt: number | null },
+): ItineraryDraft {
+  const fill = <T extends ItineraryPoint | null>(candidate: T): T => {
+    if (!candidate || candidate.lat !== lat || candidate.lon !== lon) return candidate;
+    return {
+      ...candidate,
+      name: lookup.name && (!candidate.name || isCoordinateLabel(candidate.name)) ? lookup.name : candidate.name,
+      elevationFt: candidate.elevationFt ?? lookup.elevationFt,
+    };
+  };
+  return {
+    ...draft,
+    // The trailhead follows the plan's objective, which names itself.
+    camps: draft.camps.map((camp) => ({ ...camp, point: fill(camp.point) })),
+    exit: fill(draft.exit),
+    bailPoints: draft.bailPoints.map((bail) => fill(bail)),
+    days: draft.days.map((day) => ({ ...day, checkpoints: day.checkpoints.map((checkpoint) => fill(checkpoint)) })),
+  };
+}
+
 /** What still has to be chosen before the trip can be checked, first gap first. */
 export function itineraryGaps(draft: ItineraryDraft): string[] {
   const gaps: string[] = [];

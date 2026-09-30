@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchApi } from "../../lib/api-client";
+import { lookupPointPlace } from "../../lib/search";
 import { ITINERARY_DRAFT_KEY } from "../../app/constants";
 import { parseMultiDayUsage, type MultiDayUsage } from "../../app/multi-day-usage";
 import { addDaysToIsoDate } from "../../app/core";
@@ -11,6 +12,7 @@ import {
   itineraryEndDate,
   itineraryGaps,
   maxNightsWithinForecast,
+  nameDraftPointsAt,
   parseItineraryResults,
   parseStoredItinerary,
   readItineraryAssessment,
@@ -131,6 +133,20 @@ export function useItinerary({
     if (!outOfRange && draft.camps.length <= fits) return;
     setDraftState((current) => setItineraryNights({ ...current, startDate: outOfRange ? todayDate : current.startDate }, Math.min(current.camps.length, fits)));
   }, [draft.startDate, draft.camps.length, todayDate, maxForecastDate]);
+
+  /**
+   * Names the trip's points at (lat, lon) after what is there, with their
+   * elevation. A name and elevation do not change the forecast, so a checked
+   * trip stays checked.
+   */
+  const nameAt = useCallback((lat: number, lon: number) => {
+    lookupPointPlace(lat, lon)
+      .then((found) => {
+        if (!found.name && found.elevationFt === null) return;
+        setDraftState((current) => nameDraftPointsAt(current, lat, lon, found));
+      })
+      .catch(() => undefined);
+  }, []);
 
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -290,6 +306,7 @@ export function useItinerary({
     draft,
     updateDraft,
     setTrailhead,
+    nameAt,
     stages,
     gaps,
     result,

@@ -123,9 +123,31 @@
 .sky-trip-daybar strong { font-weight: 650; }
 .sky-trip-daybar nav { display: flex; gap: 6px; margin-left: auto; }
 
+/* The trip at a glance: a row for each day, the night after it beneath. */
+.sky-trip-glance { margin: 0; padding: 4px 6px; list-style: none; }
+.sky-trip-glance li { padding: 4px 0; border-bottom: 1px solid var(--sky-separator); }
+.sky-trip-glance li:last-child { border-bottom: 0; }
+.sky-trip-glance button {
+  display: grid; grid-template-columns: 8.5rem max-content minmax(0, 1fr); align-items: center; gap: 4px 14px;
+  width: 100%; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 10px;
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.sky-trip-glance button:hover { background: var(--sky-fill); }
+.sky-trip-glance button:focus-visible { outline: none; box-shadow: var(--sky-focus-ring); }
+.sky-trip-glance-name { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sky-trip-glance-name small { font-size: 12px; font-weight: 500; color: var(--sky-secondary); }
+.sky-trip-glance-night { color: var(--sky-secondary); }
+.sky-trip-glance-night .sky-trip-glance-name { align-items: center; font-weight: 600; font-size: 14px; }
+.sky-trip-glance-facts { min-width: 0; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--sky-secondary); }
+.sky-trip-card { scroll-margin-top: 72px; }
+.sky-trip-card:focus { outline: none; }
+.sky-trip-card:focus-visible { box-shadow: var(--sky-focus-ring); }
+
 .sky-trip-loading { display: grid; gap: 10px; }
 
 @media (max-width: 640px) {
+  .sky-trip-glance button { grid-template-columns: minmax(0, 1fr) max-content; }
+  .sky-trip-glance-facts { grid-column: 1 / -1; }
   .sky-trip-readings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sky-trip-timeline { padding-left: 18px; }
   .sky-trip-card { padding: 14px; }
