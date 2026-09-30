@@ -133,8 +133,11 @@ describe('decision', () => {
     report.weather.trend[2].gust = 30;
     const decision = decide(report, { wind_unit: 'kph', temp_unit: 'c' });
     expect(check(decision, 'wind-gust').label).toBe('Wind gusts are at or below 40 km/h');
-    expect(check(decision, 'wind-gust').detail).toBe('Peak 48 km/h at 09:00 in window (limit 40 km/h).');
+    expect(check(decision, 'wind-gust').detail).toBe('Peak 48 km/h at 9:00 AM in window (limit 40 km/h).');
     expect(check(decision, 'feels-like').label).toBe('Apparent temperature is at or above -15°C');
+    // The clock follows the traveler's style too, in every check.
+    const twentyFour = decide(report, { wind_unit: 'kph', temp_unit: 'c', time_style: '24h' });
+    expect(check(twentyFour, 'wind-gust').detail).toBe('Peak 48 km/h at 09:00 in window (limit 40 km/h).');
   });
 
   test('an off-the-hour start keeps its last partial hour in the decision', () => {
@@ -144,14 +147,19 @@ describe('decision', () => {
     report.weather.trend[10].gust = 40;
     const gust = check(decide(report, { start: '05:30', travel_window_hours: '10' }), 'wind-gust');
     expect(gust.ok).toBe(false);
-    expect(gust.detail).toMatch(/Peak 40 mph at 15:00/);
+    expect(gust.detail).toMatch(/Peak 40 mph at 3:00 PM/);
+    expect(check(decide(report, { start: '05:30', travel_window_hours: '10', time_style: '24h' }), 'wind-gust').detail).toMatch(/Peak 40 mph at 15:00/);
   });
 
   test('the daylight check uses the turnaround at the end of the travel window', () => {
     const late = decide(makeReport({ start: '12:00' }), { start: '12:00', travel_window_hours: '10' });
     expect(check(late, 'daylight').ok).toBe(false);
-    expect(check(late, 'daylight').detail).toMatch(/12:00 start • back by 22:00 • 7:30 PM sunset • 150 min after sunset/);
-    expect(late.cautions.some((text) => /Turnaround time is 150 minutes after sunset/.test(text))).toBe(true);
+    // Start, return and sunset read on one clock: the traveler's, not 24-hour for two and the provider's for the third.
+    expect(check(late, 'daylight').detail).toMatch(/12:00 PM start • back by 10:00 PM • 7:30 PM sunset • 150 min after sunset/);
+    expect(late.cautions.some((text) => /Turnaround time is 150 minutes after sunset \(7:30 PM\)/.test(text))).toBe(true);
+    const twentyFour = decide(makeReport({ start: '12:00' }), { start: '12:00', travel_window_hours: '10', time_style: '24h' });
+    expect(check(twentyFour, 'daylight').detail).toMatch(/12:00 start • back by 22:00 • 19:30 sunset • 150 min after sunset/);
+    expect(twentyFour.cautions.some((text) => /150 minutes after sunset \(19:30\)/.test(text))).toBe(true);
   });
 
   test('checks with nothing to do carry no action', () => {
