@@ -99,6 +99,19 @@ test('a server error counts against USGS, a plain refusal does not', async () =>
   expect(refusals.usgsCalls()).toBe(4);
 });
 
+test('a report cancelled by its own client is not held against USGS', async () => {
+  const { fetchObjectiveElevationFt, services, usgsCalls } = setup();
+  const controller = new AbortController();
+  controller.abort(new Error('Client disconnected'));
+  services.usgs = timedOut;
+
+  for (const lon of [-121.1, -121.2, -121.3, -121.4]) {
+    await expect(fetchObjectiveElevationFt(46.8, lon, { signal: controller.signal })).resolves.toEqual(OPEN_METEO);
+  }
+  // Every lookup still asked USGS: four cancellations in a row did not open the breaker.
+  expect(usgsCalls()).toBe(4);
+});
+
 test('an unusable USGS reading falls back without counting as an outage', async () => {
   const { fetchObjectiveElevationFt, services, usgsCalls } = setup();
   services.usgs = async () => response({ value: null });

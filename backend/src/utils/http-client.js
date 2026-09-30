@@ -61,7 +61,7 @@ const createCircuitBreaker = ({ name, failureThreshold = 5, resetTimeMs = 60000 
  * so chronically-flaky upstreams (NOAA, avalanche.org) stop being hammered with
  * doomed requests once they're clearly down.
  */
-const withCircuitBreaker = async (breaker, fn) => {
+const withCircuitBreaker = async (breaker, fn, { countFailure = () => true } = {}) => {
   if (breaker.isOpen) {
     throw new Error(`${breaker.name} circuit breaker open; skipping request until it cools down`);
   }
@@ -70,7 +70,8 @@ const withCircuitBreaker = async (breaker, fn) => {
     breaker.recordSuccess();
     return result;
   } catch (error) {
-    breaker.recordFailure();
+    // A failure the upstream did not cause, such as a caller that gave up, says nothing about its health.
+    if (countFailure(error)) breaker.recordFailure();
     throw error;
   }
 };

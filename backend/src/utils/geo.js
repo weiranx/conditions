@@ -161,7 +161,7 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }) 
         );
         if (response.status >= 500) throw new Error(`USGS elevation returned ${response.status}`);
         return response;
-      });
+      }, { countFailure: () => !fetchOptions?.signal?.aborted });
       if (usgsRes.ok) {
         const usgsData = await usgsRes.json();
         const usgsElevationFt = toFiniteOrNull(usgsData?.value);
