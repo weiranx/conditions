@@ -542,6 +542,7 @@ const planWorkspace = (overrides = {}) => ({
   todayDate: '2026-09-08', maxForecastDate: '2026-09-15', travelWindowHoursDraft: '4',
   routeLoading: false, routeLoadingState: null, routeError: null, accountUser: null,
   customRouteName: 'West ridge', plannedRouteName: 'West ridge', importedGpxRoute: null,
+  isPlaceSaved: () => false, toggleSavedPlace: () => {},
   ...overrides,
 });
 
