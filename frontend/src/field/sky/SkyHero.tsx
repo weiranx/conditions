@@ -288,7 +288,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
         <div className="sky-hero-grid">
         <div className="sky-hero-text">
         <span className="sky-kicker">{kicker}</span>
-        <Title className="sky-hero-title" data-length={title.length > 56 ? "xl" : title.length > 30 ? "long" : undefined}>{title}</Title>
+        <Title className="sky-hero-title" data-length={(title?.length ?? 0) > 56 ? "xl" : (title?.length ?? 0) > 30 ? "long" : undefined}>{title}</Title>
         <p className="sky-subtitle">{subtitle}</p>
         {status}
         <span className={`sky-pill is-${tone}`}>
