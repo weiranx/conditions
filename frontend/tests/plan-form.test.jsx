@@ -77,6 +77,8 @@ function planWorkspace(overrides = {}) {
     setForecastDate: record('setForecastDate'),
     navigateToView: record('navigateToView'),
     handleGenerateReport: record('handleGenerateReport'),
+    isPlaceSaved: () => false,
+    toggleSavedPlace: record('toggleSavedPlace'),
     ...overrides,
   };
 }

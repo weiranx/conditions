@@ -101,6 +101,8 @@ function planWorkspace(overrides = {}) {
     handleSearchKeyDown: () => {},
     setShowSuggestions: () => {},
     handlePlannerTimeChange: () => () => {},
+    isPlaceSaved: () => false,
+    toggleSavedPlace: () => {},
     ...overrides,
   };
 }
