@@ -92,3 +92,37 @@ describe('server rate limiting', () => {
     expect(service.login).toHaveBeenCalledTimes(20);
   });
 });
+
+describe('cross-origin preflight', () => {
+  const app = () => {
+    const created = createApp({
+      isProduction: true,
+      corsAllowlist: ['https://conditions.example'],
+      rateLimitWindowMs: 60_000,
+      rateLimitMaxRequests: 100,
+    });
+    created.post('/api/example', (_req, res) => res.json({ ok: true }));
+    return created;
+  };
+  const preflight = (origin) => request(app())
+    .options('/api/example')
+    .set('Origin', origin)
+    .set('Access-Control-Request-Method', 'POST')
+    .set('Access-Control-Request-Headers', 'content-type,idempotency-key');
+
+  test('lets the browser reuse an approved preflight instead of asking before every JSON POST', async () => {
+    const response = await preflight('https://conditions.example').expect(204);
+
+    expect(response.headers['access-control-allow-origin']).toBe('https://conditions.example');
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+    expect(response.headers['access-control-allow-headers']).toBe('content-type,idempotency-key');
+    expect(Number(response.headers['access-control-max-age'])).toBeGreaterThanOrEqual(7200);
+  });
+
+  test('still grants nothing to an origin outside the allowlist', async () => {
+    const response = await preflight('https://elsewhere.example');
+
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+    expect(response.headers['access-control-allow-credentials']).toBeUndefined();
+  });
+});

@@ -77,6 +77,7 @@ const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAIS
 const { getFeatureFlags, initializeFeatureFlags } = require('./src/utils/feature-flags');
 const { sanitizeReportForFeatureFlags } = require('./src/utils/report-feature-filter');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
+const { createServerTiming } = require('./src/utils/server-timing');
 const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
 const { createAIModelCatalog } = require('./src/utils/ai-model-catalog');
 const { database } = require('./src/db/database');
@@ -145,7 +146,7 @@ const solarCache = createCache({ name: 'solar', ttlMs: 7 * 24 * 60 * 60 * 1000, 
 const noaaForecastCache = createCache({ name: 'noaa-forecast', ttlMs: 20 * 60 * 1000, staleTtlMs: 25 * 60 * 1000, maxEntries: 100 });
 const avalancheForecastCache = createCache({ name: 'avalanche-forecast', ttlMs: 10 * 60 * 1000, staleTtlMs: 20 * 60 * 1000, maxEntries: 300 });
 
-const { createUnavailableSnowpackData, fetchSnowpackData, prewarmSnotelStations } = createSnowpackService({
+const { createUnavailableSnowpackData, fetchSnowpackData, seedSnotelStations, prewarmSnotelStations } = createSnowpackService({
   fetchWithTimeout,
   formatIsoDateUtc,
   shiftIsoDateUtc,
@@ -338,8 +339,16 @@ const buildSafetyResponsePayload = ({
 
 const logEvaluationError = (error) => logger.warn({ err: error }, 'Plan evaluation failed');
 
+// A report slower than this is logged with its Server-Timing breakdown, so a slow source shows up in the logs.
+const SLOW_SAFETY_REQUEST_MS = 8000;
+
 const safetyHandler = async (req, res) => {
   const startedAt = Date.now();
+  // Where the time goes, for the Server-Timing header: each source is marked when it finishes.
+  const timing = createServerTiming();
+  const sendTiming = () => {
+    if (typeof res.setHeader === 'function' && !res.headersSent) res.setHeader('Server-Timing', timing.header());
+  };
   const { lat, lon, date, start, travel_window_hours: travelWindowHoursRaw, travelWindowHours, name, activity } = req.query;
   const logName = typeof name === 'string' ? name.trim() || null : null;
   const logIp = req.ip || null;
@@ -422,6 +431,7 @@ const safetyHandler = async (req, res) => {
         (value) => ({ status: 'fulfilled', value }),
         (reason) => ({ status: 'rejected', reason }),
       );
+    timing.track('avalanche', avalanchePipelinePromise);
 
     // A normal report request always includes a date. Snowpack and local
     // conditions only need coordinates plus that date, so start them beside
@@ -445,6 +455,8 @@ const safetyHandler = async (req, res) => {
           (reason) => ({ status: 'rejected', reason }),
         )
       : null;
+    if (prefetchedSnowpackPromise) timing.track('snowpack', prefetchedSnowpackPromise);
+    if (prefetchedLocalConditionsPromise) timing.track('localConditions', prefetchedLocalConditionsPromise);
     // The atmospheric step waits for weather, but its Open-Meteo payload needs
     // only coordinates.
     prefetchOpenMeteoAtmosphere({ lat: parsedLat, lon: parsedLon, fetchOptions });
@@ -466,6 +478,7 @@ const safetyHandler = async (req, res) => {
         createUnavailableWeatherData,
         noaaCircuitBreaker,
       });
+      timing.mark('weather');
       weatherData = weatherResult.weatherData;
       solarData = weatherResult.solarData;
       terrainConditionData = weatherResult.terrainConditionData;
@@ -499,19 +512,19 @@ const safetyHandler = async (req, res) => {
       referenceIso: weatherData?.forecastStartTime || selectedForecastPeriod?.startTime || weatherData?.issuedTime || null,
     });
 
-    const settle = (promise) => Promise.resolve(promise).then(
+    const settle = (name, promise) => timing.track(name, Promise.resolve(promise).then(
       (value) => ({ status: 'fulfilled', value }),
       (reason) => ({ status: 'rejected', reason }),
-    );
+    ));
     const scoreFeatures = getFeatureFlags();
     const parallelBatchPromise = Promise.all([
-      settle(fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, selectedDate: selectedForecastDate, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
-      settle(fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
-      settle(fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)),
-      settle(fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),
+      settle('supplemental', fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, selectedDate: selectedForecastDate, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
+      settle('alerts', fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
+      settle('airQuality', fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)),
+      settle('rainfall', fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),
       prefetchedSnowpackPromise
-        || settle(fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions)),
-      settle(fetchAtmosphericSignals({
+        || settle('snowpack', fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions)),
+      settle('atmosphere', fetchAtmosphericSignals({
         lat: parsedLat,
         lon: parsedLon,
         selectedDate: selectedForecastDate,
@@ -521,7 +534,7 @@ const safetyHandler = async (req, res) => {
         fetchOptions,
       })),
       prefetchedLocalConditionsPromise
-        || settle(fetchLocalConditions({
+        || settle('localConditions', fetchLocalConditions({
           lat: parsedLat,
           lon: parsedLon,
           selectedDate: selectedForecastDate,
@@ -714,11 +727,16 @@ const safetyHandler = async (req, res) => {
       campNightData,
       featureFlags: scoreFeatures,
     }), req.query, { onError: logEvaluationError });
+    timing.mark('evaluation');
     if (req.safetySignal?.aborted || res.headersSent) {
       return;
     }
     await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
     const objectiveImage = findObjectiveImage(POPULAR_PEAKS, PHOTO_REGIONS, parsedLat, parsedLon);
+    sendTiming();
+    if (Date.now() - startedAt >= SLOW_SAFETY_REQUEST_MS) {
+      logger.warn({ serverTiming: timing.header() }, 'Slow safety request');
+    }
     res.json(objectiveImage ? { ...responsePayload, objectiveImage } : responsePayload);
   } catch (error) {
     if (req.safetySignal?.aborted || res.headersSent) {
@@ -867,6 +885,7 @@ const safetyHandler = async (req, res) => {
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     }), req.query, { onError: logEvaluationError });
     await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
+    sendTiming();
     res.status(200).json(fallbackResponsePayload);
   }
 };
@@ -1057,8 +1076,15 @@ const startServer = async () => {
   await reportUsageLimitService.initializeSettings();
   await initializeFeatureFlags();
   await initializeAISettings();
+  // The first reports after a restart use bundled station data while the live catalog and the
+  // weather bulletin download, instead of each waiting for a transfer of ten seconds or more.
+  seedSnotelStations();
   const server = startBackendServer({ app, port: PORT, onShutdown: () => database.close() });
   void prewarmSnotelStations({ headers: DEFAULT_FETCH_HEADERS });
+  if (getFeatureFlags().weatherContextDetails !== false) {
+    fetchSupplementalEvidence.prewarm({ fetchOptions: { headers: DEFAULT_FETCH_HEADERS } })
+      .catch((error) => logger.warn({ err: error }, 'Weather bulletin prewarm failed'));
+  }
   return server;
 };
 

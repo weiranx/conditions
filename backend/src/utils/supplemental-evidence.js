@@ -93,7 +93,7 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     const matches = selectSynopticStations(parseSynoptic(data, { ...args, now: now() }), args.elevationFt);
     return { available: matches.length > 0, status: matches.length ? 'ok' : 'no_data', stations: matches, note: 'Quality-controlled readings from the last 2 hours. Distance and elevation do not establish equivalent terrain or exposure; these are current observations, not conditions on a future trip.' };
   };
-  return async (args) => {
+  const service = async (args) => {
     const flags = args.featureFlags || {};
     const controller = new AbortController();
     const upstream = args.fetchOptions?.signal;
@@ -119,5 +119,8 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     upstream?.throwIfAborted();
     return Object.fromEntries(entries);
   };
+  // Loads the large shared datasets before the first report asks for them.
+  service.prewarm = (options) => nbm.prewarm(options);
+  return service;
 };
 module.exports = { createSupplementalEvidenceService, parseSynoptic, selectSynopticStations, rankStations };

@@ -1,9 +1,20 @@
 const { createCache, normalizeCoordDateKey } = require('./cache');
 const { toFiniteOrNull } = require('./numbers');
+const { SNOTEL_STATIONS_URL, parseSnotelStationCatalog } = require('./snotel-stations');
 
 const CDEC_STATIONS = (() => {
   try {
     return require('../data/cdec-snow-stations.json');
+  } catch (_e) {
+    return [];
+  }
+})();
+
+// The station catalog changes a few times a year, but the USDA server takes 10 seconds or more to send it.
+// This copy answers the first reports after a restart while the live catalog loads.
+const SNOTEL_STATION_SEED = (() => {
+  try {
+    return parseSnotelStationCatalog(require('../data/snotel-stations.json'));
   } catch (_e) {
     return [];
   }
@@ -28,6 +39,8 @@ const createSnowpackService = ({
 }) => {
   const snotelStationCacheInstance = createCache({ name: 'snotel-stations', ttlMs: stationCacheTtlMs, staleTtlMs: stationCacheTtlMs, maxEntries: 1 });
   const snowpackDataCache = createCache({ name: 'snowpack', ttlMs: 4 * 60 * 60 * 1000, staleTtlMs: 8 * 60 * 60 * 1000, maxEntries: 100 });
+  // Kept short and without a stale window, so a report rebuilt from it never rests on older data than one hour.
+  const snotelStationDetailCache = createCache({ name: 'snotel-station-detail', ttlMs: 60 * 60 * 1000, maxEntries: 300 });
   const viirsMetadataCache = createCache({ name: 'viirs-snow-cover', ttlMs: 4 * 60 * 60 * 1000, staleTtlMs: 8 * 60 * 60 * 1000, maxEntries: 100 });
 
   const MAX_REASONABLE_NOHRSC_DEPTH_METERS = 20;
@@ -35,6 +48,9 @@ const createSnowpackService = ({
   const HISTORICAL_BASELINE_LOOKBACK_YEARS = 10;
   const HISTORICAL_MATCH_WINDOW_DAYS = 7;
   const HISTORICAL_FETCH_LOOKBACK_DAYS = HISTORICAL_BASELINE_LOOKBACK_YEARS * 366 + HISTORICAL_MATCH_WINDOW_DAYS;
+  // Precipitation and observed temperature are read as the latest value; a station silent for longer than this
+  // has no current reading of them.
+  const SNOTEL_CURRENT_LOOKBACK_DAYS = 30;
 
   const isValidIsoDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -190,24 +206,21 @@ const createSnowpackService = ({
     return { status: 'at_average', percentOfAverage };
   };
 
+  const fetchSnotelStationCatalog = async (fetchOptions) => {
+    const stationRes = await fetchWithTimeout(SNOTEL_STATIONS_URL, fetchOptions);
+    if (!stationRes.ok) {
+      throw new Error(`AWDB station metadata request failed with status ${stationRes.status}`);
+    }
+    const stations = parseSnotelStationCatalog(await stationRes.json());
+    // An empty catalog is a failed response, not a fact worth remembering for half a day.
+    if (!stations.length) {
+      throw new Error('AWDB station catalog was empty');
+    }
+    return stations;
+  };
+
   const getSnotelStations = (fetchOptions) =>
-    snotelStationCacheInstance.getOrFetch('global', async () => {
-      const stationRes = await fetchWithTimeout(
-        'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations?elements=WTEQ,SNWD,PREC&durations=DAILY&activeOnly=true',
-        fetchOptions,
-      );
-      if (!stationRes.ok) {
-        throw new Error(`AWDB station metadata request failed with status ${stationRes.status}`);
-      }
-      const stationJson = await stationRes.json();
-      return Array.isArray(stationJson)
-        ? stationJson.filter((station) =>
-            ['SNTL', 'SNTLT', 'MSNT'].includes(String(station?.networkCode || '').toUpperCase()) &&
-            toFiniteOrNull(station?.latitude) !== null &&
-            toFiniteOrNull(station?.longitude) !== null,
-          )
-        : [];
-    });
+    snotelStationCacheInstance.getOrFetch('global', () => fetchSnotelStationCatalog(fetchOptions));
 
   const findNearestSnotelStations = (lat, lon, stations, maxDistanceKm = 140, limit = 3) => (
     (Array.isArray(stations) ? stations : [])
@@ -465,9 +478,121 @@ const createSnowpackService = ({
     };
   };
 
+  // What one station says about the target date. It depends on the station and the date, not on where the
+  // report is for, so nearby objectives and the days of a trip share it.
+  //
+  // The 10-year history is the slow part of a report: the USDA server sends about 50 kB a second. Only
+  // snow water equivalent and depth are compared with earlier years, so the history asks for those two and
+  // the current precipitation and temperature come from a short window beside it.
+  const fetchSnotelStationDetail = (station, targetDate, fetchOptions) => {
+    const stationTriplet = String(station.stationTriplet || '');
+    const todayIso = formatIsoDateUtc(new Date());
+    const asOfIso = targetDate || todayIso;
+    return snotelStationDetailCache.getOrFetch(`${stationTriplet}|${asOfIso}`, async () => {
+      // The request belongs to every report that shares the entry, not to the one that started it.
+      const options = { headers: fetchOptions?.headers };
+      const fetchStationData = async (elements, lookbackDays) => {
+        const beginDate = shiftIsoDateUtc(asOfIso, -lookbackDays);
+        const dataUrl =
+          `https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=${encodeURIComponent(stationTriplet)}` +
+          `&elements=${elements}&duration=DAILY` +
+          `${beginDate ? `&beginDate=${encodeURIComponent(beginDate)}` : ''}` +
+          `${targetDate ? `&endDate=${encodeURIComponent(targetDate)}` : ''}` +
+          '&periodRef=END';
+        const dataRes = await fetchWithTimeout(dataUrl, options);
+        if (!dataRes.ok) {
+          throw new Error(`AWDB station data request failed with status ${dataRes.status}`);
+        }
+        const dataJson = await dataRes.json();
+        const stationData = Array.isArray(dataJson) ? dataJson[0] : null;
+        return Array.isArray(stationData?.data) ? stationData.data : [];
+      };
+      const [recentData, historyData] = await Promise.all([
+        fetchStationData('WTEQ,SNWD,PREC,TOBS', SNOTEL_CURRENT_LOOKBACK_DAYS),
+        fetchStationData('WTEQ,SNWD', HISTORICAL_FETCH_LOOKBACK_DAYS),
+      ]);
+      const elementCodeOf = (entry) => String(entry?.stationElement?.elementCode || '').toUpperCase();
+      const mapByElement = {};
+      // Snow water equivalent and depth are read from the history, so a station that reported them only before
+      // the current window still shows its latest value, as one request for the whole period did.
+      for (const entry of [...recentData, ...historyData]) {
+        const elementCode = elementCodeOf(entry);
+        if (!elementCode) {
+          continue;
+        }
+        mapByElement[elementCode] = extractLatestAwdbValue(entry?.values, asOfIso);
+      }
+
+      const snowDepthIn = toFiniteOrNull(mapByElement.SNWD?.value);
+      const sweIn = toFiniteOrNull(mapByElement.WTEQ?.value);
+      const precipIn = toFiniteOrNull(mapByElement.PREC?.value);
+      const obsTempF = toFiniteOrNull(mapByElement.TOBS?.value);
+      const observedDate = mapByElement.SNWD?.date || mapByElement.WTEQ?.date || mapByElement.PREC?.date || mapByElement.TOBS?.date || null;
+      const snwdEntry = historyData.find((entry) => elementCodeOf(entry) === 'SNWD');
+      const wteqEntry = historyData.find((entry) => elementCodeOf(entry) === 'WTEQ');
+      const snowDepthHistorical = extractHistoricalAverageAwdbValue(snwdEntry?.values || [], asOfIso);
+      const sweHistorical = extractHistoricalAverageAwdbValue(wteqEntry?.values || [], asOfIso);
+      const depthComparison = compareCurrentToHistoricalAverage(snowDepthIn, snowDepthHistorical?.average);
+      const sweComparison = compareCurrentToHistoricalAverage(sweIn, sweHistorical?.average);
+      const overallComparison =
+        sweComparison.status !== 'unknown'
+          ? { metric: 'SWE', status: sweComparison.status, percentOfAverage: sweComparison.percentOfAverage }
+          : depthComparison.status !== 'unknown'
+            ? { metric: 'Snow Depth', status: depthComparison.status, percentOfAverage: depthComparison.percentOfAverage }
+            : { metric: null, status: 'unknown', percentOfAverage: null };
+      const targetMonthDay = (() => {
+        const targetParts = parseIsoDateParts(asOfIso);
+        return targetParts ? `${pad2(targetParts.month)}-${pad2(targetParts.day)}` : null;
+      })();
+      const statusLabelByCode = {
+        below_average: 'below average',
+        at_average: 'at average',
+        above_average: 'above average',
+        unknown: 'unknown',
+      };
+      const overallSummary = overallComparison.metric
+        ? `Current ${overallComparison.metric} is ${statusLabelByCode[overallComparison.status]} for this date${
+            Number.isFinite(overallComparison.percentOfAverage) ? ` (${overallComparison.percentOfAverage}% of historical average)` : ''
+          }.`
+        : 'Historical average comparison unavailable for this date.';
+      return {
+        observedDate,
+        snowDepthIn,
+        sweIn,
+        precipIn,
+        obsTempF,
+        historical: {
+          targetDate: asOfIso,
+          monthDay: targetMonthDay,
+          lookbackYears: HISTORICAL_BASELINE_LOOKBACK_YEARS,
+          source: 'NRCS AWDB / SNOTEL daily history',
+          stationTriplet,
+          stationName: station.name || stationTriplet,
+          swe: {
+            currentIn: sweIn,
+            averageIn: toFiniteOrNull(sweHistorical?.average),
+            status: sweComparison.status,
+            percentOfAverage: sweComparison.percentOfAverage,
+            sampleCount: toFiniteOrNull(sweHistorical?.sampleCount) ?? 0,
+            maxOffsetDays: toFiniteOrNull(sweHistorical?.maxOffsetDays),
+          },
+          depth: {
+            currentIn: snowDepthIn,
+            averageIn: toFiniteOrNull(snowDepthHistorical?.average),
+            status: depthComparison.status,
+            percentOfAverage: depthComparison.percentOfAverage,
+            sampleCount: toFiniteOrNull(snowDepthHistorical?.sampleCount) ?? 0,
+            maxOffsetDays: toFiniteOrNull(snowDepthHistorical?.maxOffsetDays),
+          },
+          overall: overallComparison,
+          summary: overallSummary,
+        },
+      };
+    });
+  };
+
   const _fetchSnowpackDataUncached = async (lat, lon, selectedDate, fetchOptions) => {
     const targetDate = getSnotelTargetDate(selectedDate);
-    const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()), -HISTORICAL_FETCH_LOOKBACK_DAYS);
     const todayIso = formatIsoDateUtc(new Date());
     const nearestSnotelStationsPromise = getSnotelStations(fetchOptions)
       .then((stations) => findNearestSnotelStations(lat, lon, stations, 140, 3));
@@ -483,87 +608,7 @@ const createSnowpackService = ({
         return null;
       }
 
-      const dataUrl =
-        `https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=${encodeURIComponent(stationTriplet)}` +
-        `&elements=WTEQ,SNWD,PREC,TOBS&duration=DAILY` +
-        `${beginDate ? `&beginDate=${encodeURIComponent(beginDate)}` : ''}` +
-        `${targetDate ? `&endDate=${encodeURIComponent(targetDate)}` : ''}` +
-        '&periodRef=END';
-      const dataRes = await fetchWithTimeout(dataUrl, fetchOptions);
-      if (!dataRes.ok) {
-        throw new Error(`AWDB station data request failed with status ${dataRes.status}`);
-      }
-      const dataJson = await dataRes.json();
-      const stationData = Array.isArray(dataJson) ? dataJson[0] : null;
-      const elementData = Array.isArray(stationData?.data) ? stationData.data : [];
-      const mapByElement = {};
-      for (const entry of elementData) {
-        const elementCode = String(entry?.stationElement?.elementCode || '').toUpperCase();
-        if (!elementCode) {
-          continue;
-        }
-        mapByElement[elementCode] = extractLatestAwdbValue(entry?.values, targetDate || todayIso);
-      }
-
-      const snowDepthIn = toFiniteOrNull(mapByElement.SNWD?.value);
-      const sweIn = toFiniteOrNull(mapByElement.WTEQ?.value);
-      const precipIn = toFiniteOrNull(mapByElement.PREC?.value);
-      const obsTempF = toFiniteOrNull(mapByElement.TOBS?.value);
-      const observedDate = mapByElement.SNWD?.date || mapByElement.WTEQ?.date || mapByElement.PREC?.date || mapByElement.TOBS?.date || null;
-      const snwdEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'SNWD');
-      const wteqEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'WTEQ');
-      const snowDepthHistorical = extractHistoricalAverageAwdbValue(snwdEntry?.values || [], targetDate || todayIso);
-      const sweHistorical = extractHistoricalAverageAwdbValue(wteqEntry?.values || [], targetDate || todayIso);
-      const depthComparison = compareCurrentToHistoricalAverage(snowDepthIn, snowDepthHistorical?.average);
-      const sweComparison = compareCurrentToHistoricalAverage(sweIn, sweHistorical?.average);
-      const overallComparison =
-        sweComparison.status !== 'unknown'
-          ? { metric: 'SWE', status: sweComparison.status, percentOfAverage: sweComparison.percentOfAverage }
-          : depthComparison.status !== 'unknown'
-            ? { metric: 'Snow Depth', status: depthComparison.status, percentOfAverage: depthComparison.percentOfAverage }
-            : { metric: null, status: 'unknown', percentOfAverage: null };
-      const targetMonthDay = (() => {
-        const targetParts = parseIsoDateParts(targetDate || todayIso);
-        return targetParts ? `${pad2(targetParts.month)}-${pad2(targetParts.day)}` : null;
-      })();
-      const statusLabelByCode = {
-        below_average: 'below average',
-        at_average: 'at average',
-        above_average: 'above average',
-        unknown: 'unknown',
-      };
-      const overallSummary = overallComparison.metric
-        ? `Current ${overallComparison.metric} is ${statusLabelByCode[overallComparison.status]} for this date${
-            Number.isFinite(overallComparison.percentOfAverage) ? ` (${overallComparison.percentOfAverage}% of historical average)` : ''
-          }.`
-        : 'Historical average comparison unavailable for this date.';
-      const historical = {
-        targetDate: targetDate || todayIso,
-        monthDay: targetMonthDay,
-        lookbackYears: HISTORICAL_BASELINE_LOOKBACK_YEARS,
-        source: 'NRCS AWDB / SNOTEL daily history',
-        stationTriplet,
-        stationName: nearest.station.name || stationTriplet,
-        swe: {
-          currentIn: sweIn,
-          averageIn: toFiniteOrNull(sweHistorical?.average),
-          status: sweComparison.status,
-          percentOfAverage: sweComparison.percentOfAverage,
-          sampleCount: toFiniteOrNull(sweHistorical?.sampleCount) ?? 0,
-          maxOffsetDays: toFiniteOrNull(sweHistorical?.maxOffsetDays),
-        },
-        depth: {
-          currentIn: snowDepthIn,
-          averageIn: toFiniteOrNull(snowDepthHistorical?.average),
-          status: depthComparison.status,
-          percentOfAverage: depthComparison.percentOfAverage,
-          sampleCount: toFiniteOrNull(snowDepthHistorical?.sampleCount) ?? 0,
-          maxOffsetDays: toFiniteOrNull(snowDepthHistorical?.maxOffsetDays),
-        },
-        overall: overallComparison,
-        summary: overallSummary,
-      };
-
+      const detail = await fetchSnotelStationDetail(nearest.station, targetDate, fetchOptions);
       const stationElevationFt = toFiniteOrNull(nearest.station.elevation);
       return {
         source: 'NRCS AWDB / SNOTEL',
@@ -575,11 +620,11 @@ const createSnowpackService = ({
         stateCode: nearest.station.stateCode || null,
         distanceKm: Number(nearest.distanceKm.toFixed(1)),
         elevationFt: stationElevationFt === null ? null : Math.round(stationElevationFt),
-        observedDate,
-        snowDepthIn,
-        sweIn,
-        precipIn,
-        obsTempF,
+        observedDate: detail.observedDate,
+        snowDepthIn: detail.snowDepthIn,
+        sweIn: detail.sweIn,
+        precipIn: detail.precipIn,
+        obsTempF: detail.obsTempF,
         link: nearest.station.stationId
           ? `https://wcc.sc.egov.usda.gov/nwcc/site?sitenum=${encodeURIComponent(String(nearest.station.stationId))}`
           : null,
@@ -587,7 +632,7 @@ const createSnowpackService = ({
           targetDate && selectedDate && selectedDate > targetDate
             ? `Selected date is in the future; showing latest available daily SNOTEL observations through ${targetDate}.`
             : 'Nearest daily SNOTEL observation.',
-        historical,
+        historical: detail.historical,
       };
     })();
 
@@ -780,13 +825,22 @@ const createSnowpackService = ({
     return { ...snowpack, viirs: await settledValue(viirsLookup) };
   };
 
-  // Every snowpack lookup starts from this multi-second station list download;
-  // loading it at startup keeps it off the first report after a restart.
-  const prewarmSnotelStations = (fetchOptions) => getSnotelStations(fetchOptions).then(() => {}, () => {});
+  // Every snowpack lookup starts from the station catalog. Seeding it from the bundled copy lets the first
+  // reports after a restart proceed at once, and prewarming replaces it with the live catalog in the background.
+  const seedSnotelStations = () => {
+    if (SNOTEL_STATION_SEED.length && !snotelStationCacheInstance.has('global')) {
+      snotelStationCacheInstance.set('global', SNOTEL_STATION_SEED);
+    }
+  };
+  const prewarmSnotelStations = (fetchOptions) => fetchSnotelStationCatalog(fetchOptions).then(
+    (stations) => { snotelStationCacheInstance.set('global', stations); },
+    () => {},
+  );
 
   return {
     createUnavailableSnowpackData,
     fetchSnowpackData,
+    seedSnotelStations,
     prewarmSnotelStations,
     sampleCdecStationData,
   };

@@ -240,6 +240,29 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.body.evaluation.pleasantness.score).toBe(res.body.pleasantness.score);
   }, 20000);
 
+  test('GET /api/safety says where the time went in a Server-Timing header', async () => {
+    const res = await request(app)
+      .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00`);
+
+    expect(res.status).toBe(200);
+    const timing = Object.fromEntries(res.headers['server-timing'].split(', ').map((entry) => {
+      const [name, duration] = entry.split(';dur=');
+      return [name, Number(duration)];
+    }));
+    expect(Object.keys(timing)).toEqual(expect.arrayContaining([
+      'weather', 'avalanche', 'supplemental', 'alerts', 'airQuality', 'rainfall',
+      'snowpack', 'atmosphere', 'localConditions', 'evaluation', 'total',
+    ]));
+    for (const duration of Object.values(timing)) {
+      expect(duration).toBeGreaterThanOrEqual(0);
+    }
+    // Everything is measured from the start of the request, so no source can outlast it.
+    for (const [name, duration] of Object.entries(timing)) {
+      expect(duration).toBeLessThanOrEqual(timing.total);
+      expect(name).toMatch(/^[A-Za-z]+$/);
+    }
+  }, 20000);
+
   test('GET /api/safety evaluates the plan against the requested limits and units', async () => {
     const res = await request(app)
       .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00&max_gust_mph=12&wind_unit=kph`);
@@ -298,5 +321,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.body.pleasantness).toBeTruthy();
     expect(typeof res.body.pleasantness.score).toBe('number');
     expect(res.body.evaluation.decision.level).toMatch(/^(GO|CAUTION|NO-GO)$/);
+    // The degraded response says where the time went as well.
+    expect(res.headers['server-timing']).toMatch(/(^|, )total;dur=\d/);
   }, 20000);
 });
