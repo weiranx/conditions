@@ -219,9 +219,11 @@ const ALERT_SEVERITY_RANK = { Unknown: 0, Minor: 1, Moderate: 2, Severe: 3, Extr
 
 /**
  * Brings an alerts block back in step after alerts were dropped from its list: the counts fall by
- * the alerts removed, and the highest severity follows the alerts left. Only removing every listed
- * alert makes the status "none". A list that was already empty says something else, from an outage
- * ("unavailable") or from no alert being active at the start, and keeps its status and counts.
+ * the alerts removed, and the highest severity follows the alerts left. The status only becomes
+ * "none" (or "none_for_selected_start") when removing the listed alerts leaves nothing active, which
+ * the adjusted count establishes: the fetch lists at most six, so more can remain unlisted. A list
+ * that was already empty says something else, from an outage ("unavailable") or from no alert being
+ * active at the start, and keeps its status and counts.
  */
 const settleAlerts = (alerts, listedBefore) => {
   const kept = alerts.alerts.length;
@@ -234,8 +236,15 @@ const settleAlerts = (alerts, listedBefore) => {
       (ALERT_SEVERITY_RANK[alert?.severity] || 0) > (ALERT_SEVERITY_RANK[highest] || 0) ? alert.severity : highest
     ), 'Unknown');
   } else if (removed > 0) {
-    alerts.status = 'none';
-    delete alerts.highestSeverity;
+    if (alerts.activeCount > 0) {
+      // The fetch lists only the six most severe alerts. Any beyond them are still active but were
+      // never in the list, so the block keeps reporting them, with a severity nobody knows.
+      alerts.highestSeverity = 'Unknown';
+    } else {
+      // Nothing active is left; alerts elsewhere in the area, outside the selected start, may remain.
+      alerts.status = alerts.totalActiveCount > 0 ? 'none_for_selected_start' : 'none';
+      delete alerts.highestSeverity;
+    }
   }
 };
 
