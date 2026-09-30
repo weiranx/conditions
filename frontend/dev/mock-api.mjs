@@ -335,7 +335,15 @@ export function createMockApi({ databasePath } = {}) {
       if (!db.signedIn) return fail(401, "Sign in to the demo account.");
       if (method === "GET" && action.startsWith("request/")) return ok({ userId: db.user.id, clientName: "Claude", callbackUri });
       if (method === "GET" && action === "connections") return ok({ connections: db.mcpConnections });
-      if (method === "POST" && action === "approve") return ok({ redirect: `${callbackUri}?code=mock` });
+      if (method === "POST" && action === "approve") {
+        // As the real endpoint does: back to the reviewed address with the caller's state, carrying a
+        // code for an explicit allow and error=access_denied for anything else.
+        const target = new URL(callbackUri);
+        target.searchParams.set("state", "mock-state");
+        if (body.allow === true) target.searchParams.set("code", "mock");
+        else target.searchParams.set("error", "access_denied");
+        return ok({ redirect: target.href });
+      }
       if (method === "POST" && action === "disconnect") {
         db.mcpConnections = db.mcpConnections.filter((connection) => connection.id !== body.id);
         persist();

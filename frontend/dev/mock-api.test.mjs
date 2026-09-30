@@ -207,8 +207,16 @@ test("the connect-an-app page can review a request, list connections and disconn
   assert.equal(review.status, 200);
   assert.equal(review.payload.clientName, "Claude");
   assert.equal(review.payload.userId, (await api.handle("/api/auth/session")).payload.user.id);
-  const approved = await api.handle("/api/auth/mcp/approve", "POST", { allow: true });
-  assert.equal(new URL(approved.payload.redirect).origin, new URL(review.payload.callbackUri).origin, "returns only to the reviewed address");
+  const approved = new URL((await api.handle("/api/auth/mcp/approve", "POST", { allow: true })).payload.redirect);
+  assert.equal(approved.origin, new URL(review.payload.callbackUri).origin, "returns only to the reviewed address");
+  assert.equal(approved.searchParams.get("code"), "mock");
+  assert.equal(approved.searchParams.get("error"), null);
+  // Cancel goes back to the same address as a denial, never as a granted code.
+  const denied = new URL((await api.handle("/api/auth/mcp/approve", "POST", { allow: false })).payload.redirect);
+  assert.equal(denied.origin, approved.origin);
+  assert.equal(denied.searchParams.get("error"), "access_denied");
+  assert.equal(denied.searchParams.get("code"), null);
+  assert.equal(denied.searchParams.get("state"), approved.searchParams.get("state"), "the caller's state comes back either way");
   const [connection] = (await api.handle("/api/auth/mcp/connections")).payload.connections;
   assert.equal(connection.clientName, "Claude");
   await api.handle("/api/auth/mcp/disconnect", "POST", { id: connection.id });
