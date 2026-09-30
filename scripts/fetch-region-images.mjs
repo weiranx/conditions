@@ -1,93 +1,121 @@
 #!/usr/bin/env node
-// Builds backend/regions.json: national forests and parks with a simplified boundary
-// (OpenStreetMap via Nominatim) and a lead image (Wikipedia/Commons). A place with no
-// photo of its own falls back to the region that contains it.
-// Run manually: node scripts/fetch-region-images.mjs
-import { writeFile } from 'node:fs/promises';
+// Builds backend/regions.json: US national forests, parks, monuments, wilderness areas and
+// similar federal lands, each with a simplified boundary and a photo. A place with no photo
+// of its own falls back to the smallest of these that contains it.
+//
+//   1. Discover candidates from OpenStreetMap (Overpass) that carry a Wikidata tag.
+//   2. Resolve each one's lead image from Wikipedia/Wikidata and its license from Commons.
+//      Regions with no usable photo (none, or a map or logo) are dropped: they add nothing.
+//   3. Fetch boundaries (Nominatim) only for the ones that remain, and simplify them.
+//
+// Run manually: node scripts/fetch-region-images.mjs   (takes several minutes)
+import { readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const OUT_PATH = new URL('../backend/regions.json', import.meta.url);
 const HEADERS = { 'User-Agent': 'backcountry-conditions/1.0 (weiranxiong@gmail.com)' };
 const THUMB_WIDTH = 640;
-const SIMPLIFY_DEGREES = 0.004;
+const SIMPLIFY_DEGREES = 0.005;
 const MIN_RING_AREA = 0.0004; // square degrees; drops slivers and tiny exclaves
-
-// name: what the report calls it; search: Nominatim query; wikipedia: article whose lead image is used.
-const REGIONS = [
-  { name: 'Inyo National Forest', search: 'Inyo National Forest', wikipedia: 'Inyo National Forest' },
-  { name: 'Sierra National Forest', search: 'Sierra National Forest', wikipedia: 'Sierra National Forest' },
-  { name: 'Sequoia National Forest', search: 'Sequoia National Forest', wikipedia: 'Sequoia National Forest' },
-  { name: 'Eldorado National Forest', search: 'Eldorado National Forest', wikipedia: 'Eldorado National Forest' },
-  { name: 'Mount Rainier National Park', search: 'Mount Rainier National Park', wikipedia: 'Mount Rainier National Park' },
-  { name: 'North Cascades National Park', search: 'North Cascades National Park', wikipedia: 'North Cascades National Park' },
-  { name: 'Olympic National Park', search: 'Olympic National Park', wikipedia: 'Olympic National Park' },
-  { name: 'Yosemite National Park', search: 'Yosemite National Park', wikipedia: 'Yosemite National Park' },
-  { name: 'Sequoia National Park', search: 'Sequoia National Park', wikipedia: 'Sequoia National Park' },
-  { name: 'Kings Canyon National Park', search: 'Kings Canyon National Park', wikipedia: 'Kings Canyon National Park' },
-  { name: 'Grand Teton National Park', search: 'Grand Teton National Park', wikipedia: 'Grand Teton National Park' },
-  { name: 'Rocky Mountain National Park', search: 'Rocky Mountain National Park', wikipedia: 'Rocky Mountain National Park' },
-  { name: 'Glacier National Park', search: 'Glacier National Park Montana', wikipedia: 'Glacier National Park (U.S.)' },
-  { name: 'Mount Hood National Forest', search: 'Mount Hood National Forest', wikipedia: 'Mount Hood National Forest' },
-  { name: 'White Mountain National Forest', search: 'White Mountain National Forest', wikipedia: 'White Mountain National Forest' },
-  { name: 'Uinta-Wasatch-Cache National Forest', search: 'Uinta-Wasatch-Cache National Forest', wikipedia: 'Uinta-Wasatch-Cache National Forest' },
-  { name: 'San Bernardino National Forest', search: 'San Bernardino National Forest', wikipedia: 'San Bernardino National Forest' },
-  { name: 'John Muir Wilderness', search: 'John Muir Wilderness', wikipedia: 'John Muir Wilderness' },
-  { name: 'Ansel Adams Wilderness', search: 'Ansel Adams Wilderness', wikipedia: 'Ansel Adams Wilderness' },
-  { name: 'Hoover Wilderness', search: 'Hoover Wilderness', wikipedia: 'Hoover Wilderness' },
-  { name: 'Emigrant Wilderness', search: 'Emigrant Wilderness', wikipedia: 'Emigrant Wilderness' },
-  { name: 'Desolation Wilderness', search: 'Desolation Wilderness', wikipedia: 'Desolation Wilderness' },
-  { name: 'Lassen Volcanic National Park', search: 'Lassen Volcanic National Park', wikipedia: 'Lassen Volcanic National Park' },
-  { name: 'Stanislaus National Forest', search: 'Stanislaus National Forest', wikipedia: 'Stanislaus National Forest' },
-  { name: 'Tahoe National Forest', search: 'Tahoe National Forest', wikipedia: 'Tahoe National Forest' },
-  { name: 'Humboldt-Toiyabe National Forest', search: 'Humboldt-Toiyabe National Forest', wikipedia: 'Humboldt-Toiyabe National Forest' },
-  { name: 'Shasta-Trinity National Forest', search: 'Shasta-Trinity National Forest', wikipedia: 'Shasta-Trinity National Forest' },
-  { name: 'Mount Baker-Snoqualmie National Forest', search: 'Mount Baker-Snoqualmie National Forest', wikipedia: 'Mount Baker-Snoqualmie National Forest' },
-  { name: 'Okanogan-Wenatchee National Forest', search: 'Okanogan-Wenatchee National Forest', wikipedia: 'Okanogan-Wenatchee National Forest' },
-  { name: 'Gifford Pinchot National Forest', search: 'Gifford Pinchot National Forest', wikipedia: 'Gifford Pinchot National Forest' },
-  { name: 'Deschutes National Forest', search: 'Deschutes National Forest', wikipedia: 'Deschutes National Forest' },
-  { name: 'Willamette National Forest', search: 'Willamette National Forest', wikipedia: 'Willamette National Forest' },
-  { name: 'Crater Lake National Park', search: 'Crater Lake National Park', wikipedia: 'Crater Lake National Park' },
-  { name: 'Denali National Park', search: 'Denali National Park and Preserve', wikipedia: 'Denali National Park and Preserve' },
-  { name: 'Bridger-Teton National Forest', search: 'Bridger-Teton National Forest', wikipedia: 'Bridger-Teton National Forest' },
-  { name: 'Shoshone National Forest', search: 'Shoshone National Forest', wikipedia: 'Shoshone National Forest' },
-  { name: 'Sawtooth National Forest', search: 'Sawtooth National Forest', wikipedia: 'Sawtooth National Forest' },
-  { name: 'White River National Forest', search: 'White River National Forest', wikipedia: 'White River National Forest' },
-  { name: 'San Juan National Forest', search: 'San Juan National Forest', wikipedia: 'San Juan National Forest' },
-  { name: 'Uncompahgre National Forest', search: 'Uncompahgre National Forest', wikipedia: 'Uncompahgre National Forest' },
-  { name: 'Arapaho and Roosevelt National Forests', search: 'Arapaho National Forest', wikipedia: 'Arapaho National Forest' },
-  { name: 'Manti-La Sal National Forest', search: 'Manti-La Sal National Forest', wikipedia: 'Manti-La Sal National Forest' },
-  { name: 'Coconino National Forest', search: 'Coconino National Forest', wikipedia: 'Coconino National Forest' },
-  { name: 'Great Smoky Mountains National Park', search: 'Great Smoky Mountains National Park', wikipedia: 'Great Smoky Mountains National Park' },
-  { name: 'Acadia National Park', search: 'Acadia National Park', wikipedia: 'Acadia National Park' },
-];
+const NAME = 'National Forest|National Park|Wilderness|National Monument|National Recreation Area|National Preserve|National Grassland|National Scenic Area|National Volcanic';
+const OPERATOR = /forest service|park service|bureau of land management|^blm$|fish and wildlife/i;
+// The US in slices so each Overpass query stays small; Alaska last.
+const CHUNKS = [[31, -125, 42, -114], [42, -125, 49.5, -114], [31, -114, 42, -104], [42, -114, 49.5, -104], [24, -104, 37, -93], [37, -104, 49.5, -93], [24, -93, 37, -66], [37, -93, 49.5, -66], [51, -170, 72, -129]];
+// Ocean-sized polygons are useless for a mountain app and too big for Nominatim to return.
+const EXCLUDED_NAME = /marine|seamount|ocean/i;
+const BAD_IMAGE = /map|logo|seal|locator|flag|diagram|coat[_ ]of[_ ]arms|\.svg$/i;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-// Wikimedia rate-limits bursts: back off on 429.
-const json = async (url) => {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await sleep(300 * (attempt + 1) ** 2);
-    const response = await fetch(url, { headers: HEADERS });
-    if (response.status === 429) continue;
-    if (!response.ok) throw new Error(`${response.status} ${url}`);
-    return response.json();
-  }
-  throw new Error(`429 ${url}`);
-};
+const chunk = (items, size) => Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, i * size + size));
 const stripHtml = (value = '') => value.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
+// Wikimedia and Overpass rate-limit bursts: pace requests and back off on 429/504.
+const request = async (url, options = {}, { attempts = 6, timeoutMs = 90_000 } = {}) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await sleep(400 * (attempt + 1) ** 2);
+    let response;
+    try {
+      response = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(timeoutMs), ...options });
+    } catch {
+      continue; // timed out or dropped: back off and retry
+    }
+    if (response.status === 429 || response.status === 504 || response.status === 503) continue;
+    if (!response.ok) throw new Error(`${response.status} ${url.slice(0, 120)}`);
+    return response.json();
+  }
+  throw new Error(`gave up: ${url.slice(0, 120)}`);
+};
+const wikimedia = (host, params) => request(`https://${host}/w/api.php?${new URLSearchParams({ format: 'json', formatversion: '2', ...params })}`);
+
+// ---- 1. discovery -------------------------------------------------------------------------
+const discover = async () => {
+  const found = new Map();
+  for (const [south, west, north, east] of CHUNKS) {
+    const query = `[out:json][timeout:120];relation["boundary"~"^(protected_area|national_park)$"]["name"~"${NAME}"](${south},${west},${north},${east});out tags;`;
+    const data = await request('https://overpass-api.de/api/interpreter', { method: 'POST', body: new URLSearchParams({ data: query }) });
+    for (const element of data.elements) {
+      const tags = element.tags;
+      if (tags.wikidata && OPERATOR.test(tags.operator ?? '') && !EXCLUDED_NAME.test(tags.name)) found.set(tags.wikidata, { osmId: element.id, name: tags.name, wikidata: tags.wikidata });
+    }
+    console.log(`discovered ${found.size} after chunk ${south},${west}`);
+  }
+  return [...found.values()];
+};
+
+// ---- 2. images ----------------------------------------------------------------------------
+const resolveImages = async (regions) => {
+  const fileById = new Map();
+  for (const ids of chunk(regions.map((r) => r.wikidata), 50)) {
+    const entities = (await wikimedia('www.wikidata.org', { action: 'wbgetentities', ids: ids.join('|'), props: 'sitelinks|claims', sitefilter: 'enwiki' })).entities ?? {};
+    const titles = new Map();
+    for (const id of ids) {
+      const title = entities[id]?.sitelinks?.enwiki?.title;
+      if (title) titles.set(title, id);
+      const p18 = entities[id]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+      if (p18) fileById.set(id, p18);
+    }
+    // The article's lead image is the curated one; the Wikidata image is the fallback.
+    if (titles.size) {
+      const result = (await wikimedia('en.wikipedia.org', { action: 'query', titles: [...titles.keys()].join('|'), redirects: '1', prop: 'pageimages', piprop: 'name' })).query;
+      const redirected = new Map((result.redirects ?? []).map((r) => [r.to, r.from]));
+      for (const page of result.pages ?? []) {
+        const id = titles.get(page.title) ?? titles.get(redirected.get(page.title));
+        if (id && page.pageimage) fileById.set(id, page.pageimage);
+      }
+    }
+    console.log(`image files for ${fileById.size} regions after ${Math.min(regions.length, ids.length + 0)} lookups`);
+  }
+  const usable = regions.filter((r) => fileById.has(r.wikidata) && !BAD_IMAGE.test(fileById.get(r.wikidata)));
+  const infoByFile = new Map();
+  for (const files of chunk([...new Set(usable.map((r) => fileById.get(r.wikidata).replace(/_/g, ' ')))], 40)) {
+    const pages = (await wikimedia('commons.wikimedia.org', { action: 'query', titles: files.map((f) => `File:${f}`).join('|'), prop: 'imageinfo', iiprop: 'extmetadata|url', iiurlwidth: String(THUMB_WIDTH) })).query.pages ?? [];
+    for (const page of pages) {
+      const info = page.imageinfo?.[0];
+      if (info?.thumburl) infoByFile.set(page.title.replace(/^File:/, ''), info);
+    }
+  }
+  return usable.flatMap((region) => {
+    const info = infoByFile.get(fileById.get(region.wikidata).replace(/_/g, ' '));
+    if (!info) return [];
+    const meta = info.extmetadata ?? {};
+    return [{ ...region, image: { url: info.thumburl, width: info.thumbwidth, height: info.thumbheight, author: stripHtml(meta.Artist?.value) || 'Unknown', license: meta.LicenseShortName?.value ?? 'Unknown', sourceUrl: info.descriptionurl } }];
+  });
+};
+
+// ---- 3. boundaries ------------------------------------------------------------------------
 const ringArea = (ring) => {
   let sum = 0;
   for (let i = 0; i < ring.length - 1; i += 1) sum += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
   return Math.abs(sum) / 2;
 };
-
 const distanceToSegment = (p, a, b) => {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const t = dx || dy ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy))) : 0;
   return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
 };
-
-// Douglas-Peucker: iterative to stay safe on long rings.
+// Douglas-Peucker, iterative so long rings are safe.
 const simplify = (points, tolerance) => {
   const keep = new Array(points.length).fill(false);
   keep[0] = keep[points.length - 1] = true;
@@ -104,46 +132,54 @@ const simplify = (points, tolerance) => {
   }
   return points.filter((_, i) => keep[i]);
 };
-
 const outerRings = (geometry) => {
-  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
+  const polygons = geometry?.type === 'Polygon' ? [geometry.coordinates] : geometry?.type === 'MultiPolygon' ? geometry.coordinates : [];
   return polygons
     .map((polygon) => polygon[0])
     .filter((ring) => ringArea(ring) >= MIN_RING_AREA)
-    .map((ring) => simplify(ring, SIMPLIFY_DEGREES).map(([lon, lat]) => [Number(lon.toFixed(4)), Number(lat.toFixed(4))]))
+    .map((ring) => simplify(ring, SIMPLIFY_DEGREES).map(([lon, lat]) => [Number(lon.toFixed(3)), Number(lat.toFixed(3))]))
     .filter((ring) => ring.length >= 4);
 };
 
-const imageFor = async (title) => {
-  const wiki = (params) => json(`https://en.wikipedia.org/w/api.php?${new URLSearchParams({ format: 'json', formatversion: '2', ...params })}`);
-  const commons = (params) => json(`https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ format: 'json', formatversion: '2', ...params })}`);
-  const page = (await wiki({ action: 'query', titles: title, redirects: '1', prop: 'pageimages', piprop: 'thumbnail|name', pithumbsize: String(THUMB_WIDTH) })).query.pages[0];
-  if (!page?.thumbnail || !page.pageimage || /map|logo|seal|locator|flag|diagram/i.test(page.pageimage) || /\.svg$/i.test(page.pageimage)) return null;
-  const file = (await commons({ action: 'query', titles: `File:${page.pageimage}`, prop: 'imageinfo', iiprop: 'extmetadata|url' })).query.pages[0]?.imageinfo?.[0];
-  const meta = file?.extmetadata ?? {};
-  return {
-    url: page.thumbnail.source,
-    width: page.thumbnail.width,
-    height: page.thumbnail.height,
-    author: stripHtml(meta.Artist?.value) || 'Unknown',
-    license: meta.LicenseShortName?.value ?? 'Unknown',
-    sourceUrl: file?.descriptionurl ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
-  };
+const lookupBoundaries = async (batch) => {
+  try {
+    return await request(`https://nominatim.openstreetmap.org/lookup?${new URLSearchParams({ osm_ids: batch.map((r) => `R${r.osmId}`).join(','), format: 'json', polygon_geojson: '1', polygon_threshold: '0.003' })}`, {}, { attempts: 2, timeoutMs: 40_000 });
+  } catch (error) {
+    // A big batch can time out: retry its halves, and give up on a single region rather than the run.
+    if (batch.length === 1) { console.log(`skipped ${batch[0].name}: ${error.message.slice(0, 60)}`); return []; }
+    const half = Math.ceil(batch.length / 2);
+    return [...(await lookupBoundaries(batch.slice(0, half))), ...(await lookupBoundaries(batch.slice(half)))];
+  }
 };
 
-const regions = [];
-for (const region of REGIONS) {
-  try {
-    const [hit] = await json(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ format: 'json', q: region.search, polygon_geojson: '1', polygon_threshold: '0.002', limit: '1', countrycodes: 'us' })}`);
-    await sleep(1100);
-    const rings = hit ? outerRings(hit.geojson) : [];
-    const image = await imageFor(region.wikipedia);
-    if (!rings.length || !image) { console.log('skipped:', region.name, { rings: rings.length, image: Boolean(image) }); continue; }
-    regions.push({ name: region.name, rings, image });
-    console.log('ok:', region.name, `${rings.length} rings, ${rings.reduce((n, r) => n + r.length, 0)} points`);
-  } catch (error) {
-    console.log('failed:', region.name, error.message);
+const withBoundaries = async (regions) => {
+  const byOsmId = new Map(regions.map((r) => [r.osmId, r]));
+  const output = [];
+  for (const batch of chunk(regions, 40)) {
+    for (const place of await lookupBoundaries(batch)) {
+      const region = byOsmId.get(place.osm_id);
+      const rings = region ? outerRings(place.geojson) : [];
+      if (rings.length) output.push({ name: region.name, rings, image: region.image });
+    }
+    await sleep(1200);
+    console.log(`boundaries for ${output.length} regions`);
   }
+  return output;
+};
+
+// Steps 1 and 2 take the longest; a rerun within a day (after a failed boundary fetch) reuses them.
+const CACHE_PATH = join(tmpdir(), 'conditions-regions-images.json');
+const cached = await readFile(CACHE_PATH, 'utf8').then(JSON.parse).catch(() => null);
+let withImages;
+if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) {
+  withImages = cached.regions.filter((region) => !EXCLUDED_NAME.test(region.name));
+  console.log(`reusing ${withImages.length} regions with photos from ${CACHE_PATH}`);
+} else {
+  const candidates = await discover();
+  withImages = await resolveImages(candidates);
+  await writeFile(CACHE_PATH, JSON.stringify({ at: Date.now(), regions: withImages }));
+  console.log(`${withImages.length} of ${candidates.length} candidates have a usable photo`);
 }
+const regions = await withBoundaries(withImages);
 await writeFile(OUT_PATH, `${JSON.stringify(regions)}\n`);
-console.log(`${regions.length}/${REGIONS.length} regions written`);
+console.log(`${regions.length} regions written`);
