@@ -20,6 +20,7 @@ else delete globalThis.navigator;
 import { followThemePreference } from '../src/app/theme';
 import { getDefaultUserPreferences } from '../src/app/preferences';
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from '../src/field/page-scroll';
+import { closeDetailsOnOutsidePress, shareOrCopyLink } from '../src/field/touch';
 
 const preferences = getDefaultUserPreferences();
 
@@ -200,4 +201,117 @@ test('another page, or a new brief, opens at the top instead of the old scroll o
 
   scrollPageToTop();
   assert.deepEqual(env.scrolls.at(-1), { top: 0, behavior: 'smooth' });
+});
+
+// A stand-in for the browser's navigator, put back when the test ends.
+function navigatorStub(t) {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'navigator', previous);
+    else delete globalThis.navigator;
+  });
+  return (value) => Object.defineProperty(globalThis, 'navigator', { configurable: true, value });
+}
+const sharedLink = { url: 'https://conditions.example/r/abc', title: 'Mount Rainier conditions · Fri, Oct 2' };
+const clipboardTo = (copied) => ({ writeText: async (text) => { copied.push(text); } });
+
+test('a phone hands the link to the share sheet instead of copying it', async (t) => {
+  setup(t);
+  const shared = [];
+  const copied = [];
+  navigatorStub(t)({ share: async (data) => { shared.push(data); }, clipboard: clipboardTo(copied) });
+  assert.equal(await shareOrCopyLink(sharedLink), 'shared');
+  assert.deepEqual(shared, [sharedLink]);
+  assert.deepEqual(copied, [], 'a shared link is not also copied');
+});
+
+test('closing the share sheet is a choice: nothing is copied and nothing is reported as wrong', async (t) => {
+  setup(t);
+  const copied = [];
+  navigatorStub(t)({
+    share: async () => { throw new DOMException('The share sheet was closed', 'AbortError'); },
+    clipboard: clipboardTo(copied),
+  });
+  assert.equal(await shareOrCopyLink(sharedLink), 'dismissed');
+  assert.deepEqual(copied, []);
+});
+
+test('a share the browser refuses, such as one whose tap has lapsed, is copied instead', async (t) => {
+  setup(t);
+  const copied = [];
+  navigatorStub(t)({
+    share: async () => { throw new DOMException('Needs a user gesture', 'NotAllowedError'); },
+    clipboard: clipboardTo(copied),
+  });
+  assert.equal(await shareOrCopyLink(sharedLink), 'copied');
+  assert.deepEqual(copied, [sharedLink.url]);
+});
+
+test('a link the device cannot share is copied, and a desktop copies without opening a share dialog', async (t) => {
+  setup(t);
+  const copied = [];
+  const shared = [];
+  const use = navigatorStub(t);
+  use({ share: async (data) => { shared.push(data); }, canShare: () => false, clipboard: clipboardTo(copied) });
+  assert.equal(await shareOrCopyLink(sharedLink), 'copied');
+  use({ clipboard: clipboardTo(copied) });
+  assert.equal(await shareOrCopyLink(sharedLink), 'copied', 'a browser with no share support');
+  assert.deepEqual(shared, []);
+  assert.equal(copied.length, 2);
+});
+
+test('a mouse-driven browser copies the link even when it could share one', async (t) => {
+  setup(t, { phone: false });
+  const shared = [];
+  const copied = [];
+  navigatorStub(t)({ share: async (data) => { shared.push(data); }, clipboard: clipboardTo(copied) });
+  assert.equal(await shareOrCopyLink(sharedLink), 'copied');
+  assert.deepEqual(shared, []);
+  assert.deepEqual(copied, [sharedLink.url]);
+});
+
+test('a link that can be neither shared nor copied is reported, so the page can show it', async (t) => {
+  setup(t);
+  navigatorStub(t)({ clipboard: { writeText: async () => { throw new Error('denied'); } } });
+  assert.equal(await shareOrCopyLink(sharedLink), 'failed');
+});
+
+test('a press outside an open menu closes it, a press inside does not, and stopping ends it', (t) => {
+  setup(t, {
+    html: '<div id="root"></div><details class="menu" open><summary>More</summary><button>Save</button></details>'
+      + '<details class="other" open><summary>Other</summary></details><p id="outside">Elsewhere</p>',
+  });
+  const stop = closeDetailsOnOutsidePress('.menu');
+  const press = (target) => target.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true }));
+  const menu = document.querySelector('.menu');
+  press(menu.querySelector('button'));
+  assert.equal(menu.open, true, 'a press inside keeps it open');
+  press(document.getElementById('outside'));
+  assert.equal(menu.open, false);
+  assert.equal(document.querySelector('.other').open, true, 'only the named menu closes');
+  menu.open = true;
+  stop();
+  press(document.getElementById('outside'));
+  assert.equal(menu.open, true, 'once stopped, presses are ignored');
+});
+
+test('the comparison switch keeps its full names for screen readers while a phone shows the nouns', async (t) => {
+  const env = setup(t);
+  const w = planWorkspace({ hasObjective: true, objectiveName: 'Test mountain', tripForecastRows: [], tripRanking: null, tripHighlights: [],
+    tripChatContext: null, tripStartDate: '2026-09-06', tripStartTime: '07:00', tripDurationDays: 3,
+    featureFlags: { gpxImport: false, routeAnalysis: true } });
+  await env.render(<Compare workspace={w} />);
+  const buttons = [...document.querySelectorAll('.shortlist-mode button')];
+  assert.deepEqual(buttons.map((button) => button.textContent), ['Compare days', 'Compare objectives', 'Compare routes']);
+  assert.ok(buttons.every((button) => button.querySelector('.sky-action-label')?.textContent === 'Compare '),
+    'the verb is the part a phone hides');
+});
+
+test('the place search asks the phone for no autocorrect and a Search key', async (t) => {
+  const env = setup(t);
+  await env.render(<WorkspacePlan workspace={planWorkspace()} />);
+  const input = document.querySelector('input[role="combobox"]');
+  assert.equal(input.getAttribute('autocorrect'), 'off', 'a proper noun or a coordinate is not a typo');
+  assert.equal(input.getAttribute('spellcheck'), 'false');
+  assert.equal(input.getAttribute('enterkeyhint'), 'search');
 });

@@ -101,8 +101,26 @@ function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
   });
 }
 
+/**
+ * No response came back at all: the phone has no signal, or the server is out of reach. Browsers report
+ * this as a bare "Failed to fetch" or "Load failed"; a person at a trailhead needs to know what to do.
+ */
+export class NetworkUnavailableError extends Error {
+  constructor(offline: boolean) {
+    super(offline
+      ? 'You appear to be offline. Conditions are checked live, so this needs a connection.'
+      : "Can't reach the server. Check your connection and try again.");
+    this.name = 'NetworkUnavailableError';
+  }
+}
+
+/** The browser says there is no network at all. Only a "false" is reliable; "true" can still mean no route out. */
+const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
 export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFetchResult> {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // Retrying cannot help with no network, and would keep the person waiting on a loading state.
+  if (!import.meta.env.DEV && isOffline()) throw new NetworkUnavailableError(true);
   const attemptUrls = [buildApiUrl(normalizedPath), ...buildDevFallbackApiUrls(normalizedPath)];
   let lastError: unknown = null;
   let sawEmptyProxy500 = false;
@@ -161,6 +179,8 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
     throw new Error('Unable to reach backend API. Start it with: cd backend && npm run dev');
   }
 
+  // fetch rejects with a TypeError when no response arrived.
+  if (lastError instanceof TypeError) throw new NetworkUnavailableError(isOffline());
   if (lastError instanceof Error) {
     throw lastError;
   }
@@ -176,11 +196,17 @@ export type StreamEvent = { type?: string; [key: string]: unknown };
  * is returned as is.
  */
 export async function fetchApiStream(path: string, init: RequestInit, onEvent: (event: StreamEvent) => void): Promise<{ ok: boolean; status: number; payload: unknown }> {
-  const response = await fetch(buildApiUrl(path), {
-    credentials: 'include',
-    ...init,
-    headers: { ...(init.headers as Record<string, string> | undefined), Accept: 'application/x-ndjson, application/json' },
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildApiUrl(path), {
+      credentials: 'include',
+      ...init,
+      headers: { ...(init.headers as Record<string, string> | undefined), Accept: 'application/x-ndjson, application/json' },
+    });
+  } catch (error) {
+    if (error instanceof TypeError) throw new NetworkUnavailableError(isOffline());
+    throw error;
+  }
   if (!(response.headers.get('content-type') || '').includes('application/x-ndjson') || !response.body) {
     return { ok: response.ok, status: response.status, payload: await parseJsonFromResponse(response) };
   }

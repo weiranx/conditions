@@ -25,7 +25,6 @@ import {
   buildSavedReportShareUrl,
   sendReportEmail,
 } from "../lib/saved-reports";
-import { copyTextToClipboard } from "../app/clipboard";
 import { markLandingSeen } from "../app/landing-gate";
 import { saveObjectiveWatch } from "../lib/objective-watches";
 import { saveTrip, watchTripDays } from "../lib/saved-trips";
@@ -42,7 +41,7 @@ import { lookupPointPlace } from "../lib/search";
 import type { ItineraryPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
-import { hasCoarsePointer } from "./touch";
+import { hasCoarsePointer, shareOrCopyLink } from "./touch";
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from "./page-scroll";
 import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
@@ -177,11 +176,19 @@ export default function FieldApp() {
             window.location.hash.slice(1),
           )
         : window.location.href;
-      const copied = await copyTextToClipboard(link);
+      const day = new Date(`${report.plan.forecastDate}T12:00:00`);
+      const title = [
+        `${report.plan.objectiveName?.trim() || "Backcountry"} conditions`,
+        Number.isNaN(day.getTime()) ? "" : day.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
+      ].filter(Boolean).join(" · ");
+      const outcome = await shareOrCopyLink({ url: link, title });
+      // Closing the share sheet without choosing anyone asks for nothing more.
+      if (outcome === "dismissed") return;
+      const sent = outcome === "shared" ? "shared" : "copied";
       const described = token
-        ? "Report link copied."
-        : `Plan link copied. ${saveFailed ? "The report could not be saved, so this" : "This"} link makes a new report without the route analysis or AI brief${saveFailed ? "." : "; sign in to share the report itself."}`;
-      setFeedback(copied ? described : `Share link: ${link}`);
+        ? `Report link ${sent}.`
+        : `Plan link ${sent}. ${saveFailed ? "The report could not be saved, so this" : "This"} link makes a new report without the route analysis or AI brief${saveFailed ? "." : "; sign in to share the report itself."}`;
+      setFeedback(outcome === "failed" ? `Share link: ${link}` : described);
       return;
     }
     if (!account.user) {
