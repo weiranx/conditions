@@ -9,6 +9,7 @@ import { searchRequestPath, type SearchNear, type Suggestion } from "../lib/sear
 import type { ElevationUnit } from "../app/types";
 import { SuggestionLabel } from "./SuggestionLabel";
 import {
+  MAX_BAIL_POINTS,
   MAX_DAY_CHECKPOINTS,
   campPoint,
   isCoordinateLabel,
@@ -24,7 +25,21 @@ import { dateLabel } from "./data";
 import { PlanDateChips } from "./PlanDateChips";
 import "./itinerary.css";
 
-const MAX_BAIL_POINTS = 4;
+
+const PHONE_QUERY = "(max-width: 650px)";
+
+/** True while the map sits beside the plan form, false on a phone, where it opens over the page (as in FieldApp). */
+function useMapBesideForm() {
+  const [beside, setBeside] = useState(() => typeof window === "undefined" || !window.matchMedia?.(PHONE_QUERY).matches);
+  useEffect(() => {
+    const query = window.matchMedia?.(PHONE_QUERY);
+    if (!query) return undefined;
+    const update = () => setBeside(!query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return beside;
+}
 
 /** Multi-day "When": start date, nights, and the usual start and hours for each day. */
 export function ItineraryWhen({ workspace: w }: { workspace: Workspace }) {
@@ -35,7 +50,6 @@ export function ItineraryWhen({ workspace: w }: { workspace: Workspace }) {
   const sameEveryDay = draft.days.every((day) => day.start === firstDay.start && day.travelHours === firstDay.travelHours);
   const setAllDays = (patch: Partial<Pick<ItineraryDraft["days"][number], "start" | "travelHours">>) =>
     it.updateDraft((current) => ({ ...current, days: current.days.map((day) => ({ ...day, ...patch })) }));
-  const setNights = (value: number) => it.updateDraft((current) => setItineraryNights(current, Math.min(value, it.maxNights)));
   return (
     <>
     <PlanDateChips
@@ -46,19 +60,6 @@ export function ItineraryWhen({ workspace: w }: { workspace: Workspace }) {
       onChange={(value) => it.updateDraft((current) => ({ ...current, startDate: value }))}
     />
     <div className="field-input-grid field-plan-schedule sky-trip-when">
-      <div className="field-plan-duration">
-        <span aria-hidden="true">Nights</span>
-        <span className="field-duration-control">
-          <button type="button" className="sky-stepper" aria-label="One night fewer" disabled={nights <= 1} onClick={() => setNights(nights - 1)}>
-            <Minus size={16} aria-hidden="true" />
-          </button>
-          <output aria-label="Nights" aria-live="polite">{nights}</output>
-          <span className="field-duration-unit" aria-hidden="true">{nights === 1 ? "night" : "nights"}</span>
-          <button type="button" className="sky-stepper" aria-label="One night more" disabled={nights >= it.maxNights} onClick={() => setNights(nights + 1)}>
-            <Plus size={16} aria-hidden="true" />
-          </button>
-        </span>
-      </div>
       <label>
         Leave camp
         <input
@@ -86,7 +87,6 @@ export function ItineraryWhen({ workspace: w }: { workspace: Workspace }) {
       <p className="sky-trip-when-note">
         {nights + 1} days, {dateLabel(draft.startDate)} to {dateLabel(draft.days.length ? addDays(draft.startDate, nights) : draft.startDate)}.
         {!sameEveryDay && " Some days have their own start or hours; setting these changes every day."}
-        {nights >= it.maxNights && nights < 6 && " The forecast does not reach further yet."}
       </p>
     </div>
     </>
@@ -129,6 +129,11 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
       days: current.days.map((day, dayIndex) => (dayIndex === index ? { ...day, ...patch } : day)),
     }));
   const stages = it.stages;
+  const nights = draft.camps.length;
+  const setNights = (value: number) => it.updateDraft((current) => setItineraryNights(current, Math.min(value, it.maxNights)));
+  // A map beside the form says where to tap; on a phone the map is its own screen.
+  const mapHint = useMapBesideForm();
+  const active = it.activeTarget;
 
   async function importGpx(upload: File) {
     try {
@@ -174,7 +179,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
   return (
     <section className="sky-trip-camps" aria-labelledby="sky-trip-camps-title">
       <div className="field-form-divider">
-        <h2 className="sky-plan-step" id="sky-trip-camps-title"><span aria-hidden="true">4</span>Camps</h2>
+        <h2 className="sky-plan-step" id="sky-trip-camps-title"><span aria-hidden="true">2</span>Camps</h2>
         {w.featureFlags.gpxImport && (
           <>
             <input
@@ -196,6 +201,11 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
         )}
       </div>
       {gpxError && <p className="field-feedback" role="alert">{gpxError}</p>}
+      {!draft.trailhead ? (
+        <p className="sky-trip-hint">
+          Choose the trailhead first. Then {mapHint ? "tap the map" : "use Choose on map"} for where you will sleep each night, in order, or search for a camp.
+        </p>
+      ) : (<>
       {draft.track && (
         <p className="sky-trip-hint">
           Camps and hours come from your GPX track, split into days of equal effort. Move any camp to where you plan to sleep.
@@ -243,7 +253,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                       value={draft.camps[index].point}
                       onChange={(point) => setCamp(index, point)}
                       onPickOnMap={pickOnMap ? () => pickOnMap({ kind: "camp", index }) : undefined}
-                      picking={it.pickTarget?.kind === "camp" && it.pickTarget.index === index}
+                      picking={active?.kind === "camp" && active.index === index}
+                      mapHint={mapHint}
                     />
                   )}
                   {index > 0 && !draft.camps[index].layover && (
@@ -271,7 +282,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                           setChoosingExit(false);
                         }}
                         onPickOnMap={pickOnMap ? () => pickOnMap({ kind: "exit" }) : undefined}
-                        picking={it.pickTarget?.kind === "exit"}
+                        picking={active?.kind === "exit"}
+                        mapHint={mapHint}
                       />
                       <button
                         type="button"
@@ -298,6 +310,17 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
           );
         })}
       </ol>
+      <div className="sky-trip-nights">
+        <button type="button" className="field-text-button" disabled={nights <= 1} onClick={() => setNights(nights - 1)}>
+          <Minus size={14} aria-hidden="true" />
+          Remove last night
+        </button>
+        <button type="button" className="field-text-button" disabled={nights >= it.maxNights} onClick={() => setNights(nights + 1)}>
+          <Plus size={14} aria-hidden="true" />
+          Add a night
+        </button>
+        {nights >= it.maxNights && nights < 6 && <span className="sky-trip-hint">The forecast does not reach further yet.</span>}
+      </div>
       <details className="sky-trip-bail">
         <summary>
           <LogOut size={15} aria-hidden="true" />
@@ -332,10 +355,11 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
               if (point) it.updateDraft((current) => ({ ...current, bailPoints: [...current.bailPoints, point] }));
             }}
             onPickOnMap={pickOnMap ? () => pickOnMap({ kind: "bail" }) : undefined}
-            picking={it.pickTarget?.kind === "bail"}
+            picking={active?.kind === "bail"}
           />
         )}
       </details>
+      </>)}
     </section>
   );
 }
@@ -422,7 +446,7 @@ function DayRow({
             if (point) onChange({ checkpoints: [...day.checkpoints, point] });
           }}
           onPickOnMap={onPickOnMap ? () => onPickOnMap({ kind: "checkpoint", day: index }) : undefined}
-          picking={it.pickTarget?.kind === "checkpoint" && it.pickTarget.day === index}
+          picking={it.activeTarget?.kind === "checkpoint" && it.activeTarget.day === index}
         />
       )}
       {longDay && (
@@ -442,6 +466,7 @@ export function PlaceField({
   onPickOnMap,
   onResolve,
   picking = false,
+  mapHint = false,
   elevationUnit,
   near,
 }: {
@@ -455,6 +480,8 @@ export function PlaceField({
   /** Called with a chosen point that still lacks a place name or elevation. */
   onResolve?: (lat: number, lon: number) => void;
   picking?: boolean;
+  /** The map is beside the form: a place waiting for a tap says so instead of offering a button. */
+  mapHint?: boolean;
 }) {
   const id = useId();
   const [query, setQuery] = useState("");
@@ -519,7 +546,7 @@ export function PlaceField({
     );
   }
   return (
-    <div className="sky-trip-place field-search">
+    <div className={`sky-trip-place field-search${picking && !value ? " is-armed" : ""}`}>
       <label htmlFor={`${id}-input`} className="sky-visually-hidden-label">{label}</label>
       <div className="field-input-icon">
         {searching ? <LoaderCircle size={16} className="field-spin" aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
@@ -558,12 +585,17 @@ export function PlaceField({
         </div>
       )}
       <div className="sky-trip-place-actions">
-        {onPickOnMap && (
+        {onPickOnMap && (mapHint && picking ? (
+          <p className="sky-trip-pick-hint" role="status">
+            <MapPin size={14} aria-hidden="true" />
+            Tap the map to place it
+          </p>
+        ) : (
           <button type="button" className="field-text-button" aria-pressed={picking} onClick={onPickOnMap}>
             <MapPin size={14} aria-hidden="true" />
             {picking ? "Tap the map…" : "Choose on map"}
           </button>
-        )}
+        ))}
         {value && (
           <button type="button" className="field-text-button" onClick={() => setEditing(false)}>
             Keep {value.name || "current"}

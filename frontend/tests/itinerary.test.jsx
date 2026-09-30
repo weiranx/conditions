@@ -9,13 +9,16 @@ import {
   buildItineraryStages,
   campPoint,
   createItineraryDraft,
+  firstEmptyCamp,
   isCoordinateLabel,
   itineraryGaps,
   maxNightsWithinForecast,
+  moveDraftPoint,
   nameDraftPointsAt,
   parseItineraryDraft,
   parseItineraryResults,
   parseSavedTrip,
+  placeDraftPoint,
   pointLabel,
   buildSavedTrip,
   setItineraryNights,
@@ -26,6 +29,7 @@ import {
 import { planSettingsParams } from '../src/app/plan-evaluation';
 import { buildTripOverlay } from '../src/field/itinerary-overlay';
 import { Itinerary } from '../src/field/Itinerary';
+import { ItineraryCamps } from '../src/field/ItineraryPlan';
 import { AiAccessContext } from '../src/contexts/ai-access';
 
 const preferences = getDefaultUserPreferences();
@@ -309,4 +313,71 @@ test('the brief gives a trip at a glance and calls a camp with no name by its nu
   assert.match(html, /Snow Lakes TH → Camp 1/);
   assert.match(html, /Camp 1 →/);
   assert.doesNotMatch(html, /47\.49, -120\.76/);
+});
+
+test('map taps fill the camps in order, and a dragged pin moves just its own point', () => {
+  const empty = createItineraryDraft({ startDate: date(1), start: '07:00', travelHours: 7, nights: 3, trailhead: TRAILHEAD });
+  assert.equal(firstEmptyCamp(empty), 0);
+  const first = placeDraftPoint(empty, { kind: 'camp', index: 0 }, 47.5, -120.8);
+  assert.deepEqual(first.camps[0], { point: { name: '47.5000, -120.8000', lat: 47.5, lon: -120.8, elevationFt: null }, layover: false });
+  assert.equal(firstEmptyCamp(first), 1);
+  // A layover needs no camp of its own.
+  const withLayover = { ...first, camps: first.camps.map((camp, index) => (index === 1 ? { point: null, layover: true } : camp)) };
+  assert.equal(firstEmptyCamp(withLayover), 2);
+  const full = placeDraftPoint(withLayover, { kind: 'camp', index: 2 }, 47.4, -120.9);
+  assert.equal(firstEmptyCamp(full), null);
+
+  const named = { ...full, camps: full.camps.map((camp, index) => (index === 0 ? { ...camp, point: { ...CAMP_1 } } : camp)) };
+  const moved = moveDraftPoint(named, { kind: 'camp', index: 0 }, 47.6, -120.6);
+  assert.deepEqual(moved.camps[0].point, { name: '47.6000, -120.6000', lat: 47.6, lon: -120.6, elevationFt: null });
+  assert.deepEqual(moved.camps[2], named.camps[2]);
+  assert.equal(moveDraftPoint(named, { kind: 'camp', index: 1 }, 1, 1).camps[1], named.camps[1], 'a layover has no pin to move');
+  assert.equal(moveDraftPoint(named, { kind: 'exit' }, 1, 1), named, 'no exit to move when the trip ends at the trailhead');
+
+  const withPass = placeDraftPoint(named, { kind: 'checkpoint', day: 1 }, 47.45, -120.85);
+  assert.equal(withPass.days[1].checkpoints[0].name, 'High point');
+  const passMoved = moveDraftPoint(withPass, { kind: 'checkpoint', day: 1, index: 0 }, 47.46, -120.86);
+  assert.equal(passMoved.days[1].checkpoints[0].name, 'High point', 'a pass keeps its name');
+  assert.equal(passMoved.days[1].checkpoints[0].lat, 47.46);
+});
+
+test('each map pin knows the draft point it stands for, so it can be dragged', () => {
+  const draft = draftFor((base) => ({
+    ...base,
+    camps: [{ point: CAMP_1, layover: false }, { point: null, layover: true }],
+    exit: { name: 'Stuart Lake TH', lat: 47.52, lon: -120.83, elevationFt: 3400 },
+    bailPoints: [{ name: 'Road', lat: 47.5, lon: -120.7, elevationFt: null }],
+    days: base.days.map((day, index) => (index === 1 ? { ...day, checkpoints: [CAMP_2] } : day)),
+  }));
+  const refs = Object.fromEntries(buildTripOverlay(draft, null).points.map((point) => [point.key, point.ref]));
+  assert.deepEqual(refs['camp-0'], { kind: 'camp', index: 0 });
+  assert.equal(refs['camp-1'], null, 'a layover stands where the last camp is');
+  assert.deepEqual(refs.exit, { kind: 'exit' });
+  assert.deepEqual(refs['checkpoint-1-0'], { kind: 'checkpoint', day: 1, index: 0 });
+  assert.deepEqual(refs['bail-0'], { kind: 'bail', index: 0 });
+});
+
+test('Camps waits for the trailhead, then marks the camp the next map tap places', () => {
+  const campsFor = (draft, activeTarget) => renderToStaticMarkup(
+    <ItineraryCamps
+      onChooseMap={() => {}}
+      workspace={{
+        ...workspaceFor(checked(['clear', 'clear', 'clear'])),
+        featureFlags: {},
+        itinerary: { draft, stages: null, activeTarget, pickTarget: null, maxNights: 6, updateDraft: () => {}, setPickTarget: () => {}, nameAt: () => {} },
+      }}
+    />,
+  );
+  const blank = createItineraryDraft({ startDate: date(1), start: '07:00', travelHours: 7, nights: 2 });
+  const before = campsFor(blank, null);
+  assert.match(before, /Choose the trailhead first/);
+  assert.doesNotMatch(before, /Camp for night 1/);
+
+  const started = { ...blank, trailhead: TRAILHEAD };
+  const html = campsFor(started, { kind: 'camp', index: 0 });
+  assert.match(html, /Camp for night 1/);
+  assert.equal((html.match(/is-armed/g) || []).length, 1, 'only the next camp is marked');
+  assert.match(html, /Tap the map to place it/);
+  assert.match(html, /Add a night/);
+  assert.match(html, /Remove last night/);
 });

@@ -16,6 +16,7 @@ import { describeGpxStretch, estimateRouteDurationHours, type GpxStretch, type P
 export const MIN_ITINERARY_NIGHTS = 1;
 export const MAX_ITINERARY_NIGHTS = 6;
 export const MAX_DAY_CHECKPOINTS = 2;
+export const MAX_BAIL_POINTS = 4;
 
 export interface ItineraryPoint {
   name: string;
@@ -137,6 +138,75 @@ export function campPoint(draft: Pick<ItineraryDraft, 'camps' | 'trailhead'>, ni
 }
 
 export const itineraryExit = (draft: ItineraryDraft) => draft.exit ?? draft.trailhead;
+
+/** Where the next map tap goes while building a trip. */
+export type ItineraryPickTarget =
+  | { kind: 'camp'; index: number }
+  | { kind: 'exit' }
+  | { kind: 'checkpoint'; day: number }
+  | { kind: 'bail' };
+
+/** A placed point in the draft, to move it where it stands. */
+export type ItineraryPointRef =
+  | { kind: 'camp'; index: number }
+  | { kind: 'exit' }
+  | { kind: 'checkpoint'; day: number; index: number }
+  | { kind: 'bail'; index: number };
+
+/** The first night whose camp is still to be chosen (a layover needs none), or null. */
+export function firstEmptyCamp(draft: Pick<ItineraryDraft, 'camps'>): number | null {
+  const index = draft.camps.findIndex((camp) => !camp.layover && !camp.point);
+  return index === -1 ? null : index;
+}
+
+/** The "lat, lon" a point carries until it is named after what is there. */
+export const coordinatesLabel = (lat: number, lon: number) => `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+/** The draft with a map tap placed at `target`: a camp, the exit, a bail point or a day's high point. */
+export function placeDraftPoint(draft: ItineraryDraft, target: ItineraryPickTarget, lat: number, lon: number): ItineraryDraft {
+  const point: ItineraryPoint = { name: coordinatesLabel(lat, lon), lat, lon, elevationFt: null };
+  if (target.kind === 'camp') {
+    return { ...draft, camps: draft.camps.map((camp, index) => (index === target.index ? { point, layover: false } : camp)) };
+  }
+  if (target.kind === 'exit') return { ...draft, exit: point };
+  if (target.kind === 'bail') return { ...draft, bailPoints: [...draft.bailPoints, point].slice(0, MAX_BAIL_POINTS) };
+  return {
+    ...draft,
+    days: draft.days.map((day, index) => (
+      index === target.day ? { ...day, checkpoints: [...day.checkpoints, { ...point, name: 'High point' }].slice(0, MAX_DAY_CHECKPOINTS) } : day
+    )),
+  };
+}
+
+/**
+ * The draft with one placed point dragged to (lat, lon). It is unnamed again
+ * until looked up, except a high point, which keeps the name it was given.
+ */
+export function moveDraftPoint(draft: ItineraryDraft, ref: ItineraryPointRef, lat: number, lon: number): ItineraryDraft {
+  const moved = (current: ItineraryPoint | null, keepName = false): ItineraryPoint => ({
+    name: keepName && current?.name ? current.name : coordinatesLabel(lat, lon),
+    lat,
+    lon,
+    elevationFt: null,
+  });
+  switch (ref.kind) {
+    case 'camp':
+      return { ...draft, camps: draft.camps.map((camp, index) => (index === ref.index && !camp.layover ? { ...camp, point: moved(camp.point) } : camp)) };
+    case 'exit':
+      return draft.exit ? { ...draft, exit: moved(draft.exit) } : draft;
+    case 'bail':
+      return { ...draft, bailPoints: draft.bailPoints.map((bail, index) => (index === ref.index ? moved(bail) : bail)) };
+    default:
+      return {
+        ...draft,
+        days: draft.days.map((day, dayIndex) => (
+          dayIndex === ref.day
+            ? { ...day, checkpoints: day.checkpoints.map((checkpoint, index) => (index === ref.index ? moved(checkpoint, true) : checkpoint)) }
+            : day
+        )),
+      };
+  }
+}
 
 const COORDINATE_LABEL = /^\s*-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?\s*$/;
 

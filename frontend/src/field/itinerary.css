@@ -39,6 +39,12 @@
   display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 14px;
 }
 .sky-trip-checkpoint span, .sky-trip-bail-list span { flex: 1; min-width: 0; }
+.sky-trip-nights { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 10px; }
+.sky-trip-nights .field-text-button { display: inline-flex; align-items: center; gap: 4px; }
+.sky-trip-nights .sky-trip-hint { margin: 0; }
+/* The camp the next map tap places. */
+.sky-trip-place.is-armed { padding: 8px; margin: -8px; border-radius: 12px; box-shadow: 0 0 0 1.5px var(--sky-accent); }
+.sky-trip-pick-hint { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 600; color: var(--sky-accent); }
 .sky-trip-bail { margin-top: 12px; }
 .sky-trip-bail summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
 .sky-trip-bail summary small { margin-left: auto; font-weight: 400; color: var(--sky-secondary); }

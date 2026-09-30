@@ -37,6 +37,7 @@ import {
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { buildTripOverlay } from "./itinerary-overlay";
+import { placeDraftPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer, shareOrCopyLink } from "./touch";
@@ -253,32 +254,23 @@ export default function FieldApp() {
     if (name === "Dropped pin" || name === "Current location") w.handleMapPositionChange({ lat, lng });
     else w.selectSuggestion({ name, lat, lon: lng, class: "recent" });
   }
-  // A map tap sets whichever trip point is waiting for one, else the objective.
-  function pickOnMap(lat: number, lon: number) {
-    const target = it.pickTarget;
-    if (!multiDay || !target) {
+  // A map tap places the next camp of a trip (or whichever point was chosen),
+  // else sets the objective. Dragging the objective pin always moves it.
+  function pickOnMap(lat: number, lon: number, fromDrag = false) {
+    const target = it.activeTarget;
+    if (!multiDay || !target || fromDrag) {
       if (pinLocked) return;
+      // A finished trip leaves stray taps alone: its pins move by dragging.
+      if (multiDay && it.draft.trailhead && !fromDrag) return;
       setUndoPick(w.hasObjective && !w.objectiveDraftDirty
         ? { name: w.objectiveName, lat: w.position.lat, lng: w.position.lng, at: `${lat},${lon}` }
         : null);
       w.handleMapPositionChange({ lat, lng: lon });
       return;
     }
-    const coordinates = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-    const point = { name: coordinates, lat, lon, elevationFt: null };
     // It is named after what is there once the lookup returns.
     it.nameAt(lat, lon);
-    it.updateDraft((draft) => {
-      if (target.kind === "camp") {
-        return { ...draft, camps: draft.camps.map((camp, index) => (index === target.index ? { point, layover: false } : camp)) };
-      }
-      if (target.kind === "exit") return { ...draft, exit: point };
-      if (target.kind === "bail") return { ...draft, bailPoints: [...draft.bailPoints, point].slice(0, 4) };
-      return {
-        ...draft,
-        days: draft.days.map((day, index) => (index === target.day ? { ...day, checkpoints: [...day.checkpoints, { ...point, name: "High point" }].slice(0, 2) } : day)),
-      };
-    });
+    it.updateDraft((draft) => placeDraftPoint(draft, target, lat, lon));
     it.setPickTarget(null);
   }
   async function tripAction(kind: "save" | "watch") {
@@ -378,18 +370,20 @@ export default function FieldApp() {
         <div>
           <span className="field-kicker" id="field-objective-map-title">{multiDay ? "Trip map" : "Objective map"}</span>
           <span role="status">
-            {multiDay && it.pickTarget
-              ? it.pickTarget.kind === "camp"
-                ? `Tap the map to place the camp for night ${it.pickTarget.index + 1}`
-                : it.pickTarget.kind === "exit"
-                  ? "Tap the map to place the exit"
-                  : it.pickTarget.kind === "bail"
-                    ? "Tap the map to add a bail point"
-                    : `Tap the map to add a high point for day ${it.pickTarget.day + 1}`
+            {multiDay && it.activeTarget
+              ? it.activeTarget.kind === "camp"
+                ? `${touch ? "Tap" : "Click"} the map to place the camp for night ${it.activeTarget.index + 1}`
+                : it.activeTarget.kind === "exit"
+                  ? `${touch ? "Tap" : "Click"} the map to place the exit`
+                  : it.activeTarget.kind === "bail"
+                    ? `${touch ? "Tap" : "Click"} the map to add a bail point`
+                    : `${touch ? "Tap" : "Click"} the map to add a high point for day ${it.activeTarget.day + 1}`
+              : multiDay && it.draft.trailhead
+                ? "Drag a pin to move it. Change a camp from the list."
               : pinLocked
                 ? "Your GPX track sets this point. Remove the route to drop a pin elsewhere."
                 : plan.lat === null
-                  ? `${touch ? "Tap" : "Click"} the map to drop a pin`
+                  ? `${touch ? "Tap" : "Click"} the map to drop ${multiDay ? "the trailhead" : "a pin"}`
                   : lookingUp
                     ? "Finding what’s here…"
                     : `${plan.name || "Selected point"}${pinElevation !== null ? ` · ${w.formatElevationDisplay(pinElevation)}` : ""}`}
@@ -421,6 +415,7 @@ export default function FieldApp() {
           plan={plan}
           workspace={w}
           trip={tripOverlay}
+          onMoveTripPoint={multiDay ? it.movePoint : undefined}
           onPick={pickOnMap}
           pinLocked={pinLocked}
         />

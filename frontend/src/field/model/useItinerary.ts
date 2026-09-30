@@ -9,9 +9,11 @@ import {
   buildItineraryRequest,
   buildItineraryStages,
   createItineraryDraft,
+  firstEmptyCamp,
   itineraryEndDate,
   itineraryGaps,
   maxNightsWithinForecast,
+  moveDraftPoint,
   nameDraftPointsAt,
   parseItineraryResults,
   parseStoredItinerary,
@@ -19,7 +21,9 @@ import {
   setItineraryNights,
   type ItineraryCheckResult,
   type ItineraryDraft,
+  type ItineraryPickTarget,
   type ItineraryPoint,
+  type ItineraryPointRef,
   type PlanMode,
 } from "../../app/itinerary";
 
@@ -31,12 +35,7 @@ export interface ItineraryAlternative {
   loading: boolean;
 }
 
-/** Where the next map tap goes while building a trip; null moves the objective as usual. */
-export type ItineraryPickTarget =
-  | { kind: "camp"; index: number }
-  | { kind: "exit" }
-  | { kind: "checkpoint"; day: number }
-  | { kind: "bail" };
+export type { ItineraryPickTarget } from "../../app/itinerary";
 
 function loadStored() {
   try {
@@ -159,6 +158,24 @@ export function useItinerary({
     if (same) return;
     updateDraft((previous) => ({ ...previous, trailhead }));
   }, [updateDraft]);
+
+  /**
+   * Where the next map tap goes: the point chosen to be placed, else the first
+   * camp still to place, so a trip can be built by tapping the map in order.
+   * Null once every camp is set, when a tap places nothing.
+   */
+  const activeTarget = useMemo<ItineraryPickTarget | null>(() => {
+    if (pickTarget) return pickTarget;
+    if (!draft.trailhead) return null;
+    const index = firstEmptyCamp(draft);
+    return index === null ? null : { kind: "camp", index };
+  }, [pickTarget, draft]);
+
+  /** A pin dragged on the map: the point moves and is looked up again. */
+  const movePoint = useCallback((ref: ItineraryPointRef, lat: number, lon: number) => {
+    updateDraft((current) => moveDraftPoint(current, ref, lat, lon));
+    nameAt(lat, lon);
+  }, [updateDraft, nameAt]);
 
   const stages = useMemo(() => buildItineraryStages(draft), [draft]);
   const gaps = useMemo(() => itineraryGaps(draft), [draft]);
@@ -323,7 +340,9 @@ export function useItinerary({
     openDayIndex,
     setOpenDayIndex,
     pickTarget,
+    activeTarget,
     setPickTarget,
+    movePoint,
     maxNights: maxNightsWithinForecast(draft.startDate || todayDate, maxForecastDate),
   };
 }
