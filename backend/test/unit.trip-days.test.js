@@ -157,3 +157,31 @@ test('blank readings stay missing and a genuine zero stays zero', () => {
     expect(days.map((day) => day[field])).toEqual([null, null, 0]);
   }
 });
+
+test('a day whose alert feed did not answer has no alert count, and a genuine zero stays zero', () => {
+  const alertsFor = (alerts) => dayFor(report(1, 'clear', (data) => { data.alerts = alerts; return data; }));
+  // An outage leaves an empty list behind; it says nothing about active alerts.
+  expect(alertsFor({ status: 'unavailable', activeCount: 0, totalActiveCount: 0, alerts: [] }).alertCount).toBeNull();
+  expect(alertsFor(undefined).alertCount).toBeNull();
+  // The feed answered: none active, none at the start, or some.
+  expect(alertsFor({ status: 'none', activeCount: 0, alerts: [] }).alertCount).toBe(0);
+  expect(alertsFor({ status: 'none_for_selected_start', activeCount: 0, totalActiveCount: 2, alerts: [] }).alertCount).toBe(0);
+  expect(alertsFor({ status: 'ok', activeCount: 2, alerts: [{}, {}] }).alertCount).toBe(2);
+  // A report from before alerts carried a status is taken at its word.
+  expect(alertsFor({ activeCount: 1, alerts: [{}] }).alertCount).toBe(1);
+});
+
+test('the trip chat says alerts are unknown, not zero, for a day the alert feed missed', () => {
+  const days = withDayDeltas([1, 2].map((offset) => dayFor(report(offset, 'clear', (data) => {
+    if (offset === 2) data.alerts = { status: 'unavailable', activeCount: 0, totalActiveCount: 0, alerts: [] };
+    return data;
+  }))));
+  const chat = buildTripChatContext({
+    days,
+    ranking: rankDays(days),
+    context: buildPlanContext({ start: '07:00', travel_window_hours: '12' }),
+    featureFlags: {},
+    objective: { name: 'Rainier', latitude: 46.85, longitude: -121.76, timezone: 'America/Los_Angeles' },
+  });
+  expect(chat.days.map((day) => day.activeWeatherAlerts)).toEqual([0, null]);
+});

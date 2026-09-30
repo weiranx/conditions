@@ -173,6 +173,17 @@ function comparison(decisions, overrides = {}) {
   };
   return renderToStaticMarkup(<Compare workspace={w} />);
 }
+test("a day whose alert feed missed is unavailable, never zero alerts", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "GO", score: 90, alertCount: null },
+    { date: "2026-09-07", decisionLevel: "GO", score: 80, alertCount: 0 },
+  ]);
+  assert.match(html, /Active alerts<\/th><td[^>]*>Unavailable<\/td><td[^>]*>0<\/td>/, "the table tells them apart");
+  assert.match(html, /AQI · alerts unavailable/, "the selected day says so too");
+  assert.doesNotMatch(html, /null|NaN/);
+  const zero = comparison([{ date: "2026-09-06", decisionLevel: "GO", score: 90, alertCount: 0 }]);
+  assert.match(zero, /AQI · 0 alerts/);
+});
 test("comparison ranks decision level ahead of numeric score", () => {
   const html = comparison([
     { date: "2026-09-06", decisionLevel: "NO-GO", score: 99 },
