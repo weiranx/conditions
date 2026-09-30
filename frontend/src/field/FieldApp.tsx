@@ -25,7 +25,6 @@ import {
   buildSavedReportShareUrl,
   sendReportEmail,
 } from "../lib/saved-reports";
-import { copyTextToClipboard } from "../app/clipboard";
 import { markLandingSeen } from "../app/landing-gate";
 import { saveObjectiveWatch } from "../lib/objective-watches";
 import { saveTrip, watchTripDays } from "../lib/saved-trips";
@@ -42,7 +41,8 @@ import { lookupPointPlace } from "../lib/search";
 import type { ItineraryPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
-import { hasCoarsePointer } from "./touch";
+import { hasCoarsePointer, shareOrCopyLink } from "./touch";
+import { describeShare, SHARE_READY_FEEDBACK } from "./share-feedback";
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from "./page-scroll";
 import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
@@ -155,6 +155,7 @@ export default function FieldApp() {
       // A plan link makes a new report without the route analysis or AI work,
       // so a signed-in user's report is saved and its saved copy is shared.
       let saveFailed = false;
+      let savedNow = false;
       if (!token && account.user) {
         setActionBusy(true);
         setFeedback("");
@@ -164,6 +165,7 @@ export default function FieldApp() {
           });
           if (!saved) return;
           token = saved.shareToken;
+          savedNow = true;
         } catch {
           saveFailed = true;
         } finally {
@@ -177,11 +179,16 @@ export default function FieldApp() {
             window.location.hash.slice(1),
           )
         : window.location.href;
-      const copied = await copyTextToClipboard(link);
-      const described = token
-        ? "Report link copied."
-        : `Plan link copied. ${saveFailed ? "The report could not be saved, so this" : "This"} link makes a new report without the route analysis or AI brief${saveFailed ? "." : "; sign in to share the report itself."}`;
-      setFeedback(copied ? described : `Share link: ${link}`);
+      const day = new Date(`${report.plan.forecastDate}T12:00:00`);
+      const title = [
+        `${report.plan.objectiveName?.trim() || "Backcountry"} conditions`,
+        Number.isNaN(day.getTime()) ? "" : day.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
+      ].filter(Boolean).join(" · ");
+      // Saving first can outlast the tap's permission to open the share sheet. Then the report is saved and its
+      // link exists, so the person is offered a button: the next tap shares at once, with nothing to wait for.
+      const outcome = await shareOrCopyLink({ url: link, title }, { retryable: savedNow });
+      const message = describeShare(outcome, { token, saveFailed, link });
+      if (message !== null) setFeedback(message);
       return;
     }
     if (!account.user) {
@@ -741,7 +748,9 @@ export default function FieldApp() {
                     feedback={feedback}
                     feedbackAction={feedback && feedback === watchFeedback
                       ? { label: /limit/i.test(feedback) ? "Manage watchlist" : "View watchlist", onClick: () => navigate("watches") }
-                      : undefined}
+                      : feedback === SHARE_READY_FEEDBACK
+                        ? { label: "Share link", onClick: () => void action("share") }
+                        : undefined}
                   />
                 </Suspense>
               ) : (

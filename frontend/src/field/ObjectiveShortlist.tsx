@@ -13,6 +13,7 @@ import type { MultiDayTripForecastDay } from '../app/types';
 import { longestStretch, sameTripRank } from './trip-days';
 import { SuggestionLabel } from './SuggestionLabel';
 import { revealStart } from './page-scroll';
+import { placeSearchKeyboard } from './touch';
 import './shortlist.css';
 
 const finite = (value: number | null | undefined): value is number => value != null && Number.isFinite(value);
@@ -117,7 +118,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
             <label htmlFor={`${id}-search`}>Add an objective</label>
             <div className="field-input-icon">
               <Search size={17} aria-hidden="true" />
-              <input id={`${id}-search`} ref={searchInputRef} value={search.searchQuery} placeholder="Search place or coordinates"
+              <input id={`${id}-search`} ref={searchInputRef} value={search.searchQuery} placeholder="Search place or coordinates" {...placeSearchKeyboard}
                 role="combobox" aria-expanded={search.showSuggestions} aria-controls={`${id}-results`} aria-autocomplete="list"
                 aria-activedescendant={search.showSuggestions && search.activeSuggestionIndex >= 0 ? `${id}-suggestion-${search.activeSuggestionIndex}` : undefined}
                 autoComplete="off" onFocus={search.handleFocus} onChange={search.handleInputChange} onKeyDown={search.handleSearchKeyDown} />

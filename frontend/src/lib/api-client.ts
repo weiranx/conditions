@@ -101,8 +101,39 @@ function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
   });
 }
 
+/**
+ * No response came back at all: the phone has no signal, or the server is out of reach. Browsers report
+ * this as a bare "Failed to fetch" or "Load failed"; a person at a trailhead needs to know what to do.
+ */
+export class NetworkUnavailableError extends Error {
+  constructor(offline: boolean) {
+    super(offline
+      ? 'You appear to be offline. Conditions are checked live, so this needs a connection.'
+      : "Can't reach the server. Check your connection and try again.");
+    this.name = 'NetworkUnavailableError';
+  }
+}
+
+/** The browser says there is no network at all. Only a "false" is reliable; "true" can still mean no route out. */
+const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
+/**
+ * Runs one network step. fetch rejects with a TypeError when no response arrives, and a body that breaks off
+ * partway (a stream read, response.text()) rejects the same way, so all of them become the plain-words error.
+ * Only the network calls go through here, so a TypeError from our own code is not mistaken for a lost signal.
+ */
+async function overNetwork<T>(step: Promise<T>): Promise<T> {
+  try {
+    return await step;
+  } catch (error) {
+    throw error instanceof TypeError ? new NetworkUnavailableError(isOffline()) : error;
+  }
+}
+
 export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFetchResult> {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // Retrying cannot help with no network, and would keep the person waiting on a loading state.
+  if (!import.meta.env.DEV && isOffline()) throw new NetworkUnavailableError(true);
   const attemptUrls = [buildApiUrl(normalizedPath), ...buildDevFallbackApiUrls(normalizedPath)];
   let lastError: unknown = null;
   let sawEmptyProxy500 = false;
@@ -161,6 +192,8 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
     throw new Error('Unable to reach backend API. Start it with: cd backend && npm run dev');
   }
 
+  // fetch rejects with a TypeError when no response arrived.
+  if (lastError instanceof TypeError) throw new NetworkUnavailableError(isOffline());
   if (lastError instanceof Error) {
     throw lastError;
   }
@@ -176,13 +209,13 @@ export type StreamEvent = { type?: string; [key: string]: unknown };
  * is returned as is.
  */
 export async function fetchApiStream(path: string, init: RequestInit, onEvent: (event: StreamEvent) => void): Promise<{ ok: boolean; status: number; payload: unknown }> {
-  const response = await fetch(buildApiUrl(path), {
+  const response = await overNetwork(fetch(buildApiUrl(path), {
     credentials: 'include',
     ...init,
     headers: { ...(init.headers as Record<string, string> | undefined), Accept: 'application/x-ndjson, application/json' },
-  });
+  }));
   if (!(response.headers.get('content-type') || '').includes('application/x-ndjson') || !response.body) {
-    return { ok: response.ok, status: response.status, payload: await parseJsonFromResponse(response) };
+    return { ok: response.ok, status: response.status, payload: await overNetwork(parseJsonFromResponse(response)) };
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -200,7 +233,7 @@ export async function fetchApiStream(path: string, init: RequestInit, onEvent: (
     else onEvent(event);
   };
   for (;;) {
-    const { done, value } = await reader.read();
+    const { done, value } = await overNetwork(reader.read());
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');

@@ -27,7 +27,7 @@ import { parseGpxFile } from "../lib/gpx";
 import { Thresholds } from "./Thresholds";
 import "./sky/plan.css";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
-import { liftAboveKeyboard } from "./touch";
+import { liftAboveKeyboard, placeSearchKeyboard } from "./touch";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { RouteSuggestions } from "./RouteSuggestions";
 import { SuggestionLabel } from "./SuggestionLabel";
@@ -426,6 +426,7 @@ export function WorkspacePlan({
                       : undefined
                   }
                   autoComplete="off"
+                  {...placeSearchKeyboard}
                   onPointerDown={(event) => {
                     tapped.current = event.pointerType !== "mouse";
                   }}
