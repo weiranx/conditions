@@ -119,7 +119,7 @@ import {
 } from "../../hooks/usePreferenceHandlers";
 import type { TravelThresholdPresetKey } from "../../hooks/usePreferenceHandlers";
 import { resolveReportFeatureFlags, useProductFeatureFlags } from "../../contexts/feature-flags";
-import { buildRouteReportContext } from "../route-planning";
+import { buildRouteReportContext, elevationForRouteTiming } from "../route-planning";
 import { useAccount } from "../../hooks/useAccount";
 import {
   getSharedReport,
@@ -717,6 +717,13 @@ export function useWorkspace() {
     const feet = Number(place?.elevationFt);
     return place?.elevationFt != null && Number.isFinite(feet) ? feet : null;
   }, [searchedPlace, searchHook.recentSearches, position.lat, position.lng]);
+  // What the plan form shows for the place: a picked point's lookup, else a searched summit's mapped elevation.
+  const placeElevationFt = useMemo(() => {
+    const lookedUp = pointLookup && pointLookup.lat === position.lat && pointLookup.lng === position.lng
+      ? pointLookup.elevationFt
+      : null;
+    return lookedUp ?? searchedPlaceElevationFt;
+  }, [pointLookup, position.lat, position.lng, searchedPlaceElevationFt]);
   const objectiveDraftDirty =
     hasObjective &&
     normalizeSuggestionText(searchQuery) !==
@@ -1346,20 +1353,20 @@ export function useWorkspace() {
     );
   };
 
-  // The pace, altitude setting and summit elevation the backend times suggestions with.
+  // The pace, altitude setting and summit elevation the backend times suggestions with. A new
+  // objective clears the report, so while planning the elevation is the place's own.
   const suggestionTimingOptions = useCallback(() => {
     const p = preferencesRef.current;
-    const summitElevationFt = Number(safetyData?.weather.elevation);
     return {
       pace: {
         minutesPerMile: p.runnerPaceMinutesPerMile,
         ascentMinutesPer1000Ft: p.runnerAscentMinutesPer1000Ft,
         stopBufferMinutes: p.runnerStopBufferMinutes,
       },
-      elevationFt: Number.isFinite(summitElevationFt) ? summitElevationFt : null,
+      elevationFt: elevationForRouteTiming(safetyData?.weather.elevation, placeElevationFt),
       altitudeSlowdownPercent: p.routeAltitudeSlowdownPercent,
     };
-  }, [safetyData]);
+  }, [safetyData, placeElevationFt]);
   const lastSuggestionRequestRef = useRef<{ peak: string; lat: number; lon: number; timing: string } | null>(null);
 
   const handleFetchRouteSuggestions = useCallback(
@@ -1380,8 +1387,9 @@ export function useWorkspace() {
     if (!hasRouteSuggestions || !last || last.timing === JSON.stringify(timing)) return undefined;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
+      // The suggestions count as timed for this pace only once the new times arrived.
       void refreshRouteSuggestionTimes(last.peak, last.lat, last.lon, timing, controller.signal)
-        .then(() => { if (lastSuggestionRequestRef.current === last) last.timing = JSON.stringify(timing); });
+        .then((applied) => { if (applied && lastSuggestionRequestRef.current === last) last.timing = JSON.stringify(timing); });
     }, 500);
     return () => {
       window.clearTimeout(timer);

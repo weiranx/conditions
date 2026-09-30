@@ -235,7 +235,7 @@ export interface UseRouteAnalysisReturn {
   setRouteShape: (value: RouteShapeChoice) => void;
   /** With keepPlan, the planned route and its analysis stay while suggestions load. */
   fetchRouteSuggestions: (peak: string, lat: number, lon: number, options?: RouteSuggestionOptions) => Promise<void>;
-  refreshRouteSuggestionTimes: (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => Promise<void>;
+  refreshRouteSuggestionTimes: (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => Promise<boolean>;
   fetchRouteAnalysis: (
     peak: string,
     route: string,
@@ -381,18 +381,21 @@ export function useRouteAnalysis(initialState?: {
   /**
    * Re-time the suggestions on screen after the traveler's pace changes. It runs
    * beside any other request without touching loading state, and only replaces
-   * the list when it is still the same routes.
+   * the list when it is still the same routes. Resolves true when new times arrived,
+   * false when the request failed or was given up (the times on screen are unchanged).
    */
-  const refreshRouteSuggestionTimes = useCallback(async (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal) => {
+  const refreshRouteSuggestionTimes = useCallback(async (peak: string, lat: number, lon: number, options: RouteSuggestionOptions, signal?: AbortSignal): Promise<boolean> => {
     try {
       const timingQuery = suggestionTimingQuery(options);
       const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}${timingQuery ? `&${timingQuery}` : ''}`, { signal });
-      if (!response.ok || !Array.isArray(payload)) return;
+      if (signal?.aborted || !response.ok || !Array.isArray(payload)) return false;
       const fresh = payload as RouteOption[];
       setRouteSuggestions((current) => (current && current.length === fresh.length
         && current.every((route, i) => route.name === fresh[i].name) ? fresh : current));
+      return true;
     } catch {
       // The times on screen are still valid for the previous pace.
+      return false;
     }
   }, []);
 

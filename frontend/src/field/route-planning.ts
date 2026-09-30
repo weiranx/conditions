@@ -6,6 +6,16 @@ export function hasRouteNumber(value: unknown): value is number {
 }
 
 /**
+ * The elevation route times are scaled for: the loaded report's, else the plan's own place
+ * (a summit's mapped elevation or a picked point's lookup). Routes are suggested while
+ * planning, before any report exists, and an unknown elevation is not sea level.
+ */
+export function elevationForRouteTiming(reportElevationFt: unknown, placeElevationFt: number | null): number | null {
+  if (hasRouteNumber(reportElevationFt)) return reportElevationFt;
+  return hasRouteNumber(placeElevationFt) ? placeElevationFt : null;
+}
+
+/**
  * Checkpoints placed along the route by distance (or progress, or order) and
  * height. Needs two known elevations; an unknown one is drawn between its
  * neighbours and flagged `estimated`, never given a number of its own.
