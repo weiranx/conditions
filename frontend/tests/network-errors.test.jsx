@@ -67,3 +67,52 @@ test('an answer from the server, even an error, is a response and not a connecti
   assert.equal(response.status, 400);
   assert.deepEqual(payload, { error: 'Bad plan' });
 });
+
+// An NDJSON answer that delivers its first lines and then, unless it is given no failure, breaks off.
+function ndjsonAnswer(lines, failure) {
+  const encoder = new TextEncoder();
+  let sent = false;
+  return new Response(new ReadableStream({
+    pull(controller) {
+      if (!sent) {
+        sent = true;
+        controller.enqueue(encoder.encode(`${lines.join('\n')}\n`));
+        return;
+      }
+      if (failure) throw failure;
+      controller.close();
+    },
+  }), { status: 200, headers: { 'content-type': 'application/x-ndjson' } });
+}
+
+test('a connection that drops while the answer is streaming reads as a connection problem too', async (t) => {
+  browser(t, { onLine: true, fetch: async () => ndjsonAnswer(['{"type":"progress","step":1}'], new TypeError('network error')) });
+  const events = [];
+  await assert.rejects(fetchApiStream('/api/route-analysis', {}, (event) => events.push(event)), (error) => {
+    assert.ok(error instanceof NetworkUnavailableError);
+    assert.match(error.message, /can't reach the server/i);
+    return true;
+  });
+  assert.deepEqual(events, [{ type: 'progress', step: 1 }], 'what arrived before the drop was still delivered');
+});
+
+test('a body that breaks off while it is read is a connection problem, not a raw browser error', async (t) => {
+  browser(t, {
+    onLine: true,
+    fetch: async () => new Response(new ReadableStream({ start(controller) { controller.error(new TypeError('network error')); } }),
+      { status: 200, headers: { 'content-type': 'application/json' } }),
+  });
+  await assert.rejects(fetchApiStream('/api/route-analysis', {}, () => {}), (error) => error instanceof NetworkUnavailableError);
+});
+
+test('a stream that finishes normally is untouched, and a bug in our own callback is not mistaken for a lost signal', async (t) => {
+  browser(t, { onLine: true, fetch: async () => ndjsonAnswer(['{"type":"progress"}', '{"type":"result","payload":{"ok":true}}']) });
+  const done = await fetchApiStream('/api/route-analysis', {}, () => {});
+  assert.deepEqual(done, { ok: true, status: 200, payload: { ok: true } });
+
+  browser(t, { onLine: true, fetch: async () => ndjsonAnswer(['{"type":"progress"}', '{"type":"result","payload":{}}']) });
+  await assert.rejects(
+    fetchApiStream('/api/route-analysis', {}, () => { throw new TypeError('our own bug'); }),
+    (error) => error instanceof TypeError && !(error instanceof NetworkUnavailableError) && /our own bug/.test(error.message),
+  );
+});

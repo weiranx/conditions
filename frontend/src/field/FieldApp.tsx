@@ -42,6 +42,7 @@ import type { ItineraryPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer, shareOrCopyLink } from "./touch";
+import { describeShare, SHARE_READY_FEEDBACK } from "./share-feedback";
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from "./page-scroll";
 import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
@@ -154,6 +155,7 @@ export default function FieldApp() {
       // A plan link makes a new report without the route analysis or AI work,
       // so a signed-in user's report is saved and its saved copy is shared.
       let saveFailed = false;
+      let savedNow = false;
       if (!token && account.user) {
         setActionBusy(true);
         setFeedback("");
@@ -163,6 +165,7 @@ export default function FieldApp() {
           });
           if (!saved) return;
           token = saved.shareToken;
+          savedNow = true;
         } catch {
           saveFailed = true;
         } finally {
@@ -181,14 +184,11 @@ export default function FieldApp() {
         `${report.plan.objectiveName?.trim() || "Backcountry"} conditions`,
         Number.isNaN(day.getTime()) ? "" : day.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
       ].filter(Boolean).join(" · ");
-      const outcome = await shareOrCopyLink({ url: link, title });
-      // Closing the share sheet without choosing anyone asks for nothing more.
-      if (outcome === "dismissed") return;
-      const sent = outcome === "shared" ? "shared" : "copied";
-      const described = token
-        ? `Report link ${sent}.`
-        : `Plan link ${sent}. ${saveFailed ? "The report could not be saved, so this" : "This"} link makes a new report without the route analysis or AI brief${saveFailed ? "." : "; sign in to share the report itself."}`;
-      setFeedback(outcome === "failed" ? `Share link: ${link}` : described);
+      // Saving first can outlast the tap's permission to open the share sheet. Then the report is saved and its
+      // link exists, so the person is offered a button: the next tap shares at once, with nothing to wait for.
+      const outcome = await shareOrCopyLink({ url: link, title }, { retryable: savedNow });
+      const message = describeShare(outcome, { token, saveFailed, link });
+      if (message !== null) setFeedback(message);
       return;
     }
     if (!account.user) {
@@ -748,7 +748,9 @@ export default function FieldApp() {
                     feedback={feedback}
                     feedbackAction={feedback && feedback === watchFeedback
                       ? { label: /limit/i.test(feedback) ? "Manage watchlist" : "View watchlist", onClick: () => navigate("watches") }
-                      : undefined}
+                      : feedback === SHARE_READY_FEEDBACK
+                        ? { label: "Share link", onClick: () => void action("share") }
+                        : undefined}
                   />
                 </Suspense>
               ) : (

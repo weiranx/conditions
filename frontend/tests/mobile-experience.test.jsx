@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
+import vm from 'node:vm';
 import { act, createRef } from 'react';
 // React's event support is detected when React DOM is first imported.
 const bootstrap = new JSDOM('<html><body></body></html>');
@@ -21,6 +22,7 @@ import { followThemePreference } from '../src/app/theme';
 import { getDefaultUserPreferences } from '../src/app/preferences';
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from '../src/field/page-scroll';
 import { closeDetailsOnOutsidePress, shareOrCopyLink } from '../src/field/touch';
+import { describeShare, SHARE_READY_FEEDBACK } from '../src/field/share-feedback';
 
 const preferences = getDefaultUserPreferences();
 
@@ -247,6 +249,42 @@ test('a share the browser refuses, such as one whose tap has lapsed, is copied i
   assert.deepEqual(copied, [sharedLink.url]);
 });
 
+test('a tap that lapsed while the report saved asks for another tap instead of copying', async (t) => {
+  setup(t);
+  const copied = [];
+  navigatorStub(t)({
+    share: async () => { throw new DOMException('Needs a user gesture', 'NotAllowedError'); },
+    clipboard: clipboardTo(copied),
+  });
+  assert.equal(await shareOrCopyLink(sharedLink, { retryable: true }), 'blocked');
+  assert.deepEqual(copied, [], 'copying needs the same permission on iOS, so it is not attempted blind');
+});
+
+test('a refusal made in another frame is still recognised by its name', async (t) => {
+  setup(t);
+  // An error from another realm is not `instanceof Error` here, as one from an embedded frame or extension would be.
+  const foreign = (name) => vm.runInNewContext(`Object.assign(new Error('refused'), { name: '${name}' })`);
+  assert.equal(foreign('NotAllowedError') instanceof Error, false, 'the stand-in really comes from another realm');
+  const copied = [];
+  const use = navigatorStub(t);
+  use({ share: async () => { throw foreign('NotAllowedError'); }, clipboard: clipboardTo(copied) });
+  assert.equal(await shareOrCopyLink(sharedLink, { retryable: true }), 'blocked');
+  use({ share: async () => { throw foreign('AbortError'); }, clipboard: clipboardTo(copied) });
+  assert.equal(await shareOrCopyLink(sharedLink), 'dismissed');
+  assert.deepEqual(copied, [], 'neither refusal is answered with a blind copy');
+});
+
+test('only a lapsed tap is worth another tap; any other refusal still copies', async (t) => {
+  setup(t);
+  const copied = [];
+  navigatorStub(t)({
+    share: async () => { throw new DOMException('No target accepts this', 'DataError'); },
+    clipboard: clipboardTo(copied),
+  });
+  assert.equal(await shareOrCopyLink(sharedLink, { retryable: true }), 'copied');
+  assert.deepEqual(copied, [sharedLink.url]);
+});
+
 test('a link the device cannot share is copied, and a desktop copies without opening a share dialog', async (t) => {
   setup(t);
   const copied = [];
@@ -314,4 +352,22 @@ test('the place search asks the phone for no autocorrect and a Search key', asyn
   assert.equal(input.getAttribute('autocorrect'), 'off', 'a proper noun or a coordinate is not a typo');
   assert.equal(input.getAttribute('spellcheck'), 'false');
   assert.equal(input.getAttribute('enterkeyhint'), 'search');
+});
+
+test('every way a share can end says the right thing, or nothing when the sheet was closed', () => {
+  const url = 'https://conditions.example/r/abc';
+  const saved = { token: 'abc', saveFailed: false, link: url };
+  assert.equal(describeShare('dismissed', saved), null, 'closing the share sheet asks for no message');
+  assert.equal(describeShare('shared', saved), 'Report link shared.');
+  assert.equal(describeShare('copied', saved), 'Report link copied.');
+  assert.equal(describeShare('failed', saved), `Share link: ${url}`, 'the link is shown so it can be copied by hand');
+  assert.equal(describeShare('blocked', saved), SHARE_READY_FEEDBACK);
+  assert.match(SHARE_READY_FEEDBACK, /saved.*Tap Share link/);
+
+  const plan = { token: null, saveFailed: false, link: url };
+  assert.equal(describeShare('copied', plan),
+    'Plan link copied. This link makes a new report without the route analysis or AI brief; sign in to share the report itself.');
+  assert.match(describeShare('shared', plan), /^Plan link shared\. This link makes a new report/);
+  assert.equal(describeShare('copied', { ...plan, saveFailed: true }),
+    'Plan link copied. The report could not be saved, so this link makes a new report without the route analysis or AI brief.');
 });

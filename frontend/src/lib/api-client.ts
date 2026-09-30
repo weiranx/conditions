@@ -117,6 +117,19 @@ export class NetworkUnavailableError extends Error {
 /** The browser says there is no network at all. Only a "false" is reliable; "true" can still mean no route out. */
 const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
+/**
+ * Runs one network step. fetch rejects with a TypeError when no response arrives, and a body that breaks off
+ * partway (a stream read, response.text()) rejects the same way, so all of them become the plain-words error.
+ * Only the network calls go through here, so a TypeError from our own code is not mistaken for a lost signal.
+ */
+async function overNetwork<T>(step: Promise<T>): Promise<T> {
+  try {
+    return await step;
+  } catch (error) {
+    throw error instanceof TypeError ? new NetworkUnavailableError(isOffline()) : error;
+  }
+}
+
 export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFetchResult> {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   // Retrying cannot help with no network, and would keep the person waiting on a loading state.
@@ -196,19 +209,13 @@ export type StreamEvent = { type?: string; [key: string]: unknown };
  * is returned as is.
  */
 export async function fetchApiStream(path: string, init: RequestInit, onEvent: (event: StreamEvent) => void): Promise<{ ok: boolean; status: number; payload: unknown }> {
-  let response: Response;
-  try {
-    response = await fetch(buildApiUrl(path), {
-      credentials: 'include',
-      ...init,
-      headers: { ...(init.headers as Record<string, string> | undefined), Accept: 'application/x-ndjson, application/json' },
-    });
-  } catch (error) {
-    if (error instanceof TypeError) throw new NetworkUnavailableError(isOffline());
-    throw error;
-  }
+  const response = await overNetwork(fetch(buildApiUrl(path), {
+    credentials: 'include',
+    ...init,
+    headers: { ...(init.headers as Record<string, string> | undefined), Accept: 'application/x-ndjson, application/json' },
+  }));
   if (!(response.headers.get('content-type') || '').includes('application/x-ndjson') || !response.body) {
-    return { ok: response.ok, status: response.status, payload: await parseJsonFromResponse(response) };
+    return { ok: response.ok, status: response.status, payload: await overNetwork(parseJsonFromResponse(response)) };
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -226,7 +233,7 @@ export async function fetchApiStream(path: string, init: RequestInit, onEvent: (
     else onEvent(event);
   };
   for (;;) {
-    const { done, value } = await reader.read();
+    const { done, value } = await overNetwork(reader.read());
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
