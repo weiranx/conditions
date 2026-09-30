@@ -167,6 +167,8 @@ function comparison(decisions, overrides = {}) {
     handlePlannerTimeChange: () => () => void 0,
     objectiveTimezone: "America/Los_Angeles",
     handleInputChange: () => void 0,
+    isPlaceSaved: () => false,
+    toggleSavedPlace: () => void 0,
     ...overrides,
   };
   return renderToStaticMarkup(<Compare workspace={w} />);

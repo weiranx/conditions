@@ -72,6 +72,8 @@ function planWorkspace(overrides = {}) {
     handleFocus: () => {},
     handleInputChange: () => {},
     handleSearchKeyDown: () => {},
+    isPlaceSaved: () => false,
+    toggleSavedPlace: record('toggleSavedPlace'),
     setShowSuggestions: () => {},
     setSearchInputValue: record('setSearchInputValue'),
     setForecastDate: record('setForecastDate'),

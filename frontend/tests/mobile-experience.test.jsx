@@ -99,6 +99,8 @@ function planWorkspace(overrides = {}) {
     handleFocus: () => {},
     handleInputChange: () => {},
     handleSearchKeyDown: () => {},
+    isPlaceSaved: () => false,
+    toggleSavedPlace: () => {},
     setShowSuggestions: () => {},
     handlePlannerTimeChange: () => () => {},
     ...overrides,
