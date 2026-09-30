@@ -20,7 +20,7 @@ const bulletins = {
 };
 const args = { stations: [{ id: 'KSAN', distanceKm: 5 }], targetTimeIso: '2026-09-17T12:00:00Z', fetchOptions: { headers: { 'User-Agent': 'test' } } };
 
-const setup = ({ files = bulletins, clock = '2026-09-16T10:00:00Z' } = {}) => {
+const setup = ({ files = bulletins, clock = '2026-09-16T10:00:00Z', waitBudgetMs } = {}) => {
   const state = { now: Date.parse(clock), files: { ...files } };
   const getBytes = jest.fn(async (target) => {
     const file = state.files[target];
@@ -28,7 +28,7 @@ const setup = ({ files = bulletins, clock = '2026-09-16T10:00:00Z' } = {}) => {
     if (file instanceof Error) throw file;
     return file;
   });
-  return { state, getBytes, service: createNbmService({ getBytes, now: () => state.now }) };
+  return { state, getBytes, service: createNbmService({ getBytes, now: () => state.now, ...(waitBudgetMs === undefined ? {} : { waitBudgetMs }) }) };
 };
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const promptly = (promise) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve('waited'), 200))]);
@@ -61,7 +61,46 @@ test('the newest bulletin is downloaded once and shared by every report', async 
   expect(second).toEqual(first);
   expect(third).toEqual(first);
   expect(getBytes).toHaveBeenCalledTimes(1);
-  expect(getBytes).toHaveBeenCalledWith(url('19'), expect.objectContaining({ timeoutMs: 15000, maxBytes: 45000000 }));
+  // The download belongs to the cache, not to whichever report asked first: no request signal, a long deadline.
+  expect(getBytes).toHaveBeenCalledWith(url('19'), expect.objectContaining({ timeoutMs: 60000, maxBytes: 45000000 }));
+  expect(getBytes.mock.calls[0][1].fetchOptions.signal).toBeUndefined();
+});
+
+test('a report goes out without the bulletin rather than wait past its budget, and the download carries on', async () => {
+  const { service, getBytes, state } = setup({ clock: '2026-09-16T21:00:00Z', waitBudgetMs: 20 });
+  const download = deferred();
+  state.files[url('19')] = download.promise;
+
+  const first = await service(args);
+  expect(first).toMatchObject({ available: false, status: 'unavailable', note: expect.stringMatching(/still loading/) });
+  // The older cycle is not fetched as well: that would be a second 35 MB download.
+  expect(getBytes.mock.calls.map(([target]) => target)).toEqual([url('19')]);
+  expect(await service(args)).toMatchObject({ status: 'unavailable' });
+  expect(getBytes).toHaveBeenCalledTimes(1);
+
+  download.resolve(bulletins[url('19')]);
+  await settle();
+  expect(await service(args)).toMatchObject({ available: true, issuedTime: '2026-09-16T19:00:00.000Z' });
+  expect(getBytes).toHaveBeenCalledTimes(1);
+});
+
+test('the budget is one wait for the whole report, however many cycles it tries', async () => {
+  const { service, getBytes, state } = setup({ clock: '2026-09-16T21:00:00Z', waitBudgetMs: 50 });
+  // The newest bulletin is not published; the previous one is slow. The wait for it comes out of the same budget.
+  delete state.files[url('19')];
+  state.files[url('13')] = new Promise(() => {});
+  const startedAt = Date.now();
+  const result = await service(args);
+
+  expect(result).toMatchObject({ available: false, status: 'unavailable', note: expect.stringMatching(/still loading/) });
+  expect(Date.now() - startedAt).toBeLessThan(400);
+  expect(getBytes.mock.calls.map(([target]) => target)).toEqual([url('19'), url('13')]);
+});
+
+test('a bulletin already in memory is used at once whatever the budget', async () => {
+  const { service } = setup({ clock: '2026-09-16T21:00:00Z', waitBudgetMs: 0 });
+  await service.prewarm();
+  expect(await service(args)).toMatchObject({ available: true, issuedTime: '2026-09-16T19:00:00.000Z' });
 });
 
 test('the first report after a restart waits for the newest bulletin and falls back when it is not published', async () => {

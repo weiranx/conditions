@@ -4,8 +4,11 @@ const HOUR = 3600000;
 const CYCLE_MS = 6 * HOUR;
 // A bulletin is about 35 MB. Downloads that nobody is waiting on get a long timeout, and one that failed is not
 // retried by every report that arrives while the source is down or the cycle is not published yet.
-const BACKGROUND_TIMEOUT_MS = 60000;
+const DOWNLOAD_TIMEOUT_MS = 60000;
 const BACKGROUND_RETRY_MS = 5 * 60000;
+// How long a report waits for a bulletin that is not in memory yet (the first reports after a restart). This is
+// supplementary context, so a report goes out without it rather than wait on a slow transfer; the download goes on.
+const WAIT_BUDGET_MS = 4000;
 
 // NBP is a fixed-width text bulletin, not whitespace-delimited: empty cells
 // must retain their columns. Wind percentiles are supplied in knots.
@@ -52,21 +55,24 @@ const reduceNbpBlock = (block) => {
   return header === null ? '' : [header, ...rows.values()].join('\n');
 };
 
-// A report or a caller that gives up on waiting must not keep waiting for a download it does not own.
-const untilAborted = (promise, signal) => {
-  if (!signal) return promise;
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(signal.reason ?? new Error('Aborted'));
-      return;
-    }
-    const abort = () => reject(signal.reason ?? new Error('Aborted'));
-    signal.addEventListener('abort', abort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
-  });
-};
+class WaitBudgetExceeded extends Error {}
 
-const createNbmService = ({ getBytes, now = Date.now }) => {
+// A report waits for a download it does not own only as long as its caller and its budget allow.
+const waitFor = (promise, { signal, budgetMs }) => new Promise((resolve, reject) => {
+  if (signal?.aborted) {
+    reject(signal.reason ?? new Error('Aborted'));
+    return;
+  }
+  const abort = () => reject(signal.reason ?? new Error('Aborted'));
+  const timer = setTimeout(() => reject(new WaitBudgetExceeded('NBM bulletin still downloading')), budgetMs);
+  signal?.addEventListener('abort', abort, { once: true });
+  promise.then(resolve, reject).finally(() => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+  });
+});
+
+const createNbmService = ({ getBytes, now = Date.now, waitBudgetMs = WAIT_BUDGET_MS }) => {
   // A cycle stays useful as the fallback for the whole of the next one, so a report is never left
   // waiting on the download of a new bulletin while the previous one is in memory.
   const cache = createCache({ name: 'nbm-bulletins', ttlMs: 2 * CYCLE_MS, maxEntries: 2 });
@@ -90,19 +96,18 @@ const createNbmService = ({ getBytes, now = Date.now }) => {
     if (!blocks.size) throw new Error('Invalid NBM bulletin');
     return blocks;
   };
-  // A report that needs the bulletin now, under its own signal and deadline.
-  const load = (cycle, fetchOptions) => cache.getOrFetch(cycle.date, () => download(cycle, { fetchOptions, timeoutMs: 15000 }));
-  // Nobody waits on this download, so it belongs to no report: no request signal, a long deadline.
-  const loadInBackground = (cycle, fetchOptions) => cache.getOrFetch(
+  // The download belongs to the cache, not to the report that asked first: no request signal, a long deadline.
+  // Reports that need it wait for it (see waitFor) and the rest of them share it.
+  const load = (cycle, fetchOptions) => cache.getOrFetch(
     cycle.date,
-    () => download(cycle, { fetchOptions: { headers: fetchOptions?.headers }, timeoutMs: BACKGROUND_TIMEOUT_MS }),
+    () => download(cycle, { fetchOptions: { headers: fetchOptions?.headers }, timeoutMs: DOWNLOAD_TIMEOUT_MS }),
   );
   const refreshInBackground = (cycle, fetchOptions) => {
     const last = lastBackgroundAttempt.get(cycle.date);
     if (cache.has(cycle.date) || (last !== undefined && now() - last < BACKGROUND_RETRY_MS)) return;
     lastBackgroundAttempt.set(cycle.date, now());
     if (lastBackgroundAttempt.size > 8) lastBackgroundAttempt.delete(lastBackgroundAttempt.keys().next().value);
-    loadInBackground(cycle, fetchOptions).catch(() => {});
+    load(cycle, fetchOptions).catch(() => {});
   };
 
   // Loads the newest bulletin before the first report needs it, or the previous one if that is not published yet.
@@ -110,7 +115,7 @@ const createNbmService = ({ getBytes, now = Date.now }) => {
     const newest = newestCycle();
     for (const cycle of [newest, describeCycle(newest.issued - CYCLE_MS)]) {
       try {
-        await loadInBackground(cycle, fetchOptions);
+        await load(cycle, fetchOptions);
         return;
       } catch {
         // Try the previous cycle; a report will try again when it needs one.
@@ -131,11 +136,18 @@ const createNbmService = ({ getBytes, now = Date.now }) => {
       refreshInBackground(newest, fetchOptions);
       cycles = [previous];
     }
+    // One budget for the whole report, however many cycles it tries.
+    const deadline = Date.now() + waitBudgetMs;
     for (const cycle of cycles) {
       let blocks;
       try {
-        blocks = await untilAborted(load(cycle, fetchOptions), fetchOptions?.signal);
-      } catch { fetchOptions?.signal?.throwIfAborted(); continue; }
+        blocks = await waitFor(load(cycle, fetchOptions), { signal: fetchOptions?.signal, budgetMs: Math.max(0, deadline - Date.now()) });
+      } catch (error) {
+        fetchOptions?.signal?.throwIfAborted();
+        // Still downloading: go without it rather than start a second 35 MB download for the older cycle.
+        if (error instanceof WaitBudgetExceeded) return { available: false, status: 'unavailable', note: 'The regional wind bulletin is still loading. Try again in a moment.' };
+        continue;
+      }
       for (const station of nearby) {
         const data = parseNbp(blocks.get(station.id) || '');
         if (!data || Date.parse(data.issuedTime) !== cycle.issued) continue;
