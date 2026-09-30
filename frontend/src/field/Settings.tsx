@@ -20,7 +20,7 @@ import {
   sameRouteTiming,
 } from "../app/activity-limits";
 import { ROUTE_TIMING_BOUNDS } from "../app/preferences";
-import { NumberField, Row, Thresholds } from "./Thresholds";
+import { DraftNumberField, NumberField, Row, Thresholds } from "./Thresholds";
 import { Account } from "./Account";
 import { useAccount } from "../hooks/useAccount";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
@@ -59,21 +59,15 @@ function RouteTiming({ workspace: w, idPrefix }: { workspace: Workspace; idPrefi
           const [min, max] = ROUTE_TIMING_BOUNDS[item.key];
           return (
             <Row key={item.key} label={item.label} htmlFor={`${idPrefix}-${item.key}`}>
-              <NumberField id={`${idPrefix}-${item.key}`} value={p[item.key]} unit={item.unit} min={min} max={max}
-                onChange={(e) => {
-                  if (e.target.value !== "")
-                    w.updatePreferences({ [item.key]: Math.min(max, Math.max(min, Number(e.target.value))) });
-                }} />
+              <DraftNumberField id={`${idPrefix}-${item.key}`} value={p[item.key]} unit={item.unit} min={min} max={max}
+                onApply={(value) => w.updatePreferences({ [item.key]: value })} />
             </Row>
           );
         })}
         <Row label="Altitude slowdown" htmlFor={`${idPrefix}-altitude`}
           hint="Suggested-route times run this much slower for every 1,000 ft of average elevation above 8,000 ft, up to 30%. Longer days and rougher route classes add more.">
-          <NumberField id={`${idPrefix}-altitude`} value={p.routeAltitudeSlowdownPercent} unit="% per 1,000 ft" min={0} max={15}
-            onChange={(e) => {
-              if (e.target.value !== "")
-                w.updatePreferences({ routeAltitudeSlowdownPercent: Math.min(15, Math.max(0, Math.round(Number(e.target.value)))) });
-            }} />
+          <DraftNumberField id={`${idPrefix}-altitude`} value={p.routeAltitudeSlowdownPercent} unit="% per 1,000 ft" min={0} max={15} integer
+            onApply={(value) => w.updatePreferences({ routeAltitudeSlowdownPercent: value })} />
         </Row>
       </div>
     </>
