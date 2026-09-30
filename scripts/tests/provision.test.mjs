@@ -305,7 +305,7 @@ test('issues a certificate, then serves the HTTPS site with a renewal reload hoo
   const f = nginxFixture(t);
   const result = f.run();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(readFileSync(f.site, 'utf8'), /listen 443 ssl;/);
+  assert.match(readFileSync(f.site, 'utf8'), /listen 443 ssl http2;/);
   assert.match(f.calls(), /certbot certonly --webroot/);
 });
 

@@ -1,4 +1,4 @@
-const { createCache } = require('./cache');
+const { createCache, normalizeCoordKey } = require('./cache');
 const { haversineKm } = require('./geo');
 const { toFiniteOrNull } = require('./numbers');
 const { createEvidenceFetcher } = require('./evidence-fetch');
@@ -47,14 +47,20 @@ const parseSynoptic = (data, { lat, lon, elevationFt, now = Date.now() }) => {
   });
 };
 const selectSynopticStations = (stations, elevationFt) => rankStations(stations, elevationFt).slice(0, 3);
-const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, now = Date.now }) => {
+const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, now = Date.now, pointsCache = null }) => {
   const getBytes = createEvidenceFetcher(fetchWithTimeout);
   const json = async (url, fetchOptions) => JSON.parse((await getBytes(url, { fetchOptions })).toString());
   const metadata = createCache({ name: 'evidence-nws-metadata', ttlMs: 24 * HOUR, maxEntries: 200 });
   const current = createCache({ name: 'evidence-current', ttlMs: 5 * 60000, maxEntries: 200 });
   const nbm = createNbmService({ getBytes, now });
   const smoke = createHrrrSmokeService({ getBytes, now });
-  const point = (lat, lon, options) => metadata.getOrFetch(`point:${lat.toFixed(4)},${lon.toFixed(4)}`, () => json(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`, options));
+  // The weather pipeline has nearly always looked this point up already. With its cache passed in, the
+  // regional forecast and station lookups start from that answer instead of asking NOAA again.
+  const point = (lat, lon, options) => {
+    const key = normalizeCoordKey(lat, lon);
+    const fetchPoint = () => json(`https://api.weather.gov/points/${key}`, options);
+    return pointsCache ? pointsCache.getOrFetch(key, fetchPoint) : metadata.getOrFetch(`point:${key}`, fetchPoint);
+  };
   const stations = async (lat, lon, options) => {
     const p = await point(lat, lon, options);
     const url = p.properties?.observationStations;
@@ -93,7 +99,7 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     const matches = selectSynopticStations(parseSynoptic(data, { ...args, now: now() }), args.elevationFt);
     return { available: matches.length > 0, status: matches.length ? 'ok' : 'no_data', stations: matches, note: 'Quality-controlled readings from the last 2 hours. Distance and elevation do not establish equivalent terrain or exposure; these are current observations, not conditions on a future trip.' };
   };
-  return async (args) => {
+  const service = async (args) => {
     const flags = args.featureFlags || {};
     const controller = new AbortController();
     const upstream = args.fetchOptions?.signal;
@@ -119,5 +125,8 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     upstream?.throwIfAborted();
     return Object.fromEntries(entries);
   };
+  // Loads the large shared datasets before the first report asks for them.
+  service.prewarm = (options) => nbm.prewarm(options);
+  return service;
 };
 module.exports = { createSupplementalEvidenceService, parseSynoptic, selectSynopticStations, rankStations };

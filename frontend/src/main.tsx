@@ -1,8 +1,7 @@
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
-import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
-import { AccountProvider } from './contexts/AccountProvider.tsx'
+import { AppRoot } from './AppRoot.tsx'
 import { readLocalStorage, shouldShowLanding } from './app/landing-gate.ts'
 
 const McpConnect = lazy(() => import('./field/McpConnect'));
@@ -20,24 +19,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       {MockControls && <Suspense fallback={null}><MockControls /></Suspense>}
-      <Suspense
-        fallback={(
-          <main className="loading-state" role="status" aria-live="polite" aria-busy="true">
-            Loading Backcountry Conditions…
-          </main>
-        )}
-      >
-        {showLanding ? (
-          // The landing page needs no account or feature flags, so it skips their requests and polling.
-          <Landing />
-        ) : (
-          <FeatureFlagsProvider>
-            <AccountProvider>
-              {isConnect ? <McpConnect /> : <App />}
-            </AccountProvider>
-          </FeatureFlagsProvider>
-        )}
-      </Suspense>
+      <AppRoot landing={showLanding}>
+        {showLanding ? <Landing /> : isConnect ? <McpConnect /> : <App />}
+      </AppRoot>
     </ErrorBoundary>
   </StrictMode>,
 )

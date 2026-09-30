@@ -49,13 +49,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Every file under /assets has a hash of its content in its name, so a URL never changes meaning:
+  // once cached it needs no second look. Other files (icons, the manifest, the hero photo) keep their
+  // names when they change, so they are served from the cache and refreshed behind it.
+  const hashedAsset = url.pathname.startsWith('/assets/');
+
   event.respondWith(
     caches.match(request).then((cached) => {
       let usableCached = cached;
-      if (usableCached && url.pathname.startsWith('/assets/') && !isSafeAssetResponse(usableCached)) {
+      if (usableCached && hashedAsset && !isSafeAssetResponse(usableCached)) {
         void caches.open(CACHE_NAME).then((cache) => cache.delete(request));
         usableCached = undefined;
       }
+      if (usableCached && hashedAsset) return usableCached;
 
       const network = fetch(request).then((response) => {
         if (isSafeAssetResponse(response)) {
@@ -64,7 +70,11 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       });
-      return usableCached || network;
+      if (!usableCached) return network;
+      // The refresh is for the next visit; being offline or failing must not raise an unhandled rejection.
+      const refreshed = network.then(() => undefined, () => undefined);
+      event.waitUntil(refreshed);
+      return usableCached;
     }),
   );
 });

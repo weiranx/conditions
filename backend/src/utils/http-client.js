@@ -65,8 +65,11 @@ const createCircuitBreaker = ({ name, failureThreshold = 5, resetTimeMs = 60000 
  * particular request (NOAA's 404 for a point outside the US). That shows it is up, so it
  * ends a failure streak instead of extending it; otherwise five lookups of places outside
  * the forecast's coverage would fast-fail everyone's requests for a minute.
+ *
+ * `countFailure(error)` can return false for a failure the upstream did not cause, such as a
+ * caller that gave up: it then counts neither for nor against the upstream.
  */
-const withCircuitBreaker = async (breaker, fn) => {
+const withCircuitBreaker = async (breaker, fn, { countFailure = () => true } = {}) => {
   if (breaker.isOpen) {
     throw new Error(`${breaker.name} circuit breaker open; skipping request until it cools down`);
   }
@@ -76,7 +79,8 @@ const withCircuitBreaker = async (breaker, fn) => {
     return result;
   } catch (error) {
     if (error?.upstreamRefusedRequest) breaker.recordSuccess();
-    else breaker.recordFailure();
+    // A failure the upstream did not cause, such as a caller that gave up, says nothing about its health.
+    else if (countFailure(error)) breaker.recordFailure();
     throw error;
   }
 };

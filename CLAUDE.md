@@ -16,6 +16,7 @@ npm run test             # Run every Jest suite (unit, integration, scenario)
 npm run test:unit        # All test/unit.*.test.js files
 npm run test:integration # All test/integration.*.test.js files
 npm run db:migrate       # Apply SQL migrations in backend/migrations/ (needs DATABASE_URL)
+node scripts/refresh-snotel-stations.js  # Rewrite src/data/snotel-stations.json from the live USDA catalog
 ```
 
 ### Frontend (`cd frontend`)
@@ -40,7 +41,7 @@ npm test                 # MCP tool tests
 
 ### Deployment (`scripts/`)
 
-Merging to `main` deploys automatically, and only once CI passes: `deploy.yml` → `ci-deploy.sh` → `deploy.sh` on the droplet (backend, migrations, MCP server, rollback) → the frontend to Cloudflare Pages with Wrangler → `smoke-test.mjs` against the public URLs. Cloudflare's own Git deployments stay disabled so failing commits never ship. Each step runs only for what changed: CI jobs are gated by `scripts/ci-changed-areas.sh`, `deploy.sh --skip-unchanged` keeps a running backend or MCP server whose files did not change since its last healthy release, and the frontend ships only when `frontend/` differs from the live Pages deployment's commit.
+Merging to `main` deploys automatically, and only once CI passes: `deploy.yml` → `ci-deploy.sh` → `deploy.sh` on the droplet (backend, migrations, MCP server, rollback) → the frontend to Cloudflare Pages with Wrangler → `smoke-test.mjs` against the public URLs. Cloudflare's own Git deployments stay disabled so failing commits never ship. CI deploys pass `--no-nginx`, so a change to `scripts/setup-nginx.sh` reaches the server only when provisioning is run there again. Each step runs only for what changed: CI jobs are gated by `scripts/ci-changed-areas.sh`, `deploy.sh --skip-unchanged` keeps a running backend or MCP server whose files did not change since its last healthy release, and the frontend ships only when `frontend/` differs from the live Pages deployment's commit.
 
 ```bash
 ./scripts/provision.sh --host IP --domain API_DOMAIN --frontend-origin URL --email EMAIL  # new or drifted server, end to end
@@ -78,6 +79,7 @@ Three parts: React + Vite SPA (`frontend/`), Express API (`backend/`, PostgreSQL
 - **`frontend/src/main.tsx`** → **`frontend/src/field/FieldApp.tsx`** — the live app. `field/` holds the screens (`Report`, `Compare`, `Library`, `Settings`, `Administration`, `Chat`, …), lazily loaded from `FieldApp`.
 - **`frontend/src/field/model/`** — state hooks: `useWorkspace.ts` (planner state, the `Workspace` object passed to most screens), `useAdministration.ts`, `useReportGeneration.ts`, `useReportComparisons.ts`, `useSavedReportSync.ts`, `useObjectiveShortlist.ts`.
 - **`frontend/src/app/`** — helpers shared by screens: `types.ts` (domain interfaces, including `PlanEvaluation`), `constants.ts`, `core.ts` (formatting), `preferences.ts`, `plan-evaluation.ts` (plan params, reading evaluations), `report-storage.ts`, etc. The frontend presents: decisions, hourly checks, comparisons and report interpretation come from the backend's evaluation; do not add domain logic here.
+- **Loading** — `src/AppRoot.tsx` keeps the account and feature-flag providers outside the Suspense boundary so their requests start at boot, not after the planner has downloaded. `scripts/planner-load-hints.mjs` (a Vite plugin) adds the API preconnect and, for visits that open the planner, a script that preloads its chunks; it makes the same decision as `shouldShowLanding`, and `tests/load-hints.test.jsx` keeps the two in step. Cloudflare Pages ignores `vercel.json`: `public/_headers` sets the cache rules. `public/sw.js` serves hashed `/assets` from its cache without asking the network.
 - **Multi-day trips** — a plan type, not a screen: the plan form's Day trip / Multi-day switch (`field/ItineraryPlan.tsx`), state in `field/model/useItinerary.ts`, the draft and request in `app/itinerary.ts`, the trip brief in `field/Itinerary.tsx`. The backend (`/api/itineraries/check`, `utils/itinerary-assessment.js`) decides each day and night and the trip verdict: the trip is its weakest day or night, and unchecked is never good. Compare (`field/Compare.tsx`) is the separate pick-a-day tool.
 - **`frontend/src/hooks/`**, **`frontend/src/contexts/`** — data-fetching hooks (`useSafetyData`, `usePlanEvaluation`, `useTripForecast`, `useStartTimeScenarios`, …) and account/feature-flag/AI-access providers.
 - **`frontend/src/lib/`** — `api-client.ts` (API calls + retry), `search.ts` (local peak catalog + Nominatim), `gpx.ts`, `saved-reports.ts`, `objective-watches.ts`.
@@ -98,6 +100,8 @@ Three parts: React + Vite SPA (`frontend/`), Express API (`backend/`, PostgreSQL
 10. Attach `evaluation` (`attachPlanEvaluation`): the decision, hourly checks, verdict, wind loading, report interpretation, terrain window and elevation estimates for the plan params in the query
 11. Return unified payload; on partial upstream failures returns `200` with `partialData: true` + `apiWarning`
 
+Every response carries a `Server-Timing` header (weather, avalanche, each batch source, evaluation, total; milliseconds from the start of the request), and a report over 8 s logs the same breakdown: read it before guessing where time goes. A new place is limited by its slowest upstream, so nothing slow and shared belongs on the request path: the NBM bulletin (~35 MB) is loaded at startup and each new cycle downloads in the background while reports use the previous one (`nbm-guidance.js`); the SNOTEL station catalog (10+ s from USDA) is seeded from `src/data/snotel-stations.json`; USGS elevation gets 3.5 s and a circuit breaker before the Open-Meteo fallback, whose coarser answer is cached for ten minutes only (`geo.js`).
+
 When the plan changes after a report loads (limits, units, approach, target elevation) or a stored evaluation is stale, the frontend re-evaluates the report with `POST /api/evaluate { report, plan }` instead of computing anything itself. Plan params are the flat keys in `PLAN_PARAM_KEYS` (`src/utils/plan-context.js`); the evaluation echoes them in `evaluation.params`.
 
 ### Upstream providers
@@ -105,7 +109,7 @@ When the plan changes after a report loads (limits, units, approach, target elev
 - **Weather**: NOAA/NWS (`api.weather.gov`) primary, Open-Meteo fallback
 - **Avalanche**: Avalanche.org map/product feeds, center-link scraping fallback
 - **Solar**: `api.sunrisesunset.io`
-- **Snowpack**: NRCS AWDB/SNOTEL, NOAA NOHRSC
+- **Snowpack**: NRCS AWDB/SNOTEL, NOAA NOHRSC (the USDA server sends ~50 kB/s, so the comparison with earlier years asks for the week ending on the date in each of ten years, in parallel, never a ten-year series)
 - **Search/Elevation**: OpenStreetMap Nominatim, USGS/Open-Meteo; map points are named from the peak catalog, Nominatim reverse and USGS place names (GNIS)
 
 ### User preferences

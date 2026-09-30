@@ -79,7 +79,10 @@ EOF
 https_server() {
   cat <<EOF
 server {
-    listen 443 ssl;
+    # HTTP/2 lets the browser send a report's requests over one connection instead of six, each with its own
+    # TLS handshake. nginx 1.25.1 added a separate "http2 on;" directive and deprecates this form, which every
+    # version accepts.
+    listen 443 ssl http2;
     server_name ${DOMAIN};
 
     ssl_certificate     ${CERT_DIR}/fullchain.pem;

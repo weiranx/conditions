@@ -22,6 +22,9 @@ const createApp = ({
 
   const corsOptions = {
     credentials: true,
+    // The frontend is a different origin, so every JSON POST is preceded by a preflight. Without this a browser
+    // remembers the answer for 5 seconds; with it, for as long as the browser allows (Chrome caps it at 2 hours).
+    maxAge: 86400,
     origin(origin, callback) {
       if (!origin) {
         callback(null, true);

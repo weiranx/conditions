@@ -1,6 +1,6 @@
 const { point } = require('@turf/helpers');
 const booleanPointInPolygon = require('@turf/boolean-point-in-polygon').default;
-const { createFetchWithTimeout } = require('./http-client');
+const { createFetchWithTimeout, createCircuitBreaker, withCircuitBreaker } = require('./http-client');
 const { createCache, normalizeCoordKey } = require('./cache');
 const { logger } = require('./logger');
 const { toFiniteOrNull } = require('./numbers');
@@ -136,25 +136,48 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
   return { feature: null, mode: 'none', fallbackDistanceKm: nearestDistance };
 };
 
-const createElevationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
-  const elevationCache = createCache({ name: 'elevation', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 500 });
+const USGS_ELEVATION_SOURCE = 'USGS 3DEP elevation service';
+// USGS answers in well under a second when it is healthy. When it is not, waiting out the request timeout
+// would hold every report at a new place for seconds; the Open-Meteo lookup is there for exactly that.
+const USGS_ELEVATION_TIMEOUT_MS = 3500;
+// Open-Meteo's grid is coarser than USGS's, hundreds of feet lower on a sharp summit. Its answer is used but
+// remembered only briefly, so a later report gets the USGS value once USGS answers again.
+const PROVISIONAL_ELEVATION_TTL_MS = 10 * 60 * 1000;
 
-  const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions) => {
+const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }) => {
+  const elevationCache = createCache({ name: 'elevation', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 500 });
+  const provisionalCache = createCache({ name: 'elevation-provisional', ttlMs: PROVISIONAL_ELEVATION_TTL_MS, maxEntries: 500 });
+  // After a few failures in a row stop asking USGS for a minute, so an outage costs nothing per report.
+  const usgsBreaker = createCircuitBreaker({ name: 'usgs-elevation', failureThreshold: 3, resetTimeMs: 60000 });
+
+  const lookupUsgs = async (lat, lon, fetchOptions) => {
+    if (usgsBreaker.isOpen) return null;
     try {
-      const usgsRes = await fetchWithTimeout(
-        `https://epqs.nationalmap.gov/v1/json?x=${lon}&y=${lat}&units=Feet&wkid=4326`,
-        fetchOptions,
-      );
+      const usgsRes = await withCircuitBreaker(usgsBreaker, async () => {
+        const response = await fetchWithTimeout(
+          `https://epqs.nationalmap.gov/v1/json?x=${lon}&y=${lat}&units=Feet&wkid=4326`,
+          fetchOptions,
+          Math.min(requestTimeoutMs, USGS_ELEVATION_TIMEOUT_MS),
+        );
+        if (response.status >= 500) throw new Error(`USGS elevation returned ${response.status}`);
+        return response;
+      }, { countFailure: () => !fetchOptions?.signal?.aborted });
       if (usgsRes.ok) {
         const usgsData = await usgsRes.json();
         const usgsElevationFt = toFiniteOrNull(usgsData?.value);
         if (usgsElevationFt !== null && usgsElevationFt > -1000 && usgsElevationFt <= MAX_REASONABLE_ELEVATION_FT) {
-          return { elevationFt: Math.round(usgsElevationFt), source: 'USGS 3DEP elevation service' };
+          return { elevationFt: Math.round(usgsElevationFt), source: USGS_ELEVATION_SOURCE };
         }
       }
     } catch (error) {
       logger.warn({ err: error }, 'Elevation USGS lookup failed');
     }
+    return null;
+  };
+
+  const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions) => {
+    const usgs = await lookupUsgs(lat, lon, fetchOptions);
+    if (usgs) return usgs;
 
     try {
       const openMeteoRes = await fetchWithTimeout(
@@ -176,9 +199,20 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     return { elevationFt: null, source: null };
   };
 
-  const fetchObjectiveElevationFt = (lat, lon, fetchOptions) => {
+  const fetchObjectiveElevationFt = async (lat, lon, fetchOptions) => {
     const key = normalizeCoordKey(lat, lon);
-    return elevationCache.getOrFetch(key, () => _fetchObjectiveElevationFtUncached(lat, lon, fetchOptions));
+    if (!elevationCache.has(key)) {
+      const provisional = provisionalCache.get(key);
+      if (provisional) return provisional.value;
+    }
+    // Only a USGS answer is kept for the week. Anything else, including no answer at all, is asked for again soon.
+    const result = await elevationCache.getOrFetch(
+      key,
+      () => _fetchObjectiveElevationFtUncached(lat, lon, fetchOptions),
+      { shouldStore: (value) => value.source === USGS_ELEVATION_SOURCE },
+    );
+    if (result.source !== USGS_ELEVATION_SOURCE) provisionalCache.set(key, result);
+    return result;
   };
 
   return { elevationCache, fetchObjectiveElevationFt };
