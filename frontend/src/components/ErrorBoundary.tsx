@@ -1,4 +1,5 @@
 import React from 'react';
+import './error-boundary.css';
 
 const CHUNK_RECOVERY_GUARD_KEY = 'summitsafe:chunk-recovery-attempts:v2';
 const CHUNK_RECOVERY_WINDOW_MS = 2 * 60_000;

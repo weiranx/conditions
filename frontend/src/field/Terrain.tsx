@@ -286,7 +286,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                     disabled={!w.canDecreaseTargetElevation} onClick={() => w.handleTargetElevationStep(-1000)}>
                     <Minus size={18} aria-hidden="true" />
                   </button>
-                  <input inputMode="numeric" value={w.targetElevationInput} onChange={w.handleTargetElevationChange} />
+                  <input inputMode="numeric" aria-label={`Target elevation (${w.elevationUnitLabel})`} value={w.targetElevationInput} onChange={w.handleTargetElevationChange} />
                   <button type="button" className="sky-stepper" aria-label="Increase target elevation"
                     onClick={() => w.handleTargetElevationStep(1000)}>
                     <Plus size={18} aria-hidden="true" />

@@ -172,7 +172,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
   return (
     <section className="sky-trip-camps" aria-labelledby="sky-trip-camps-title">
       <div className="field-form-divider">
-        <h3 className="sky-plan-step" id="sky-trip-camps-title"><span aria-hidden="true">4</span>Camps</h3>
+        <h2 className="sky-plan-step" id="sky-trip-camps-title"><span aria-hidden="true">4</span>Camps</h2>
         {w.featureFlags.gpxImport && (
           <>
             <input

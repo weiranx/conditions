@@ -14,6 +14,7 @@ import {
   Settings2,
   ShieldCheck,
   Sunrise,
+  TriangleAlert,
   UserRound,
 } from "lucide-react";
 import { useWorkspace } from "./model/useWorkspace";
@@ -539,12 +540,10 @@ export default function FieldApp() {
           </header>
           <main id="field-main" tabIndex={-1}>
             {w.error && (
-              <div className="field-warning" role="alert">
-                <p>{w.error}</p>
-                <button
-                  className="field-text-button"
-                  onClick={() => w.setError(null)}
-                >
+              <div className="sky-notice is-caution sky-app-alert" role="alert">
+                <TriangleAlert size={20} aria-hidden="true" />
+                <div>{w.error}</div>
+                <button type="button" className="sky-link" onClick={() => w.setError(null)}>
                   Dismiss
                 </button>
               </div>

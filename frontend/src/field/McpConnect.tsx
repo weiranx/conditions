@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useAccount } from '../hooks/useAccount';
 import { buildApiUrl } from '../lib/api-client';
 import { GoogleAuth } from './GoogleAuth';
-import { getDefaultUserPreferences } from '../app/preferences';
+import { BrandMark } from './BrandMark';
+import { getDefaultUserPreferences, loadUserPreferences } from '../app/preferences';
+import { followThemePreference } from '../app/theme';
+import './sky/tokens.css';
 import './mcp-connect.css';
 
 type Connection = { clientName?: string; id: string; created_at: string; expires_at: string };
@@ -29,6 +32,16 @@ export default function McpConnect() {
   const userId = account.user?.id;
   const currentUser = useRef(userId);
   currentUser.current = account.user?.id;
+  // The page is titled like the app's other screens and takes the theme the app is set to.
+  useEffect(() => {
+    const previous = document.title;
+    document.title = `${request ? 'Connect an app' : 'Connected apps'} - Backcountry Conditions`;
+    const stopFollowingTheme = followThemePreference(loadUserPreferences().themeMode);
+    return () => {
+      document.title = previous;
+      stopFollowingTheme();
+    };
+  }, [request]);
   useEffect(() => {
     if (!userId) return;
     const id = userId;
@@ -60,7 +73,7 @@ export default function McpConnect() {
   }
   const pending = busy || account.busy || account.loading;
   return <main className="mcp-connect">
-    <a href="/">Conditions</a>
+    <a className="mcp-connect-brand" href="/"><span><BrandMark size={18} /></span>Backcountry Conditions</a>
     <h1>{request ? 'Connect Conditions to an AI app' : 'Connected apps'}</h1>
     {error && <p role="alert">{error}</p>}
     {account.loading ? <p role="status">Checking your account…</p> : !account.user ? <>

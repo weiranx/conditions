@@ -311,7 +311,7 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
           </div>
         </div>
       ) : (
-        <div className="sky-card sky-auth-card">
+        <div className="sky-card sky-auth-card" data-mode={mode}>
           <div className="sky-avatar is-guest" aria-hidden="true">
             <UserRound size={26} />
           </div>

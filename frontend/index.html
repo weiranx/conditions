@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/summitsafe-icon.svg" />
     <link rel="shortcut icon" href="/summitsafe-icon.svg" />
+    <!-- iOS draws the home-screen icon from this: a full-bleed square, since it applies its own corner mask. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -16,6 +18,11 @@
     <style>
       /* First paint, until the app applies its theme: no white flash in dark mode. */
       html:not([data-theme]) { background: #f2f3f1; color: #18201c; }
+      /* Scrollbars and native controls take the theme too. The screens' stylesheets set this only
+         inside the planner, so the landing, connect and error screens would otherwise keep light ones. */
+      html { color-scheme: light dark; }
+      html[data-theme="light"] { color-scheme: light; }
+      html[data-theme="dark"] { color-scheme: dark; }
       body { margin: 0; }
       /* Until the bundle's styles load: the app icon over a quiet line, centred. */
       .loading-state {
