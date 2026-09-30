@@ -225,6 +225,7 @@ export default function FieldMap({
                 key={point.key}
                 position={[point.lat, point.lon]}
                 icon={tripPin(point.label, point.kind, point.tone)}
+                title={point.title}
                 zIndexOffset={point.kind === "camp" ? 500 : 0}
               >
                 <Tooltip>{point.title}</Tooltip>
@@ -237,6 +238,7 @@ export default function FieldMap({
             key={`${lat},${lon}`}
             position={[lat, lon]}
             icon={pin}
+            title={pinLabel}
             draggable={!!onPick && !pinLocked}
             eventHandlers={events}
             zIndexOffset={1000}
@@ -261,7 +263,8 @@ export default function FieldMap({
           return (
             <Marker key={indexes.join("-")} position={[point.lat, point.lon]}
               icon={checkpointPin({ label: indexes.map((index) => index + 1).join("·"), tone: worstTone(tones),
-                estimated: indexes.some((index) => analysis.summaries[index]?.locationEstimated) })}>
+                estimated: indexes.some((index) => analysis.summaries[index]?.locationEstimated) })}
+              title={indexes.map((index) => `${index + 1}. ${analysis.waypoints[index].name}`).join(", ")}>
               <Tooltip>
                 {point.name} · {w.formatElevationDisplay(point.elev_ft)}
               </Tooltip>

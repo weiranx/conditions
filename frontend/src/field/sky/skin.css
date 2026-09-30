@@ -176,6 +176,22 @@
 .field-app .sky-report .condition-legend span::before { content: ""; width: 16px; border-top: 2.25px solid var(--sky-label); }
 .field-app .sky-report .condition-legend .is-reference::before { border-top: 1.5px dashed var(--sky-secondary); }
 
+/* ---------- Touch: the small controls a thumb has to land on ---------- */
+/* On a phone or any touch screen these keep their look and their place in the layout, but the area that
+   answers a tap reaches 44px: a pseudo-element extends it, or padding is paid back with a negative margin. */
+@media (max-width: 650px), (pointer: coarse) {
+  /* "Set trailhead" and "Edit approach" sit inside a sentence, about 20px tall. */
+  .sky-approach-note button { position: relative; }
+  .sky-approach-note button::after { content: ""; position: absolute; inset: -13px -8px; }
+  .sky-timeline-use { position: relative; }
+  .sky-timeline-use::after { content: ""; position: absolute; inset: -4px -2px; }
+  .field-app .sky-notice .sky-link { min-height: 44px; margin-block: -4px; }
+  /* Disclosures in the report ("About this percentage") are 36px rows. */
+  .field-app .sky-report .sky-details > summary { min-height: 44px; margin-block: -4px; }
+  .field-app .sky-plan-limits-link { min-height: 44px; margin-bottom: 0; }
+  .field-app .field-plan-form.sky-plan > fieldset > .sky-trip-mode label { min-height: 44px; }
+}
+
 /* Written-out evidence under a card. */
 .field-app .sky-evidence-body > .sky-list { margin: 2px 0 4px; }
 .field-app .sky-evidence-body > .sky-bullets { margin: 4px 0 8px; }

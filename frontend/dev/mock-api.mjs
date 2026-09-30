@@ -326,6 +326,31 @@ export function createMockApi({ databasePath } = {}) {
     if (p === "/api/feature-flags") return ok(db.flags);
     if (p === "/api/auth/google/config") return ok({ available: false });
     if (p === "/api/auth/session") return ok(session());
+    if (p.startsWith("/api/auth/mcp/")) {
+      // The connect-an-app page: the request being reviewed, the apps already connected, and the
+      // decision. Nothing is issued; approving only hands back the reviewed return address.
+      const action = p.slice("/api/auth/mcp/".length);
+      const callbackUri = "https://claude.ai/api/mcp/auth_callback";
+      db.mcpConnections ??= [{ id: "mock-connection", clientName: "Claude", created_at: now(), expires_at: new Date(Date.now() + 30 * 86400000).toISOString() }];
+      if (!db.signedIn) return fail(401, "Sign in to the demo account.");
+      if (method === "GET" && action.startsWith("request/")) return ok({ userId: db.user.id, clientName: "Claude", callbackUri });
+      if (method === "GET" && action === "connections") return ok({ connections: db.mcpConnections });
+      if (method === "POST" && action === "approve") {
+        // As the real endpoint does: back to the reviewed address with the caller's state, carrying a
+        // code for an explicit allow and error=access_denied for anything else.
+        const target = new URL(callbackUri);
+        target.searchParams.set("state", "mock-state");
+        if (body.allow === true) target.searchParams.set("code", "mock");
+        else target.searchParams.set("error", "access_denied");
+        return ok({ redirect: target.href });
+      }
+      if (method === "POST" && action === "disconnect") {
+        db.mcpConnections = db.mcpConnections.filter((connection) => connection.id !== body.id);
+        persist();
+        return ok({ ok: true });
+      }
+      return fail(404, "Unknown connection request.");
+    }
     if (p.startsWith("/api/auth/")) {
       if (method !== "POST") return fail(405, "Use POST.");
       db.signedIn = !p.endsWith("/logout");

@@ -1,13 +1,63 @@
-/* index.html paints a themed page behind the loading splash; this page stays on white. */
-html:has(.mcp-connect) { background: #fff; }
-.mcp-connect { max-width: 600px; margin: 48px auto; padding: 24px; color: #202c28; background: #fff; font: 16px/1.6 system-ui,sans-serif; }
-.mcp-connect h1 { font-size: 28px; line-height: 1.2; }
-.mcp-connect h2 { font-size: 20px; }
-.mcp-connect label { display: block; margin: 16px 0; }
-.mcp-connect input { display: block; box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #74847d; border-radius: 4px; font: inherit; }
-.mcp-connect button { padding: 10px 16px; cursor: pointer; font: inherit; border: 1px solid #456b58; border-radius: 4px; background: #eef5f0; color: #173d28; }
-.mcp-connect button:disabled { opacity: .55; cursor: wait; }
-.mcp-connect a { color: #21613c; text-decoration: underline; }
-.mcp-connect [role=alert] { color: #992722; }
-.mcp-connect section { border-top: 1px solid #c8d1cb; margin-top: 20px; padding-top: 16px; }
-.mcp-connect-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+/* The connect-an-app consent page and the connected-apps list. Built on the Sky tokens, so it
+   matches the rest of the app in light and dark; McpConnect follows the saved theme. */
+html:has(.mcp-connect) { background: var(--sky-bg); }
+.mcp-connect {
+  box-sizing: border-box; width: min(600px, calc(100% - 32px)); margin: clamp(16px, 6vh, 56px) auto; padding: 28px clamp(20px, 5vw, 36px) 32px;
+  border-radius: 24px; background: var(--sky-surface); box-shadow: var(--sky-elevation);
+  color: var(--sky-label); font: 400 16px/1.55 var(--sky-font); -webkit-font-smoothing: antialiased;
+}
+.mcp-connect a.mcp-connect-brand {
+  display: inline-flex; align-items: center; gap: 10px; color: var(--sky-label); text-decoration: none;
+  font: 500 19px/1 var(--sky-display); letter-spacing: -0.01em;
+}
+.mcp-connect-brand > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--sky-brand-tile); color: var(--sky-brand-line); }
+.mcp-connect h1 { margin: 28px 0 8px; font: 500 34px/1.1 var(--sky-display); letter-spacing: -0.022em; text-wrap: balance; }
+.mcp-connect h2 { margin: 28px 0 8px; font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -0.01em; }
+.mcp-connect p { margin: 10px 0; color: var(--sky-secondary); text-wrap: pretty; }
+.mcp-connect strong { color: var(--sky-label); font-weight: 600; }
+.mcp-connect a { color: var(--sky-accent); text-decoration: underline; text-underline-offset: 3px; }
+.mcp-connect a:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 3px; border-radius: 4px; }
+.mcp-connect code { padding: 2px 6px; border-radius: 6px; background: var(--sky-fill); color: var(--sky-label); font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* What the app may read, as a ruled checklist. */
+.mcp-connect ul { margin: 14px 0; padding: 0; list-style: none; border-top: 1px solid var(--sky-separator); }
+.mcp-connect li {
+  position: relative; padding: 11px 0 11px 30px; border-bottom: 1px solid var(--sky-separator);
+  color: var(--sky-label); font-size: 15px; line-height: 1.45;
+}
+.mcp-connect li::before {
+  content: ""; position: absolute; left: 4px; top: 15px; width: 12px; height: 7px;
+  border: solid var(--sky-accent); border-width: 0 0 2.5px 2.5px; transform: rotate(-45deg);
+}
+
+.mcp-connect label { display: block; margin: 16px 0 0; color: var(--sky-secondary); font-size: 13px; font-weight: 550; }
+.mcp-connect input {
+  display: block; box-sizing: border-box; width: 100%; min-height: 48px; margin-top: 6px; padding: 0 14px;
+  border: 1px solid var(--sky-field-border); border-radius: 12px; background: var(--sky-field); color: var(--sky-label);
+  font: inherit; font-size: 16px; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mcp-connect input:hover { border-color: var(--sky-field-border-hover); }
+.mcp-connect input:focus-visible { border-color: var(--sky-accent); outline: none; box-shadow: 0 0 0 1px var(--sky-accent), var(--sky-focus-ring); }
+
+/* Buttons are quiet by default; the one that proceeds (Sign in, Allow read access) is the accent. */
+.mcp-connect button {
+  min-height: 44px; padding: 0 18px; border: 0; border-radius: 12px; background: var(--sky-raised); box-shadow: var(--sky-raised-shadow);
+  color: var(--sky-label); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mcp-connect button:hover:not(:disabled) { background: var(--sky-raised-hover); }
+.mcp-connect form button, .mcp-connect-actions button:first-child { background: var(--sky-accent-fill); box-shadow: none; color: var(--sky-on-accent); }
+.mcp-connect form button:hover:not(:disabled), .mcp-connect-actions button:first-child:hover:not(:disabled) { background: var(--sky-accent-fill-hover); }
+.mcp-connect form button { margin-top: 20px; }
+.mcp-connect p button { display: inline; min-height: 0; padding: 0; background: none; box-shadow: none; color: var(--sky-accent); font-size: inherit; font-weight: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.mcp-connect button:disabled { opacity: 0.55; cursor: wait; }
+.mcp-connect button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
+
+.mcp-connect [role="alert"] {
+  margin: 16px 0 0; padding: 12px 16px; border-radius: 14px; background: var(--sky-caution-fill);
+  box-shadow: inset 4px 0 0 var(--sky-caution); color: var(--sky-caution); font-size: 15px; font-weight: 550;
+}
+.mcp-connect section { margin-top: 16px; padding: 16px 18px; border-radius: 16px; background: var(--sky-field); box-shadow: inset 0 0 0 1px var(--sky-field-border); }
+.mcp-connect section h2 { margin: 0 0 4px; font-size: 17px; }
+.mcp-connect section p { margin: 0 0 12px; font-size: 14px; }
+.mcp-connect-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }

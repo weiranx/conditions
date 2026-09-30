@@ -247,17 +247,22 @@ export function BriefSections({ w, hours, clock, onOpen, onReadAll, route = null
         statusText={!daylightKnown ? "Unavailable" : spare! < 0 ? `Back ${durationLabel(spare!)} after sunset` : start! < sunrise! ? `Starts before sunrise · ${durationLabel(spare!)} spare` : `${durationLabel(spare!)} spare`}
         caption={daylightKnown ? `Back at ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}.` : "Sunrise and sunset are unavailable for this plan."}>
         {daylightKnown && (
-          <svg className="sky-viz" viewBox="0 0 240 70" role="img"
-            aria-label={`Sunrise ${w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}. Out ${w.displayStartTime}, back ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}.`}>
-            <line x1="6" y1="58" x2="234" y2="58" className="s-secondary" strokeOpacity=".35" />
-            <path d="M10 58 Q120 -42 230 58" fill="none" className="s-secondary" strokeOpacity=".35" strokeDasharray="2 5" strokeLinecap="round" />
-            <polyline fill="none" className={daylightStatus === "over" ? "s-caution" : "s-accent"} strokeWidth="4" strokeLinecap="round"
-              points={Array.from({ length: 21 }, (_, k) => arcPoint(start! + ((back! - start!) * k) / 20).join(",")).join(" ")} />
-            <circle cx={arcPoint(back!)[0]} cy={arcPoint(back!)[1]} r="5" className={daylightStatus === "over" ? "f-caution" : "f-accent"} />
-            <circle cx="230" cy="58" r="7" fill="#f4b25c" />
-            <text x="10" y="70">{w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}</text>
-            <text x="236" y="70" textAnchor="end">{w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}</text>
-          </svg>
+          <>
+            <svg className="sky-viz" viewBox="0 0 240 66" role="img"
+              aria-label={`Sunrise ${w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}. Out ${w.displayStartTime}, back ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}.`}>
+              <line x1="6" y1="58" x2="234" y2="58" className="s-secondary" strokeOpacity=".35" />
+              <path d="M10 58 Q120 -42 230 58" fill="none" className="s-secondary" strokeOpacity=".35" strokeDasharray="2 5" strokeLinecap="round" />
+              <polyline fill="none" className={daylightStatus === "over" ? "s-caution" : "s-accent"} strokeWidth="4" strokeLinecap="round"
+                points={Array.from({ length: 21 }, (_, k) => arcPoint(start! + ((back! - start!) * k) / 20).join(",")).join(" ")} />
+              <circle cx={arcPoint(back!)[0]} cy={arcPoint(back!)[1]} r="5" className={daylightStatus === "over" ? "f-caution" : "f-accent"} />
+              <circle cx="230" cy="58" r="7" fill="#f4b25c" />
+            </svg>
+            {/* The times sit under the drawing, as text that keeps its size in a narrow tile. */}
+            <span className="sky-viz-ends" aria-hidden="true">
+              <span>{w.formatClockForStyle(data.solar?.sunrise, prefs.timeStyle)}</span>
+              <span>{w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}</span>
+            </span>
+          </>
         )}
       </CheckCard>
     ) },
@@ -282,14 +287,13 @@ export function BriefSections({ w, hours, clock, onOpen, onReadAll, route = null
         status={avalanche.relevant && avalancheLevel === null ? "missing" : avalancheLevel !== null && avalancheLevel >= 3 ? "over" : "ok"}
         statusText={avalancheLevel !== null && avalancheLevel > 0 ? ["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel] || `Level ${avalancheLevel}` : avalanche.relevant ? "No rating" : "Not relevant"}
         caption={avalanche.briefCaption}>
-        <svg className="sky-viz" viewBox="0 0 240 40" role="img" aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5.` : "No avalanche danger rating."}>
-          {["Low", "Mod", "Consid", "High", "Extreme"].map((label, i) => (
-            <g key={label}>
-              <rect x={i * 49} y="4" width="44" height="16" rx="5" className={avalancheLevel === i + 1 ? (i >= 2 ? "f-caution" : "f-label") : "f-fill"} />
-              <text x={i * 49 + 22} y="36" textAnchor="middle">{label}</text>
-            </g>
+        {/* The North American danger scale, one to five. HTML rather than SVG so the numerals keep their size in a narrow tile. */}
+        <span className="sky-danger" role="img" aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5.` : "No avalanche danger rating."}>
+          {[1, 2, 3, 4, 5].map((step) => (
+            <span key={step} aria-hidden="true" title={["Low", "Moderate", "Considerable", "High", "Extreme"][step - 1]}
+              className={avalancheLevel === step ? (step >= 3 ? "is-over" : "is-current") : undefined}>{step}</span>
           ))}
-        </svg>
+        </span>
       </CheckCard>
     ) },
     { key: "air", over: fireHigh || (measured(aqi) && aqi > 100), card: (

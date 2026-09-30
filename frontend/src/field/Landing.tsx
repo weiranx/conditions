@@ -146,7 +146,9 @@ export default function Landing() {
             />
           </div>
           <figcaption>
-            The top of a real report, running on sample data. Hover, click or drag across the sky, or use the arrow keys, to read any hour.
+            The top of a real report, running on sample data.{" "}
+            <span className="landing-hint-pointer">Hover, click or drag across the sky, or use the arrow keys, to read any hour.</span>
+            <span className="landing-hint-touch">Touch and drag across the sky to read any hour.</span>
           </figcaption>
         </figure>
 

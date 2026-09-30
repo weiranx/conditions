@@ -245,6 +245,19 @@ html:has(.landing) {
   line-height: 1.55;
 }
 
+/* The sample's caption names the gestures the screen has: a finger has no hover and no arrow keys. */
+.landing-hint-touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .landing-hint-pointer {
+    display: none;
+  }
+  .landing-hint-touch {
+    display: inline;
+  }
+}
+
 /* Footer */
 .landing-footer {
   display: flex;
@@ -311,5 +324,21 @@ html:has(.landing) {
   }
   .landing-sources .landing-source-from {
     grid-column: 1;
+  }
+}
+
+/* On a phone the quiet text links get a 44px-tall hit area, without moving anything on the page. */
+@media (max-width: 650px) {
+  .landing-bar nav a,
+  .landing-footer nav a,
+  .landing-link {
+    position: relative;
+  }
+  .landing-bar nav a::after,
+  .landing-footer nav a::after,
+  .landing-link::after {
+    content: "";
+    position: absolute;
+    inset: -12px -6px;
   }
 }

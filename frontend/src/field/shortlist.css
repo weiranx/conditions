@@ -11,7 +11,8 @@
 .shortlist-controls > p { margin: 6px 0 16px; font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
 .shortlist-controls fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .shortlist-controls fieldset:disabled { opacity: .6; }
-.shortlist-controls .field-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+/* The date and time fields carry a native picker icon, so their column is the wider one. */
+.shortlist-controls .field-input-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; margin-top: 14px; }
 .shortlist-controls label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
 .shortlist-controls input, .shortlist-controls select {
   width: 100%; min-width: 0; min-height: 44px; padding: 0 12px; border: 0; border-radius: 12px;

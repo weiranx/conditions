@@ -93,7 +93,8 @@
   .field-chat-chevron, .field-chat-form { transition: none; }
 }
 @media (max-width: 650px) {
-  .field-chat-heading .field-chat-screen-button { padding: 0; width: 40px; }
+  .field-chat-heading .field-chat-screen-button { padding: 0; width: 44px; }
+  .field-chat .field-chat-screen-button { min-height: 44px; min-width: 44px; }
   .field-chat-screen-button span { display: none; }
   .field-chat-toggle { gap: 10px; }
   .field-chat-mark { width: 34px; height: 34px; }

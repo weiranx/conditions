@@ -28,6 +28,7 @@ import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
 import { RouteNote } from "./sky/RouteNote";
 import { summarizePlannedRoute } from "./route-planning";
+import { closeDetailsOnOutsidePress } from "./touch";
 import { BriefSections } from "./sky/BriefSections";
 import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
@@ -231,6 +232,8 @@ export function Report({
     const heading = topRef.current?.querySelector<HTMLElement>(".sky-chapter-head h1");
     heading?.focus({ preventScroll: true });
   }, [navigation]);
+  // The actions menu closes when focus leaves it, which never happens on iOS Safari: a tap elsewhere closes it instead.
+  useEffect(() => closeDetailsOnOutsidePress(".report-actions-menu"), []);
   function go(next: View, anchor?: string) {
     if (activeView === "brief") briefScroll.current = window.scrollY;
     focusRequest.current = next === "brief" ? "brief" : anchor ? { anchor } : "chapter";
