@@ -1,0 +1,11 @@
+# Cloudflare Pages response headers (vercel.json holds the same rules for a Vercel deploy).
+
+# Vite names every file under /assets after a hash of its content, so a URL never changes meaning and a
+# browser can keep it for good. Without this rule Pages sends max-age=14400, and after four hours a browser
+# asks the network about every chunk again.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The service worker and the page that starts it must always be checked, or a deploy would not reach anyone.
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
