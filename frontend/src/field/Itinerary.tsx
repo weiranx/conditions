@@ -281,7 +281,8 @@ function DayCard({ workspace: w, day, stage, lastDay }: { workspace: Workspace; 
         {day.incompleteHours > 0 && <li><CircleDashed size={13} aria-hidden="true" /> {day.incompleteHours} h without a complete forecast</li>}
         {checked?.partialData && <li><CircleDashed size={13} aria-hidden="true" /> Some sources were unavailable</li>}
         {day.lowConfidence && <li>{day.daysAhead} days out: forecast skill is low</li>}
-        {checked && checked.alertCount > 0 && <li><TriangleAlert size={13} aria-hidden="true" /> {checked.alertCount} active weather {checked.alertCount === 1 ? "alert" : "alerts"}</li>}
+        {checked && checked.alertCount === null && <li><CircleDashed size={13} aria-hidden="true" /> Weather alerts not confirmed</li>}
+        {checked && checked.alertCount !== null && checked.alertCount > 0 && <li><TriangleAlert size={13} aria-hidden="true" /> {checked.alertCount} active weather {checked.alertCount === 1 ? "alert" : "alerts"}</li>}
       </ul>
       {checked && (
         <button type="button" className="field-text-button sky-trip-open" onClick={() => w.openItineraryDay(stage.index)}>

@@ -13,6 +13,8 @@ interface UseStartTimeScenariosParams {
   travelWindowHours: number;
   /** The traveler's limits, units and approach, as a query string. */
   planSettingsQuery: string;
+  /** The planned activity: it weights the hazards in each departure's score and decision. */
+  activity?: string;
 }
 
 /**
@@ -27,9 +29,10 @@ export function useStartTimeScenarios({
   position,
   travelWindowHours,
   planSettingsQuery,
+  activity,
 }: UseStartTimeScenariosParams) {
   const hours = comparisonTravelHours(travelWindowHours);
-  const planKey = JSON.stringify([position.lat, position.lng, forecastDate, currentStartTime, hours, planSettingsQuery]);
+  const planKey = JSON.stringify([position.lat, position.lng, forecastDate, currentStartTime, hours, planSettingsQuery, activity ?? null]);
   const [expandedPlanKey, setExpandedPlanKey] = useState<string | null>(null);
   const extended = expandedPlanKey === planKey;
   const requestKey = JSON.stringify([planKey, extended]);
@@ -50,6 +53,7 @@ export function useStartTimeScenarios({
       date: forecastDate,
       start: currentStartTime,
       travel_window_hours: String(hours),
+      ...(activity ? { activity } : {}),
       ...(extended ? { set: 'extended' } : {}),
     });
     (async () => {
@@ -75,7 +79,7 @@ export function useStartTimeScenarios({
       }
     })();
     return () => controller.abort();
-  }, [enabled, requestKey, sourceReport, position.lat, position.lng, forecastDate, currentStartTime, hours, extended, planSettingsQuery]);
+  }, [enabled, requestKey, sourceReport, position.lat, position.lng, forecastDate, currentStartTime, hours, extended, planSettingsQuery, activity]);
 
   const generateMore = useCallback(() => setExpandedPlanKey(planKey), [planKey, setExpandedPlanKey]);
   return {

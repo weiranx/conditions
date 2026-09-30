@@ -223,6 +223,25 @@ test('the trip brief shows every day and night, and says when a day could not be
 });
 
 
+test('a day whose alert feed missed says its alerts were not confirmed; one with alerts counts them', () => {
+  const html = renderToStaticMarkup(
+    <AiAccessContext.Provider value={{ requestAiAccess: () => true }}>
+      <Itinerary
+        workspace={workspaceFor(checked(['clear', 'clear', 'clear'], {
+          edit: (report, index) => {
+            if (index === 0) report.alerts = { status: 'unavailable', activeCount: 0, totalActiveCount: 0, alerts: [] };
+            if (index === 1) report.alerts = { status: 'ok', activeCount: 2, totalActiveCount: 2, alerts: [{ event: 'Wind Advisory' }, { event: 'Frost Advisory' }] };
+          },
+        }))}
+        onEdit={() => {}}
+      />
+    </AiAccessContext.Provider>,
+  );
+  assert.equal((html.match(/Weather alerts not confirmed/g) || []).length, 1, 'only the day the feed missed');
+  assert.match(html, /2 active weather alerts/);
+  assert.doesNotMatch(html, /null/);
+});
+
 test('a saved trip keeps the backend’s assessment and reads back whole', () => {
   const draft = draftFor();
   const check = checked(['clear', 'storm', 'clear'], { draft });

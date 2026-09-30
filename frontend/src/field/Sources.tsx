@@ -174,7 +174,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
         </div>
       )}
       <div className="sky-section">
-        <SupplementalEvidence evidence={w.safetyData?.supplementalEvidence} localize={w.localizeUnitText} />
+        <SupplementalEvidence evidence={w.safetyData?.supplementalEvidence} localize={w.localizeUnitText} timeStyle={w.preferences.timeStyle} />
       </div>
 
       <div className="sky-duo sky-section">

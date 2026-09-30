@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import { useSearchSuggestions } from "../src/hooks/useSearchSuggestions";
 import { getLocalPopularSuggestions, isSameSuggestionPlace, rankAndDeduplicateSuggestions, searchRequestPath } from "../src/lib/search";
 import { filterSuggestionBucket, mergeSuggestionBuckets, normalizeStoredSuggestion } from "../src/app/suggestion-storage";
 import { SuggestionLabel } from "../src/field/SuggestionLabel";
@@ -82,4 +86,90 @@ test("searches lean toward the plan's area, sent only to the whole degree", () =
   assert.equal(searchRequestPath("snow lake", { lat: 47.4912, lon: -121.7311 }), "/api/search?q=snow+lake&near=47%2C-122");
   assert.equal(searchRequestPath("snow lake", null), "/api/search?q=snow+lake");
   assert.equal(searchRequestPath("x", { lat: Number.NaN, lon: 1 }), "/api/search?q=x");
+});
+
+test("a saved place shows the name it was given, commas and all", () => {
+  const camp = { name: "Camp Muir, upper snowfield", lat: 46.8358, lon: -121.7318, class: "saved", elevationFt: 10188 };
+  assert.match(
+    renderToStaticMarkup(<SuggestionLabel item={camp} elevationUnit="ft" />),
+    /<strong>Camp Muir, upper snowfield<\/strong><small>Saved · 10,188 ft<\/small>/,
+  );
+});
+
+const SAVED_KEY = "summitsafe-saved-places";
+const RECENT_KEY = "summitsafe-recent-searches";
+
+// The search hook in a page whose local storage starts as given.
+async function mountSearch(t, storage = {}) {
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
+  for (const [key, value] of Object.entries(storage)) dom.window.localStorage.setItem(key, JSON.stringify(value));
+  const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  globalThis.fetch = () => new Promise(() => {});
+  const box = {};
+  function Probe() {
+    box.hook = useSearchSuggestions({ initialSearchQuery: "", updateObjectivePosition: () => {} });
+    return null;
+  }
+  const root = createRoot(document.getElementById("root"));
+  t.after(async () => {
+    await act(async () => root.unmount());
+    dom.window.close();
+    Object.assign(globalThis, previous);
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+  await act(async () => root.render(<Probe />));
+  return { box, stored: (key) => JSON.parse(dom.window.localStorage.getItem(key) ?? "null") };
+}
+
+test("a place can be saved, is recognised at the same spot, and toggling removes it", async (t) => {
+  const { box, stored } = await mountSearch(t);
+  const si = { name: "Mount Si, King County, Washington", lat: 47.4912, lon: -121.7311, elevationFt: 4167 };
+  assert.equal(box.hook.isPlaceSaved(si), false);
+  await act(async () => box.hook.toggleSavedPlace(si));
+  assert.equal(box.hook.isPlaceSaved({ lat: 47.4914, lon: -121.7313 }), true, "a few metres away is the same spot");
+  assert.equal(box.hook.isPlaceSaved({ lat: 47.5, lon: -121.7311 }), false, "a kilometre away is not");
+  assert.deepEqual(stored(SAVED_KEY).map((place) => [place.name, place.elevationFt]), [["Mount Si, King County, Washington", 4167]]);
+
+  await act(async () => box.hook.toggleSavedPlace({ ...si, name: "Si", lat: 47.4913 }));
+  assert.equal(box.hook.isPlaceSaved(si), false);
+  assert.deepEqual(stored(SAVED_KEY), []);
+});
+
+test("renaming the plan's place renames its saved copy, and only that", async (t) => {
+  const { box, stored } = await mountSearch(t);
+  await act(async () => box.hook.toggleSavedPlace({ name: "46.8523, -121.7603", lat: 46.8523, lon: -121.7603 }));
+  await act(async () => box.hook.toggleSavedPlace({ name: "Elsewhere", lat: 40, lon: -110 }));
+  await act(async () => box.hook.renameSavedPlace({ lat: 46.8523, lon: -121.7603 }, "Camp Muir, upper snowfield"));
+  assert.deepEqual(stored(SAVED_KEY).map((place) => place.name), ["Elsewhere", "Camp Muir, upper snowfield"]);
+
+  await act(async () => box.hook.renameSavedPlace({ lat: 1, lon: 1 }, "Nowhere"));
+  assert.deepEqual(stored(SAVED_KEY).map((place) => place.name), ["Elsewhere", "Camp Muir, upper snowfield"]);
+});
+
+test("saved places lead the list, and a recent pick of the same place is not listed twice", async (t) => {
+  const saved = { name: "Camp Muir, Pierce County, Washington", lat: 46.8358, lon: -121.7318 };
+  const sameAsRecent = { name: "Camp Muir", lat: 46.8359, lon: -121.7319 };
+  const other = { name: "Mount Si", lat: 47.4912, lon: -121.7311 };
+  const { box } = await mountSearch(t, { [SAVED_KEY]: [saved], [RECENT_KEY]: [other, sameAsRecent] });
+  assert.deepEqual(box.hook.savedPlaces.map((place) => place.class), ["saved"], "a place loaded from storage is a saved one");
+
+  await act(async () => box.hook.fetchSuggestions(""));
+  const listed = box.hook.suggestions;
+  assert.deepEqual([listed[0].name, listed[0].class], [saved.name, "saved"]);
+  assert.equal(listed.filter((item) => item.name.startsWith("Camp Muir")).length, 1);
+  assert.ok(listed.some((item) => item.name === "Mount Si" && item.class === "recent"));
+});
+
+test("no more than 50 places are kept, the newest first", async (t) => {
+  const { box, stored } = await mountSearch(t);
+  for (let i = 0; i < 52; i += 1) {
+    await act(async () => box.hook.toggleSavedPlace({ name: `Place ${i}`, lat: 30 + i * 0.1, lon: -100 }));
+  }
+  assert.equal(box.hook.savedPlaces.length, 50);
+  assert.equal(stored(SAVED_KEY).length, 50);
+  assert.equal(box.hook.savedPlaces[0].name, "Place 51");
+  assert.equal(box.hook.savedPlaces.at(-1).name, "Place 2");
 });

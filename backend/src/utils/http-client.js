@@ -60,6 +60,14 @@ const createCircuitBreaker = ({ name, failureThreshold = 5, resetTimeMs = 60000 
  * (fast-fail) while the breaker is open, and records success/failure on each attempt
  * so chronically-flaky upstreams (NOAA, avalanche.org) stop being hammered with
  * doomed requests once they're clearly down.
+ *
+ * An error flagged `upstreamRefusedRequest` means the upstream answered but declined this
+ * particular request (NOAA's 404 for a point outside the US). That shows it is up, so it
+ * ends a failure streak instead of extending it; otherwise five lookups of places outside
+ * the forecast's coverage would fast-fail everyone's requests for a minute.
+ *
+ * `countFailure(error)` can return false for a failure the upstream did not cause, such as a
+ * caller that gave up: it then counts neither for nor against the upstream.
  */
 const withCircuitBreaker = async (breaker, fn, { countFailure = () => true } = {}) => {
   if (breaker.isOpen) {
@@ -70,8 +78,9 @@ const withCircuitBreaker = async (breaker, fn, { countFailure = () => true } = {
     breaker.recordSuccess();
     return result;
   } catch (error) {
+    if (error?.upstreamRefusedRequest) breaker.recordSuccess();
     // A failure the upstream did not cause, such as a caller that gave up, says nothing about its health.
-    if (countFailure(error)) breaker.recordFailure();
+    else if (countFailure(error)) breaker.recordFailure();
     throw error;
   }
 };

@@ -430,7 +430,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                           { label: "Cloud cover", value: (d: MultiDayTripForecastDay) => percent(d.cloudCoverPct) },
                           { label: "Visibility risk", value: (d: MultiDayTripForecastDay) => d.visibilityLevel || "Unavailable" },
                           { label: "Air quality", value: (d: MultiDayTripForecastDay) => isNumber(d.airQualityAqi) ? `${d.airQualityAqi} AQI` : "Unavailable" },
-                          { label: "Active alerts", value: (d: MultiDayTripForecastDay) => String(d.alertCount) },
+                          { label: "Active alerts", value: (d: MultiDayTripForecastDay) => d.alertCount === null ? "Unavailable" : String(d.alertCount) },
                           { label: "Sunrise / sunset", value: (d: MultiDayTripForecastDay) => `${d.sunrise ? formatClockForStyle(d.sunrise, timeStyle) : "—"} / ${d.sunset ? formatClockForStyle(d.sunset, timeStyle) : "—"}` },
                         ].map((metric) => (
                           <tr key={metric.label}><th scope="row">{metric.label}</th>{days.map((day) => <td key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>{metric.value(day)}</td>)}</tr>
@@ -466,7 +466,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     <div><dt>Peak rain / snow chance</dt><dd>{percent(selected.peakPrecipChance)}</dd><small>{percent(selected.precipChance)} at departure</small></div>
                     <div><dt>Rain / snow expected</dt><dd>{amount(selected.expectedRainIn)} / {amount(selected.expectedSnowIn, true)}</dd></div>
                     <div><dt>Visibility</dt><dd>{selected.visibilityLevel || "Unavailable"}</dd><small>{selected.visibilitySummary}</small></div>
-                    <div><dt>Air quality / alerts</dt><dd>{selected.airQualityAqi ?? "—"} AQI · {selected.alertCount} alerts</dd></div>
+                    <div><dt>Air quality / alerts</dt><dd>{selected.airQualityAqi ?? "—"} AQI · {selected.alertCount === null ? "alerts unavailable" : `${selected.alertCount} alerts`}</dd></div>
                     <div><dt>Daylight</dt><dd>{selected.sunrise ? formatClockForStyle(selected.sunrise, timeStyle) : "—"} – {selected.sunset ? formatClockForStyle(selected.sunset, timeStyle) : "—"}</dd><small>{selected.dayLength}</small></div>
                     <div><dt>Source freshness</dt><dd>{sentenceCase(ageLabel(selected.sourceIssuedTime))}</dd><small>{selected.partialData ? "Partial data. Verify current sources." : "Forecast evidence available"}</small></div>
                   </dl>

@@ -1,16 +1,21 @@
 import { Sunrise, Sunset } from "lucide-react";
-import { parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
+import { formatClockForStyle, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
+import type { TimeStyle } from "../app/types";
 export function DaylightChart({
   start,
   hours,
   sunrise,
   sunset,
+  timeStyle,
 }: {
   start: string;
   hours: number;
   sunrise?: string;
   sunset?: string;
+  /** The traveler's clock: sunrise and sunset arrive as the provider wrote them ("6:30 AM"). */
+  timeStyle?: TimeStyle;
 }) {
+  const clock = (value: string | undefined) => (timeStyle ? formatClockForStyle(value, timeStyle) : value ?? "");
   const begin = parseTimeInputMinutes(start),
     rise = parseTimeInputMinutes(sunrise || "") ?? parseSolarClockMinutes(sunrise),
     set = parseTimeInputMinutes(sunset || "") ?? parseSolarClockMinutes(sunset);
@@ -22,17 +27,17 @@ export function DaylightChart({
       <figcaption>
         <span>
           <Sunrise size={18} />
-          {sunrise} sunrise
+          {clock(sunrise)} sunrise
         </span>
         <span>
           <Sunset size={18} />
-          {sunset} sunset
+          {clock(sunset)} sunset
         </span>
       </figcaption>
       <div
         className="daylight-track"
         role="img"
-        aria-label={`Daylight from ${sunrise} to ${sunset}. Trip begins at ${start} for ${hours} hours${duration > 1440 ? ", returning the following day" : ""}.`}
+        aria-label={`Daylight from ${clock(sunrise)} to ${clock(sunset)}. Trip begins at ${clock(start)} for ${hours} hours${duration > 1440 ? ", returning the following day" : ""}.`}
       >
         {Array.from({ length: duration / 1440 }, (_, day) => (
           <span
@@ -53,9 +58,9 @@ export function DaylightChart({
         />
       </div>
       <div className="daylight-axis">
-        <span>00:00</span>
-        <span>{duration === 1440 ? "12:00" : "Next day"}</span>
-        <span>24:00{duration > 1440 ? " +1 day" : ""}</span>
+        <span>{clock("00:00")}</span>
+        <span>{duration === 1440 ? clock("12:00") : "Next day"}</span>
+        <span>{timeStyle === "ampm" ? "12:00 AM" : "24:00"}{duration > 1440 ? " +1 day" : ""}</span>
       </div>
       <div className="daylight-legend">
         <span>Daylight</span>

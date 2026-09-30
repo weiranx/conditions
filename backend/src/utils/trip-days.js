@@ -14,6 +14,13 @@ const { toFiniteOrNull } = require('./numbers');
 
 const DECISION_PRIORITY = { GO: 2, CAUTION: 1, 'NO-GO': 0 };
 
+// NWS statuses that mean the alert feed answered. Anything else ('unavailable') is an outage,
+// and its empty alert list says nothing about active alerts. A report from before statuses
+// existed has none and counts as answered.
+const ANSWERED_ALERT_STATUSES = new Set(['ok', 'none', 'none_for_selected_start']);
+const alertFeedAnswered = (alerts) => Boolean(alerts) && typeof alerts === 'object'
+  && (alerts.status === undefined || ANSWERED_ALERT_STATUSES.has(alerts.status));
+
 // The highest of the readings that exist; a missing reading is not a calm or dry one.
 const peakReading = (values) => {
   const known = values.map(toFiniteOrNull).filter((value) => value !== null);
@@ -124,7 +131,8 @@ const buildTripDay = (report, context, { requiredHours = 1 } = {}) => {
     dayLength: report?.solar?.dayLength || null,
     visibilityLevel: weather.visibilityRisk?.level || null,
     visibilitySummary: weather.visibilityRisk?.summary || null,
-    alertCount: Math.max(0, Math.round(Number(report?.alerts?.activeCount) || 0)),
+    /** Null when the alert feed did not answer: an unchecked day has no alerts on record, not zero. */
+    alertCount: alertFeedAnswered(report?.alerts) ? Math.max(0, Math.round(Number(report.alerts.activeCount) || 0)) : null,
     airQualityAqi: roundOrNull(toFiniteOrNull(airQuality.forecast?.usAqi ?? airQuality.usAqi)),
     airQualityCategory: String(airQualityCategory || '').trim().toLowerCase() === 'unknown' ? null : airQualityCategory,
     comfortScore: toFiniteOrNull(report?.pleasantness?.score),

@@ -72,13 +72,13 @@ function planWorkspace(overrides = {}) {
     handleFocus: () => {},
     handleInputChange: () => {},
     handleSearchKeyDown: () => {},
-    isPlaceSaved: () => false,
-    toggleSavedPlace: record('toggleSavedPlace'),
     setShowSuggestions: () => {},
     setSearchInputValue: record('setSearchInputValue'),
     setForecastDate: record('setForecastDate'),
     navigateToView: record('navigateToView'),
     handleGenerateReport: record('handleGenerateReport'),
+    isPlaceSaved: () => false,
+    toggleSavedPlace: record('toggleSavedPlace'),
     ...overrides,
   };
 }
@@ -200,6 +200,37 @@ test('a searched summit shows its mapped elevation on the place card', async (t)
   const env = setup(t);
   await env.render(<WorkspacePlan workspace={planWorkspace({ searchedPlaceElevationFt: 14411, formatElevationDisplay: (ft) => `${ft.toLocaleString('en-US')} ft` })} />);
   assert.match(document.querySelector('.sky-plan-place-name small').textContent, /^14,411 ft · /);
+});
+
+test('the place card offers a star that saves the place with its name, spot and elevation', async (t) => {
+  const env = setup(t);
+  const w = planWorkspace({ searchedPlaceElevationFt: 14411, formatElevationDisplay: (ft) => `${ft.toLocaleString('en-US')} ft` });
+  await env.render(<WorkspacePlan workspace={w} />);
+  const star = document.querySelector('.sky-plan-place-actions [aria-label="Save place"]');
+  assert.equal(star.getAttribute('aria-pressed'), 'false');
+  await act(async () => star.click());
+  assert.deepEqual(w.calls.filter(([name]) => name === 'toggleSavedPlace'),
+    [['toggleSavedPlace', { name: 'Mount Rainier', lat: 46.8523, lon: -121.7603, elevationFt: 14411 }]]);
+});
+
+test('a saved place shows a pressed star that takes it off the list again', async (t) => {
+  const env = setup(t);
+  const asked = [];
+  const w = planWorkspace({ isPlaceSaved: (spot) => { asked.push(spot); return true; } });
+  await env.render(<WorkspacePlan workspace={w} />);
+  assert.deepEqual(asked[0], { lat: 46.8523, lon: -121.7603 }, 'asks about the plan\'s own spot');
+  const star = document.querySelector('.sky-plan-place-actions [aria-label="Remove from saved places"]');
+  assert.equal(star.getAttribute('aria-pressed'), 'true');
+  assert.equal(document.querySelector('[aria-label="Save place"]'), null);
+  await act(async () => star.click());
+  const [call] = w.calls.filter(([name]) => name === 'toggleSavedPlace');
+  assert.equal(call[1].elevationFt, undefined, 'no elevation is invented when none is known');
+});
+
+test('the star waits while a picked point is still being looked up', async (t) => {
+  const env = setup(t);
+  await env.render(<WorkspacePlan workspace={planWorkspace({ pointLookup: { lat: 46.8523, lng: -121.7603, loading: true, elevationFt: null } })} />);
+  assert.equal(document.querySelector('[aria-label="Save place"]'), null);
 });
 
 test('the later forecast days are outlooks, and choosing one says so', async (t) => {

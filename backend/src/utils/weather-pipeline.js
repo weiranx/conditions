@@ -114,7 +114,12 @@ async function fetchWeatherPipeline({
         `https://api.weather.gov/points/${parsedLat.toFixed(4)},${parsedLon.toFixed(4)}`,
         fetchOptions,
       );
-      if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
+      if (!pointsRes.ok) {
+        const error = new Error('Failed to fetch NOAA points (Location might be outside US)');
+        // 400 and 404 mean NOAA has no forecast for this point, not that NOAA is down.
+        error.upstreamRefusedRequest = pointsRes.status === 400 || pointsRes.status === 404;
+        throw error;
+      }
       return pointsRes.json();
     }));
     const pointElevationMeters = parsePointElevationMeters(pointsData?.properties?.elevation?.value);
