@@ -3,6 +3,8 @@
 const {
   getScoreFeatureSnapshot,
   removeAvalancheNarrativeReferences,
+  removeAvalancheReferences,
+  removeDisabledFeatureReferences,
   reportMatchesScoreFeatures,
   sanitizeReportForFeatureFlags,
 } = require('../src/utils/report-feature-filter');
@@ -146,5 +148,79 @@ describe('report feature filtering', () => {
     )).toBe(
       'BIG PICTURE: Wind gusts reach 45 mph.\nBEST MOVE: Use sheltered terrain.',
     );
+  });
+});
+
+describe('alerts through the feature filter', () => {
+  const reportWith = (alerts) => ({
+    weather: { description: 'Clear', trend: [] },
+    safety: { score: 90, factors: [] },
+    alerts: { source: 'NOAA/NWS Active Alerts', highestSeverity: 'Unknown', ...alerts },
+  });
+  // The three ways a report reaches the filter with a feature turned off.
+  const filters = {
+    'sanitize (avalanche off)': (report) => sanitizeReportForFeatureFlags(report, { avalancheDetails: false }),
+    'removeAvalancheReferences': (report) => removeAvalancheReferences(report),
+    'removeDisabledFeatureReferences (fire off)': (report) => removeDisabledFeatureReferences(report, { fireRiskDetails: false }),
+  };
+
+  test.each(Object.keys(filters))('%s: an alert feed that was down is not turned into "no alerts"', (name) => {
+    const { alerts } = filters[name](reportWith({ status: 'unavailable', activeCount: 0, totalActiveCount: 0, alerts: [] }));
+    expect(alerts.status).toBe('unavailable');
+    expect(alerts.activeCount).toBe(0);
+    expect(alerts.highestSeverity).toBe('Unknown');
+  });
+
+  test.each(Object.keys(filters))('%s: "none at your start" keeps its meaning and the alerts that exist elsewhere', (name) => {
+    const { alerts } = filters[name](reportWith({
+      status: 'none_for_selected_start',
+      activeCount: 0,
+      totalActiveCount: 3,
+      note: 'No currently issued alert is active at the selected start time.',
+      alerts: [],
+    }));
+    expect(alerts.status).toBe('none_for_selected_start');
+    expect(alerts.totalActiveCount).toBe(3);
+    expect(alerts.note).toMatch(/selected start time/);
+  });
+
+  test('removing every listed alert leaves "none"', () => {
+    const report = reportWith({
+      status: 'ok',
+      activeCount: 1,
+      totalActiveCount: 1,
+      highestSeverity: 'Severe',
+      alerts: [{ event: 'Avalanche Warning', severity: 'Severe' }],
+    });
+    const { alerts } = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    expect(alerts).toMatchObject({ status: 'none', activeCount: 0, totalActiveCount: 0, alerts: [] });
+    expect(alerts.highestSeverity).toBeUndefined();
+  });
+
+  test('removing some alerts lowers the counts by that many, even beyond the six listed', () => {
+    const listed = [
+      { event: 'Avalanche Warning', severity: 'Extreme' },
+      { event: 'High Wind Warning', severity: 'Moderate' },
+      { event: 'Winter Weather Advisory', severity: 'Minor' },
+      { event: 'Wind Advisory', severity: 'Minor' },
+      { event: 'Frost Advisory', severity: 'Minor' },
+      { event: 'Dense Fog Advisory', severity: 'Minor' },
+    ];
+    const report = reportWith({ status: 'ok', activeCount: 8, totalActiveCount: 9, highestSeverity: 'Extreme', alerts: listed });
+    const { alerts } = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    expect(alerts.alerts.map((alert) => alert.event)).not.toContain('Avalanche Warning');
+    expect(alerts).toMatchObject({ status: 'ok', activeCount: 7, totalActiveCount: 8, highestSeverity: 'Moderate' });
+  });
+
+  test('a filter that removes nothing leaves the counts as they were', () => {
+    const report = reportWith({
+      status: 'ok',
+      activeCount: 8,
+      totalActiveCount: 9,
+      highestSeverity: 'Moderate',
+      alerts: [{ event: 'High Wind Warning', severity: 'Moderate' }],
+    });
+    const { alerts } = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
+    expect(alerts).toMatchObject({ status: 'ok', activeCount: 8, totalActiveCount: 9, highestSeverity: 'Moderate' });
   });
 });

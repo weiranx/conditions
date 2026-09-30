@@ -215,6 +215,30 @@ const removeDisabledAnalysisDetails = (analysis, flags) => {
   return filtered;
 };
 
+const ALERT_SEVERITY_RANK = { Unknown: 0, Minor: 1, Moderate: 2, Severe: 3, Extreme: 4 };
+
+/**
+ * Brings an alerts block back in step after alerts were dropped from its list: the counts fall by
+ * the alerts removed, and the highest severity follows the alerts left. Only removing every listed
+ * alert makes the status "none". A list that was already empty says something else, from an outage
+ * ("unavailable") or from no alert being active at the start, and keeps its status and counts.
+ */
+const settleAlerts = (alerts, listedBefore) => {
+  const kept = alerts.alerts.length;
+  const removed = Math.max(0, listedBefore - kept);
+  const fewer = (count) => (Number.isFinite(count) ? Math.max(kept, count - removed) : kept);
+  alerts.activeCount = fewer(alerts.activeCount);
+  alerts.totalActiveCount = fewer(alerts.totalActiveCount);
+  if (kept > 0) {
+    alerts.highestSeverity = alerts.alerts.reduce((highest, alert) => (
+      (ALERT_SEVERITY_RANK[alert?.severity] || 0) > (ALERT_SEVERITY_RANK[highest] || 0) ? alert.severity : highest
+    ), 'Unknown');
+  } else if (removed > 0) {
+    alerts.status = 'none';
+    delete alerts.highestSeverity;
+  }
+};
+
 const removeAvalancheReferences = (report) => {
   const filtered = cloneReport(report);
   delete filtered.avalanche;
@@ -224,18 +248,9 @@ const removeAvalancheReferences = (report) => {
     filtered.gear = filtered.gear.filter((item) => !containsAvalancheReference(item));
   }
   if (filtered.alerts && typeof filtered.alerts === 'object' && Array.isArray(filtered.alerts.alerts)) {
+    const listed = filtered.alerts.alerts.length;
     filtered.alerts.alerts = filtered.alerts.alerts.filter((alert) => !containsAvalancheReference(alert));
-    filtered.alerts.activeCount = filtered.alerts.alerts.length;
-    filtered.alerts.totalActiveCount = filtered.alerts.alerts.length;
-    if (filtered.alerts.alerts.length === 0) {
-      filtered.alerts.status = 'none';
-      delete filtered.alerts.highestSeverity;
-    } else {
-      const severityRank = { Unknown: 0, Minor: 1, Moderate: 2, Severe: 3, Extreme: 4 };
-      filtered.alerts.highestSeverity = filtered.alerts.alerts.reduce((highest, alert) => (
-        (severityRank[alert?.severity] || 0) > (severityRank[highest] || 0) ? alert.severity : highest
-      ), 'Unknown');
-    }
+    settleAlerts(filtered.alerts, listed);
   }
   return scrubAvalancheReferences(filtered);
 };
@@ -245,17 +260,8 @@ const removeDisabledFeatureReferences = (report, flags) => {
   if (patterns.length === 0) return cloneReport(report);
   const filtered = scrubDisabledReferences(report, patterns);
   if (filtered?.alerts && typeof filtered.alerts === 'object' && Array.isArray(filtered.alerts.alerts)) {
-    filtered.alerts.activeCount = filtered.alerts.alerts.length;
-    filtered.alerts.totalActiveCount = filtered.alerts.alerts.length;
-    if (filtered.alerts.alerts.length === 0) {
-      filtered.alerts.status = 'none';
-      delete filtered.alerts.highestSeverity;
-    } else {
-      const severityRank = { Unknown: 0, Minor: 1, Moderate: 2, Severe: 3, Extreme: 4 };
-      filtered.alerts.highestSeverity = filtered.alerts.alerts.reduce((highest, alert) => (
-        (severityRank[alert?.severity] || 0) > (severityRank[highest] || 0) ? alert.severity : highest
-      ), 'Unknown');
-    }
+    const listed = Array.isArray(report?.alerts?.alerts) ? report.alerts.alerts.length : filtered.alerts.alerts.length;
+    settleAlerts(filtered.alerts, listed);
   }
   return filtered;
 };
@@ -329,7 +335,9 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
     );
   }
   if (filtered.alerts && typeof filtered.alerts === 'object' && Array.isArray(filtered.alerts.alerts)) {
+    const listed = filtered.alerts.alerts.length;
     filtered.alerts.alerts = withoutDisabledReferenceItems(filtered.alerts.alerts);
+    settleAlerts(filtered.alerts, listed);
   }
   const closureAlerts = filtered.localConditions?.closures?.alerts;
   if (Array.isArray(closureAlerts)) {
