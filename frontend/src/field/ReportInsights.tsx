@@ -1,4 +1,4 @@
-import type { SafetyData } from '../app/types';
+import type { SafetyData, TimeStyle } from '../app/types';
 import { reportInsightItems } from '../app/report-insights';
 import { SourceLink } from './Details';
 import './report-insights.css';
@@ -10,10 +10,12 @@ type Insight = ReturnType<typeof reportInsightItems>[number];
 const disclaimerOnly = (item: Insight) =>
   item.tone === 'gap' || (item.tone === 'context' && ['access', 'station-wind', 'water'].includes(item.id));
 
-export function ReportInsights({ data, localize = text => text, onSources }: {
+export function ReportInsights({ data, localize = text => text, onSources, timeStyle = 'ampm' }: {
   data: SafetyData;
   localize?: (text: string) => string;
   onSources: () => void;
+  /** The traveler's clock for the times of the sources. */
+  timeStyle?: TimeStyle;
 }) {
   const items = reportInsightItems(data);
   const cautions = items.filter(item => item.decisionRelevant);
@@ -26,7 +28,7 @@ export function ReportInsights({ data, localize = text => text, onSources }: {
     <p className="report-insight-action"><strong>For your plan:</strong> {localize(item.action)}</p>
     {item.evidence.length > 0 && <details><summary>Why the report says this</summary>
       <ul>{item.evidence.map((source, i) => <li key={i}><strong>{source.source}</strong><span>{localize(source.detail)}</span>
-        {source.time && <time dateTime={source.time}>{Number.isFinite(Date.parse(source.time)) ? new Date(source.time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'Time unavailable'}</time>}
+        {source.time && <time dateTime={source.time}>{Number.isFinite(Date.parse(source.time)) ? new Date(source.time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', hour12: timeStyle !== '24h' }) : 'Time unavailable'}</time>}
         {source.url && <SourceLink url={source.url}>Open source</SourceLink>}
       </li>)}</ul>
     </details>}

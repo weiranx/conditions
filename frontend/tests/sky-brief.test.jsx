@@ -6,6 +6,8 @@ import { BriefSections } from "../src/field/sky/BriefSections";
 import { TilePopup } from "../src/field/sky/TilePopup";
 import { plainHeadline } from "../src/field/sky/plain-headline";
 import { WeatherDetail, AlertsDetail, DaylightDetail } from "../src/field/sky/TileDetails";
+import { Timing } from "../src/field/Timing";
+import { formatClockForStyle } from "../src/app/core";
 import { getDefaultUserPreferences } from "../src/app/preferences";
 import { buildSkyHours, skyRuns, sunProgress, shortHour, spanLabel, isOverHour } from "../src/field/sky/sky-model";
 import { evaluate, interpret } from "./evaluation-fixtures";
@@ -293,6 +295,33 @@ test("the alerts and daylight popups list what they are based on", () => {
   const daylight = renderToStaticMarkup(<DaylightDetail w={briefWorkspace({ alpineStartTime: "07:00", travelWindowHours: 10 })} />);
   assert.match(daylight, /Sunrise/);
   assert.match(daylight, /Spare at return/);
+});
+
+test("sunrise and sunset read on the traveler's clock in the daylight chart and the timing chapter", () => {
+  const timing = (timeStyle) => renderToStaticMarkup(<Timing hours={[]} workspace={briefWorkspace({
+    preferences: { ...getDefaultUserPreferences(), timeStyle },
+    formatClockForStyle,
+    startTimeScenarios: { comparison: null, loading: false, error: null, canGenerateMore: false, generateMore() {} },
+    alpineStartTime: "07:00", travelWindowHours: 10, returnExtendsPastMidnight: false,
+  }, { solar: { sunrise: "6:52 AM", sunset: "7:30 PM" }, featureFlags: {} })} />);
+  const twelve = timing("ampm");
+  assert.match(twelve, /<dt>Sunrise<\/dt><dd>6:52 AM<\/dd>/);
+  assert.match(twelve, /<dt>Sunset<\/dt><dd>7:30 PM<\/dd>/);
+  assert.match(twelve, /6:52 AM sunrise/);
+  const twentyFour = timing("24h");
+  assert.match(twentyFour, /<dt>Sunrise<\/dt><dd>06:52<\/dd>/);
+  assert.match(twentyFour, /<dt>Sunset<\/dt><dd>19:30<\/dd>/);
+  assert.match(twentyFour, /19:30 sunset/);
+  assert.doesNotMatch(twentyFour.slice(twentyFour.indexOf("Your day outside")), /[AP]M/);
+});
+
+test("when an alert ends reads on the traveler's clock", () => {
+  const alert = { event: "Wind Advisory", severity: "Moderate", headline: "Gusts to 45 mph", ends: "2026-09-17T21:00:00Z" };
+  const until = (timeStyle) => renderToStaticMarkup(<AlertsDetail w={briefWorkspace({ preferences: { ...getDefaultUserPreferences(), timeStyle } },
+    { alerts: { status: "ok", activeCount: 1, alerts: [alert] } })} />).match(/Until [^<]*/)?.[0];
+  assert.match(until("ampm"), /\b[AP]M\b/);
+  assert.match(until("24h"), /Until \w+,? \d{2}:\d{2}/);
+  assert.doesNotMatch(until("24h"), /\b[AP]M\b/);
 });
 
 test("the activity's two headline numbers sit above the checks, each against your limit", () => {
