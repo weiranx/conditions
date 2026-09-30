@@ -268,7 +268,7 @@ test('a multi-day trip checks as soon as the typed trailhead reaches the trip', 
     mode: 'multi',
     draft: { name: '', trailhead, camps: [{ point: { name: 'Camp', lat: 36.57, lon: -118.28, elevationFt: null }, layover: false }], exit: null,
       days: [day, day], bailPoints: [], track: null, startDate: '2026-09-06' },
-    stages: [], gaps: [], loading: false, maxNights: 5, pickTarget: null, setPickTarget: () => {},
+    stages: [], gaps: [], loading: false, maxNights: 5, pickTarget: null, activeTarget: null, setPickTarget: () => {}, nameAt: () => {}, movePoint: () => {},
     runCheck: async () => { checks.push(1); }, updateDraft: () => {},
   });
   const typed = planWorkspace({ hasObjective: false, searchQuery: 'Whitney', committedSearchQuery: '', itinerary: itinerary(null),
