@@ -385,6 +385,12 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
   .sky-hero h2 { font-size: 23px; }
   .sky-hero-actions { justify-content: flex-start; margin: 0 0 14px; }
   .sky-report .field-report-actions > button, .sky-report .field-report-actions summary { min-height: 44px; }
+  /* The menu hangs from the action row's outer edge, not from its own button, so it cannot run off the
+     screen: the hero's row sits at the left on a phone (the menu opens rightward), the chapter bar's at the right. */
+  .sky-report .field-report-actions { position: relative; }
+  .sky-report .report-actions-menu { position: static; }
+  .sky-hero .report-actions-popover { right: auto; left: 0; }
+  .sky-report .report-actions-popover { width: min(232px, calc(100vw - 32px)); }
   .sky-readout { display: grid; grid-template-columns: auto 1fr; gap: 0 16px; align-items: center; }
   .sky-readout dl { margin: 0; }
   .sky-readout-flag, .sky-readout-approach { grid-column: 1 / -1; }
@@ -430,6 +436,11 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
 /* On the narrowest phones a tile has no room for an icon beside a label like "Terrain & snow". */
 @media (max-width: 370px) {
   .sky-tile .sky-card-head > svg { display: none; }
+}
+@media (max-width: 380px) {
+  /* Low, bar and high need about 135px; a tile here has 110–130. The bar drops under the two numbers. */
+  .sky-wx .sky-hilo { flex-wrap: wrap; justify-content: space-between; row-gap: 5px; }
+  .sky-wx .sky-hilo-bar { order: 1; flex: 1 0 100%; }
 }
 @media print {
   .sky-hero { color: #000; background: none; }

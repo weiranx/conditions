@@ -54,10 +54,11 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
   }
   return <>
     <div className="shortlist-mode" role="group" aria-label="Comparison mode">
-      <button className="field-button" aria-pressed={mode === 'days'} onClick={() => chooseMode('days')}>Compare days</button>
-      <button className="field-button" aria-pressed={mode === 'objectives'} onClick={() => chooseMode('objectives')}>Compare objectives</button>
+      {/* On a phone the verb is dropped from view (the noun says enough) but stays in the accessible name. */}
+      <button className="field-button" aria-pressed={mode === 'days'} onClick={() => chooseMode('days')}><span className="sky-action-label">Compare </span>days</button>
+      <button className="field-button" aria-pressed={mode === 'objectives'} onClick={() => chooseMode('objectives')}><span className="sky-action-label">Compare </span>objectives</button>
       {w.featureFlags.routeAnalysis && (
-        <button className="field-button" aria-pressed={mode === 'routes'} onClick={() => chooseMode('routes')}>Compare routes</button>
+        <button className="field-button" aria-pressed={mode === 'routes'} onClick={() => chooseMode('routes')}><span className="sky-action-label">Compare </span>routes</button>
       )}
     </div>
     {mode === 'days' ? <CompareDays workspace={w} /> : mode === 'routes' && w.featureFlags.routeAnalysis ? <CompareRoutes workspace={w} /> : mode === 'objectives' ? <>
