@@ -67,6 +67,20 @@
 }
 .sky-activity.is-checked svg { color: inherit; }
 .sky-activity:has(input:focus-visible) { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; }
+/* Laid out as an even grid of tiles, icon above name, instead of ragged rows of pills of every width. */
+.sky-activity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.field-plan-form.sky-plan label.sky-activity {
+  flex-direction: column; justify-content: center; gap: 6px; min-width: 0; min-height: 68px; padding: 10px 6px;
+  border-radius: 14px; font-size: 13px; text-align: center; white-space: normal; text-wrap: balance;
+}
+.field-plan-form.sky-plan label.sky-activity svg { width: 20px; height: 20px; }
+/* A phone's column is too narrow for three ("Mountaineering" would break mid-word): two across, icon beside name. */
+@container plan (max-width: 340px) {
+  .sky-activity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .field-plan-form.sky-plan label.sky-activity {
+    flex-direction: row; justify-content: flex-start; gap: 8px; min-height: 48px; padding: 6px 10px; text-align: left;
+  }
+}
 .field-plan-form.sky-plan .field-form-submit { margin-top: 24px; min-height: 52px; border-radius: 14px; font-size: 17px; }
 @media (max-width: 650px) {
   .field-plan-form.sky-plan label.sky-activity { min-height: 44px; }
