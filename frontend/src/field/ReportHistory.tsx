@@ -188,11 +188,13 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, w
           {userId && <button className="field-button" disabled={loading || loadingMore} onClick={() => setRevision(n => n + 1)}>
             <RefreshCw size={15} aria-hidden="true" /> Refresh
           </button>}
-          <button className="field-button field-button-primary" onClick={() => navigate('planner')}>Plan an outing <ArrowUpRight size={15} aria-hidden="true" /></button>
+          {/* An empty history shows its own "Plan an outing" below; one primary action is enough. */}
+          {!(userId && !loading && !searching && !loadError && !filtered && reports.length === 0) &&
+            <button className="field-button field-button-primary" onClick={() => navigate('planner')}>Plan an outing <ArrowUpRight size={15} aria-hidden="true" /></button>}
         </div>
       </div>
 
-      {userId && <div className="sky-card sky-filter-bar field-history-filters">
+      {userId && (loading || filtered || reports.length > 0) && <div className="sky-card sky-filter-bar field-history-filters">
         <div className="field-library-search">
           <label htmlFor={searchId} className="sr-only">Search all account reports</label>
           <div className="field-input-icon sky-search">
@@ -213,7 +215,7 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, w
         <button className="field-button" disabled={loading || loadingMore} onClick={() => nextCursor ? void loadMore() : setRevision(n => n + 1)}>Try again</button>
       </div>}
       <p className="sky-cap field-history-count" role="status">
-        {loading || searching ? 'Loading report history…' : userId && !loadError
+        {loading || searching ? 'Loading report history…' : userId && !loadError && (filtered || reports.length > 0)
           ? `${reports.length}${nextCursor ? '+' : ''} ${filtered ? 'matching ' : ''}account ${reports.length === 1 && !nextCursor ? 'report' : 'reports'} · Newest saved first`
           : ''}
       </p>
@@ -286,7 +288,7 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled, w
         <p>{!userId ? 'Sign in to save reports and revisit them across your devices.' : filtered
           ? 'Try a different objective or date, or clear your filters.' : 'Reports generated while signed in are saved here automatically. You can also save a report from its toolbar.'}</p>
         <button className="field-button field-button-primary" onClick={() => !userId ? navigate('account') : filtered ? clearFilters() : navigate('planner')}>
-          {!userId ? 'Open your account' : filtered ? 'Clear filters' : 'Create a report'}
+          {!userId ? 'Open your account' : filtered ? 'Clear filters' : 'Plan an outing'}
         </button>
       </div>}
     </section>

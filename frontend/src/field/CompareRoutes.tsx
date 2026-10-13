@@ -127,6 +127,16 @@ export default function CompareRoutes({ workspace: w }: { workspace: Workspace }
           )}
         </form>
       )}
+      {!w.hasObjective && (
+        <div className="sky-card sky-compare-empty">
+          <RouteIcon size={28} aria-hidden="true" />
+          <h2>Start with an objective</h2>
+          <p>Pick a peak, trail or point in the plan, then come back here to line up two or three routes up it.</p>
+          <button type="button" className="field-button field-button-primary" onClick={() => w.navigateToView("planner")}>
+            Choose an objective
+          </button>
+        </div>
+      )}
       {w.hasObjective && entries.length === 0 && (
         <div className="sky-card sky-compare-empty">
           <RouteIcon size={28} aria-hidden="true" />

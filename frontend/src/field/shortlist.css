@@ -23,6 +23,8 @@
 .shortlist-controls .field-text-button { min-height: 44px; }
 .shortlist-controls form .field-muted { margin: 12px 0; font-size: 13px; line-height: 1.5; color: var(--sky-secondary); }
 .shortlist-validation { margin: 10px 0; font-size: 13px; color: var(--sky-caution); font-weight: 600; }
+/* Too few objectives is the starting point, not a mistake: say what to do next without the warning colour. */
+.shortlist-validation.is-hint { color: var(--sky-secondary, var(--f-muted)); font-weight: 500; }
 .shortlist-controls .field-button-primary { width: 100%; min-height: 50px; justify-content: center; }
 .shortlist-allowance, .shortlist-caption { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--sky-secondary); }
 .shortlist-objectives { list-style: none; padding: 0; margin: 12px 0 0; border-radius: 14px; background: var(--sky-fill); }

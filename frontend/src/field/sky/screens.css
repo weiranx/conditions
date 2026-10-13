@@ -2,6 +2,10 @@
    grouped row lists, empty states. Loaded app-wide from FieldApp. */
 
 .field-app .sky-screen .field-page-heading .sky-lead { margin-top: 8px; font-size: 18px; }
+/* With nothing to count yet, the lead still says what the screen is for (as Workspace and Compare do),
+   instead of leaving an empty gap under the title. */
+.field-app .sky-screen .field-page-heading .sky-lead:not(:has(strong)) { color: var(--sky-secondary); }
+.field-app .sky-screen .field-page-heading .sky-lead:not(:has(strong)) .sky-lead-note { display: inline; }
 
 /* A toolbar card: search on the left, filters or actions on the right. */
 .sky-filter-bar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 12px; }
