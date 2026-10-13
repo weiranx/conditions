@@ -87,6 +87,8 @@
 .field-app .field-planner-map .field-map { margin: 0 12px; border-radius: 14px; }
 /* Leaflet sets Helvetica Neue on its container; its controls, scale and tooltips should read as Inter. */
 .field-app .leaflet-container { font-family: var(--sky-font); }
+/* Before tiles arrive (or where they can't load) the map is a quiet theme-coloured well, not Leaflet's light grey. */
+.field-app .field-map.leaflet-container { background: var(--sky-fill); }
 .field-app .field-map .leaflet-control-zoom { border: 0; border-radius: 10px; overflow: hidden; box-shadow: var(--sky-raised-shadow); }
 .field-app .field-map .leaflet-control-zoom a { background: var(--sky-raised); color: var(--sky-label); border-color: var(--sky-separator); }
 .field-app .field-map .leaflet-control-zoom a:hover { background: var(--sky-raised-hover); }
