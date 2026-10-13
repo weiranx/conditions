@@ -182,7 +182,7 @@ export function AiRead({
       {(narrative || canWrite) && (
         <p className="ai-brief-footnote">
           <Info size={13} aria-hidden="true" />
-          Written by AI from this report’s data and can be wrong. It explains the decision and never changes it.
+          Written by AI from this report’s data and can be wrong. The go/no-go comes from the report’s checks, not the AI.
         </p>
       )}
     </section>

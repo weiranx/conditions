@@ -202,3 +202,19 @@ test('AI brief keeps the raw discussion when a relevant section was truncated', 
   expect(response.status).toBe(200);
   expect(askAI.mock.calls[0][0]).toContain('late thunderstorm mention');
 });
+
+test('a report over the prompt limit is still explained, with restated tables left out', async () => {
+  const app = express();
+  app.use(express.json({ limit: '5mb' }));
+  const askAI = jest.fn().mockResolvedValue('not json');
+  registerAiBriefRoute({ app, askAI, ensureFeatureEnabled: () => {} });
+  const byAspect = Array.from({ length: 2000 }, (_, i) => ({ aspect: 'N', hour: i, note: 'x'.repeat(100) }));
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ report: { safety: { score: 61 }, evaluation: { decision: { level: 'CAUTION' }, terrain: { byAspect } } }, decisionLevel: 'CAUTION' });
+  expect(response.status).toBe(200);
+  expect(response.body.validation).toBe('deterministic_fallback');
+  const prompt = askAI.mock.calls[0][0];
+  expect(prompt).toContain('"omittedForLength":["evaluation.terrain.byAspect"]');
+  expect(prompt).not.toContain('"byAspect"');
+});

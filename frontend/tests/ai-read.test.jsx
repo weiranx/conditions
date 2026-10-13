@@ -57,7 +57,7 @@ test('the AI read leads with the picture and the move, cites its evidence and of
   assert.match(html, /<details class="ai-read-more">[^]*Why it matters[^]*Watch closely[^]*Data confidence[^]*Comfort check/);
   assert.match(html, /Suggested questions[^]*When do the gusts build\?[^]*What would make this a go\?/);
   assert.doesNotMatch(html, /What is driving this decision/, 'the read\'s own questions replace the starters');
-  assert.match(html, /never changes it/);
+  assert.match(html, /go\/no-go comes from the report’s checks/);
   assert.doesNotMatch(html, /didn’t pass the report’s fact checks/);
 });
 
@@ -73,7 +73,7 @@ test('the AI read waits, offers, or steps aside depending on what is available',
   assert.match(read({ narrative: null, details: null }), /Write the AI read/);
   const askOnly = read({ narrative: null, details: null, briefAvailable: false });
   assert.match(askOnly, /Ask about this plan/);
-  assert.doesNotMatch(askOnly, /Write the AI read|never changes it/);
+  assert.doesNotMatch(askOnly, /Write the AI read|go\/no-go comes from/);
   assert.equal(read({ narrative: null, details: null, briefAvailable: false, chatAvailable: false }), '');
   const saved = read({ readOnly: true });
   assert.match(saved, /Gusts reach 32 mph/);

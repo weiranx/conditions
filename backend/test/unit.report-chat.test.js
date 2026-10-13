@@ -93,8 +93,13 @@ describe('report chat request handling', () => {
     expect(() => normalizeReport([])).toThrow(/object/i);
   });
 
-  test('bounds oversized report context', () => {
-    expect(() => normalizeReport({ detail: 'x'.repeat(MAX_REPORT_LENGTH + 100) })).toThrow(/too large/i);
+  test('shortens oversized report context and refuses only what cannot fit', () => {
+    const shortened = JSON.parse(normalizeReport({ safety: { score: 72 }, detail: 'x'.repeat(MAX_REPORT_LENGTH + 100) }));
+    expect(shortened.safety).toEqual({ score: 72 });
+    expect(shortened.detail.length).toBeLessThan(2100);
+    expect(shortened.omittedForLength).toEqual([expect.stringMatching(/shortened/)]);
+    const unfittable = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`field${i}`, 'x'.repeat(240)]));
+    expect(() => normalizeReport(unfittable)).toThrow(/too large/i);
   });
 
   test('keeps recent text messages and removes unsupported parts', () => {
