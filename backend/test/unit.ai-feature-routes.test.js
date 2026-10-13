@@ -115,11 +115,50 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
   expect(response.body.validation).toBe('deterministic_fallback');
   expect(response.body.narrative).toContain('Strong wind is expected.');
   expect(response.body.narrative).not.toMatch(/avalanche/i);
-  expect(askAI).toHaveBeenCalledTimes(1);
+  // The unusable answer is retried once, with what failed, before falling back.
+  expect(askAI).toHaveBeenCalledTimes(2);
+  expect(askAI.mock.calls[1][0]).toMatch(/failed these fact checks[\s\S]*not valid JSON/);
   const prompt = askAI.mock.calls[0][0];
   expect(prompt).toMatch(/Disabled product domains: avalanche/i);
   expect(prompt).toContain('Cloudy and windy');
   expect(prompt).not.toMatch(/Considerable|Deep Persistent Slab|Avalanche rescue kit/);
+});
+
+test('AI brief retries once with the failed checks and keeps the corrected read', async () => {
+  const app = express();
+  app.use(express.json());
+  const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
+  const answer = (gust) => JSON.stringify({ sections: headings.map((heading) => ({ heading, text: `Gusts reach ${gust} mph.`, evidence: [{ path: 'weather.windGust', value: 42 }] })) });
+  const askAI = jest.fn().mockResolvedValueOnce(answer(55)).mockResolvedValueOnce(answer(42));
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { description: 'Windy', windGust: 42 }, safety: { explanations: ['Strong wind.'] } } });
+
+  expect(response.status).toBe(200);
+  expect(response.body.validation).toBe('evidence_checked');
+  expect(response.body.narrative).toMatch(/^BIG PICTURE: Gusts reach 42 mph\./);
+  expect(askAI).toHaveBeenCalledTimes(2);
+  expect(askAI.mock.calls[1][0]).toContain('BIG PICTURE: states 55 without citing a report field that holds it');
+});
+
+test('AI brief keeps the first usable read when the retry request fails', async () => {
+  const app = express();
+  app.use(express.json());
+  const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
+  const first = JSON.stringify({ sections: headings.map((heading) => ({ heading, text: heading === 'WATCH CLOSELY' ? 'Gusts reach 99 mph.' : 'Gusts reach 42 mph.', evidence: [{ path: 'weather.windGust', value: 42 }] })) });
+  const askAI = jest.fn().mockResolvedValueOnce(first).mockRejectedValueOnce(new Error('timeout'));
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { windGust: 42 }, safety: { explanations: ['Strong wind.'] } } });
+
+  expect(response.status).toBe(200);
+  expect(response.body.validation).toBe('evidence_checked');
+  expect(response.body.narrative).not.toMatch(/WATCH CLOSELY/);
+  expect(askAI).toHaveBeenCalledTimes(2);
 });
 
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {

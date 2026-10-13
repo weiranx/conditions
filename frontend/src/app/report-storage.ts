@@ -99,8 +99,19 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
       };
     }
   }
+  const hero = isRecord(value.hero) && typeof value.hero.headline === 'string' && value.hero.headline.trim()
+    && typeof value.hero.reason === 'string' && Array.isArray(value.hero.evidence)
+    ? {
+      headline: value.hero.headline,
+      reason: value.hero.reason,
+      ...(typeof value.hero.level === 'string' ? { level: value.hero.level } : {}),
+      evidence: value.hero.evidence.filter((claim): claim is AiBriefCitation => isRecord(claim)
+        && typeof claim.path === 'string'
+        && ['string', 'number', 'boolean'].includes(typeof claim.value)).map(({ path, value: cited }) => ({ path, value: cited })),
+    }
+    : null;
   const validation = value.validation === 'evidence_checked' || value.validation === 'deterministic_fallback' ? value.validation : null;
-  return { narrative, evidence, questions, chapters, validation };
+  return { narrative, evidence, questions, chapters, hero, validation };
 }
 
 function isSafetyData(value: unknown): value is SafetyData {

@@ -98,3 +98,18 @@ export function sectionCitations(details: AiBriefDetails | null, title: string):
 export function sectionCitesChapter(citations: AiBriefCitation[], chapter: EvidenceChapter): boolean {
   return citations.some((citation) => evidenceChapter(citation.path) === chapter);
 }
+
+const LEVEL_RANK: Record<string, number> = { GO: 0, CAUTION: 1, 'NO-GO': 2 };
+
+/**
+ * The AI's headline and reason for the top of the report, when it passed its
+ * checks and was written against a decision at least as strict as the one shown.
+ */
+export function aiHero(details: AiBriefDetails | null, level: string): NonNullable<AiBriefDetails['hero']> | null {
+  const hero = details?.validation === 'evidence_checked' ? details.hero : null;
+  if (!hero?.headline.trim() || !hero.reason.trim()) return null;
+  const written = hero.level === undefined ? undefined : LEVEL_RANK[hero.level];
+  const shown = LEVEL_RANK[level];
+  if (written === undefined || shown === undefined || written < shown) return null;
+  return hero;
+}

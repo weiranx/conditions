@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AiChapterNote, AiRead } from '../src/field/AiRead';
 import { starterQuestions } from '../src/field/ai-explanation';
-import { evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
+import { aiHero, evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
 import { parseAiBriefDetails } from '../src/app/report-storage';
 import { getDefaultUserPreferences, normalizeUserPreferences } from '../src/app/preferences';
 
@@ -117,18 +117,32 @@ test('saved chapter analyses keep only the AI chapters and well-formed citations
   assert.deepEqual(saved.chapters, { timing: { text: 'Start early.', evidence: [{ path: 'solar.sunrise', value: '6:40 AM' }] } });
 });
 
-test('starter questions name the check that sets the decision', () => {
-  assert.deepEqual(starterQuestions(['Wind gusts over your limit'], 'CAUTION'), [
-    'Why does wind gusts over your limit set the decision?',
+test('the AI opening shows only when it passed its checks against a decision no less strict', () => {
+  const hero = { headline: 'Wind sets the pace today', reason: 'Gusts reach 8 mph on the ridge.', evidence: [{ path: 'weather.windGust', value: 8 }], level: 'CAUTION' };
+  const with_ = (overrides) => ({ ...details, hero, ...overrides });
+  assert.equal(aiHero(with_({}), 'CAUTION'), hero);
+  assert.equal(aiHero(with_({}), 'GO'), hero);
+  assert.equal(aiHero(with_({}), 'NO-GO'), null);
+  assert.equal(aiHero(with_({ validation: 'deterministic_fallback' }), 'CAUTION'), null);
+  assert.equal(aiHero(with_({ hero: { ...hero, level: undefined } }), 'CAUTION'), null);
+  assert.equal(aiHero(with_({ hero: null }), 'CAUTION'), null);
+  assert.equal(aiHero(null, 'GO'), null);
+  const saved = parseAiBriefDetails({ ...details, hero: { ...hero, evidence: [{ path: 'weather.windGust', value: 8 }, { path: 3 }] } }, details.narrative);
+  assert.deepEqual(saved.hero, hero);
+  assert.equal(parseAiBriefDetails({ ...details, hero: { headline: 'x' } }, details.narrative).hero, null);
+});
+
+test('starter questions read as plain questions and never paste in a check sentence', () => {
+  assert.deepEqual(starterQuestions('CAUTION'), [
+    'What is driving this decision?',
     'What would have to change to make this a go?',
     'What should I check before I leave?',
   ]);
-  assert.equal(starterQuestions([], 'GO')[0], 'What is driving this decision?');
-  assert.equal(starterQuestions([], 'GO')[1], 'What would turn this into a no-go?');
+  assert.equal(starterQuestions('GO')[1], 'What would turn this into a no-go?');
 });
 
 test('saved AI read details belong only to the narrative they were written with', () => {
-  assert.deepEqual(parseAiBriefDetails(details, narrative), { ...details, chapters: {} });
+  assert.deepEqual(parseAiBriefDetails(details, narrative), { ...details, chapters: {}, hero: null });
   assert.equal(parseAiBriefDetails(details, 'another brief'), null);
   assert.equal(parseAiBriefDetails(null, narrative), null);
   const messy = parseAiBriefDetails({
@@ -142,6 +156,7 @@ test('saved AI read details belong only to the narrative they were written with'
     evidence: [{ heading: 'BIG PICTURE', evidence: [{ path: 'weather.windGust', value: 32 }] }],
     questions: ['Fine?'],
     chapters: {},
+    hero: null,
     validation: null,
   });
 });
