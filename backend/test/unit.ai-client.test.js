@@ -327,6 +327,7 @@ describe('AI provider client wrapper', () => {
         planParse: { enabled: true, available: true },
         avalancheExtraction: { enabled: true, available: true },
         tripDebrief: { enabled: true, available: true },
+        aiReport: { enabled: true, available: true },
       },
       primaryTimeoutMs: 28000,
       fastTimeoutMs: 8000,
@@ -361,6 +362,7 @@ describe('AI provider client wrapper', () => {
         planParse: { enabled: false, available: false },
         avalancheExtraction: { enabled: false, available: false },
         tripDebrief: { enabled: false, available: false },
+        aiReport: { enabled: false, available: false },
       },
     }));
     expect(isAIAvailable()).toBe(false);
@@ -405,6 +407,7 @@ describe('AI provider client wrapper', () => {
           planParse: { enabled: false, available: false },
           avalancheExtraction: { enabled: false, available: false },
           tripDebrief: { enabled: false, available: false },
+          aiReport: { enabled: false, available: false },
         }),
       }));
     } finally {
@@ -499,6 +502,7 @@ describe('AI provider client wrapper', () => {
         planParse: { enabled: false, available: false },
         avalancheExtraction: { enabled: false, available: false },
         tripDebrief: { enabled: false, available: false },
+        aiReport: { enabled: false, available: false },
       },
     }));
     expect(isAIAvailable()).toBe(false);
@@ -514,6 +518,7 @@ describe('AI provider client wrapper', () => {
       planParse: { enabled: true, available: true },
       avalancheExtraction: { enabled: true, available: true },
       tripDebrief: { enabled: true, available: true },
+      aiReport: { enabled: true, available: true },
     });
   });
 

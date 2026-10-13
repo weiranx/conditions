@@ -57,9 +57,11 @@ const snowLayout: Layout = {
 function Section({
   section,
   layout,
+  footer,
 }: {
   section: LabeledSection<string>;
   layout: Layout;
+  footer?: ReactNode;
 }) {
   const Icon = layout.icons[section.kind] ?? Info;
   const tag = layout.tags?.[section.kind];
@@ -80,6 +82,7 @@ function Section({
       <div className="field-markdown ai-explanation-copy">
         <Markdown mode="static">{section.text}</Markdown>
       </div>
+      {footer}
     </article>
   );
 }
@@ -130,6 +133,11 @@ function AiSections({
       )}
     </div>
   );
+}
+
+/** One section of the report's AI read, styled as in the full explanation. */
+export function AiBriefSection({ section, footer }: { section: LabeledSection<string>; footer?: ReactNode }) {
+  return <Section section={section} layout={briefLayout} footer={footer} />;
 }
 
 export function AiExplanation({

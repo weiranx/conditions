@@ -90,3 +90,13 @@ export function parseSnowAnalysis(
     true,
   );
 }
+
+/** Report-specific questions first; these stand in until the read has written its own. */
+export function starterQuestions(limitingChecks: string[], level: string): string[] {
+  const first = limitingChecks[0]?.trim();
+  return [
+    first ? `Why does ${first.charAt(0).toLowerCase()}${first.slice(1)} set the decision?` : "What is driving this decision?",
+    level === "GO" ? "What would turn this into a no-go?" : "What would have to change to make this a go?",
+    "What should I check before I leave?",
+  ];
+}
