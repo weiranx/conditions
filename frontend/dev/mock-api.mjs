@@ -12,6 +12,8 @@ import itineraryAssessment from "../../backend/src/utils/itinerary-assessment.js
 import { makeReport, peaks, scenarios } from "./mock-data.mjs";
 import planContext from "../../backend/src/utils/plan-context.js";
 import planEvaluation from "../../backend/src/utils/plan-evaluation.js";
+import planParse from "../../backend/src/utils/plan-parse.js";
+import tripDebrief from "../../backend/src/utils/trip-debrief.js";
 import startTimeScenarios from "../../backend/src/utils/start-time-scenarios.js";
 import dayOverDay from "../../backend/src/utils/day-over-day.js";
 import tripDays from "../../backend/src/utils/trip-days.js";
@@ -275,7 +277,7 @@ export function createMockApi({ databasePath } = {}) {
       primaryModel: "fixture",
       fastModel: "fixture",
       features: Object.fromEntries(
-        ["aiBrief", "reportChat", "routeAnalysis", "snowVision", "watchSummary", "fieldObservations", "planParse", "avalancheExtraction", "tripDebrief"].map((k) => [
+        ["aiBrief", "reportChat", "routeAnalysis", "snowVision", "watchSummary", "tripReports", "planParse", "avalancheExtraction", "tripDebrief"].map((k) => [
           k,
           {
             available:
@@ -844,6 +846,54 @@ export function createMockApi({ databasePath } = {}) {
           "BIG PICTURE: This is a synthetic local briefing for testing the report layout. The selected fixture supplies the weather and field observations. WHY IT MATTERS: Large values and hourly charts show how this sample changes through the outing. These are demonstration values, not live observations. WATCH CLOSELY: Review the selected hour and any highlighted field signals in the sample report. DATA CONFIDENCE: All data in this briefing is mocked. No live forecast or AI provider was contacted. COMFORT CHECK: The comfort card is separate from the safety decision. BEST MOVE: Use the scenario selector to test clear skies, storms, snow, and missing data. Use a real report before making an outing decision.",
         cached: false,
       });
+    if (p === "/api/field-observations/extract") {
+      const text = typeof body.text === "string" ? body.text : "";
+      if (!text.trim()) return { status: 400, payload: { error: "Paste a trip report or what you saw." } };
+      if (text.length > 12000) return { status: 413, payload: { error: "Keep the text under 12,000 characters." } };
+      // Demo extraction: one observation per sentence, surface guessed from keywords.
+      const surfaces = [["slush", "slush"], ["verglas", "verglas"], ["ice", "ice"], ["posthol", "soft-snow"], ["soft snow", "soft-snow"], ["snow", "firm-snow"], ["mud", "mud"], ["dry", "dry-trail"]];
+      const observations = (text.match(/[^.!?\n]+[.!?]?/g) || [])
+        .map((sentence) => sentence.trim())
+        .filter((sentence) => sentence.length > 8)
+        .slice(0, 3)
+        .map((quote) => ({
+          observedDate: null, ageDays: null, stale: true, location: body.objective?.name || "Objective",
+          elevationFt: null, aspect: null, snowlineFt: null, confidence: "low", quote,
+          surface: surfaces.find(([word]) => quote.toLowerCase().includes(word))?.[1] || "unknown",
+          hazards: /posthol/i.test(quote) ? ["postholing"] : [],
+        }));
+      return ok({ observations, plannedDate: body.date || null, generatedAt: now() });
+    }
+    if (p === "/api/plan-parse") {
+      // No model: a few patterns stand in for it, and the backend's checks decide.
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text || !planContext.isCalendarDate(body.today)) return fail(400, "Missing required fields: text, today (YYYY-MM-DD)");
+      const hour = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+      const gust = text.match(/(\d+)\s*(mph|kph|km\/h)/i);
+      const answer = {
+        place: text.split(/,|\b(?:today|tomorrow|this|next|on|mon|tue|wed|thu|fri|sat|sun)\w*\b/i)[0].trim() || null,
+        start: hour ? `${String((Number(hour[1]) % 12) + (/pm/i.test(hour[3]) ? 12 : 0)).padStart(2, "0")}:${hour[2] || "00"}` : null,
+        activity: /\bski/i.test(text) ? "ski-touring" : /\bhike/i.test(text) ? "hiking" : null,
+        maxGust: gust ? { value: Number(gust[1]), unit: gust[2].toLowerCase().replace("km/h", "kph") } : null,
+        notes: ["Demo parse: no AI provider was contacted."],
+      };
+      return ok(planParse.validatePlanParse(answer, { text, today: body.today, units: body.units || {} }));
+    }
+    if (p === "/api/trip-debrief") {
+      if (!body?.report || !Array.isArray(body?.track?.points) || body.track.points.length < 2)
+        return fail(400, "The track needs at least two points.");
+      try {
+        const comparison = tripDebrief.buildTripDebrief({ report: body.report, points: body.track.points });
+        return ok({
+          comparison,
+          narrative:
+            "**Pace.** Demo debrief: the comparison above is computed from your track; this text is mocked.\n\n**Conditions.** No AI provider was contacted, so your notes were not read.\n\n**For next time**\n- Use the matching pace in the table for your next plan.",
+          narrativeStatus: "ok",
+        });
+      } catch (error) {
+        return fail(400, error.message);
+      }
+    }
     if (p === "/api/snow-vision")
       return ok({
         analysis:
@@ -1335,7 +1385,7 @@ export function createMockApi({ databasePath } = {}) {
           routeAnalysis: true,
           snowVision: true,
           watchSummary: true,
-          fieldObservations: true,
+          tripReports: true,
           planParse: true,
           avalancheExtraction: true,
           tripDebrief: true,

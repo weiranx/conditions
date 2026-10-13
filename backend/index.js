@@ -76,7 +76,7 @@ const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { registerFieldObservationRoutes } = require('./src/routes/field-observations');
 const { registerPlanParseRoute } = require('./src/routes/plan-parse');
 const { registerTripDebriefRoute } = require('./src/routes/trip-debrief');
-const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable } = require('./src/utils/ai-client');
+const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable, isAIFeatureAvailable } = require('./src/utils/ai-client');
 const { getFeatureFlags, initializeFeatureFlags } = require('./src/utils/feature-flags');
 const { sanitizeReportForFeatureFlags } = require('./src/utils/report-feature-filter');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
@@ -114,6 +114,12 @@ const { buildAtmosphericData } = require('./src/utils/atmospheric');
 const { createAtmosphericService } = require('./src/utils/atmospheric-fetch');
 const { createLocalConditionsService } = require('./src/utils/local-conditions-fetch');
 const { fetchAvalanchePipeline, applyAvalanchePostProcessing } = require('./src/utils/avalanche-pipeline');
+const { createAvalancheAiExtraction } = require('./src/utils/avalanche-ai-extraction');
+// Reads problems/danger/bottom line out of bulletin text the feed left unstructured.
+const avalancheAiExtraction = createAvalancheAiExtraction({
+  askAI,
+  isFeatureAvailable: isAIFeatureAvailable,
+});
 
 const avyLog = (...args) => {
   if (DEBUG_AVY) {
@@ -430,6 +436,7 @@ const safetyHandler = async (req, res) => {
         fetchWithTimeout,
         avyLog,
       }))
+      .then((value) => avalancheAiExtraction.apply(value))
       .then(
         (value) => ({ status: 'fulfilled', value }),
         (reason) => ({ status: 'rejected', reason }),
@@ -1014,6 +1021,8 @@ const objectiveWatchChecker = createObjectiveWatchChecker({
   emailService,
   log: logger,
   getCheckIntervalMinutes: objectiveWatchScheduler.getCheckIntervalMinutes,
+  askAI,
+  isAIFeatureAvailable,
 });
 registerObjectiveWatchRoutes({
   app,

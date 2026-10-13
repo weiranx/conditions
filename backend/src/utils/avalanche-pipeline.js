@@ -19,6 +19,13 @@ const {
   resolveAvalancheCenterLink,
   applyDerivedOverallAvalancheDanger,
 } = require('./avalanche-orchestration');
+const {
+  attachBulletinText,
+  htmlToBulletinText,
+  markBulletinGaps,
+  productToBulletinText,
+  recordToBulletinText,
+} = require('./avalanche-ai-extraction');
 const { findMatchingAvalancheZone } = require('./geo');
 const { parseIsoTimeToMs, parseIsoTimeToMsWithReference } = require('./time');
 const { logger } = require('./logger');
@@ -115,6 +122,10 @@ async function fetchAvalanchePipeline({
                 })(),
         };
 
+        const mapLayerElevations = avalancheData.elevations;
+        const mapLayerHasBands = ['danger_low', 'danger_mid', 'danger_high']
+          .every((key) => Number.isFinite(parseInt(props[key], 10)));
+
         // Try to get the real bottom line by product ID
         try {
           avalancheData = await enrichAvalancheFromDetail({
@@ -140,6 +151,21 @@ async function fetchAvalanchePipeline({
           fetchWithTimeout,
           avyLog,
         });
+
+        // What the structured feed and scrapers left empty, for the AI
+        // bulletin reader (avalanche-ai-extraction.js) to fill from the text.
+        if (!centerNoActiveForecast) {
+          const bottomLineText = cleanForecastText(avalancheData.bottomLine || '');
+          avalancheData = markBulletinGaps(avalancheData, {
+            missing: {
+              problems: !Array.isArray(avalancheData.problems) || avalancheData.problems.length === 0,
+              elevations: !mapLayerHasBands && avalancheData.elevations === mapLayerElevations,
+              bottomLine:
+                bottomLineText.length < 40 || avalancheData.bottomLine === props.travel_advice,
+            },
+            feedDangerLevel: avalancheData.dangerUnknown ? 0 : avalancheData.dangerLevel,
+          });
+        }
 
         if (centerNoActiveForecast) {
           const offSeasonFallback = createUnknownAvalancheData('no_active_forecast');
@@ -300,6 +326,7 @@ async function enrichAvalancheFromDetail({
       avyLog(
         `[Avy] Data retrieved for ${props.center_id}. BL length: ${finalBL?.length || 0}`,
       );
+      avalancheData = attachBulletinText(avalancheData, 'product', productToBulletinText(det));
 
       if (det.published_time || det.updated_at) {
         avalancheData = {
@@ -420,6 +447,11 @@ async function tryScraperFallback({
           if (uacRes.ok) {
             const uacPayloads = parseAvalancheDetailPayloads(await uacRes.text());
             const uacAdvisory = extractUtahAvalancheAdvisory(uacPayloads[0]);
+            avalancheData = attachBulletinText(
+              avalancheData,
+              'center-json',
+              recordToBulletinText(uacAdvisory?.rawAdvisory),
+            );
             if (
               uacAdvisory?.bottomLine ||
               (uacAdvisory?.problems && uacAdvisory.problems.length > 0)
@@ -473,6 +505,7 @@ async function tryScraperFallback({
         );
       } else {
         const pageText = await pageRes.text();
+        avalancheData = attachBulletinText(avalancheData, 'page', htmlToBulletinText(pageText));
         const bottomLineCandidates = [];
 
         const blMatch = pageText.match(

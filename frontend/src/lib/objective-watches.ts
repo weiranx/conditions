@@ -7,6 +7,8 @@ export interface ObjectiveWatchChange {
   checkedAt?: string;
   direction?: ObjectiveWatchChangeDirection | null;
   reasons?: Array<{ key?: string; label?: string; direction?: 'worse' | 'better' }>;
+  /** A short AI explanation of a risk increase, when the check produced one. */
+  aiSummary?: string;
 }
 
 /** Change events recorded since the watch was last marked reviewed. */

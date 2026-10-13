@@ -58,7 +58,7 @@ async function mount(t, consumers) {
 test('report sections share one AI availability poll', async (t) => {
   const h = await mount(t, 3);
   assert.equal(h.requests.length, 1);
-  assert.deepEqual(h.seen, Array(3).fill({ aiBrief: true, reportChat: false, routeAnalysis: true, snowVision: true, watchSummary: true, fieldObservations: true, planParse: true, avalancheExtraction: true, tripDebrief: true }));
+  assert.deepEqual(h.seen, Array(3).fill({ aiBrief: true, reportChat: false, routeAnalysis: true, snowVision: true, watchSummary: true, tripReports: true, planParse: true, avalancheExtraction: true, tripDebrief: true }));
   await h.tick();
   assert.equal(h.requests.length, 2);
 });
@@ -75,7 +75,7 @@ test('a hidden tab skips availability polls and refreshes when shown', async (t)
 test('published AI settings reach mounted consumers, and polling stops with the last one', async (t) => {
   const h = await mount(t, 2);
   await act(async () => publishAiAvailability({ available: false }));
-  assert.deepEqual(h.seen, Array(2).fill({ aiBrief: false, reportChat: false, routeAnalysis: false, snowVision: false, watchSummary: false, fieldObservations: false, planParse: false, avalancheExtraction: false, tripDebrief: false }));
+  assert.deepEqual(h.seen, Array(2).fill({ aiBrief: false, reportChat: false, routeAnalysis: false, snowVision: false, watchSummary: false, tripReports: false, planParse: false, avalancheExtraction: false, tripDebrief: false }));
   await h.unmount();
   await h.tick();
   assert.equal(h.requests.length, 1);

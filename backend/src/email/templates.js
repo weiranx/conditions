@@ -761,9 +761,17 @@ const formatWatchPlan = ({ forecastDate, alpineStartTime } = {}) => {
   return { dateLabel, planLabel: [dateLabel, start].filter(Boolean).join(' · ') };
 };
 
+// One plain paragraph for the optional AI explanation; anything else is dropped.
+const watchSummaryText = (summary) => {
+  if (typeof summary !== 'string') return '';
+  const text = summary.replace(/\s+/gu, ' ').trim();
+  return text.length > 600 ? `${text.slice(0, 599).trimEnd()}…` : text;
+};
+
 // Alerts are sent for risk increases; improvements found by the same check
-// follow under "Also changed".
-const buildObjectiveWatchChangeEmail = ({ displayName, title, plan, reasons, actionUrl }) => {
+// follow under "Also changed". An AI explanation of the change, when the check
+// produced one, leads the email; the reasons below it are the record.
+const buildObjectiveWatchChangeEmail = ({ displayName, title, plan, reasons, summary, actionUrl }) => {
   const safeTitle = String(title || 'Watched objective').replace(/[\r\n]+/gu, ' ').trim().slice(0, 160) || 'Watched objective';
   const safeReasons = (Array.isArray(reasons) ? reasons : [])
     .map((reason) => (typeof reason === 'string' ? { label: reason } : reason || {}))
@@ -780,13 +788,18 @@ const buildObjectiveWatchChangeEmail = ({ displayName, title, plan, reasons, act
   const intro = `Objective Watch found a meaningful risk increase for ${safeTitle}${planLabel ? ` (${planLabel})` : ''}:`;
   const htmlList = (items) => `<ul style="margin:0;padding-left:20px;">${items.map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`).join('')}</ul>`;
   const textList = (items) => items.map((item) => `- ${item}`).join('\n');
+  const safeSummary = watchSummaryText(summary);
+  const summaryText = safeSummary ? `${safeSummary}\n\n` : '';
+  const summaryHtml = safeSummary
+    ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:10px;background:#f3f6f3;">${escapeHtml(safeSummary)}</p>`
+    : '';
   return {
     subject,
-    text: `${displayName ? `Hi ${displayName},\n\n` : ''}${intro}\n\n${textList(worse)}${better.length ? `\n\nAlso changed:\n${textList(better)}` : ''}\n\nReview the latest conditions before relying on the plan.\n\n${actionUrl}`,
+    text: `${displayName ? `Hi ${displayName},\n\n` : ''}${intro}\n\n${summaryText}${textList(worse)}${better.length ? `\n\nAlso changed:\n${textList(better)}` : ''}\n\nReview the latest conditions before relying on the plan.\n\n${actionUrl}`,
     html: emailShell({
       preview: subject,
       heading: subject,
-      body: `<p style="margin:0 0 14px;">${greeting}</p><p style="margin:0 0 14px;">${escapeHtml(intro)}</p>${htmlList(worse)}${better.length ? `<p style="margin:16px 0 8px;">Also changed:</p>${htmlList(better)}` : ''}<p style="margin:16px 0 0;">Review fresh source data and use your own judgment before relying on the plan.</p>`,
+      body: `<p style="margin:0 0 14px;">${greeting}</p><p style="margin:0 0 14px;">${escapeHtml(intro)}</p>${summaryHtml}${htmlList(worse)}${better.length ? `<p style="margin:16px 0 8px;">Also changed:</p>${htmlList(better)}` : ''}<p style="margin:16px 0 0;">Review fresh source data and use your own judgment before relying on the plan.</p>`,
       actionLabel: 'Review objective watches',
       actionUrl,
       footer: 'Automated checks can miss changes or receive incomplete source data. This is planning support, not a safety guarantee.',

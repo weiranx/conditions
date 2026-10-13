@@ -221,7 +221,7 @@ export interface SafetyData {
     routeAnalysis?: boolean;
     snowVision?: boolean;
     watchSummary?: boolean;
-    fieldObservations?: boolean;
+    tripReports?: boolean;
     planParse?: boolean;
     avalancheExtraction?: boolean;
     tripDebrief?: boolean;
@@ -314,6 +314,8 @@ export interface SafetyData {
     expiresTime?: string;
     generatedTime?: string | null;
     staleWarning?: '48h' | '72h';
+    /** Set when problems, band ratings or the bottom line were read from the bulletin text by AI. */
+    extraction?: { method: 'ai'; fields?: string[]; source?: string; extractedAt?: string; note?: string };
   };
   alerts?: {
     source?: string;

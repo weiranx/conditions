@@ -124,7 +124,7 @@ export function makeReport(params = {}, scenario = "mixed") {
       routeAnalysis: true,
       snowVision: true,
       watchSummary: true,
-      fieldObservations: true,
+      tripReports: true,
       planParse: true,
       avalancheExtraction: true,
       tripDebrief: true,

@@ -118,7 +118,7 @@ const createEmailService = ({
     const reasons = Array.isArray(change?.reasons) ? change.reasons : [];
     return send({
       to,
-      template: buildObjectiveWatchChangeEmail({ displayName, title, plan, reasons, actionUrl }),
+      template: buildObjectiveWatchChangeEmail({ displayName, title, plan, reasons, summary: change?.aiSummary, actionUrl }),
       idempotencyKey: `objective-watch/${watchId}/${eventId}/${changeKey}`,
     });
   };

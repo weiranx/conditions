@@ -253,7 +253,7 @@ test('first light, sunrise and sunset show for the place and day, with a start a
   const w = planWorkspace({ setAlpineStartTime: (value) => w.calls.push(['setAlpineStartTime', value]) });
   await env.render(<WorkspacePlan workspace={w} />);
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 320)); });
-  assert.match(asked[0], /\/api\/search\/daylight\?lat=46\.8523&lon=-121\.7603&date=2026-09-06/);
+  assert.match(asked.find((url) => url.includes('/daylight')), /\/api\/search\/daylight\?lat=46\.8523&lon=-121\.7603&date=2026-09-06/);
   const line = document.querySelector('.sky-plan-daylight');
   assert.match(line.textContent, /First light 6:31 AM.*Sunrise 7:01 AM.*Sunset 6:48 PM/);
   await act(async () => line.querySelector('button').click());

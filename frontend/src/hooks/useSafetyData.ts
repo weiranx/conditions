@@ -65,6 +65,7 @@ export interface UseSafetyDataReturn {
     decisionLevel: DecisionLevel;
     /** The analyzed route, sent alongside the report when there is one. */
     route?: unknown;
+    fieldObservations?: unknown[] | null;
   }) => Promise<void>;
 }
 
@@ -356,6 +357,7 @@ export function useSafetyData({
     safetyData: SafetyData;
     decisionLevel: DecisionLevel;
     route?: unknown;
+    fieldObservations?: unknown[] | null;
   }) => {
     if (aiBriefLoading) return;
     setAiBriefLoading(true);
@@ -363,7 +365,11 @@ export function useSafetyData({
     try {
       const result = await fetchAiBrief({
         decisionLevel: params.decisionLevel,
-        report: params.route ? { ...params.safetyData, route: params.route } : params.safetyData,
+        report: {
+          ...params.safetyData,
+          ...(params.route ? { route: params.route } : {}),
+          ...(params.fieldObservations?.length ? { fieldObservations: params.fieldObservations } : {}),
+        },
         units: {
           temperature: preferences.temperatureUnit,
           wind: preferences.windSpeedUnit,

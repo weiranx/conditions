@@ -330,7 +330,7 @@ export type AIFeatureKey =
   | "routeAnalysis"
   | "snowVision"
   | "watchSummary"
-  | "fieldObservations"
+  | "tripReports"
   | "planParse"
   | "avalancheExtraction"
   | "tripDebrief";
@@ -369,7 +369,7 @@ const AI_FEATURE_CONTROLS = [
     icon: BellRing,
   },
   {
-    key: "fieldObservations",
+    key: "tripReports",
     label: "Field observations",
     description:
       "Extracts dated snow and trail observations from pasted trip reports.",

@@ -438,3 +438,52 @@ export async function parseGpxFile(file: File): Promise<ParsedGpxRoute> {
   }
   return parseGpxText(await file.text(), file.name);
 }
+
+/** A recorded track point as GPX holds it: elevation in metres, time as an ISO timestamp. */
+export type RecordedTrackPoint = { lat: number; lon: number; ele?: number; time?: string };
+
+// Watches record every second or two, so a day's recording runs larger than a planned route.
+const MAX_RECORDED_GPX_FILE_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Every point of a recorded track with its elevation and timestamp, which the
+ * route parser above leaves out: for comparing a finished trip with its plan.
+ */
+export function parseGpxRecordedTrack(xmlText: string, fileName = 'Recorded track.gpx'): { name: string; points: RecordedTrackPoint[] } {
+  const document = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (document.querySelector('parsererror')) {
+    throw new Error('This file is not valid GPX XML.');
+  }
+  if (document.documentElement.localName !== 'gpx') {
+    throw new Error('Choose a GPX file containing a track or route.');
+  }
+  const trackPoints = elementsByLocalName(document, 'trkpt');
+  const elements = trackPoints.length > 0 ? trackPoints : elementsByLocalName(document, 'rtept');
+  if (elements.length > MAX_TRACK_POINTS) {
+    throw new Error(`GPX files are limited to ${MAX_TRACK_POINTS.toLocaleString()} track points.`);
+  }
+  const points = elements.flatMap((element): RecordedTrackPoint[] => {
+    const lat = Number(element.getAttribute('lat')?.trim() || Number.NaN);
+    const lon = Number(element.getAttribute('lon')?.trim() || Number.NaN);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return [];
+    const eleText = childText(element, 'ele');
+    const ele = eleText === null ? Number.NaN : Number(eleText);
+    const timeText = childText(element, 'time');
+    const time = timeText && Number.isFinite(Date.parse(timeText)) ? new Date(Date.parse(timeText)).toISOString() : null;
+    return [{ lat, lon, ...(Number.isFinite(ele) ? { ele } : {}), ...(time ? { time } : {}) }];
+  });
+  if (points.length < 2) {
+    throw new Error('The GPX file needs at least two valid track or route points.');
+  }
+  return { name: routeName(document, fileName), points };
+}
+
+export async function readGpxRecordedTrack(file: File): Promise<{ name: string; points: RecordedTrackPoint[] }> {
+  if (!/\.gpx$/i.test(file.name)) {
+    throw new Error('Choose a file with a .gpx extension.');
+  }
+  if (file.size > MAX_RECORDED_GPX_FILE_BYTES) {
+    throw new Error('Recorded GPX files are limited to 25 MB.');
+  }
+  return parseGpxRecordedTrack(await file.text(), file.name);
+}
