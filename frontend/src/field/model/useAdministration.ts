@@ -8,6 +8,7 @@ import {
   Bot,
   CalendarRange,
   Clock3,
+  Eye,
   FileUp,
   Gauge,
   Grid3X3,
@@ -17,7 +18,9 @@ import {
   LayoutDashboard,
   MapPinned,
   MessageCircleQuestion,
+  Mountain,
   Moon,
+  NotebookPen,
   Route,
   Satellite,
   Server,
@@ -25,6 +28,7 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  WandSparkles,
 } from "lucide-react";
 import React, {
   useCallback,
@@ -324,7 +328,12 @@ export type AIFeatureKey =
   | "aiBrief"
   | "reportChat"
   | "routeAnalysis"
-  | "snowVision";
+  | "snowVision"
+  | "watchSummary"
+  | "tripReports"
+  | "planParse"
+  | "avalancheExtraction"
+  | "tripDebrief";
 const AI_FEATURE_CONTROLS = [
   {
     key: "aiBrief",
@@ -351,6 +360,41 @@ const AI_FEATURE_CONTROLS = [
     description:
       "Enables AI analysis of satellite imagery and nearby snow measurements.",
     icon: Satellite,
+  },
+  {
+    key: "watchSummary",
+    label: "Watch alert summaries",
+    description:
+      "Adds a short AI explanation of what changed and what to adjust to Objective Watch alerts.",
+    icon: BellRing,
+  },
+  {
+    key: "tripReports",
+    label: "Field observations",
+    description:
+      "Extracts dated snow and trail observations from pasted trip reports.",
+    icon: Eye,
+  },
+  {
+    key: "planParse",
+    label: "Describe your plan",
+    description:
+      "Fills in the plan form from a sentence such as a peak, day, start time and wind limit.",
+    icon: WandSparkles,
+  },
+  {
+    key: "avalancheExtraction",
+    label: "Avalanche bulletin extraction",
+    description:
+      "Reads avalanche problems from scraped bulletins when a center's feed leaves them out.",
+    icon: Mountain,
+  },
+  {
+    key: "tripDebrief",
+    label: "Post-trip debrief",
+    description:
+      "Compares a recorded GPX track with the forecast and planned pace after the trip.",
+    icon: NotebookPen,
   },
 ] as const;
 export interface ProductFeatureFlagStatus {

@@ -215,6 +215,25 @@ test('shows readings and change reasons in the preferred wind unit, including ol
   assert.doesNotMatch(latest, /mph/);
 });
 
+test('a change with an AI explanation shows it above the reasons, in the preferred wind unit', async t => {
+  const reasons = [worse('Peak gusts increased from 20 mph to 40 mph.')];
+  await setup(t, () => ({ payload: { watches: [watch('Rainier', {
+    latestCheck: changed(reasons, { change: { checkedAt, reasons, aiSummary: 'Gusts reach 40 mph after 11:00. An earlier start avoids them.' } }),
+  })], policy } }), kph);
+  const latest = document.querySelector('.field-watch-latest');
+  const summary = latest.querySelector('.sky-watch-summary');
+  assert.equal(summary.textContent, 'Gusts reach 64 kph after 11:00. An earlier start avoids them.');
+  assert.ok(summary.compareDocumentPosition(latest.querySelector('.sky-watch-reasons')) & 4);
+});
+
+test('a change without an AI explanation lists only its reasons', async t => {
+  await setup(t, () => ({ payload: { watches: [watch('Rainier', {
+    latestCheck: changed([worse('Peak gusts increased from 20 mph to 40 mph.')]),
+  })], policy } }));
+  assert.equal(document.querySelector('.sky-watch-summary'), null);
+  assert.ok(document.querySelector('.field-watch-latest .sky-watch-reasons'));
+});
+
 test('attention falls back to the direction of the last change without review data', () => {
   const now = Date.parse('2026-09-06T14:00:00Z');
   const improvement = watch('Rainier', { lastChange: { reasons: [{ key: 'score_improvement', label: 'Better.' }] } });

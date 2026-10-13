@@ -1,0 +1,70 @@
+/* Post-trip debrief: the GPX picker, planned-vs-actual table and the hours out. */
+.trip-debrief-intro,
+.trip-debrief-caption {
+  margin: 8px 0 0;
+  color: var(--ai-secondary);
+  font-size: 14px;
+}
+.trip-debrief-form {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin-top: 12px;
+}
+.trip-debrief-file {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ai-secondary);
+}
+.trip-debrief-notes {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+}
+.trip-debrief-notes small {
+  font-weight: 400;
+  color: var(--ai-secondary);
+}
+.trip-debrief-notes textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--ai-separator);
+  border-radius: 10px;
+  background: var(--ai-fill);
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+}
+.trip-debrief-result {
+  margin-top: 16px;
+}
+.trip-debrief-table {
+  font-size: 14px;
+}
+.trip-debrief-table td,
+.trip-debrief-table th {
+  white-space: normal;
+  vertical-align: top;
+}
+.trip-debrief-table tbody th {
+  white-space: nowrap;
+}
+.trip-debrief-subhead {
+  margin: 20px 0 0;
+  font-size: 16px;
+}
+.trip-debrief-notes-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--ai-secondary);
+  font-size: 13px;
+}
+.trip-debrief-narrative {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ai-separator);
+}

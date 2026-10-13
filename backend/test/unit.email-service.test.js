@@ -256,6 +256,34 @@ describe('transactional email service', () => {
     expect(message.html.indexOf('Also changed:')).toBeLessThan(message.html.indexOf('Precipitation chance decreased'));
   });
 
+  test('Objective Watch alerts lead with the AI explanation, escaped, and omit it when absent', async () => {
+    const send = jest.fn().mockResolvedValue({ data: { id: 'watch-email-125' }, error: null });
+    const service = createEmailService({
+      apiKey: 're_test',
+      fromAddress: 'accounts@mail.example.com',
+      appBaseUrl: 'https://conditions.example.com',
+      client: { emails: { send } },
+    });
+    const reasons = [{ key: 'wind_gust', direction: 'worse', label: 'Peak gusts increased from 20 mph to 40 mph.' }];
+    const base = { eventId: 'event-6', changeKey: 'ghi789', watchId: 'watch-7', title: 'Mount Rainier', to: 'climber@example.com' };
+
+    await service.sendObjectiveWatchChangeEmail({
+      ...base,
+      change: { reasons, aiSummary: 'Gusts reach 40 mph after 11:00 <near the summit>.\nAn earlier start keeps you below them.' },
+    });
+    const [message] = send.mock.calls[0];
+    const summary = 'Gusts reach 40 mph after 11:00 <near the summit>. An earlier start keeps you below them.';
+    expect(message.text).toContain(`${summary}\n\n- Peak gusts increased`);
+    expect(message.html).toContain('Gusts reach 40 mph after 11:00 &lt;near the summit&gt;. An earlier start');
+    expect(message.html).not.toContain('<near the summit>');
+    expect(message.html.indexOf('An earlier start')).toBeLessThan(message.html.indexOf('Peak gusts increased'));
+
+    await service.sendObjectiveWatchChangeEmail({ ...base, change: { reasons } });
+    const [plain] = send.mock.calls[1];
+    expect(plain.text).toContain('Mount Rainier:\n\n- Peak gusts increased');
+    expect(plain.html).not.toContain('background:#f3f6f3;">');
+  });
+
   test('sends owner health alerts with incident-scoped idempotency', async () => {
     const send = jest.fn().mockResolvedValue({ data: { id: 'health-email-123' }, error: null });
     const service = createEmailService({
