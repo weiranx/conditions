@@ -939,6 +939,14 @@ export interface AiBriefDetails {
   questions: string[];
   /** The AI's fact-checked analysis of each report chapter; a chapter that failed its checks is absent. */
   chapters?: Partial<Record<'forecast' | 'timing' | 'terrain' | 'sources', { text: string; evidence: AiBriefCitation[] }>>;
+  /** The AI's fact-checked headline and reason for the top of the report; null when it failed its checks. */
+  hero?: {
+    headline: string;
+    reason: string;
+    evidence: AiBriefCitation[];
+    /** The decision level the hero was written against; it is shown only beside a level no stricter. */
+    level?: string;
+  } | null;
   /** `deterministic_fallback` when the AI answer failed the backend's checks. */
   validation: 'evidence_checked' | 'deterministic_fallback' | null;
 }

@@ -859,6 +859,12 @@ export function createMockApi({ databasePath } = {}) {
           terrain: { text: "Synthetic analysis: the sample's snow and avalanche values are mocked; read them as layout, not conditions.", evidence: [{ path: "avalanche.dangerLevel", value: 0 }] },
           sources: { text: "Synthetic analysis: every source here is simulated, so the checks describe the fixture rather than the mountain.", evidence: [{ path: "safety.confidence", value: 0 }] },
         },
+        hero: {
+          headline: "A sample day shaped by afternoon wind",
+          reason: "Synthetic hero: in this fixture the wind builds through the window, so the early hours carry the least exposure.",
+          evidence: [{ path: "weather.windGust", value: 0 }],
+          level: body.decisionLevel || "CAUTION",
+        },
         questions: ["When does the wind start to build?", "What would make this a no-go?", "How early should I turn around?"],
         validation: "evidence_checked",
       });

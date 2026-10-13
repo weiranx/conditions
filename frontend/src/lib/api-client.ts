@@ -262,6 +262,7 @@ export interface AiBriefResponse {
   evidence?: AiBriefDetails['evidence'];
   questions?: string[];
   chapters?: AiBriefDetails['chapters'];
+  hero?: AiBriefDetails['hero'];
   validation?: AiBriefDetails['validation'];
 }
 

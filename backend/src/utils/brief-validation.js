@@ -40,6 +40,21 @@ const validateChapters = (value, report, decisionLevel) => {
   }
   return chapters;
 };
+const HERO_HEADLINE = { min: 8, max: 90 };
+const MAX_HERO_REASON = 320;
+// The report's opening headline and reason, written by AI. Both are checked
+// together; a hero that fails is left out and the report keeps its own.
+const validateHero = (value, report, decisionLevel) => {
+  if (!value || typeof value !== 'object' || typeof value.headline !== 'string' || typeof value.reason !== 'string') return null;
+  const headline = value.headline.replace(/\s+/g, ' ').trim().replace(/\.$/, '');
+  const reason = value.reason.replace(/\s+/g, ' ').trim();
+  if (headline.length < HERO_HEADLINE.min || headline.length > HERO_HEADLINE.max || !reason || reason.length > MAX_HERO_REASON) return null;
+  const text = `${headline}. ${reason}`;
+  // The badge beside it shows the checks' level; the hero may not name another one.
+  if (decisionLevel !== 'NO-GO' && /\bNO-GO\b/i.test(text)) return null;
+  if (!checkClaim(text, value.evidence, report, decisionLevel)) return null;
+  return { headline, reason, evidence: value.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
+};
 const MAX_QUESTIONS = 3;
 // Follow-up questions the reader can ask the report assistant. They are prompts,
 // not claims, but a number in one would still read as a fact, so none may hold one.
@@ -76,6 +91,7 @@ const validateBrief = (raw, report, decisionLevel) => {
     evidence: parsed.sections.map(({ heading, evidence }) => ({ heading, evidence })),
     questions: validateQuestions(parsed.questions),
     chapters: validateChapters(parsed.chapters, report, decisionLevel),
+    hero: validateHero(parsed.hero, report, decisionLevel),
   };
 };
 const deterministicBrief = (report, decisionLevel) => {
@@ -92,4 +108,4 @@ const deterministicBrief = (report, decisionLevel) => {
     `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : concerns.slice(0, 2).map(item => item.action).join(' ') || 'Resolve failed checks and missing evidence before committing.'}`,
   ].join('\n');
 };
-module.exports = { validateBrief, validateQuestions, validateChapters, deterministicBrief };
+module.exports = { validateBrief, validateQuestions, validateChapters, validateHero, deterministicBrief };

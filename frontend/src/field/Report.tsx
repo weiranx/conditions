@@ -14,6 +14,7 @@ import {
   Ellipsis,
   Printer,
   RefreshCw,
+  Sparkles,
   TriangleAlert,
 } from "lucide-react";
 import { GearActions } from "./GearActions";
@@ -22,6 +23,7 @@ import "./report-reading.css";
 import "./report-navigation.css";
 import { AiChapterNote, AiRead } from "./AiRead";
 import { starterQuestions } from "./ai-explanation";
+import { aiHero } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
@@ -243,6 +245,17 @@ export function Report({
   const readKey = `${data.generatedAt ?? ""}|${JSON.stringify(evaluation.params ?? null)}`;
   // An admin switch: off, the read sits under More and is written only on request.
   const aiFirst = ai.aiReport;
+  // Under AI-first the AI writes the report's opening; the badge and the checks
+  // beside it still come from the evaluation.
+  const hero = aiFirst ? aiHero(w.aiBriefDetails, decision.level) : null;
+  const heroHeadline = hero?.headline ?? headline;
+  const heroReason = hero?.reason ?? copy.reason;
+  const heroByline = hero && (
+    <p className="sky-ai-byline">
+      <Sparkles size={13} aria-hidden="true" />
+      Written by AI from this report’s data. The call comes from the checks.
+    </p>
+  );
   const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
   useEffect(() => {
     if (!autoRead || w.aiBriefNarrative || w.aiBriefLoading || w.aiBriefError) return;
@@ -545,10 +558,10 @@ export function Report({
           subtitle={subtitle}
           status={passedStatus}
           level={decision.level}
-          headline={headline}
-          reason={copy.reason}
+          headline={heroHeadline}
+          reason={heroReason}
           limitingChecks={copy.limitingChecks}
-          note={<>{approachNote}{routeNote}</>}
+          note={<>{heroByline}{approachNote}{routeNote}</>}
           actions={actions}
           photo={data.objectiveImage}
           format={{
@@ -624,13 +637,14 @@ export function Report({
                 {copy.tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
                 <span><span className="sr-only">Trip decision: </span>{decision.level === "GO" ? "Go" : decision.level === "NO-GO" ? "No-go" : "Caution"}</span>
               </span>
-              <h2 id="sky-full-verdict">{headline}</h2>
-              <p className="sky-verdict-reason">{copy.reason}</p>
+              <h2 id="sky-full-verdict">{heroHeadline}</h2>
+              <p className="sky-verdict-reason">{heroReason}</p>
               {copy.limitingChecks.length > 0 && (
                 <ul className="sky-limiting" aria-label="Checks setting the decision">
                   {copy.limitingChecks.map((check) => <li key={check}>{check}</li>)}
                 </ul>
               )}
+              {heroByline}
               {approachNote}
               {routeNote}
               <p className="sky-cap">{subtitle}</p>

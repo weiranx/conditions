@@ -1,6 +1,6 @@
 const { calculateSafetyScore } = require('../src/utils/safety-score');
 const { selectForecastIntervals } = require('../src/utils/report-evidence');
-const { validateBrief, validateQuestions, validateChapters, deterministicBrief } = require('../src/utils/brief-validation');
+const { validateBrief, validateQuestions, validateChapters, validateHero, deterministicBrief } = require('../src/utils/brief-validation');
 const start = '2026-09-16T08:30:00-07:00';
 const row = (timeIso, extra = {}) => ({ timeIso, temp: 55, feelsLike: 55, wind: 5, gust: 8, precipChance: 0, ...extra });
 const base = () => ({
@@ -98,6 +98,25 @@ test('chapter analyses are fact-checked one by one and a failing one is left out
   expect(validateChapters('nope', report, 'GO')).toEqual({});
   const withChapters = JSON.stringify({ ...JSON.parse(brief('Forecast gusts are 8 mph.')), chapters: { forecast: { text: 'Gusts stay at 8 mph.', evidence: cite('weather.windGust', 8) }, terrain: { text: 'Gusts hit 80 mph.', evidence: cite('weather.windGust', 8) } } });
   expect(Object.keys(validateBrief(withChapters, report, 'CAUTION').chapters)).toEqual(['forecast']);
+});
+
+test('the AI hero is fact-checked and never names another level or sounds safer', () => {
+  const report = { weather: { windGust: 8 }, safety: { score: 62 } };
+  const cite = (path, value) => [{ path, value }];
+  const hero = (headline, reason, evidence = cite('weather.windGust', 8)) => ({ headline, reason, evidence });
+  expect(validateHero(hero('Wind sets the pace today.', 'Gusts reach 8 mph   on the ridge.'), report, 'CAUTION'))
+    .toEqual({ headline: 'Wind sets the pace today', reason: 'Gusts reach 8 mph on the ridge.', evidence: cite('weather.windGust', 8) });
+  expect(validateHero(hero('Wind sets the pace today', 'Gusts reach 30 mph.'), report, 'CAUTION')).toBeNull();
+  expect(validateHero(hero('Proceed with the full ridge', 'Gusts reach 8 mph.'), report, 'CAUTION')).toBeNull();
+  expect(validateHero(hero('A no-go on the ridge today', 'Gusts reach 8 mph.'), report, 'CAUTION')).toBeNull();
+  expect(validateHero(hero('A no-go on the ridge today', 'Gusts reach 8 mph.'), report, 'NO-GO')).not.toBeNull();
+  expect(validateHero(hero('Short', 'Gusts reach 8 mph.'), report, 'GO')).toBeNull();
+  expect(validateHero(hero('Wind sets the pace today', 'x'.repeat(321)), report, 'GO')).toBeNull();
+  expect(validateHero(hero('Wind sets the pace today', 'Gusts reach 8 mph.', []), report, 'GO')).toBeNull();
+  expect(validateHero(null, report, 'GO')).toBeNull();
+  const withHero = JSON.stringify({ ...JSON.parse(brief('Forecast gusts are 8 mph.')), hero: hero('Wind sets the pace today', 'Gusts reach 8 mph.') });
+  expect(validateBrief(withHero, report, 'CAUTION').hero).toMatchObject({ headline: 'Wind sets the pace today' });
+  expect(validateBrief(brief('Forecast gusts are 8 mph.'), report, 'CAUTION').hero).toBeNull();
 });
 
 test('saved synthetic sparse-provider fixture remains insufficient on replay', () => {
