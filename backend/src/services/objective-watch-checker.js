@@ -2,6 +2,7 @@
 
 const { createHash, randomUUID } = require('crypto');
 const { toFiniteOrNull: finiteNumber } = require('../utils/numbers');
+const { createWatchSummarizer, sanitizeWatchSummary } = require('../utils/watch-summary');
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_BATCH_SIZE = 100;
@@ -268,6 +269,19 @@ const extractRouteSignals = (payloads) => {
   };
 };
 
+/** Each checkpoint's place, arrival and readings, for the change summary to name where it applies. */
+const describeRouteCheckpoints = (points, arrivals, payloads) => points.map((point, index) => {
+  const payload = payloads[index];
+  const alerts = payload && payload.partialData !== true ? readAlertKeys(payload.alerts) : null;
+  return {
+    name: point.name,
+    arrival: arrivals[index]?.start || null,
+    maxGustMph: payload ? maxFinite([payload.weather?.windGust, payload.weather?.trend?.[0]?.gust]) : null,
+    precipChancePercent: payload ? maxFinite([payload.weather?.precipChance, payload.weather?.trend?.[0]?.precipChance]) : null,
+    alerts: alerts ? alerts.map(formatAlertKey) : null,
+  };
+});
+
 const isKnownSignal = (value) => value !== null && value !== undefined && value !== '';
 
 const formatAlertKey = (key) => {
@@ -421,7 +435,9 @@ const normalizeWatchChange = (change) => {
         ? reason.direction
         : IMPROVEMENT_REASON_KEYS.has(String(reason.key || '')) ? 'better' : 'worse',
     }));
-  return { ...change, reasons, direction: summarizeDirection(reasons) };
+  const { aiSummary, ...rest } = change;
+  const summary = typeof aiSummary === 'string' ? sanitizeWatchSummary(aiSummary) : null;
+  return { ...rest, reasons, direction: summarizeDirection(reasons), ...(summary ? { aiSummary: summary } : {}) };
 };
 
 const buildChangeKey = (watchId, change) => createHash('sha256')
@@ -450,7 +466,17 @@ const createObjectiveWatchChecker = ({
   createClaimToken = randomUUID,
   concurrency = Number(process.env.OBJECTIVE_WATCH_CONCURRENCY) || DEFAULT_CONCURRENCY,
   batchSize = Number(process.env.OBJECTIVE_WATCH_BATCH_SIZE) || DEFAULT_BATCH_SIZE,
+  // Optional AI explanation of a risk increase; without these, changes carry none.
+  askAI = null,
+  isAIFeatureAvailable = () => false,
+  summaryTimeoutMs = Number(process.env.OBJECTIVE_WATCH_SUMMARY_TIMEOUT_MS) || undefined,
 } = {}) => {
+  const summarizeChange = createWatchSummarizer({
+    askAI,
+    isAvailable: isAIFeatureAvailable,
+    timeoutMs: summaryTimeoutMs,
+    log,
+  });
   const deliverPendingNotifications = async () => {
     if (!emailService?.available || typeof emailService.sendObjectiveWatchChangeEmail !== 'function') return 0;
     const result = await database.query(`
@@ -658,8 +684,9 @@ const createObjectiveWatchChecker = ({
       if (!points) return Promise.resolve(null);
       const key = JSON.stringify([watch.plan.forecastDate, watch.plan.alpineStartTime, points]);
       if (!routeChecks.has(key)) {
-        routeChecks.set(key, Promise.all(points.map(async (point) => {
-          const arrival = checkpointArrival(watch.plan, point.offsetMinutes);
+        const arrivals = points.map((point) => checkpointArrival(watch.plan, point.offsetMinutes));
+        routeChecks.set(key, Promise.all(points.map(async (point, index) => {
+          const arrival = arrivals[index];
           if (!arrival) return null;
           try {
             const result = await invokeSafetyHandler({
@@ -674,7 +701,10 @@ const createObjectiveWatchChecker = ({
           } catch {
             return null;
           }
-        })).then(extractRouteSignals));
+        })).then((payloads) => ({
+          signals: extractRouteSignals(payloads),
+          checkpoints: describeRouteCheckpoints(points, arrivals, payloads),
+        })));
       }
       return routeChecks.get(key);
     };
@@ -715,7 +745,8 @@ const createObjectiveWatchChecker = ({
         const partial = objectiveSignals.partial;
         for (const watch of group) {
           // A route that couldn't be checked stays unknown; the objective still is.
-          const routeSignals = partial ? null : await checkWatchRoute(watch);
+          const route = partial ? null : await checkWatchRoute(watch);
+          const routeSignals = route?.signals || null;
           const currentSignals = routeSignals ? { ...objectiveSignals, ...routeSignals } : objectiveSignals;
           // Without stored reference signals (a new or re-baselined watch, or
           // one saved before they existed) compare with the latest snapshot,
@@ -724,6 +755,20 @@ const createObjectiveWatchChecker = ({
             || extractWatchSignals(watch.last_snapshot || watch.baseline_report?.safetyData || null);
           const change = partial ? null : buildSignalChange(referenceSignals, currentSignals, checkedAt);
           const nextReference = partial ? null : advanceReferenceSignals(referenceSignals, currentSignals, change?.reasons || []);
+          // A risk increase gets a short explanation when AI is available. It
+          // only explains the reasons; it resolves null on any failure or
+          // timeout, so the check and the alert go ahead without it.
+          if (change && change.direction !== 'better') {
+            const aiSummary = await summarizeChange({
+              title: watch.title,
+              plan: watch.plan,
+              change,
+              report: result.payload,
+              routeCheckpoints: route?.checkpoints || null,
+              userId: watch.user_id,
+            });
+            if (aiSummary) change.aiSummary = aiSummary;
+          }
           const premium = watch.tier_key === 'premium';
           const nextCheckAt = premium ? calculateNextCheckAt(watch.plan, checkedAt, standardIntervalMinutes) : null;
           const checkStatus = partial ? 'partial' : change ? 'changed' : 'unchanged';

@@ -497,7 +497,7 @@ describe('reference signals across checks', () => {
     tier_key: 'premium',
     ...overrides,
   });
-  const createHarness = (row) => {
+  const createHarness = (row, options = {}) => {
     const state = { reference: row.reference_signals, snapshot: row.last_snapshot };
     const query = jest.fn(async (sql, params) => {
       if (sql.includes('WITH candidate_watches AS')) {
@@ -517,6 +517,7 @@ describe('reference signals across checks', () => {
       emailService: { available: false },
       log: { warn: jest.fn() },
       now: () => new Date('2026-07-14T00:00:00.000Z'),
+      ...options,
     });
     return {
       state,
@@ -575,10 +576,59 @@ describe('reference signals across checks', () => {
     expect(better.events()).toHaveLength(1);
     expect(better.events()[0][1][3]).toBe('not_requested');
   });
+
+  test('stores a grounded AI explanation with a risk increase, asked of the fast tier for the owner', async () => {
+    const askAI = jest.fn(async () => '**Conditions score** dropped from 80 to 55 for the 06:00 start.\nReview the plan before relying on it.');
+    const harness = createHarness(premiumRow(), { askAI, isAIFeatureAvailable: (feature) => feature === 'watchSummary' });
+    expect(await harness.check(safetyPayload({ score: 55 }))).toMatchObject({ checked: 1, changed: 1 });
+    const change = JSON.parse(harness.events()[0][1][2]);
+    expect(change.aiSummary).toBe('Conditions score dropped from 80 to 55 for the 06:00 start. Review the plan before relying on it.');
+    expect(change.reasons.map((reason) => reason.label)).toEqual(['Conditions score dropped from 80 to 55.', 'Risk tier increased from Low to High.']);
+    expect(askAI).toHaveBeenCalledWith(expect.stringContaining('Conditions score dropped from 80 to 55.'), expect.objectContaining({
+      tier: 'fast', feature: 'watch-summary', userId: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
+    }));
+    const update = harness.query.mock.calls.find(([sql]) => sql.includes('last_checked_at = $2'));
+    expect(JSON.parse(update[1][4]).aiSummary).toBe(change.aiSummary);
+  });
+
+  test.each([
+    ['fails', async () => { throw new Error('provider down'); }],
+    ['returns nothing', async () => ''],
+    ['invents a number', async () => 'Gusts now reach 70 mph by 09:00, so start two hours earlier than planned.'],
+  ])('sends the change without an explanation when the AI %s', async (_label, impl) => {
+    const askAI = jest.fn(impl);
+    const harness = createHarness(premiumRow(), { askAI, isAIFeatureAvailable: () => true });
+    expect(await harness.check(safetyPayload({ score: 55 }))).toMatchObject({ checked: 1, changed: 1, failed: 0 });
+    expect(askAI).toHaveBeenCalledTimes(1);
+    const change = JSON.parse(harness.events()[0][1][2]);
+    expect(change).not.toHaveProperty('aiSummary');
+    expect(harness.events()[0][1][3]).toBe('pending');
+  });
+
+  test('does not ask for an explanation when the feature is off or conditions only improved', async () => {
+    const askAI = jest.fn(async () => 'unused');
+    const off = createHarness(premiumRow(), { askAI, isAIFeatureAvailable: () => false });
+    await off.check(safetyPayload({ score: 55 }));
+    const better = createHarness(premiumRow({ baseline_report: { safetyData: safetyPayload({ score: 55 }) } }), {
+      askAI, isAIFeatureAvailable: () => true,
+    });
+    await better.check(safetyPayload({ score: 80 }));
+    expect(askAI).not.toHaveBeenCalled();
+  });
+
+  test('a slow AI answer is abandoned at the summary timeout', async () => {
+    const askAI = jest.fn(() => new Promise(() => {}));
+    const harness = createHarness(premiumRow(), { askAI, isAIFeatureAvailable: () => true, summaryTimeoutMs: 20 });
+    expect(await harness.check(safetyPayload({ score: 55 }))).toMatchObject({ changed: 1, failed: 0 });
+    expect(JSON.parse(harness.events()[0][1][2])).not.toHaveProperty('aiSummary');
+  });
 });
 
 test('delivers risk-increase emails with the plan and skips queued improvement-only events', async () => {
-  const worseChange = { reasons: [{ key: 'wind_gust', label: 'Peak gusts increased from 20 mph to 40 mph.' }] };
+  const worseChange = {
+    reasons: [{ key: 'wind_gust', label: 'Peak gusts increased from 20 mph to 40 mph.' }],
+    aiSummary: 'Gusts rose from 20 mph to 40 mph.\nConsider reviewing the plan.',
+  };
   const betterChange = { reasons: [{ key: 'score_improvement', label: 'Conditions score improved from 55 to 80.' }] };
   const query = jest.fn(async (sql) => {
     if (sql.includes('FROM objective_watch_events events')) {
@@ -600,6 +650,7 @@ test('delivers risk-increase emails with the plan and skips queued improvement-o
   expect(sendObjectiveWatchChangeEmail).toHaveBeenCalledTimes(1);
   expect(sendObjectiveWatchChangeEmail.mock.calls[0][0]).toMatchObject({
     eventId: '2',
+    change: { aiSummary: 'Gusts rose from 20 mph to 40 mph. Consider reviewing the plan.' },
     plan: PLAN,
     change: { direction: 'worse', reasons: [{ key: 'wind_gust', direction: 'worse' }] },
   });
@@ -620,7 +671,7 @@ describe('watched routes', () => {
       },
     },
   };
-  const createRouteHarness = (baseline = routeReport) => {
+  const createRouteHarness = (baseline = routeReport, options = {}) => {
     const state = { reference: null };
     const row = {
       id: 'watch-route', user_id: '8c696be4-e175-4b6a-965b-82bdf3758e0c', title: 'Rainier via Muir', plan: PLAN,
@@ -648,7 +699,7 @@ describe('watched routes', () => {
     });
     const checker = createObjectiveWatchChecker({
       database: { configured: true, query }, invokeSafetyHandler, emailService: { available: false },
-      log: { warn: jest.fn() }, now: () => new Date('2026-07-14T00:00:00.000Z'),
+      log: { warn: jest.fn() }, now: () => new Date('2026-07-14T00:00:00.000Z'), ...options,
     });
     return {
       state, calls,
@@ -676,6 +727,19 @@ describe('watched routes', () => {
       'New weather alert along the route: Wind Advisory (Moderate).',
       'Along the route, peak gusts increased from 20 mph to 42 mph.',
     ]);
+  });
+
+  test('the change explanation is given each checkpoint\'s arrival and readings', async () => {
+    const askAI = jest.fn(async () => 'Gusts along the route rose to 42 mph at Camp Muir around 11:00.');
+    const harness = createRouteHarness(routeReport, { askAI, isAIFeatureAvailable: () => true });
+    await harness.check();
+    harness.set({ routeGust: 42 });
+    const { query } = await harness.check();
+    const context = JSON.parse(askAI.mock.calls[0][0].split('\n')[1]);
+    expect(context.routeCheckpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Camp Muir', arrival: '11:00', maxGustMph: 42 }),
+    ]));
+    expect(harness.changes(query)[0].aiSummary).toBe('Gusts along the route rose to 42 mph at Camp Muir around 11:00.');
   });
 
   test('a route checkpoint that fails leaves the route unknown instead of calm', async () => {

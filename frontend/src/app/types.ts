@@ -220,6 +220,11 @@ export interface SafetyData {
     reportChat?: boolean;
     routeAnalysis?: boolean;
     snowVision?: boolean;
+    watchSummary?: boolean;
+    tripReports?: boolean;
+    planParse?: boolean;
+    avalancheExtraction?: boolean;
+    tripDebrief?: boolean;
   };
   location: { lat: number; lon: number };
   /** A photo of the objective (a catalog peak) or, with `fallback`, of the forest or park it is in; with its license and credit. */
@@ -309,6 +314,8 @@ export interface SafetyData {
     expiresTime?: string;
     generatedTime?: string | null;
     staleWarning?: '48h' | '72h';
+    /** Set when problems, band ratings or the bottom line were read from the bulletin text by AI. */
+    extraction?: { method: 'ai'; fields?: string[]; source?: string; extractedAt?: string; note?: string };
   };
   alerts?: {
     source?: string;

@@ -1,0 +1,17 @@
+/* "Describe your plan": one line above the plan steps that fills them in. */
+.sky-plan-sentence { display: grid; gap: 6px; margin: 0 0 22px; }
+.sky-plan-sentence > label { font-size: 13px; font-weight: 550; color: var(--sky-secondary, var(--f-muted)); }
+.sky-plan-sentence-row { display: flex; gap: 8px; }
+.field-app .field-plan-form .sky-plan-sentence-row input {
+  flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--sky-field-border, var(--f-line)); border-radius: 12px;
+  background: var(--sky-field, var(--f-paper)); color: var(--sky-label, var(--f-ink)); font: inherit; font-size: 16px;
+}
+.field-app .field-plan-form .sky-plan-sentence-row input:focus-visible {
+  border-color: var(--sky-accent); outline: none; box-shadow: 0 0 0 1px var(--sky-accent), var(--sky-focus-ring);
+}
+.sky-plan-sentence-row .field-button { flex: none; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+.sky-plan-sentence p { margin: 0; font-size: 13px; line-height: 1.4; }
+.sky-plan-sentence-summary { color: var(--sky-label, var(--f-ink)); }
+.sky-plan-sentence-notes { color: var(--sky-secondary, var(--f-muted)); }
+.sky-plan-sentence-error { color: var(--f-red); }

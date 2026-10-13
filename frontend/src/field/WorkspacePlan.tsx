@@ -34,6 +34,7 @@ import { SuggestionLabel } from "./SuggestionLabel";
 import { ItineraryCamps, ItineraryWhen } from "./ItineraryPlan";
 import { PlanDateChips } from "./PlanDateChips";
 import { usePlanDaylight } from "../hooks/usePlanDaylight";
+import { PlanSentence } from "./PlanSentence";
 
 /** "6:31:02 AM" as a time input's "06:31". */
 function clockInput(value: string) {
@@ -212,6 +213,15 @@ export function WorkspacePlan({
     else if (optionBounds.bottom > listBottom)
       list.scrollTop += optionBounds.bottom - listBottom;
   }, [w.activeSuggestionIndex, w.showSuggestions, w.suggestions]);
+  // A sentence fills a day trip's plan; the place goes through the search like typing it.
+  const sentenceAvailable = useAiAvailability().planParse && !comparison && !multiDay;
+  function searchFor(query: string) {
+    setError("");
+    setRenaming(null);
+    // The search shows even when the sentence names the place already chosen.
+    setChangingPlace(placeKey);
+    w.handleInputChange({ target: { value: query } } as ChangeEvent<HTMLInputElement>);
+  }
   const gpxAllowed = w.featureFlags.gpxImport && !multiDay && !comparison;
   const chooseGpx = () => file.current?.click();
   return (
@@ -272,6 +282,16 @@ export function WorkspacePlan({
               </label>
             ))}
           </div>
+        )}
+        {sentenceAvailable && (
+          <PlanSentence
+            workspace={w}
+            placeKey={placeKey}
+            onDate={setDate}
+            onStart={setStart}
+            onDuration={setDuration}
+            onPlaceQuery={searchFor}
+          />
         )}
         <h2 className="sky-plan-step"><span aria-hidden="true">1</span>{multiDay ? "Trailhead" : "Where"}</h2>
         {gpxAllowed && (

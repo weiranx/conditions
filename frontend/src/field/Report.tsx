@@ -63,6 +63,7 @@ const Sources = lazy(() =>
 );
 const Route = lazy(() => import("./Route").then((m) => ({ default: m.Route })));
 const Chat = lazy(() => import("./Chat").then((m) => ({ default: m.Chat })));
+const TripDebrief = lazy(() => import("./TripDebrief").then((m) => ({ default: m.TripDebrief })));
 const chapters = REPORT_CHAPTERS;
 type Chapter = ReportChapter;
 type View = Chapter | "brief" | "all";
@@ -539,6 +540,11 @@ export function Report({
               </>
             )}
           </section>
+        )}
+        {w.viewingHistoryReport && w.restoredReportSource === "saved" && w.accountUser && (
+          <Suspense fallback={null}>
+            <TripDebrief report={report} aiAvailable={ai.tripDebrief} formatClock={eta} />
+          </Suspense>
         )}
         {(ai.reportChat || w.reportChatMessages.length > 0) && (
           <Suspense fallback={<p>Loading report assistant…</p>}>

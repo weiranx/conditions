@@ -322,6 +322,11 @@ describe('AI provider client wrapper', () => {
         reportChat: { enabled: true, available: true },
         routeAnalysis: { enabled: true, available: true },
         snowVision: { enabled: true, available: true },
+        watchSummary: { enabled: true, available: true },
+        tripReports: { enabled: true, available: true },
+        planParse: { enabled: true, available: true },
+        avalancheExtraction: { enabled: true, available: true },
+        tripDebrief: { enabled: true, available: true },
       },
       primaryTimeoutMs: 28000,
       fastTimeoutMs: 8000,
@@ -351,6 +356,11 @@ describe('AI provider client wrapper', () => {
         reportChat: { enabled: false, available: false },
         routeAnalysis: { enabled: false, available: false },
         snowVision: { enabled: false, available: false },
+        watchSummary: { enabled: false, available: false },
+        tripReports: { enabled: false, available: false },
+        planParse: { enabled: false, available: false },
+        avalancheExtraction: { enabled: false, available: false },
+        tripDebrief: { enabled: false, available: false },
       },
     }));
     expect(isAIAvailable()).toBe(false);
@@ -390,6 +400,11 @@ describe('AI provider client wrapper', () => {
           reportChat: { enabled: false, available: false },
           routeAnalysis: { enabled: false, available: false },
           snowVision: { enabled: false, available: false },
+          watchSummary: { enabled: false, available: false },
+          tripReports: { enabled: false, available: false },
+          planParse: { enabled: false, available: false },
+          avalancheExtraction: { enabled: false, available: false },
+          tripDebrief: { enabled: false, available: false },
         }),
       }));
     } finally {
@@ -479,6 +494,11 @@ describe('AI provider client wrapper', () => {
         reportChat: { enabled: false, available: false },
         routeAnalysis: { enabled: false, available: false },
         snowVision: { enabled: false, available: false },
+        watchSummary: { enabled: false, available: false },
+        tripReports: { enabled: false, available: false },
+        planParse: { enabled: false, available: false },
+        avalancheExtraction: { enabled: false, available: false },
+        tripDebrief: { enabled: false, available: false },
       },
     }));
     expect(isAIAvailable()).toBe(false);
@@ -489,6 +509,11 @@ describe('AI provider client wrapper', () => {
       reportChat: { enabled: true, available: true },
       routeAnalysis: { enabled: true, available: true },
       snowVision: { enabled: true, available: true },
+      watchSummary: { enabled: true, available: true },
+      tripReports: { enabled: true, available: true },
+      planParse: { enabled: true, available: true },
+      avalancheExtraction: { enabled: true, available: true },
+      tripDebrief: { enabled: true, available: true },
     });
   });
 

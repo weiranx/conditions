@@ -57,14 +57,19 @@ const AVALANCHE_DANGER_NAMES = ["", "Low", "Moderate", "Considerable", "High", "
 function WatchReasons({ change, localize }: { change: ObjectiveWatchChange | null | undefined; localize: (text: string) => string }) {
   const reasons = watchChangeReasons(change);
   if (!reasons.length) return null;
+  // The AI explanation (when the check produced one) leads; the reasons stay the record.
+  const summary = typeof change?.aiSummary === "string" ? change.aiSummary.trim() : "";
   return (
-    <ul className="sky-watch-reasons">
-      {reasons.map((reason, index) => (
-        <li key={`${reason.key}-${index}`} className={`is-${reason.direction}`}>
-          {watchReasonText(reason.label, localize)}
-        </li>
-      ))}
-    </ul>
+    <>
+      {summary && <p className="sky-watch-summary">{watchReasonText(summary, localize)}</p>}
+      <ul className="sky-watch-reasons">
+        {reasons.map((reason, index) => (
+          <li key={`${reason.key}-${index}`} className={`is-${reason.direction}`}>
+            {watchReasonText(reason.label, localize)}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
