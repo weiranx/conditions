@@ -152,6 +152,19 @@ test('fast-forwards to the tested SHA and holds the shared lock through the real
   assert.match(f.calls(), /builder prune --force --filter until=168h/);
 });
 
+test('fetches with the job token without exposing it or handing it to deploy.sh', (t) => {
+  const f = fixture(t);
+  const sha = f.advance();
+  const token = 'ghs_test-token-value';
+  const result = f.run(sha, { DEPLOY_FETCH_TOKEN: token });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(f.git(f.host, 'rev-parse', 'HEAD'), sha);
+  assert.doesNotMatch(result.stdout + result.stderr, new RegExp(token));
+  assert.doesNotMatch(f.git(f.host, 'config', '--list'), /extraheader/i);
+  const script = readFileSync(bootstrap, 'utf8');
+  assert.ok(script.indexOf('unset DEPLOY_FETCH_TOKEN') < script.indexOf('exec bash'), 'drops the token before deploy.sh');
+});
+
 test('can retry the current tested commit', (t) => {
   const f = fixture(t);
   assert.equal(f.run().status, 0);

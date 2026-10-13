@@ -40,6 +40,9 @@ jobs:
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          # Read-only and expires with this job; lets the droplet fetch main
+          # without a GitHub credential of its own.
+          DEPLOY_FETCH_TOKEN: ${{ github.token }}
         with:
           host: ${{ secrets.DO_SSH_HOST }}
           username: ${{ secrets.DO_SSH_USER }}
@@ -51,7 +54,7 @@ jobs:
           version: 1.8.4 # ssh-action adds the release tag's v prefix.
           timeout: 30s
           command_timeout: 20m
-          envs: DEPLOY_SHA
+          envs: DEPLOY_SHA,DEPLOY_FETCH_TOKEN
           # Send the tested bootstrap from the runner, including on the first
           # release when the VPS still has the previous deployment script.
           script_path: scripts/ci-deploy.sh
