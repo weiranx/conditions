@@ -55,4 +55,74 @@ const compactReportForAI = (input) => {
   };
 };
 
-module.exports = { compactReportForAI };
+// The parts of a report an AI prompt can do without, cheapest loss first. The
+// evaluation's per-aspect, per-elevation and per-hour tables restate the
+// weather and terrain the report already carries; the decision, verdict and
+// checks themselves are never dropped.
+const OPTIONAL_PATHS = [
+  ['capabilities'],
+  ['objectiveImage'],
+  ['evaluation', 'terrain', 'byAspect'],
+  ['evaluation', 'elevation', 'bandsByHour'],
+  ['evaluation', 'travelWindow', 'readings'],
+  ['evaluation', 'interpretation', 'weatherTrend'],
+  ['evaluation', 'pleasantness'],
+  ['evaluation', 'terrain'],
+  ['evaluation', 'elevation'],
+  ['evaluation', 'travelWindow'],
+  ['evaluation', 'interpretation'],
+  ['supplementalEvidence', 'discussion', 'text'],
+  ['route', 'routeGeometry'],
+  ['route', 'waypoints'],
+];
+
+const withoutPath = (value, [key, ...rest]) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, key)) return value;
+  if (!rest.length) {
+    const { [key]: _removed, ...kept } = value;
+    return kept;
+  }
+  return { ...value, [key]: withoutPath(value[key], rest) };
+};
+
+// Bounds every string and list, for a report whose own text is the bulk.
+const capSizes = (value, maxString, maxItems) => {
+  if (typeof value === 'string') return value.length > maxString ? `${value.slice(0, maxString)}…` : value;
+  if (Array.isArray(value)) return value.slice(0, maxItems).map((item) => capSizes(item, maxString, maxItems));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, capSizes(item, maxString, maxItems)]));
+  }
+  return value;
+};
+
+const has = (value, path) => path.reduce((node, key) => (node && typeof node === 'object' && Object.hasOwn(node, key) ? node[key] : undefined), value) !== undefined;
+
+/**
+ * Fits a compacted report under an AI prompt's size limit by leaving out
+ * restated detail first, then shortening long text and lists. It says what it
+ * left out in `omittedForLength`, so the model never mistakes a gap for a
+ * reading. Returns null only when even the shortest form is too large.
+ */
+const fitReportForAI = (input, maxLength) => {
+  let report = input;
+  const omitted = [];
+  const size = () => JSON.stringify(omitted.length ? { ...report, omittedForLength: omitted } : report).length;
+  const done = () => (omitted.length ? { ...report, omittedForLength: omitted } : report);
+  if (size() <= maxLength) return done();
+  for (const path of OPTIONAL_PATHS) {
+    if (!has(report, path)) continue;
+    report = withoutPath(report, path);
+    omitted.push(path.join('.'));
+    if (size() <= maxLength) return done();
+  }
+  for (const [maxString, maxItems] of [[2000, 48], [600, 24], [240, 12]]) {
+    report = capSizes(report, maxString, maxItems);
+    const label = `long text and lists shortened to ${maxString} characters and ${maxItems} items`;
+    omitted.push(label);
+    if (size() <= maxLength) return done();
+    omitted.pop();
+  }
+  return null;
+};
+
+module.exports = { compactReportForAI, fitReportForAI };
