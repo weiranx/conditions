@@ -80,12 +80,18 @@ const registerAiBriefRoute = ({
         if (!validated || problems.length) {
           logger.warn({ problems: problems.slice(0, 12), decision: effectiveDecision }, 'ai-brief: answer failed fact checks; retrying');
           const retryProblems = [];
-          const retried = validateBrief(
-            await ask(`${userPrompt}\n\n${describeFailedChecks(problems)}`),
-            filteredReport,
-            effectiveDecision,
-            { units, problems: retryProblems },
-          );
+          let retried = null;
+          try {
+            retried = validateBrief(
+              await ask(`${userPrompt}\n\n${describeFailedChecks(problems)}`),
+              filteredReport,
+              effectiveDecision,
+              { units, problems: retryProblems },
+            );
+          } catch (err) {
+            // The retry is best effort: its failure keeps the first read, or the checks summary.
+            logger.warn({ err }, 'ai-brief: retry request failed');
+          }
           if (retried && (!validated || retryProblems.length < problems.length)) validated = retried;
           if (!validated) logger.warn({ problems: retryProblems.slice(0, 12), decision: effectiveDecision }, 'ai-brief: retry failed fact checks; using the checks summary');
         }

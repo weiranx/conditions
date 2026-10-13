@@ -143,6 +143,24 @@ test('AI brief retries once with the failed checks and keeps the corrected read'
   expect(askAI.mock.calls[1][0]).toContain('BIG PICTURE: states 55 without citing a report field that holds it');
 });
 
+test('AI brief keeps the first usable read when the retry request fails', async () => {
+  const app = express();
+  app.use(express.json());
+  const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
+  const first = JSON.stringify({ sections: headings.map((heading) => ({ heading, text: heading === 'WATCH CLOSELY' ? 'Gusts reach 99 mph.' : 'Gusts reach 42 mph.', evidence: [{ path: 'weather.windGust', value: 42 }] })) });
+  const askAI = jest.fn().mockResolvedValueOnce(first).mockRejectedValueOnce(new Error('timeout'));
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { windGust: 42 }, safety: { explanations: ['Strong wind.'] } } });
+
+  expect(response.status).toBe(200);
+  expect(response.body.validation).toBe('evidence_checked');
+  expect(response.body.narrative).not.toMatch(/WATCH CLOSELY/);
+  expect(askAI).toHaveBeenCalledTimes(2);
+});
+
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {
   const app = express();
   app.use(express.json());

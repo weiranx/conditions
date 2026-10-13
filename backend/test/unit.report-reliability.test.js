@@ -123,6 +123,28 @@ test('fact checks accept ranges, rounding, converted units and negations, and ke
   expect(truncated[0]).toMatch(/not valid JSON/);
 });
 
+test('a cited number converts only the way its kind of value does', () => {
+  const report = { weather: { windGust: 8, temp: 25, note: 'Gusts near 20 mph and 30°F at 9000 ft' } };
+  const metric = { temperature: 'c', wind: 'kph', elevation: 'm' };
+  const hero = (reason, path) => validateHero({ headline: 'Wind sets the pace today', reason, evidence: [{ path, value: report.weather[path.split('.')[1]] }] }, report, 'CAUTION', metric);
+  expect(hero('Gusts reach 13 km/h.', 'weather.windGust')).not.toBeNull();
+  expect(hero('It is -13 C.', 'weather.windGust')).toBeNull();
+  expect(hero('Gusts reach 2 m.', 'weather.windGust')).toBeNull();
+  expect(hero('It is -4 C.', 'weather.temp')).not.toBeNull();
+  expect(hero('Gusts near 32 km/h, -1 C at 2740 m.', 'weather.note')).not.toBeNull();
+  expect(hero('It is -7 C.', 'weather.note')).toBeNull();
+});
+
+test('the AI hero never names a decision level other than the badge', () => {
+  const report = { weather: { windGust: 8 } };
+  const hero = (headline, level) => validateHero({ headline, reason: 'Gusts reach 8 mph.', evidence: [{ path: 'weather.windGust', value: 8 }] }, report, level);
+  expect(hero('GO is the call today', 'CAUTION')).toBeNull();
+  expect(hero('CAUTION on the ridge today', 'GO')).toBeNull();
+  expect(hero('CAUTION on the ridge today', 'CAUTION')).not.toBeNull();
+  expect(hero('A clear GO for the morning', 'GO')).not.toBeNull();
+  expect(hero('A NO-GO on the ridge today', 'NO-GO')).not.toBeNull();
+});
+
 test('the checks summary leads with what the evaluation says, not a stock line', () => {
   const text = deterministicBrief({ evaluation: { decision: { headline: 'Wind crosses your limit after noon.' }, verdict: { reason: 'Gusts exceed your limit on the ridge.' } } }, 'CAUTION');
   expect(text).toMatch(/^BIG PICTURE: The checks call this a go with caution\. Wind crosses your limit after noon\. Gusts exceed your limit on the ridge\./);

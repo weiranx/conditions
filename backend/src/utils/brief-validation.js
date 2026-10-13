@@ -6,15 +6,52 @@ const readPath = (report, path) => {
 // A minus sign counts only when it starts a number, so "10-15 mph" and
 // "7:00-9:00" read as ranges, not negative values.
 const numbers = value => (String(value).match(/(?:(?<![\w.])-)?\d+(?:\.\d+)?/g) || []).map(Number);
+// What a cited number measures, so it is converted only the way that kind of
+// value is: from the unit written beside it in a string ("25°F", "12 mph"),
+// otherwise from the field's name. Anything else is never converted.
+const UNIT_KIND = [
+  [/^(?:°\s*f|f)$/i, 'temperature'],
+  [/^mph$/i, 'wind'],
+  [/^(?:ft|feet|foot)$/i, 'elevation'],
+  [/^(?:mi|miles?)$/i, 'distance'],
+  [/^(?:in|inch|inches|")$/i, 'depth'],
+];
+const kindOfPath = (path) => {
+  const key = String(path).split('.').filter(part => !/^\d+$/.test(part)).pop()?.toLowerCase() || '';
+  if (/temp|feelslike|dewpoint|windchill|heatindex|apparent/.test(key)) return 'temperature';
+  if (/wind|gust/.test(key)) return 'wind';
+  if (/elev|altitude|snowline|freezing|ft$|feet/.test(key)) return 'elevation';
+  if (/distance|miles|mi$/.test(key)) return 'distance';
+  if (/depth|swe|snowfall|inches|accum|precipin|^in$/.test(key)) return 'depth';
+  return null;
+};
+const citedNumbers = (path, value) => {
+  if (typeof value !== 'string') return numbers(value).map(number => ({ number, kind: kindOfPath(path) }));
+  const found = [];
+  const pattern = /((?:(?<![\w.])-)?\d+(?:\.\d+)?)\s*(°\s*F|F\b|mph\b|ft\b|feet\b|foot\b|mi\b|miles?\b|in\b|inch(?:es)?\b|")?/gi;
+  for (const match of value.matchAll(pattern)) {
+    const unit = match[2] && UNIT_KIND.find(([test]) => test.test(match[2].replace(/\s+/g, '')));
+    found.push({ number: Number(match[1]), kind: unit ? unit[1] : null });
+  }
+  return found;
+};
+const CONVERSIONS = {
+  temperature: { unit: 'temperature', metric: 'c', to: n => ((n - 32) * 5) / 9 },
+  wind: { unit: 'wind', metric: 'kph', to: n => n * 1.609344 },
+  elevation: { unit: 'elevation', metric: 'm', to: n => n * 0.3048, coarse: true },
+  distance: { unit: 'elevation', metric: 'm', to: n => n * 1.609344 },
+  depth: { unit: 'elevation', metric: 'm', to: n => n * 2.54 },
+};
 // The values a cited number may be written as: itself, rounded, and, when the
-// reader uses metric units, converted the way the prompt asks for.
-const forms = (number, units) => {
+// reader uses metric units, converted the way the prompt asks for that kind.
+const forms = (number, kind, units) => {
   const values = [number, Math.round(number), Math.round(number * 10) / 10];
-  const metric = [];
-  if (units?.temperature === 'c') metric.push(((number - 32) * 5) / 9);
-  if (units?.wind === 'kph') metric.push(number * 1.609344);
-  if (units?.elevation === 'm') metric.push(number * 0.3048, number * 1.609344, number * 2.54);
-  for (const value of metric) values.push(Math.round(value), Math.round(value * 10) / 10, Math.round(value / 10) * 10, Math.round(value / 100) * 100);
+  const conversion = kind && CONVERSIONS[kind];
+  if (conversion && units?.[conversion.unit] === conversion.metric) {
+    const value = conversion.to(number);
+    values.push(Math.round(value), Math.round(value * 10) / 10);
+    if (conversion.coarse) values.push(Math.round(value / 10) * 10, Math.round(value / 100) * 100);
+  }
   return values;
 };
 const PERMISSIVE = /\b(?<!not |n't |never )(safe to|all clear|risk.free|guaranteed|no (?:risk|hazards))\b/i;
@@ -30,7 +67,7 @@ const claimProblem = (text, evidence, report, decisionLevel, units) => {
     const actual = readPath(report, claim.path);
     if (actual === undefined || actual === null || typeof actual === 'object') return `cited path ${claim.path} is not a value in the report`;
     if (actual !== claim.value) return `cited ${claim.path} as ${JSON.stringify(claim.value)} but the report has ${JSON.stringify(actual)}`;
-    for (const number of numbers(actual)) for (const form of forms(number, units)) allowed.add(form);
+    for (const { number, kind } of citedNumbers(claim.path, actual)) for (const form of forms(number, kind, units)) allowed.add(form);
   }
   const stray = numbers(text).filter(number => !allowed.has(number));
   if (stray.length) return `states ${stray.join(', ')} without citing a report field that holds it`;
@@ -69,7 +106,12 @@ const validateHero = (value, report, decisionLevel, units) => {
   if (headline.length < HERO_HEADLINE.min || headline.length > HERO_HEADLINE.max || !reason || reason.length > MAX_HERO_REASON) return null;
   const text = `${headline}. ${reason}`;
   // The badge beside it shows the checks' level; the hero may not name another one.
-  if (decisionLevel !== 'NO-GO' && /\bNO-GO\b/i.test(text)) return null;
+  const named = [
+    ...(/\bNO-GO\b/i.test(text) ? ['NO-GO'] : []),
+    ...(/\bGO\b/.test(text.replace(/NO-GO/gi, '')) ? ['GO'] : []),
+    ...(/\bCAUTION\b/.test(text) ? ['CAUTION'] : []),
+  ];
+  if (named.some(level => level !== decisionLevel)) return null;
   if (!checkClaim(text, value.evidence, report, decisionLevel, units)) return null;
   return { headline, reason, evidence: value.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
 };
