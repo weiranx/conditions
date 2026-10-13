@@ -413,7 +413,7 @@ export function BriefSections({ w, hours, clock, onOpen, onReadAll, route = null
       </section>
 
       {showMore && (packItems || more) && (
-        <Fold id="sky-more" title="More" hint={[packItems ? "pack list" : null, more ? "source insights" : null].filter(Boolean).join(" · ")}>
+        <Fold id="sky-more" title="More" hint={[packItems ? "pack list" : null, more ? "more on this report" : null].filter(Boolean).join(" · ")}>
           {packItems}
           {more}
         </Fold>

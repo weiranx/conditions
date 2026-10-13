@@ -241,7 +241,9 @@ export function Report({
   // once per report and plan, unless the reader turned that off.
   const autoReadKey = useRef<string | null>(null);
   const readKey = `${data.generatedAt ?? ""}|${JSON.stringify(evaluation.params ?? null)}`;
-  const autoRead = w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
+  // An admin switch: off, the read sits under More and is written only on request.
+  const aiFirst = ai.aiReport;
+  const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
   useEffect(() => {
     if (!autoRead || w.aiBriefNarrative || w.aiBriefLoading || w.aiBriefError) return;
     if (autoReadKey.current === readKey) return;
@@ -521,6 +523,8 @@ export function Report({
   );
   const briefMore = (
     <>
+        {!aiFirst && aiRead}
+        {!aiFirst && chat}
         {w.viewingHistoryReport && w.restoredReportSource === "saved" && w.accountUser && (
           <Suspense fallback={null}>
             <TripDebrief report={report} aiAvailable={ai.tripDebrief} formatClock={eta} />
@@ -585,13 +589,13 @@ export function Report({
       )}
       <div className="sky-body">
         {notices}
-        {activeView === "brief" && (
+        {activeView === "brief" && aiFirst && (
           <>
             {aiRead}
             {chat}
           </>
         )}
-        {activeChapter && (
+        {aiFirst && activeChapter && (
           <AiChapterNote
             narrative={w.aiBriefNarrative}
             details={w.aiBriefDetails}
@@ -630,7 +634,7 @@ export function Report({
               {routeNote}
               <p className="sky-cap">{subtitle}</p>
             </section>
-            {aiRead}
+            {aiFirst && aiRead}
             <BriefSections
               w={w}
               hours={skyHours}
