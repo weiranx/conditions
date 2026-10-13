@@ -105,7 +105,9 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
       };
     }
   }
-  const hero = isRecord(value.hero) && typeof value.hero.headline === 'string' && value.hero.headline.trim()
+  // A read saved before the AI wrote the report's opening has no hero key at all;
+  // it stays undefined so the report knows to write the read again.
+  const hero = !Object.hasOwn(value, 'hero') ? undefined : isRecord(value.hero) && typeof value.hero.headline === 'string' && value.hero.headline.trim()
     && typeof value.hero.reason === 'string' && Array.isArray(value.hero.evidence)
     ? {
       headline: value.hero.headline,
@@ -118,7 +120,7 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
     }
     : null;
   const validation = value.validation === 'evidence_checked' || value.validation === 'deterministic_fallback' ? value.validation : null;
-  return { narrative, evidence, questions, chapters, hero, validation };
+  return { narrative, evidence, questions, chapters, ...(hero === undefined ? {} : { hero }), validation };
 }
 
 function isSafetyData(value: unknown): value is SafetyData {
