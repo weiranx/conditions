@@ -5,7 +5,9 @@ const readPath = (report, path) => {
 };
 // A minus sign counts only when it starts a number, so "10-15 mph" and
 // "7:00-9:00" read as ranges, not negative values.
-const numbers = value => (String(value).match(/(?:(?<![\w.])-)?\d+(?:\.\d+)?/g) || []).map(Number);
+// Thousands separators are read as part of the number: "13,026 ft" is 13026.
+const withoutSeparators = value => String(value).replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+const numbers = value => (withoutSeparators(value).match(/(?:(?<![\w.])-)?\d+(?:\.\d+)?/g) || []).map(Number);
 // What a cited number measures, so it is converted only the way that kind of
 // value is: from the unit written beside it in a string ("25°F", "12 mph"),
 // otherwise from the field's name. Anything else is never converted.
@@ -29,7 +31,7 @@ const citedNumbers = (path, value) => {
   if (typeof value !== 'string') return numbers(value).map(number => ({ number, kind: kindOfPath(path) }));
   const found = [];
   const pattern = /((?:(?<![\w.])-)?\d+(?:\.\d+)?)\s*(°\s*F|F\b|mph\b|ft\b|feet\b|foot\b|mi\b|miles?\b|in\b|inch(?:es)?\b|")?/gi;
-  for (const match of value.matchAll(pattern)) {
+  for (const match of withoutSeparators(value).matchAll(pattern)) {
     const unit = match[2] && UNIT_KIND.find(([test]) => test.test(match[2].replace(/\s+/g, '')));
     found.push({ number: Number(match[1]), kind: unit ? unit[1] : null });
   }
@@ -46,6 +48,8 @@ const CONVERSIONS = {
 // reader uses metric units, converted the way the prompt asks for that kind.
 const forms = (number, kind, units) => {
   const values = [number, Math.round(number), Math.round(number * 10) / 10];
+  // Elevations are spoken of to the nearest ten or hundred feet.
+  if (kind === 'elevation') values.push(Math.round(number / 10) * 10, Math.round(number / 100) * 100);
   const conversion = kind && CONVERSIONS[kind];
   if (conversion && units?.[conversion.unit] === conversion.metric) {
     const value = conversion.to(number);
@@ -97,6 +101,7 @@ const validateChapters = (value, report, decisionLevel, units) => {
 };
 const HERO_HEADLINE = { min: 8, max: 90 };
 const MAX_HERO_REASON = 320;
+const MAX_HERO_NOTE = 280;
 // The report's opening headline and reason, written by AI. Both are checked
 // together; a hero that fails is left out and the report keeps its own.
 const validateHero = (value, report, decisionLevel, units) => {
@@ -113,7 +118,15 @@ const validateHero = (value, report, decisionLevel, units) => {
   ];
   if (named.some(level => level !== decisionLevel)) return null;
   if (!checkClaim(text, value.evidence, report, decisionLevel, units)) return null;
-  return { headline, reason, evidence: value.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
+  const hero = { headline, reason, evidence: value.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
+  // An optional note on the hours judged below the objective; it is checked on its own and dropped alone.
+  if (value.note && typeof value.note === 'object' && typeof value.note.text === 'string') {
+    const note = value.note.text.replace(/\s+/g, ' ').trim();
+    if (note.length <= MAX_HERO_NOTE && !claimProblem(note, value.note.evidence, report, decisionLevel, units)) {
+      hero.note = { text: note, evidence: value.note.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
+    }
+  }
+  return hero;
 };
 const MAX_QUESTIONS = 3;
 // Follow-up questions the reader can ask the report assistant. They are prompts,

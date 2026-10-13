@@ -864,6 +864,7 @@ export function createMockApi({ databasePath } = {}) {
           reason: "Synthetic hero: in this fixture the wind builds through the window, so the early hours carry the least exposure.",
           evidence: [{ path: "weather.windGust", value: 0 }],
           level: body.decisionLevel || "CAUTION",
+          note: { text: "Synthetic note: the first hours are judged on the way up, below the objective, where clear and calm air can sit colder.", evidence: [{ path: "weather.windGust", value: 0 }] },
         },
         questions: ["When does the wind start to build?", "What would make this a no-go?", "How early should I turn around?"],
         validation: "evidence_checked",

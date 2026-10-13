@@ -9,7 +9,7 @@ const roundTo100 = (ft: number) => Math.round(ft / 100) * 100;
  * Plain-language note for hours checked below the objective, so a changed
  * verdict never comes from an adjustment the reader cannot see.
  */
-export function ApproachNote({ hours, summary, source, clock, elevation, onEdit, terms = SUMMIT_TERMS }: {
+export function ApproachNote({ hours, summary, source, clock, elevation, onEdit, terms = SUMMIT_TERMS, text }: {
   hours: SkyHour[];
   /** The hours checked below the objective, as the backend evaluated them. */
   summary: ApproachSummary | null;
@@ -18,6 +18,8 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
   elevation: (ft: number) => string;
   onEdit?: () => void;
   terms?: ObjectiveTerms;
+  /** The AI's fact-checked wording of this note, in place of the template's. */
+  text?: string;
 }) {
   if (!summary || !source) return null;
   const spans = summary.adjustedRuns.map((run) => spanLabel(hours, run, clock)).filter(Boolean).join(" and ");
@@ -29,14 +31,16 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
     <div className="sky-approach-note">
       <Mountain size={16} aria-hidden="true" />
       <p>
+        {text ? <>{text}{" "}</> : <>
         <strong>{spans || `${summary.adjustedHours} h`}</strong> is judged lower down, near {range}, not at
         the {terms.top} <span className="sky-approach-source">({APPROACH_SOURCE_LABEL[source]})</span>.{" "}
+        </>}
         {onEdit && (
           <button type="button" onClick={onEdit}>
             {source === "estimated" ? `Set ${terms.start}` : "Edit approach"}
           </button>
         )}
-        {inversion && (
+        {inversion && !text && (
           <span className="sky-approach-inversion">
             Clear, calm conditions: {inversion} may be colder at the {terms.start} than at the {terms.top}.
           </span>

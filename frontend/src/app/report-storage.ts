@@ -72,6 +72,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+const citations = (list: unknown[]): AiBriefCitation[] => list
+  .filter((claim): claim is AiBriefCitation => isRecord(claim)
+    && typeof claim.path === 'string'
+    && ['string', 'number', 'boolean'].includes(typeof claim.value))
+  .map(({ path, value: cited }) => ({ path, value: cited }));
+
 export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBriefDetails | null {
   if (!isRecord(value) || typeof narrative !== 'string' || value.narrative !== narrative) return null;
   const evidence = Array.isArray(value.evidence)
@@ -105,9 +111,10 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
       headline: value.hero.headline,
       reason: value.hero.reason,
       ...(typeof value.hero.level === 'string' ? { level: value.hero.level } : {}),
-      evidence: value.hero.evidence.filter((claim): claim is AiBriefCitation => isRecord(claim)
-        && typeof claim.path === 'string'
-        && ['string', 'number', 'boolean'].includes(typeof claim.value)).map(({ path, value: cited }) => ({ path, value: cited })),
+      ...(isRecord(value.hero.note) && typeof value.hero.note.text === 'string' && value.hero.note.text.trim() && Array.isArray(value.hero.note.evidence)
+        ? { note: { text: value.hero.note.text, evidence: citations(value.hero.note.evidence) } }
+        : {}),
+      evidence: citations(value.hero.evidence),
     }
     : null;
   const validation = value.validation === 'evidence_checked' || value.validation === 'deterministic_fallback' ? value.validation : null;
