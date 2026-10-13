@@ -845,6 +845,16 @@ export function createMockApi({ databasePath } = {}) {
         narrative:
           "BIG PICTURE: This is a synthetic local briefing for testing the report layout. The selected fixture supplies the weather and field observations. WHY IT MATTERS: Large values and hourly charts show how this sample changes through the outing. These are demonstration values, not live observations. WATCH CLOSELY: Review the selected hour and any highlighted field signals in the sample report. DATA CONFIDENCE: All data in this briefing is mocked. No live forecast or AI provider was contacted. COMFORT CHECK: The comfort card is separate from the safety decision. BEST MOVE: Use the scenario selector to test clear skies, storms, snow, and missing data. Use a real report before making an outing decision.",
         cached: false,
+        evidence: [
+          { heading: "BIG PICTURE", evidence: [{ path: "safety.score", value: 0 }, { path: "weather.windGust", value: 0 }] },
+          { heading: "WHY IT MATTERS", evidence: [{ path: "weather.precipChance", value: 0 }] },
+          { heading: "WATCH CLOSELY", evidence: [{ path: "weather.windGust", value: 0 }, { path: "solar.sunset", value: "" }] },
+          { heading: "DATA CONFIDENCE", evidence: [{ path: "safety.confidence", value: 0 }] },
+          { heading: "COMFORT CHECK", evidence: [{ path: "weather.feelsLike", value: 0 }] },
+          { heading: "BEST MOVE", evidence: [{ path: "avalanche.dangerLevel", value: 0 }, { path: "solar.sunset", value: "" }] },
+        ],
+        questions: ["When does the wind start to build?", "What would make this a no-go?", "How early should I turn around?"],
+        validation: "evidence_checked",
       });
     if (p === "/api/field-observations/extract") {
       const text = typeof body.text === "string" ? body.text : "";

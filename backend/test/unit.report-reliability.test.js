@@ -1,6 +1,6 @@
 const { calculateSafetyScore } = require('../src/utils/safety-score');
 const { selectForecastIntervals } = require('../src/utils/report-evidence');
-const { validateBrief, deterministicBrief } = require('../src/utils/brief-validation');
+const { validateBrief, validateQuestions, deterministicBrief } = require('../src/utils/brief-validation');
 const start = '2026-09-16T08:30:00-07:00';
 const row = (timeIso, extra = {}) => ({ timeIso, temp: 55, feelsLike: 55, wind: 5, gust: 8, precipChance: 0, ...extra });
 const base = () => ({
@@ -69,6 +69,17 @@ test('brief validation rejects unsupported quantities, forged references, and pe
   expect(validateBrief(brief('Forecast gusts are 8 mph.'), { weather: { windGust: null } }, 'GO')).toBeNull();
   expect(validateBrief('unstructured answer', report, 'GO')).toBeNull();
   expect(deterministicBrief({ safety: { assessmentStatus: 'insufficient_evidence' } }, 'CAUTION')).toMatch(/Insufficient evidence/);
+});
+
+test('brief follow-up questions are short, numberless questions and never fail the brief', () => {
+  const report = { weather: { windGust: 8 } };
+  const withQuestions = (questions) => JSON.stringify({ ...JSON.parse(brief('Forecast gusts are 8 mph.')), questions });
+  expect(validateBrief(withQuestions(['When do the gusts build?', 'when do the gusts build?', 'Is it windy at 11 AM?', 'Tell me more.', 'Is the ridge safe to cross?', 42, 'What would make this a no-go?', 'Should I start earlier?']), report, 'CAUTION').questions)
+    .toEqual(['When do the gusts build?', 'What would make this a no-go?', 'Should I start earlier?']);
+  expect(validateBrief(withQuestions('not a list'), report, 'CAUTION').questions).toEqual([]);
+  expect(validateBrief(brief('Forecast gusts are 8 mph.'), report, 'CAUTION').questions).toEqual([]);
+  expect(validateQuestions(['  What   changes after   noon? '])).toEqual(['What changes after noon?']);
+  expect(validateQuestions([`${'Why '.repeat(40)}?`])).toEqual([]);
 });
 
 test('saved synthetic sparse-provider fixture remains insufficient on replay', () => {

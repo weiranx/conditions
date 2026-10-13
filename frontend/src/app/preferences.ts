@@ -127,6 +127,7 @@ export function getDefaultUserPreferences(): UserPreferences {
     runnerStopBufferMinutes: 45,
     routeAltitudeSlowdownPercent: 5,
     approachElevationAdjustment: true,
+    autoAiRead: true,
   };
 }
 
@@ -197,6 +198,7 @@ export function normalizeUserPreferences(
     approachElevationAdjustment: typeof parsed.approachElevationAdjustment === 'boolean'
       ? parsed.approachElevationAdjustment
       : defaults.approachElevationAdjustment,
+    autoAiRead: typeof parsed.autoAiRead === 'boolean' ? parsed.autoAiRead : defaults.autoAiRead,
   };
 
   // The flat limits are the active activity's; saved limits for the others

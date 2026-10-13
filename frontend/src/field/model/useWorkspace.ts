@@ -422,6 +422,7 @@ export function useWorkspace() {
     onNewReportGenerated: handleNewReportGenerated,
     initialSafetyData: initialRestoredReport?.safetyData,
     initialAiBriefNarrative: initialRestoredReport?.ai.aiBriefNarrative,
+    initialAiBriefDetails: initialRestoredReport?.ai.aiBriefDetails ?? null,
     initialSnowVisionAnalysis: initialRestoredReport?.ai.snowVisionAnalysis,
     initialSnowVisionImage: initialRestoredReport?.ai.snowVisionImage,
   });
@@ -433,6 +434,8 @@ export function useWorkspace() {
     setError,
     aiBriefNarrative,
     setAiBriefNarrative,
+    aiBriefDetails,
+    setAiBriefDetails,
     aiBriefLoading,
     setAiBriefLoading,
     aiBriefError,
@@ -1123,6 +1126,7 @@ export function useWorkspace() {
             safetyData,
             {
               aiBriefNarrative,
+              aiBriefDetails,
               snowVisionAnalysis,
               snowVisionImage,
               reportChatMessages,
@@ -1145,6 +1149,7 @@ export function useWorkspace() {
       reportPlan,
       safetyData,
       aiBriefNarrative,
+      aiBriefDetails,
       snowVisionAnalysis,
       snowVisionImage,
       reportChatMessages,
@@ -1598,6 +1603,7 @@ export function useWorkspace() {
       setSafetyData(report.safetyData);
 
       setAiBriefNarrative(report.ai.aiBriefNarrative);
+      setAiBriefDetails(report.ai.aiBriefDetails ?? null);
       setAiBriefLoading(false);
       setAiBriefError(null);
       setSnowVisionAnalysis(report.ai.snowVisionAnalysis);
@@ -1616,6 +1622,7 @@ export function useWorkspace() {
       clearWakeRetry,
       resetSavedReportTracking,
       restoreRouteState,
+      setAiBriefDetails,
       setAiBriefError,
       setAiBriefLoading,
       setAiBriefNarrative,
@@ -2655,6 +2662,7 @@ export function useWorkspace() {
     setError,
     aiBriefNarrative,
     setAiBriefNarrative,
+    aiBriefDetails,
     aiBriefLoading,
     setAiBriefLoading,
     aiBriefError,

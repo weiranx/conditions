@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, Maximize2, MessagesSquare, Minimize2 } from "lucide-react";
 import { useAiAccess } from "../hooks/useAiAccess";
 import type { PersistedReportChatMessage } from "../app/report-storage";
@@ -18,6 +18,7 @@ export function Chat({
   initialMessages = [],
   onMessagesChange,
   readOnly = false,
+  ask = null,
 }: {
   reportPayload: string;
   contextType?: "report" | "trip" | "itinerary";
@@ -25,6 +26,8 @@ export function Chat({
   initialMessages?: PersistedReportChatMessage[];
   onMessagesChange?: (messages: PersistedReportChatMessage[]) => void;
   readOnly?: boolean;
+  /** A question asked elsewhere on the page; a new id opens the chat and sends it. */
+  ask?: { id: number; text: string } | null;
 }) {
   const { requestAiAccess } = useAiAccess();
   const [open, setOpen] = useState(initialMessages.length > 0);
@@ -36,6 +39,7 @@ export function Chat({
   const expandButton = useRef<HTMLButtonElement>(null);
   const exitButton = useRef<HTMLButtonElement>(null);
   const scrollPosition = useRef(0);
+  const section = useRef<HTMLElement>(null);
   const title = readOnly
     ? "Saved conversation"
     : contextType === "trip" ? "Ask about these days" : contextType === "itinerary" ? "Ask about this trip" : "Ask about this report";
@@ -68,6 +72,20 @@ export function Chat({
     };
   }, [open, fullScreen]);
 
+  // A question asked from the page opens the chat; the page's own access check already ran.
+  const asked = ask && !readOnly && ask.text.trim() ? ask : null;
+  const [shownAsk, setShownAsk] = useState<number | null>(null);
+  if (asked && asked.id !== shownAsk) {
+    setShownAsk(asked.id);
+    setOpen(true);
+    setOpened(true);
+  }
+  useEffect(() => {
+    if (!asked) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    section.current?.scrollIntoView?.({ block: "nearest", behavior: reduced ? "instant" : "smooth" });
+  }, [asked]);
+
   function changeScreen(expanded: boolean) {
     if (expanded && !readOnly && !requestAiAccess()) return;
     scrollPosition.current = viewport.current?.scrollTop ?? 0;
@@ -76,7 +94,7 @@ export function Chat({
     setFullScreen(expanded);
   }
   return (
-    <section className="field-chat field-panel">
+    <section ref={section} className="field-chat field-panel" id="report-chat">
       <div className="field-chat-heading">
         <button className="field-chat-toggle" aria-expanded={open} aria-controls={id} onClick={() => {
           if (!open && !readOnly && !requestAiAccess()) return;
@@ -111,6 +129,7 @@ export function Chat({
               initialMessages={initialMessages}
               onMessagesChange={onMessagesChange}
               readOnly={readOnly}
+              pendingQuestion={asked}
             />
           </Suspense>
         )}

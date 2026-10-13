@@ -174,3 +174,42 @@ test('suggested follow-up sends conversation history and renders the next answer
   assert.equal(document.querySelectorAll('.field-chat-suggestions button').length, 3);
   assert.equal(document.querySelector('[role="alert"]'), null);
 });
+
+test('a question asked from the report opens the chat and is sent once', async t => {
+  const previousFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    const chunks = [
+      { type: 'start', messageId: 'answer' },
+      { type: 'text-start', id: 'text' },
+      { type: 'text-delta', id: 'text', delta: 'The wind builds after noon.' },
+      { type: 'text-end', id: 'text' },
+      { type: 'finish' },
+    ];
+    return new Response(chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n', {
+      headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+    });
+  };
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const h = await mount(t);
+  assert.equal(document.querySelector('dialog').open, false);
+  const ask = { id: 1, text: 'When does the wind build?' };
+  await h.render({ ask });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  assert.equal(document.querySelector('dialog').open, true);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].report, '{"objective":"Rainier"}');
+  assert.match(document.querySelector('.is-user').textContent, /When does the wind build\?/);
+  assert.match(document.querySelector('.is-assistant').textContent, /builds after noon/);
+  await h.render({ ask });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  assert.equal(requests.length, 1, 'the same question is never sent twice');
+});
+
+test('a saved conversation never sends a question asked from the report', async t => {
+  const h = await mount(t, { readOnly: true, ask: { id: 1, text: 'When does the wind build?' } });
+  assert.equal(document.querySelector('dialog').open, false);
+  assert.equal(document.querySelector('textarea'), null);
+  assert.ok(h);
+});

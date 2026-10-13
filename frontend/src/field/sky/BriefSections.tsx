@@ -112,7 +112,7 @@ export function BriefSections({ w, hours, clock, onOpen, onReadAll, route = null
   clock: (minute: number) => string;
   onOpen: (chapter: BriefChapter) => void;
   onReadAll: () => void;
-  /** Extra brief parts (AI explanation, assistant) shown under More beside the pack list. */
+  /** Extra brief parts (trip debrief, source insights) shown under More beside the pack list. */
   more?: ReactNode;
   /** The full-report link; the full report already contains every section. */
   showMore?: boolean;
@@ -413,7 +413,7 @@ export function BriefSections({ w, hours, clock, onOpen, onReadAll, route = null
       </section>
 
       {showMore && (packItems || more) && (
-        <Fold id="sky-more" title="More" hint={[packItems ? "pack list" : null, more ? "AI explanation, assistant, insights" : null].filter(Boolean).join(" · ")}>
+        <Fold id="sky-more" title="More" hint={[packItems ? "pack list" : null, more ? "source insights" : null].filter(Boolean).join(" · ")}>
           {packItems}
           {more}
         </Fold>

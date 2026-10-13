@@ -339,6 +339,15 @@ export function Settings({
                 <Segmented label="Clock" value={p.timeStyle} options={[["ampm", "12-hour"], ["24h", "24-hour"]] as const}
                   onChange={(value) => onChange({ ...p, timeStyle: value })} />
               </Row>
+              <Row label="Write the AI read when a report opens"
+                hint="When you're signed in and AI is available, each new report opens with a plain-language read of what drives the decision. Turn off to write it only when you ask.">
+                <label className="sky-switch">
+                  <input type="checkbox" aria-label="Write the AI read when a report opens"
+                    checked={p.autoAiRead}
+                    onChange={(e) => onChange({ ...p, autoAiRead: e.target.checked })} />
+                  <span aria-hidden="true" />
+                </label>
+              </Row>
             </div>
           </section>
 

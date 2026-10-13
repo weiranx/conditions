@@ -1,0 +1,196 @@
+/* The report's AI read: it leads the brief, so it sits on the page like the
+   checks below it rather than as a panel tucked under More. */
+.ai-read,
+.ai-chapter-note {
+  --ai-label: var(--sky-label, var(--f-ink));
+  --ai-secondary: var(--sky-secondary, var(--f-muted));
+  --ai-fill: var(--sky-fill, var(--f-wash));
+  --ai-accent: var(--sky-accent, var(--f-green));
+  --ai-separator: var(--sky-separator, var(--f-line));
+}
+.ai-read {
+  margin: 0 0 20px;
+  padding: 18px 20px 16px;
+  border-radius: 18px;
+  background: var(--sky-surface, var(--f-paper));
+  box-shadow: 0 0 0 1px var(--ai-separator);
+}
+.ai-read h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  line-height: 1.3;
+  color: var(--ai-label);
+}
+.ai-read > .field-warning {
+  margin: 12px 0 0;
+}
+.ai-read-status {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--ai-secondary);
+}
+.ai-read-fallback {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ai-fill);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ai-secondary);
+}
+.ai-read-cites {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ai-secondary);
+}
+.ai-read-cites-label {
+  margin-right: 2px;
+  font-weight: 600;
+}
+.ai-read-cites :is(button, span:not(.ai-read-cites-label)) {
+  padding: 2px 9px;
+  border: 1px solid var(--ai-separator);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ai-label);
+  font: inherit;
+  line-height: 1.5;
+}
+.ai-read-cites button {
+  cursor: pointer;
+}
+.ai-read-cites button:hover {
+  border-color: var(--ai-accent);
+  color: var(--ai-accent);
+}
+.ai-read-cites button:focus-visible {
+  outline: 3px solid var(--ai-accent);
+  outline-offset: 2px;
+}
+.ai-read-more {
+  border-top: 1px solid var(--ai-separator);
+}
+.ai-read-more summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding-top: 12px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ai-label);
+}
+.ai-read-more summary::-webkit-details-marker {
+  display: none;
+}
+.ai-read-more summary svg {
+  transition: transform 0.15s ease;
+}
+.ai-read-more[open] summary svg {
+  transform: rotate(90deg);
+}
+.ai-read-more .ai-explanation-supporting {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+.ai-read-ask {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.ai-read-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--ai-separator);
+  border-radius: 14px;
+  background: var(--sky-surface, var(--f-paper));
+}
+.ai-read-form:focus-within {
+  border-color: var(--ai-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ai-accent) 18%, transparent);
+}
+.ai-read-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--ai-label);
+  font: inherit;
+  font-size: 15px;
+}
+.ai-read-form input:focus-visible {
+  outline: 0;
+}
+.field-app .ai-read-form .field-button {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 11px;
+}
+.ai-read-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ai-read-questions button {
+  min-height: 36px;
+  padding: 7px 14px;
+  border: 1px solid var(--ai-separator);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ai-label);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+.ai-read-questions button:hover {
+  border-color: var(--ai-accent);
+  color: var(--ai-accent);
+}
+.ai-read-questions button:focus-visible {
+  outline: 3px solid var(--ai-accent);
+  outline-offset: 2px;
+}
+.ai-chapter-note {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ai-accent) 7%, var(--sky-surface, var(--f-paper)));
+  box-shadow: inset 4px 0 0 var(--ai-accent);
+}
+.ai-chapter-note p {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ai-label);
+}
+.ai-chapter-note .sky-link {
+  justify-self: start;
+}
+@media (max-width: 600px) {
+  .ai-read {
+    padding: 16px 14px 14px;
+  }
+}
+@media print {
+  .ai-read-ask,
+  .ai-read-more summary svg,
+  .ai-brief-regenerate {
+    display: none;
+  }
+}

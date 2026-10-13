@@ -924,6 +924,22 @@ export interface CustomActivity {
   baseActivity: ActivityType;
 }
 
+/** One report field an AI read section cites, as the backend checked it. */
+export interface AiBriefCitation {
+  path: string;
+  value: string | number | boolean;
+}
+
+/** What the AI read returns beside its text: its citations and follow-up questions. */
+export interface AiBriefDetails {
+  /** The narrative these details belong to; they never apply to any other text. */
+  narrative: string;
+  evidence: { heading: string; evidence: AiBriefCitation[] }[];
+  questions: string[];
+  /** `deterministic_fallback` when the AI answer failed the backend's checks. */
+  validation: 'evidence_checked' | 'deterministic_fallback' | null;
+}
+
 export interface UserPreferences {
   defaultActivity: ActivityType;
   /** Selected custom activity, or null for the built-in `defaultActivity`. */
@@ -951,6 +967,8 @@ export interface UserPreferences {
   routeAltitudeSlowdownPercent: number;
   /** Score approach hours at the estimated trailhead/approach elevation rather than the objective's. */
   approachElevationAdjustment: boolean;
+  /** Write the report's AI read as soon as a report opens, when AI is available. */
+  autoAiRead: boolean;
 }
 
 export type FreshnessState = 'fresh' | 'aging' | 'stale' | 'missing';

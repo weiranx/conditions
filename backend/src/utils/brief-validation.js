@@ -4,6 +4,26 @@ const readPath = (report, path) => {
   return path.split('.').reduce((value, key) => value && Object.hasOwn(value, key) ? value[key] : undefined, report);
 };
 const numbers = value => (String(value).match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+const MAX_QUESTIONS = 3;
+// Follow-up questions the reader can ask the report assistant. They are prompts,
+// not claims, but a number in one would still read as a fact, so none may hold one.
+const validateQuestions = (value) => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const questions = [];
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    const question = item.replace(/\s+/g, ' ').trim();
+    if (question.length < 8 || question.length > 120 || !question.endsWith('?') || /\d/.test(question)) continue;
+    if (/\b(safe to|all clear|risk.free|guaranteed)\b/i.test(question)) continue;
+    const key = question.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    questions.push(question);
+    if (questions.length === MAX_QUESTIONS) break;
+  }
+  return questions;
+};
 const validateBrief = (raw, report, decisionLevel) => {
   let parsed;
   try { parsed = JSON.parse(String(raw).replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { return null; }
@@ -26,7 +46,11 @@ const validateBrief = (raw, report, decisionLevel) => {
     if (decisionLevel === 'NO-GO' && /\bGO\b/.test(section.text.replace(/NO-GO/g, ''))) return null;
     lines.push(`${section.heading}: ${section.text.trim()}`);
   }
-  return { narrative: lines.join('\n'), evidence: parsed.sections.map(({ heading, evidence }) => ({ heading, evidence })) };
+  return {
+    narrative: lines.join('\n'),
+    evidence: parsed.sections.map(({ heading, evidence }) => ({ heading, evidence })),
+    questions: validateQuestions(parsed.questions),
+  };
 };
 const deterministicBrief = (report, decisionLevel) => {
   const safety = report.safety || {};
@@ -42,4 +66,4 @@ const deterministicBrief = (report, decisionLevel) => {
     `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : concerns.slice(0, 2).map(item => item.action).join(' ') || 'Resolve failed checks and missing evidence before committing.'}`,
   ].join('\n');
 };
-module.exports = { validateBrief, deterministicBrief };
+module.exports = { validateBrief, validateQuestions, deterministicBrief };

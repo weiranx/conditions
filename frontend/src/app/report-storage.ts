@@ -6,7 +6,7 @@ import {
 } from './constants';
 import { isValidLatLon, parseTimeInputMinutes } from './core';
 import { hasStoredUserPreferences, normalizeUserPreferences } from './preferences';
-import type { ActivityType, SafetyData, UserPreferences } from './types';
+import type { ActivityType, AiBriefCitation, AiBriefDetails, SafetyData, UserPreferences } from './types';
 import { buildSafetyRequestKey } from './url-state';
 import { reportActivity } from './activity-profiles';
 import type { RouteAnalysisResult, RouteOption, RouteShapeChoice } from '../hooks/useRouteAnalysis';
@@ -31,6 +31,8 @@ export interface PersistedReportPlan {
 
 export interface PersistedReportAiFields {
   aiBriefNarrative: string | null;
+  /** Citations and questions for `aiBriefNarrative`; reports saved before them have none. */
+  aiBriefDetails?: AiBriefDetails | null;
   snowVisionAnalysis: string | null;
   snowVisionImage: string | null;
   reportChatMessages: PersistedReportChatMessage[];
@@ -68,6 +70,24 @@ export interface PersistedReport {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBriefDetails | null {
+  if (!isRecord(value) || typeof narrative !== 'string' || value.narrative !== narrative) return null;
+  const evidence = Array.isArray(value.evidence)
+    ? value.evidence.flatMap((section) => {
+      if (!isRecord(section) || typeof section.heading !== 'string' || !Array.isArray(section.evidence)) return [];
+      const citations = section.evidence.filter((claim): claim is AiBriefCitation => isRecord(claim)
+        && typeof claim.path === 'string'
+        && ['string', 'number', 'boolean'].includes(typeof claim.value));
+      return [{ heading: section.heading, evidence: citations.map(({ path, value: cited }) => ({ path, value: cited })) }];
+    })
+    : [];
+  const questions = Array.isArray(value.questions)
+    ? value.questions.filter((question): question is string => typeof question === 'string' && Boolean(question.trim())).slice(0, 3)
+    : [];
+  const validation = value.validation === 'evidence_checked' || value.validation === 'deterministic_fallback' ? value.validation : null;
+  return { narrative, evidence, questions, validation };
 }
 
 function isSafetyData(value: unknown): value is SafetyData {
@@ -253,6 +273,7 @@ export function parsePersistedReport(value: unknown): PersistedReport | null {
       aiBriefNarrative: isRecord(value.ai) && typeof value.ai.aiBriefNarrative === 'string'
         ? value.ai.aiBriefNarrative
         : null,
+      aiBriefDetails: isRecord(value.ai) ? parseAiBriefDetails(value.ai.aiBriefDetails, value.ai.aiBriefNarrative) : null,
       snowVisionAnalysis: isRecord(value.ai) && typeof value.ai.snowVisionAnalysis === 'string'
         ? value.ai.snowVisionAnalysis
         : null,

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { fetchApi, readApiErrorMessage, fetchAiBrief, fetchSnowVisionAnalysis } from '../lib/api-client';
-import type { SafetyData, UserPreferences, DecisionLevel } from '../app/types';
+import type { AiBriefDetails, SafetyData, UserPreferences, DecisionLevel } from '../app/types';
 import {
   DATE_FMT,
   BACKEND_WAKE_RETRY_DELAY_MS,
@@ -21,6 +21,7 @@ export interface UseSafetyDataParams {
   onNewReportGenerated?: () => void;
   initialSafetyData?: SafetyData | null;
   initialAiBriefNarrative?: string | null;
+  initialAiBriefDetails?: AiBriefDetails | null;
   initialSnowVisionAnalysis?: string | null;
   initialSnowVisionImage?: string | null;
 }
@@ -38,6 +39,9 @@ export interface UseSafetyDataReturn {
   setError: React.Dispatch<React.SetStateAction<string | null>>;
   aiBriefNarrative: string | null;
   setAiBriefNarrative: React.Dispatch<React.SetStateAction<string | null>>;
+  /** Citations and questions for the current narrative, or null when it has none. */
+  aiBriefDetails: AiBriefDetails | null;
+  setAiBriefDetails: React.Dispatch<React.SetStateAction<AiBriefDetails | null>>;
   aiBriefLoading: boolean;
   setAiBriefLoading: React.Dispatch<React.SetStateAction<boolean>>;
   aiBriefError: string | null;
@@ -78,6 +82,7 @@ export function useSafetyData({
   onNewReportGenerated,
   initialSafetyData = null,
   initialAiBriefNarrative = null,
+  initialAiBriefDetails = null,
   initialSnowVisionAnalysis = null,
   initialSnowVisionImage = null,
 }: UseSafetyDataParams): UseSafetyDataReturn {
@@ -85,6 +90,10 @@ export function useSafetyData({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiBriefNarrative, setAiBriefNarrative] = useState<string | null>(initialAiBriefNarrative);
+  // Details carry the narrative they belong to, so clearing or replacing the
+  // narrative anywhere can never leave another brief's citations showing.
+  const [aiBriefDetailsState, setAiBriefDetails] = useState<AiBriefDetails | null>(initialAiBriefDetails);
+  const aiBriefDetails = aiBriefDetailsState && aiBriefDetailsState.narrative === aiBriefNarrative ? aiBriefDetailsState : null;
   const [aiBriefLoading, setAiBriefLoading] = useState(false);
   const [aiBriefError, setAiBriefError] = useState<string | null>(null);
   const [snowVisionAnalysis, setSnowVisionAnalysis] = useState<string | null>(initialSnowVisionAnalysis);
@@ -377,6 +386,12 @@ export function useSafetyData({
         },
       });
       setAiBriefNarrative(result.narrative);
+      setAiBriefDetails({
+        narrative: result.narrative,
+        evidence: Array.isArray(result.evidence) ? result.evidence : [],
+        questions: Array.isArray(result.questions) ? result.questions.filter((q) => typeof q === 'string').slice(0, 3) : [],
+        validation: result.validation ?? null,
+      });
     } catch (err) {
       setAiBriefError(err instanceof Error ? err.message : 'AI brief unavailable');
     } finally {
@@ -407,6 +422,8 @@ export function useSafetyData({
     setError,
     aiBriefNarrative,
     setAiBriefNarrative,
+    aiBriefDetails,
+    setAiBriefDetails,
     aiBriefLoading,
     setAiBriefLoading,
     aiBriefError,

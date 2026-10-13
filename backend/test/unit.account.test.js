@@ -126,6 +126,9 @@ describe('password accounts', () => {
       .toEqual({ ...PREFERENCES, approachElevationAdjustment: false });
     expect(() => validateAccountPreferences({ ...PREFERENCES, approachElevationAdjustment: 'yes' }))
       .toThrow(AccountValidationError);
+    expect(validateAccountPreferences(PREFERENCES)).not.toHaveProperty('autoAiRead');
+    expect(validateAccountPreferences({ ...PREFERENCES, autoAiRead: false })).toEqual({ ...PREFERENCES, autoAiRead: false });
+    expect(() => validateAccountPreferences({ ...PREFERENCES, autoAiRead: 'yes' })).toThrow();
   });
 
   test('accepts optional per-activity route timing', () => {
