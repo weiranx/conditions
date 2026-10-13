@@ -853,6 +853,12 @@ export function createMockApi({ databasePath } = {}) {
           { heading: "COMFORT CHECK", evidence: [{ path: "weather.feelsLike", value: 0 }] },
           { heading: "BEST MOVE", evidence: [{ path: "avalanche.dangerLevel", value: 0 }, { path: "solar.sunset", value: "" }] },
         ],
+        chapters: {
+          forecast: { text: "Synthetic analysis: the sample's wind and precipitation build through the middle of the window, so the later hours carry most of the exposure.", evidence: [{ path: "weather.windGust", value: 0 }] },
+          timing: { text: "Synthetic analysis: an early start keeps the exposed hours before the weather builds and leaves daylight margin at the end.", evidence: [{ path: "solar.sunset", value: "" }] },
+          terrain: { text: "Synthetic analysis: the sample's snow and avalanche values are mocked; read them as layout, not conditions.", evidence: [{ path: "avalanche.dangerLevel", value: 0 }] },
+          sources: { text: "Synthetic analysis: every source here is simulated, so the checks describe the fixture rather than the mountain.", evidence: [{ path: "safety.confidence", value: 0 }] },
+        },
         questions: ["When does the wind start to build?", "What would make this a no-go?", "How early should I turn around?"],
         validation: "evidence_checked",
       });

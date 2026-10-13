@@ -261,6 +261,7 @@ export interface AiBriefResponse {
   cached?: boolean;
   evidence?: AiBriefDetails['evidence'];
   questions?: string[];
+  chapters?: AiBriefDetails['chapters'];
   validation?: AiBriefDetails['validation'];
 }
 

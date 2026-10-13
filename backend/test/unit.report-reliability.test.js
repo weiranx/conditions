@@ -1,6 +1,6 @@
 const { calculateSafetyScore } = require('../src/utils/safety-score');
 const { selectForecastIntervals } = require('../src/utils/report-evidence');
-const { validateBrief, validateQuestions, deterministicBrief } = require('../src/utils/brief-validation');
+const { validateBrief, validateQuestions, validateChapters, deterministicBrief } = require('../src/utils/brief-validation');
 const start = '2026-09-16T08:30:00-07:00';
 const row = (timeIso, extra = {}) => ({ timeIso, temp: 55, feelsLike: 55, wind: 5, gust: 8, precipChance: 0, ...extra });
 const base = () => ({
@@ -80,6 +80,24 @@ test('brief follow-up questions are short, numberless questions and never fail t
   expect(validateBrief(brief('Forecast gusts are 8 mph.'), report, 'CAUTION').questions).toEqual([]);
   expect(validateQuestions(['  What   changes after   noon? '])).toEqual(['What changes after noon?']);
   expect(validateQuestions([`${'Why '.repeat(40)}?`])).toEqual([]);
+});
+
+test('chapter analyses are fact-checked one by one and a failing one is left out', () => {
+  const report = { weather: { windGust: 8 }, solar: { sunset: '7:02 PM' }, avalanche: { dangerLevel: 3 } };
+  const cite = (path, value) => [{ path, value }];
+  const chapters = validateChapters({
+    forecast: { text: 'Gusts peak at 8 mph   by noon.', evidence: cite('weather.windGust', 8) },
+    timing: { text: 'Sunset is at 7:02 PM, leaving 90 minutes.', evidence: cite('solar.sunset', '7:02 PM') },
+    terrain: { text: 'Danger is 3, so it is all clear above treeline.', evidence: cite('avalanche.dangerLevel', 3) },
+    sources: { text: 'Checks agree.', evidence: cite('weather.windGust', 9) },
+    route: { text: 'Not a chapter the AI writes.', evidence: cite('weather.windGust', 8) },
+  }, report, 'CAUTION');
+  expect(chapters).toEqual({ forecast: { text: 'Gusts peak at 8 mph by noon.', evidence: cite('weather.windGust', 8) } });
+  expect(validateChapters({ forecast: { text: 'Proceed as planned.', evidence: cite('weather.windGust', 8) } }, report, 'NO-GO')).toEqual({});
+  expect(validateChapters({ forecast: { text: 'x'.repeat(701), evidence: cite('weather.windGust', 8) } }, report, 'GO')).toEqual({});
+  expect(validateChapters('nope', report, 'GO')).toEqual({});
+  const withChapters = JSON.stringify({ ...JSON.parse(brief('Forecast gusts are 8 mph.')), chapters: { forecast: { text: 'Gusts stay at 8 mph.', evidence: cite('weather.windGust', 8) }, terrain: { text: 'Gusts hit 80 mph.', evidence: cite('weather.windGust', 8) } } });
+  expect(Object.keys(validateBrief(withChapters, report, 'CAUTION').chapters)).toEqual(['forecast']);
 });
 
 test('saved synthetic sparse-provider fixture remains insufficient on replay', () => {

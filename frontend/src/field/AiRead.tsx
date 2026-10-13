@@ -190,30 +190,45 @@ export function AiRead({
 }
 
 /**
- * The parts of the AI read that cite what a chapter shows, at the top of that
- * chapter, so the explanation follows the reader into the detail.
+ * The AI's analysis at the top of a chapter: the fact-checked chapter analysis
+ * when the read wrote one, otherwise the parts of the read that cite the chapter.
  */
-export function AiChapterNote({ narrative, details, chapter, onReadAll }: {
+export function AiChapterNote({ narrative, details, chapter, onReadAll, onOpen }: {
   narrative: string | null;
   details: AiBriefDetails | null;
   chapter: EvidenceChapter;
   onReadAll: () => void;
+  /** Opens the chapter a citation points to. */
+  onOpen?: (chapter: EvidenceChapter) => void;
 }) {
   if (!narrative || !details || details.validation === "deterministic_fallback") return null;
+  const analysis = chapter === "forecast" || chapter === "timing" || chapter === "terrain" || chapter === "sources"
+    ? details.chapters?.[chapter]
+    : undefined;
   const sections = parseExplanation(narrative);
-  const relevant = chapter === "gear"
+  const relevant = analysis ? [] : chapter === "gear"
     ? sections.filter((s) => s.kind === "action")
     : sections.filter((s) => s.kind !== "comfort" && sectionCitesChapter(sectionCitations(details, s.title), chapter));
-  if (!relevant.length) return null;
+  if (!analysis && !relevant.length) return null;
   return (
-    <aside className="ai-chapter-note" aria-label={`AI read on ${chapterLabel(chapter)}`}>
+    <aside className="ai-chapter-note" aria-label={`AI analysis of ${chapterLabel(chapter)}`}>
       <span className="field-kicker ai-brief-kicker">
         <Sparkles size={14} aria-hidden="true" />
-        AI read on {chapterLabel(chapter).toLowerCase()}
+        AI analysis · {chapterLabel(chapter).toLowerCase()}
       </span>
-      {relevant.slice(0, 2).map((section, index) => (
+      {analysis ? <p>{analysis.text}</p> : relevant.slice(0, 2).map((section, index) => (
         <p key={`${section.kind}-${index}`}><strong>{section.title}.</strong> {section.text}</p>
       ))}
+      {analysis && analysis.evidence.length > 0 && (
+        <p className="ai-read-cites">
+          <span className="ai-read-cites-label">Based on</span>
+          {evidenceLinks(analysis.evidence).map((link) => link.chapter && link.chapter !== chapter && onOpen ? (
+            <button key={link.label} type="button" onClick={() => onOpen(link.chapter!)} title={`Open ${chapterLabel(link.chapter)}`}>{link.label}</button>
+          ) : (
+            <span key={link.label}>{link.label}</span>
+          ))}
+        </p>
+      )}
       <button type="button" className="sky-link" onClick={onReadAll}>Full AI read</button>
     </aside>
   );

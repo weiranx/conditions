@@ -390,6 +390,7 @@ export function useSafetyData({
         narrative: result.narrative,
         evidence: Array.isArray(result.evidence) ? result.evidence : [],
         questions: Array.isArray(result.questions) ? result.questions.filter((q) => typeof q === 'string').slice(0, 3) : [],
+        chapters: result.chapters && typeof result.chapters === 'object' ? result.chapters : {},
         validation: result.validation ?? null,
       });
     } catch (err) {

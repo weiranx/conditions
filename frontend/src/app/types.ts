@@ -937,6 +937,8 @@ export interface AiBriefDetails {
   narrative: string;
   evidence: { heading: string; evidence: AiBriefCitation[] }[];
   questions: string[];
+  /** The AI's fact-checked analysis of each report chapter; a chapter that failed its checks is absent. */
+  chapters?: Partial<Record<'forecast' | 'timing' | 'terrain' | 'sources', { text: string; evidence: AiBriefCitation[] }>>;
   /** `deterministic_fallback` when the AI answer failed the backend's checks. */
   validation: 'evidence_checked' | 'deterministic_fallback' | null;
 }

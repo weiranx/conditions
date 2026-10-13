@@ -601,6 +601,7 @@ export function Report({
             details={w.aiBriefDetails}
             chapter={activeChapter.id}
             onReadAll={() => go("brief")}
+            onOpen={(chapter) => go(chapter)}
           />
         )}
         {activeView === "brief" && (

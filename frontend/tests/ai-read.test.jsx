@@ -87,13 +87,34 @@ test('each chapter opens with the parts of the read that cite it', () => {
     <AiChapterNote narrative={narrative} details={details} chapter={chapter} onReadAll={() => {}} {...extra} />,
   );
   const weather = note('forecast');
-  assert.match(weather, /AI read on weather[^]*Big picture[^]*Why it matters/);
+  assert.match(weather, /AI analysis · weather[^]*Big picture[^]*Why it matters/);
   assert.doesNotMatch(weather, /Comfort check|Data confidence/);
   assert.match(note('terrain'), /Data confidence[^]*avalanche bulletin/);
   assert.match(note('gear'), /Best move[^]*Start at dawn/);
   assert.equal(note('route'), '');
   assert.equal(note('forecast', { details: { ...details, validation: 'deterministic_fallback' } }), '');
   assert.equal(note('forecast', { details: null }), '');
+});
+
+test('a chapter leads with the AI\'s own analysis of it when the read wrote one', () => {
+  const withChapters = { ...details, chapters: { terrain: { text: 'Wind-loaded north aspects are the concern above the col.', evidence: [{ path: 'avalanche.dangerLevel', value: 2 }, { path: 'weather.windGust', value: 32 }] } } };
+  const note = (chapter) => renderToStaticMarkup(
+    <AiChapterNote narrative={narrative} details={withChapters} chapter={chapter} onReadAll={() => {}} onOpen={() => {}} />,
+  );
+  const terrain = note('terrain');
+  assert.match(terrain, /AI analysis · terrain &amp; snow[^]*Wind-loaded north aspects/);
+  assert.doesNotMatch(terrain, /Data confidence/, 'the chapter analysis replaces the read\'s excerpts');
+  assert.match(terrain, /<span>Avalanche danger level<\/span>[^]*<button[^>]*>Wind gust<\/button>/, 'a citation of this chapter is plain text; another chapter\'s opens it');
+  assert.match(note('forecast'), /Big picture/, 'chapters without an analysis keep the read\'s excerpts');
+});
+
+test('saved chapter analyses keep only the AI chapters and well-formed citations', () => {
+  const saved = parseAiBriefDetails({ ...details, chapters: {
+    timing: { text: 'Start early.', evidence: [{ path: 'solar.sunrise', value: '6:40 AM' }, { bad: true }] },
+    route: { text: 'Not an AI chapter.', evidence: [] },
+    terrain: { text: '', evidence: [] },
+  } }, narrative);
+  assert.deepEqual(saved.chapters, { timing: { text: 'Start early.', evidence: [{ path: 'solar.sunrise', value: '6:40 AM' }] } });
 });
 
 test('starter questions name the check that sets the decision', () => {
@@ -107,7 +128,7 @@ test('starter questions name the check that sets the decision', () => {
 });
 
 test('saved AI read details belong only to the narrative they were written with', () => {
-  assert.deepEqual(parseAiBriefDetails(details, narrative), details);
+  assert.deepEqual(parseAiBriefDetails(details, narrative), { ...details, chapters: {} });
   assert.equal(parseAiBriefDetails(details, 'another brief'), null);
   assert.equal(parseAiBriefDetails(null, narrative), null);
   const messy = parseAiBriefDetails({
@@ -120,6 +141,7 @@ test('saved AI read details belong only to the narrative they were written with'
     narrative,
     evidence: [{ heading: 'BIG PICTURE', evidence: [{ path: 'weather.windGust', value: 32 }] }],
     questions: ['Fine?'],
+    chapters: {},
     validation: null,
   });
 });

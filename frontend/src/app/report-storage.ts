@@ -86,8 +86,21 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
   const questions = Array.isArray(value.questions)
     ? value.questions.filter((question): question is string => typeof question === 'string' && Boolean(question.trim())).slice(0, 3)
     : [];
+  const chapters: NonNullable<AiBriefDetails['chapters']> = {};
+  if (isRecord(value.chapters)) {
+    for (const key of ['forecast', 'timing', 'terrain', 'sources'] as const) {
+      const entry = value.chapters[key];
+      if (!isRecord(entry) || typeof entry.text !== 'string' || !entry.text.trim() || !Array.isArray(entry.evidence)) continue;
+      chapters[key] = {
+        text: entry.text,
+        evidence: entry.evidence.filter((claim): claim is AiBriefCitation => isRecord(claim)
+          && typeof claim.path === 'string'
+          && ['string', 'number', 'boolean'].includes(typeof claim.value)).map(({ path, value: cited }) => ({ path, value: cited })),
+      };
+    }
+  }
   const validation = value.validation === 'evidence_checked' || value.validation === 'deterministic_fallback' ? value.validation : null;
-  return { narrative, evidence, questions, validation };
+  return { narrative, evidence, questions, chapters, validation };
 }
 
 function isSafetyData(value: unknown): value is SafetyData {
