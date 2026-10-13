@@ -27,7 +27,21 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   fail "Tracked changes are present in the production checkout."
 fi
 
-git fetch origin refs/heads/main:refs/remotes/origin/main
+# Actions sends the job's short-lived, read-only GitHub token so an HTTPS
+# checkout of a private repository can fetch without a credential stored on the
+# host. It goes through git's environment config, not argv, so `ps` never shows
+# it, and it is dropped before deploy.sh runs.
+if [ -n "${DEPLOY_FETCH_TOKEN:-}" ]; then
+  fetch_auth="$(printf 'x-access-token:%s' "$DEPLOY_FETCH_TOKEN" | base64 | tr -d '\n')"
+  GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0='http.https://github.com/.extraheader' \
+    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $fetch_auth" \
+    git fetch origin refs/heads/main:refs/remotes/origin/main
+  unset fetch_auth
+else
+  git fetch origin refs/heads/main:refs/remotes/origin/main
+fi
+unset DEPLOY_FETCH_TOKEN
 remote_head="$(git rev-parse refs/remotes/origin/main)"
 if [ "$remote_head" != "$DEPLOY_SHA" ]; then
   echo "==> Skipping superseded commit $DEPLOY_SHA; origin/main is $remote_head."

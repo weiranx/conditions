@@ -54,6 +54,13 @@ test('the frontend ships exactly when the backend released the tested commit', (
   assert.doesNotMatch(frontend, /ls-remote|superseded/i);
 });
 
+test('the droplet fetches main with the job token, not a stored credential', () => {
+  const { backend } = jobs();
+  assert.match(backend, /DEPLOY_FETCH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(backend, /envs: DEPLOY_SHA,DEPLOY_FETCH_TOKEN$/m);
+  assert.match(workflow, /^permissions:\n {2}contents: read$/m);
+});
+
 test('every job releases the commit that passed CI', () => {
   for (const [name, block] of Object.entries(jobs())) {
     assert.match(block, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/, `${name} checks out head_sha`);
