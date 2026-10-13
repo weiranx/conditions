@@ -17,7 +17,7 @@ The controllers in `model/` retain the established planning, account, persistenc
 | Elevation forecasts, terrain timeline, avalanche, snowpack, satellite snow, wind loading | `Terrain` |
 | Rain/snow history, heat, fire, AQI, visibility, atmosphere, field observations | `Conditions` |
 | Named routes, GPX checkpoint analysis, elevation profile, checkpoint details | `Route` |
-| Gear checklist, AI brief, persistent report chat | `Report`, `Chat` |
+| Gear checklist, AI read (leads the brief, cites its evidence, notes in each chapter), ask bar, persistent report chat | `Report`, `AiRead`, `Chat` |
 | Multi-day ranking, day detail, copy/print, open day in planner, trip chat | `Compare` |
 | Multi-day itineraries: camps, layovers, exits, high points, bail points, GPX split, trip brief with each day and night, saved trips, per-day watches, trip chat | `ItineraryPlan`, `Itinerary`, `SavedTrips`, `useItinerary` |
 | Objective × date shortlist, hazard ranking, weather tradeoffs, local Plan A / Plan B | `ObjectiveShortlist`, `useObjectiveShortlist` |

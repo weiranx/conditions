@@ -21,6 +21,7 @@ import {
   Mountain,
   Moon,
   NotebookPen,
+  LayoutList,
   Route,
   Satellite,
   Server,
@@ -333,7 +334,8 @@ export type AIFeatureKey =
   | "tripReports"
   | "planParse"
   | "avalancheExtraction"
-  | "tripDebrief";
+  | "tripDebrief"
+  | "aiReport";
 const AI_FEATURE_CONTROLS = [
   {
     key: "aiBrief",
@@ -395,6 +397,13 @@ const AI_FEATURE_CONTROLS = [
     description:
       "Compares a recorded GPX track with the forecast and planned pace after the trip.",
     icon: NotebookPen,
+  },
+  {
+    key: "aiReport",
+    label: "AI-first report",
+    description:
+      "Opens each report with the AI read, its cited evidence, suggested questions and notes in every chapter. Off puts the explanation back under More, written on request.",
+    icon: LayoutList,
   },
 ] as const;
 export interface ProductFeatureFlagStatus {

@@ -274,6 +274,9 @@ const validateAccountPreferences = (value) => {
     ...(preferences.approachElevationAdjustment === undefined
       ? {}
       : { approachElevationAdjustment: validatePreferenceBoolean(preferences, 'approachElevationAdjustment') }),
+    ...(preferences.autoAiRead === undefined
+      ? {}
+      : { autoAiRead: validatePreferenceBoolean(preferences, 'autoAiRead') }),
     ...validateActivityPreferences(preferences),
   };
 };

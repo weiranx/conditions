@@ -128,6 +128,7 @@ export function makeReport(params = {}, scenario = "mixed") {
       planParse: true,
       avalancheExtraction: true,
       tripDebrief: true,
+      aiReport: true,
     },
     location: { lat, lon },
     forecast: {

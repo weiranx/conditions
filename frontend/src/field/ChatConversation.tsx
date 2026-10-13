@@ -17,6 +17,7 @@ export function ChatConversation({
   initialMessages,
   onMessagesChange,
   readOnly,
+  pendingQuestion = null,
 }: {
   id: string;
   viewportRef: RefObject<HTMLDivElement | null>;
@@ -25,6 +26,8 @@ export function ChatConversation({
   initialMessages: PersistedReportChatMessage[];
   onMessagesChange?: (messages: PersistedReportChatMessage[]) => void;
   readOnly: boolean;
+  /** A question asked from the report; each new id is sent once. */
+  pendingQuestion?: { id: number; text: string } | null;
 }) {
   const { requestAiAccess } = useAiAccess();
   const [input, setInput] = useState("");
@@ -82,6 +85,15 @@ export function ChatConversation({
     "How does the timing affect my plan?",
     "What should I verify before leaving?",
   ];
+  const sentQuestion = useRef<number | null>(null);
+  useEffect(() => {
+    // While an answer is still being written, the question waits for it to finish.
+    if (!pendingQuestion || sentQuestion.current === pendingQuestion.id || readOnly || busy) return;
+    sentQuestion.current = pendingQuestion.id;
+    following.current = true;
+    void sendMessage({ text: pendingQuestion.text.trim() }, { body: { report: reportPayload, contextType } });
+  }, [pendingQuestion, busy, readOnly, sendMessage, reportPayload, contextType]);
+
   function ask(question: string) {
     const text = question.trim();
     if (!text || busy || readOnly || !requestAiAccess()) return;

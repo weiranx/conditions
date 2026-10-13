@@ -14,15 +14,14 @@ import {
   Ellipsis,
   Printer,
   RefreshCw,
-  Sparkles,
-  Info,
   TriangleAlert,
 } from "lucide-react";
 import { GearActions } from "./GearActions";
 import { ReportInsights } from "./ReportInsights";
 import "./report-reading.css";
 import "./report-navigation.css";
-import { AiExplanation, AiExplanationSkeleton } from "./AiExplanation";
+import { AiChapterNote, AiRead } from "./AiRead";
+import { starterQuestions } from "./ai-explanation";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
@@ -119,6 +118,9 @@ export function Report({
   // An anchor asks to land on a specific part of a (possibly lazy) chapter.
   const focusRequest = useRef<"chapter" | "brief" | { anchor: string } | null>(null);
   const [navigation, setNavigation] = useState(0);
+  // A question asked from the AI read, handed to the report assistant.
+  // It belongs to one conversation: a new report's assistant never receives it.
+  const [chatAsk, setChatAsk] = useState<{ id: number; text: string; session: number } | null>(null);
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
@@ -235,6 +237,19 @@ export function Report({
   }, [navigation]);
   // The actions menu closes when focus leaves it, which never happens on iOS Safari: a tap elsewhere closes it instead.
   useEffect(() => closeDetailsOnOutsidePress(".report-actions-menu"), []);
+  // The AI read is part of the report, so it is written as the report opens,
+  // once per report and plan, unless the reader turned that off.
+  const autoReadKey = useRef<string | null>(null);
+  const readKey = `${data.generatedAt ?? ""}|${JSON.stringify(evaluation.params ?? null)}`;
+  // An admin switch: off, the read sits under More and is written only on request.
+  const aiFirst = ai.aiReport;
+  const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
+  useEffect(() => {
+    if (!autoRead || w.aiBriefNarrative || w.aiBriefLoading || w.aiBriefError) return;
+    if (autoReadKey.current === readKey) return;
+    autoReadKey.current = readKey;
+    void w.handleRequestAiBriefAction();
+  }, [autoRead, readKey, w.aiBriefNarrative, w.aiBriefLoading, w.aiBriefError, w]);
   function go(next: View, anchor?: string) {
     if (activeView === "brief") briefScroll.current = window.scrollY;
     focusRequest.current = next === "brief" ? "brief" : anchor ? { anchor } : "chapter";
@@ -474,88 +489,45 @@ export function Report({
     if (id === "route" && flags.routeAnalysis) return <Route key="route" workspace={w} />;
     return null;
   };
+  const showChat = ai.reportChat || w.reportChatMessages.length > 0;
+  const aiRead = (
+    <AiRead
+      narrative={w.aiBriefNarrative}
+      details={w.aiBriefDetails}
+      loading={w.aiBriefLoading}
+      error={w.aiBriefError}
+      briefAvailable={ai.aiBrief}
+      chatAvailable={ai.reportChat}
+      readOnly={w.viewingHistoryReport}
+      fallbackQuestions={starterQuestions(copy.limitingChecks, decision.level)}
+      onRequest={w.handleRequestAiBriefAction}
+      onAsk={(text) => {
+        if (!w.requestAiAccess()) return;
+        setChatAsk((previous) => ({ id: (previous?.id ?? 0) + 1, text, session: w.reportChatSessionKey }));
+      }}
+      onOpen={(chapter) => go(chapter)}
+    />
+  );
+  const chat = showChat && (
+    <Suspense fallback={<p>Loading report assistant…</p>}>
+      <Chat
+        key={w.reportChatSessionKey}
+        reportPayload={w.rawReportPayload}
+        contextLabel={`${report.plan.objectiveName} · ${dateLabel(report.plan.forecastDate)}`}
+        initialMessages={w.reportChatMessages}
+        onMessagesChange={w.setReportChatMessages}
+        readOnly={w.viewingHistoryReport}
+        ask={chatAsk?.session === w.reportChatSessionKey ? chatAsk : null}
+      />
+    </Suspense>
+  );
   const briefMore = (
     <>
-        {(w.aiBriefNarrative || (ai.aiBrief && !w.viewingHistoryReport)) && (
-          <section
-            className="field-panel ai-brief"
-            aria-labelledby="ai-brief-title"
-            aria-busy={w.aiBriefLoading}
-          >
-            <div className="ai-brief-heading">
-              <div>
-                <span className="field-kicker ai-brief-kicker">
-                  <Sparkles size={14} aria-hidden="true" />
-                  AI explanation
-                </span>
-                <h2 id="ai-brief-title">The report, explained</h2>
-              </div>
-              {w.aiBriefNarrative && !w.viewingHistoryReport && (
-                <button
-                  className="field-button ai-brief-regenerate"
-                  disabled={!ai.aiBrief}
-                  aria-disabled={w.aiBriefLoading || undefined}
-                  onClick={w.handleRequestAiBriefAction}
-                >
-                  <RefreshCw
-                    size={14}
-                    aria-hidden="true"
-                    className={w.aiBriefLoading ? "is-spinning" : undefined}
-                  />
-                  {w.aiBriefLoading ? "Rewriting…" : "Regenerate"}
-                </button>
-              )}
-            </div>
-            {w.aiBriefError && (
-              <p className="field-warning" role="alert">
-                {w.aiBriefError}
-              </p>
-            )}
-            {w.aiBriefNarrative ? (
-              <>
-                <AiExplanation text={w.aiBriefNarrative} stale={w.aiBriefLoading} />
-                <p className="ai-brief-footnote">
-                  <Info size={13} aria-hidden="true" />
-                  Written by AI from this report’s data and can be wrong. It never
-                  changes the decision or score.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="ai-brief-empty">
-                  <p>
-                    A plain-language read of this report: what drives the decision,
-                    what to watch, and the best move for your plan.
-                  </p>
-                  <button
-                    className="field-button field-button-primary"
-                    aria-disabled={w.aiBriefLoading || undefined}
-                    onClick={w.handleRequestAiBriefAction}
-                  >
-                    <Sparkles size={16} aria-hidden="true" />
-                    {w.aiBriefLoading ? "Writing explanation…" : "Explain this report"}
-                  </button>
-                </div>
-                {w.aiBriefLoading && <AiExplanationSkeleton />}
-              </>
-            )}
-          </section>
-        )}
+        {!aiFirst && aiRead}
+        {!aiFirst && chat}
         {w.viewingHistoryReport && w.restoredReportSource === "saved" && w.accountUser && (
           <Suspense fallback={null}>
             <TripDebrief report={report} aiAvailable={ai.tripDebrief} formatClock={eta} />
-          </Suspense>
-        )}
-        {(ai.reportChat || w.reportChatMessages.length > 0) && (
-          <Suspense fallback={<p>Loading report assistant…</p>}>
-            <Chat
-              key={w.reportChatSessionKey}
-              reportPayload={w.rawReportPayload}
-              contextLabel={`${report.plan.objectiveName} · ${dateLabel(report.plan.forecastDate)}`}
-              initialMessages={w.reportChatMessages}
-              onMessagesChange={w.setReportChatMessages}
-              readOnly={w.viewingHistoryReport}
-            />
           </Suspense>
         )}
       <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
@@ -617,6 +589,21 @@ export function Report({
       )}
       <div className="sky-body">
         {notices}
+        {activeView === "brief" && aiFirst && (
+          <>
+            {aiRead}
+            {chat}
+          </>
+        )}
+        {aiFirst && activeChapter && (
+          <AiChapterNote
+            narrative={w.aiBriefNarrative}
+            details={w.aiBriefDetails}
+            chapter={activeChapter.id}
+            onReadAll={() => go("brief")}
+            onOpen={(chapter) => go(chapter)}
+          />
+        )}
         {activeView === "brief" && (
           <BriefSections
             w={w}
@@ -648,6 +635,7 @@ export function Report({
               {routeNote}
               <p className="sky-cap">{subtitle}</p>
             </section>
+            {aiFirst && aiRead}
             <BriefSections
               w={w}
               hours={skyHours}
