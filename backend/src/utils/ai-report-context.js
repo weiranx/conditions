@@ -24,10 +24,33 @@ const labelFieldObservations = (report) => {
   };
 };
 
+// The hours checked below the objective, lifted out of the per-hour tables so
+// the AI can explain them even when those tables are left out for length.
+const approachForAI = (report) => {
+  const planned = report?.evaluation?.travelWindow?.planned;
+  const summary = planned?.approachSummary;
+  if (!summary || typeof summary !== 'object') return undefined;
+  const rows = Array.isArray(planned.rows) ? planned.rows : [];
+  const spans = (runs) => (Array.isArray(runs) ? runs : [])
+    .map((run) => ({ firstHour: rows[run?.start]?.time ?? null, lastHour: rows[run?.end]?.time ?? null }))
+    .filter((span) => span.firstHour);
+  return {
+    meaning: 'These hours are judged at the elevation the party is expected to be at on the way up, not at the objective. inversionRisk hours have clear, calm conditions that can leave lower ground colder than the objective.',
+    trailhead: report?.evaluation?.params?.trailhead_ft ? 'set by the user' : 'estimated',
+    hoursBelowObjective: summary.adjustedHours,
+    lowestFt: summary.lowFt,
+    highestFt: summary.highFt,
+    belowObjective: spans(summary.adjustedRuns),
+    inversionRisk: spans(summary.inversionRuns),
+  };
+};
+
 // Removes report text that AI prompts would otherwise pay for twice or that the
 // app has already judged irrelevant. It never drops a unique scored value.
 const compactReportForAI = (input) => {
-  const report = labelFieldObservations(input);
+  const lifted = labelFieldObservations(input);
+  const approach = approachForAI(lifted);
+  const report = approach ? { ...lifted, approach } : lifted;
   const evidence = report?.supplementalEvidence;
   const discussion = evidence?.discussion;
   if (!discussion || !Array.isArray(discussion.sections) || discussion.sections.length === 0) return report;
@@ -99,6 +122,7 @@ const PROTECTED_PATHS = new Set([
   'evaluation.verdict',
   'evaluation.criticalWindow',
   'evaluation.windLoading',
+  'approach',
 ]);
 
 // Bounds every other string and list, for a report whose own text is the bulk.

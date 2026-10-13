@@ -123,7 +123,9 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test
+        # Every suite has finished and reported by the time Jest exits; a stray
+        # handle once kept it alive until the job timed out and cancelled a deploy.
+        run: npm test -- --forceExit
 
   frontend-checks:
     needs: changes

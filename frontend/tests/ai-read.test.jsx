@@ -5,6 +5,7 @@ import { AiChapterNote, AiRead } from '../src/field/AiRead';
 import { starterQuestions } from '../src/field/ai-explanation';
 import { aiHero, evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
 import { parseAiBriefDetails } from '../src/app/report-storage';
+import { ApproachNote } from '../src/field/sky/ApproachNote';
 import { getDefaultUserPreferences, normalizeUserPreferences } from '../src/app/preferences';
 
 const narrative = [
@@ -166,4 +167,19 @@ test('the AI read is written automatically unless turned off', () => {
   assert.equal(normalizeUserPreferences({}).autoAiRead, true);
   assert.equal(normalizeUserPreferences({ autoAiRead: false }).autoAiRead, false);
   assert.equal(normalizeUserPreferences({ autoAiRead: 'no' }).autoAiRead, true);
+});
+
+test('the AI writes the approach note in place of the template, keeping the trailhead button', () => {
+  const hours = [{ minute: 420 }, { minute: 480 }];
+  const summary = { adjustedHours: 2, lowFt: 11487, highFt: 11600, adjustedRuns: [{ start: 0, end: 1 }], inversionRuns: [{ start: 0, end: 0 }] };
+  const props = { hours, summary, source: 'estimated', clock: (m) => `${m / 60}:00`, elevation: (ft) => `${ft} ft`, onEdit: () => {} };
+  const template = renderToStaticMarkup(<ApproachNote {...props} />);
+  assert.match(template, /is judged lower down/);
+  assert.match(template, /Clear, calm conditions/);
+  const written = renderToStaticMarkup(<ApproachNote {...props} text="Your first two hours are judged on the way up, near 11,500 ft." />);
+  assert.match(written, /Your first two hours are judged on the way up/);
+  assert.doesNotMatch(written, /is judged lower down|Clear, calm conditions/);
+  assert.match(written, /Set trailhead/);
+  const saved = parseAiBriefDetails({ ...details, hero: { headline: 'Wind sets the pace', reason: 'Gusts build.', evidence: [], level: 'CAUTION', note: { text: 'Judged lower down.', evidence: [{ path: 'approach.lowestFt', value: 11487 }, { bad: 1 }] } } }, details.narrative);
+  assert.deepEqual(saved.hero.note, { text: 'Judged lower down.', evidence: [{ path: 'approach.lowestFt', value: 11487 }] });
 });

@@ -946,6 +946,8 @@ export interface AiBriefDetails {
     evidence: AiBriefCitation[];
     /** The decision level the hero was written against; it is shown only beside a level no stricter. */
     level?: string;
+    /** The AI's note on the hours judged below the objective, when the report has any. */
+    note?: { text: string; evidence: AiBriefCitation[] };
   } | null;
   /** `deterministic_fallback` when the AI answer failed the backend's checks. */
   validation: 'evidence_checked' | 'deterministic_fallback' | null;

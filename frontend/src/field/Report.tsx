@@ -480,6 +480,7 @@ export function Report({
       elevation={(ft) => w.formatElevationDisplay(ft)}
       onEdit={w.viewingHistoryReport ? undefined : () => go("terrain", "sky-terrain-approach")}
       terms={w.objectiveTerms}
+      text={hero?.note?.text}
     />
   );
   const routeNote = (

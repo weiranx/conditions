@@ -1,4 +1,4 @@
-const { fitReportForAI } = require('../src/utils/ai-report-context');
+const { compactReportForAI, fitReportForAI } = require('../src/utils/ai-report-context');
 
 const row = (i) => ({ time: `${String(i % 24).padStart(2, '0')}:00`, temp: 30 + i, gust: 10 + i, note: 'x'.repeat(200) });
 const bigReport = () => ({
@@ -51,4 +51,25 @@ test('shortening never cuts the hours, checks or hazards behind the decision', (
   expect(fitted.evaluation.decision.checks).toHaveLength(30);
   expect(fitted.evaluation.decision.checks[29]).toEqual(checks[29]);
   expect(fitted.notes.length).toBeLessThan(400);
+});
+
+test('the hours judged below the objective are lifted out so the AI can explain them', () => {
+  const report = {
+    evaluation: {
+      params: {},
+      travelWindow: { planned: {
+        rows: [{ time: '07:00' }, { time: '08:00' }, { time: '09:00' }],
+        approachSummary: { adjustedHours: 2, lowFt: 11487, highFt: 12210, adjustedRuns: [{ start: 0, end: 1 }], inversionRuns: [{ start: 0, end: 0 }] },
+      } },
+    },
+  };
+  const { approach } = compactReportForAI(report);
+  expect(approach).toMatchObject({
+    trailhead: 'estimated', hoursBelowObjective: 2, lowestFt: 11487, highestFt: 12210,
+    belowObjective: [{ firstHour: '07:00', lastHour: '08:00' }],
+    inversionRisk: [{ firstHour: '07:00', lastHour: '07:00' }],
+  });
+  expect(compactReportForAI({ evaluation: { travelWindow: { planned: { rows: [], approachSummary: null } } } }).approach).toBeUndefined();
+  const fitted = fitReportForAI({ ...compactReportForAI(report), padding: 'x'.repeat(5000) }, 3000);
+  expect(fitted.approach).toEqual(approach);
 });

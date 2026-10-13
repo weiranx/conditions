@@ -135,6 +135,21 @@ test('a cited number converts only the way its kind of value does', () => {
   expect(hero('It is -7 C.', 'weather.note')).toBeNull();
 });
 
+test('thousands separators and rounded elevations pass; the hero note is checked on its own', () => {
+  const report = { approach: { lowestFt: 11487, trailhead: 'estimated', belowObjective: [{ firstHour: '07:00', lastHour: '08:00' }] }, objective: { elevationFt: 13026 }, weather: { windGust: 8 } };
+  const cite = (path, value) => ({ path, value });
+  const base = { headline: 'Wind sets the pace today', reason: 'The summit sits at 13,026 ft.', evidence: [cite('objective.elevationFt', 13026)] };
+  const note = (text, evidence) => validateHero({ ...base, note: { text, evidence } }, report, 'CAUTION');
+  expect(validateHero(base, report, 'CAUTION')).not.toBeNull();
+  expect(note('From 07:00 to 08:00 you will be near 11,500 ft on the way up, so those hours are judged there.', [cite('approach.lowestFt', 11487), cite('approach.belowObjective.0.firstHour', '07:00'), cite('approach.belowObjective.0.lastHour', '08:00')]).note.text)
+    .toMatch(/near 11,500 ft/);
+  const bad = note('You will be near 9,000 ft.', [cite('approach.lowestFt', 11487)]);
+  expect(bad).not.toBeNull();
+  expect(bad.note).toBeUndefined();
+  expect(validateHero({ ...base, reason: 'The summit sits at 13,000 ft.' }, report, 'CAUTION')).not.toBeNull();
+  expect(validateHero({ ...base, reason: 'The summit sits at 12,000 ft.' }, report, 'CAUTION')).toBeNull();
+});
+
 test('the AI hero never names a decision level other than the badge', () => {
   const report = { weather: { windGust: 8 } };
   const hero = (headline, level) => validateHero({ headline, reason: 'Gusts reach 8 mph.', evidence: [{ path: 'weather.windGust', value: 8 }] }, report, level);
