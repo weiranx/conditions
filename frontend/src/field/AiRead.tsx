@@ -36,6 +36,23 @@ function Citations({ details, section, onOpen }: {
   );
 }
 
+/** Why AI text was replaced or left out: what the fact checks rejected, in their words. */
+function CheckDetails({ details }: { details: AiBriefDetails | null }) {
+  const problems = details?.checks?.problems ?? [];
+  if (!problems.length) return null;
+  return (
+    <details className="ai-read-checks">
+      <summary>
+        Fact-check details · {problems.length} {problems.length === 1 ? "issue" : "issues"}
+        {details?.checks && details.checks.attempts > 1 ? ` across ${details.checks.attempts} AI answers` : ""}
+      </summary>
+      <ul>
+        {problems.map((problem, index) => <li key={`${index}-${problem}`}>{problem}</li>)}
+      </ul>
+    </details>
+  );
+}
+
 /**
  * The report's AI read: what the decision means for this plan, the move to make,
  * the evidence behind each part, and a place to ask a follow-up. It explains
@@ -126,6 +143,7 @@ export function AiRead({
               The AI answer didn’t pass the report’s fact checks, so this summary comes straight from the checks.
             </p>
           )}
+          <CheckDetails details={details} />
           {lead.map(render)}
           {action.map(render)}
           {more.length > 0 && (

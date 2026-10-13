@@ -87,14 +87,15 @@ const CHAPTERS = ['forecast', 'timing', 'terrain', 'sources'];
 const MAX_CHAPTER_LENGTH = 700;
 // The AI's analysis of each report chapter. Each one is checked on its own and
 // a chapter that fails is left out; it never fails the brief.
-const validateChapters = (value, report, decisionLevel, units) => {
+const validateChapters = (value, report, decisionLevel, units, problems = []) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const chapters = {};
   for (const chapter of CHAPTERS) {
     const entry = value[chapter];
     if (!entry || typeof entry !== 'object' || typeof entry.text !== 'string') continue;
     const text = entry.text.replace(/\s+/g, ' ').trim();
-    if (text.length > MAX_CHAPTER_LENGTH || !checkClaim(text, entry.evidence, report, decisionLevel, units)) continue;
+    const problem = text.length > MAX_CHAPTER_LENGTH ? `longer than ${MAX_CHAPTER_LENGTH} characters` : claimProblem(text, entry.evidence, report, decisionLevel, units);
+    if (problem) { problems.push(`${chapter} chapter: ${problem}`); continue; }
     chapters[chapter] = { text, evidence: entry.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
   }
   return chapters;
@@ -104,11 +105,13 @@ const MAX_HERO_REASON = 320;
 const MAX_HERO_NOTE = 280;
 // The report's opening headline and reason, written by AI. Both are checked
 // together; a hero that fails is left out and the report keeps its own.
-const validateHero = (value, report, decisionLevel, units) => {
-  if (!value || typeof value !== 'object' || typeof value.headline !== 'string' || typeof value.reason !== 'string') return null;
+const validateHero = (value, report, decisionLevel, units, problems = []) => {
+  const fail = (problem) => { problems.push(`OPENING: ${problem}`); return null; };
+  if (!value || typeof value !== 'object' || typeof value.headline !== 'string' || typeof value.reason !== 'string') return fail('missing or without a headline and reason');
   const headline = value.headline.replace(/\s+/g, ' ').trim().replace(/\.$/, '');
   const reason = value.reason.replace(/\s+/g, ' ').trim();
-  if (headline.length < HERO_HEADLINE.min || headline.length > HERO_HEADLINE.max || !reason || reason.length > MAX_HERO_REASON) return null;
+  if (headline.length < HERO_HEADLINE.min || headline.length > HERO_HEADLINE.max) return fail(`headline is ${headline.length} characters (${HERO_HEADLINE.min}-${HERO_HEADLINE.max} allowed)`);
+  if (!reason || reason.length > MAX_HERO_REASON) return fail(`reason is ${reason.length} characters (1-${MAX_HERO_REASON} allowed)`);
   const text = `${headline}. ${reason}`;
   // The badge beside it shows the checks' level; the hero may not name another one.
   const named = [
@@ -116,15 +119,16 @@ const validateHero = (value, report, decisionLevel, units) => {
     ...(/\bGO\b/.test(text.replace(/NO-GO/gi, '')) ? ['GO'] : []),
     ...(/\bCAUTION\b/.test(text) ? ['CAUTION'] : []),
   ];
-  if (named.some(level => level !== decisionLevel)) return null;
-  if (!checkClaim(text, value.evidence, report, decisionLevel, units)) return null;
+  if (named.some(level => level !== decisionLevel)) return fail(`names ${named.join(', ')} beside a ${decisionLevel} badge`);
+  const problem = claimProblem(text, value.evidence, report, decisionLevel, units);
+  if (problem) return fail(problem);
   const hero = { headline, reason, evidence: value.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
   // An optional note on the hours judged below the objective; it is checked on its own and dropped alone.
   if (value.note && typeof value.note === 'object' && typeof value.note.text === 'string') {
     const note = value.note.text.replace(/\s+/g, ' ').trim();
-    if (note.length <= MAX_HERO_NOTE && !claimProblem(note, value.note.evidence, report, decisionLevel, units)) {
-      hero.note = { text: note, evidence: value.note.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
-    }
+    const problem = note.length > MAX_HERO_NOTE ? `longer than ${MAX_HERO_NOTE} characters` : claimProblem(note, value.note.evidence, report, decisionLevel, units);
+    if (problem) problems.push(`OPENING note: ${problem}`);
+    else hero.note = { text: note, evidence: value.note.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
   }
   return hero;
 };
@@ -167,7 +171,11 @@ const parseJson = (raw) => {
  */
 const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}) => {
   const parsed = parseJson(raw);
-  if (!parsed || typeof parsed !== 'object') { problems.push('the answer was not valid JSON (it may have been cut off)'); return null; }
+  if (!parsed || typeof parsed !== 'object') {
+    const text = String(raw ?? '').trim();
+    problems.push(`the answer was not valid JSON (${text.length} characters, ending "${text.slice(-60)}"; it may have been cut off)`);
+    return null;
+  }
   if (!Array.isArray(parsed.sections)) { problems.push('the answer had no "sections" array'); return null; }
   const kept = [];
   for (const heading of HEADINGS) {
@@ -183,8 +191,8 @@ const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}
     narrative: kept.map(({ heading, text }) => `${heading}: ${text}`).join('\n'),
     evidence: kept.map(({ heading, evidence }) => ({ heading, evidence })),
     questions: validateQuestions(parsed.questions),
-    chapters: validateChapters(parsed.chapters, report, decisionLevel, units),
-    hero: validateHero(parsed.hero, report, decisionLevel, units),
+    chapters: validateChapters(parsed.chapters, report, decisionLevel, units, problems),
+    hero: validateHero(parsed.hero, report, decisionLevel, units, problems),
   };
 };
 const deterministicBrief = (report, decisionLevel) => {

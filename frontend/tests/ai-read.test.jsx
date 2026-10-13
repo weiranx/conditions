@@ -191,3 +191,12 @@ test('a read saved before the AI wrote the opening is outdated; one whose openin
   assert.equal(isOutdatedRead(details.narrative, { ...details, hero: null }), false);
   assert.equal(isOutdatedRead(details.narrative, { ...details, hero: { headline: 'h', reason: 'r', evidence: [] } }), false);
 });
+
+test('the AI read shows what the fact checks rejected, and saved reads keep it', () => {
+  const checks = { attempts: 2, problems: ['OPENING: states 30 without citing a report field that holds it', 'first answer: the answer was not valid JSON'] };
+  const html = read({ details: { ...details, checks } });
+  assert.match(html, /Fact-check details · 2 issues across 2 AI answers/);
+  assert.match(html, /OPENING: states 30 without citing/);
+  assert.doesNotMatch(read(), /Fact-check details/);
+  assert.deepEqual(parseAiBriefDetails({ ...details, checks: { attempts: 2, problems: ['a', 3] } }, details.narrative).checks, { attempts: 2, problems: ['a'] });
+});

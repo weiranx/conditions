@@ -120,7 +120,13 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
     }
     : null;
   const validation = value.validation === 'evidence_checked' || value.validation === 'deterministic_fallback' ? value.validation : null;
-  return { narrative, evidence, questions, chapters, ...(hero === undefined ? {} : { hero }), validation };
+  const checks = isRecord(value.checks) && Array.isArray(value.checks.problems)
+    ? {
+      attempts: typeof value.checks.attempts === 'number' ? value.checks.attempts : 1,
+      problems: value.checks.problems.filter((problem): problem is string => typeof problem === 'string'),
+    }
+    : undefined;
+  return { narrative, evidence, questions, chapters, ...(hero === undefined ? {} : { hero }), ...(checks ? { checks } : {}), validation };
 }
 
 function isSafetyData(value: unknown): value is SafetyData {
