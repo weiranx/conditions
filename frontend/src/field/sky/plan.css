@@ -281,3 +281,13 @@
   border: 0; border-radius: 8px; background: none; color: var(--sky-secondary, var(--f-muted)); cursor: pointer;
 }
 .field-app .field-plan-form .sky-plan-rename-button:hover { background: var(--sky-fill, var(--f-wash)); color: var(--sky-label, var(--f-ink)); }
+
+/* Regular width: the map stays in view beside the plan instead of stretching into a tall, mostly empty column
+   (a multi-day plan with camps runs well past one screen). */
+@media (min-width: 851px) {
+  .field-app .field-planner-grid { align-items: start; }
+  .field-app .field-planner-map:not(.is-sheet) {
+    position: sticky; top: calc(var(--field-sticky-top, 0px) + 16px);
+    height: clamp(480px, calc(100dvh - var(--field-sticky-top, 0px) - 32px), 860px);
+  }
+}

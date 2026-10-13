@@ -282,7 +282,8 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
           <span className="sky-lead-note">Follow conditions as the forecast updates, review what changed, and get alerts.</span>
         </p>
       </header>
-      <div className="sky-card sky-filter-bar">
+      {/* With nothing watched there is nothing to search or refresh; the empty state below carries the one next step. */}
+      {!(!loading && !error && !query && (!account.user || items.length === 0)) && <div className="sky-card sky-filter-bar">
         <div className="field-library-search">
           <label htmlFor={searchId} className="sr-only">Find an objective</label>
           <div className="field-input-icon sky-search">
@@ -316,7 +317,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
             <ArrowUpRight size={15} aria-hidden="true" />
           </button>
         </div>
-      </div>
+      </div>}
       {items.length > 0 && (
         <div className="sky-segmented sky-watch-filter field-watch-filters" role="group" aria-label="Filter watches">
           {([
@@ -640,7 +641,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
               className="field-button field-button-primary"
               onClick={() => navigate(account.user ? "planner" : "account")}
             >
-              {account.user ? "Create a brief" : "Open your account"}
+              {account.user ? "Plan an outing" : "Open your account"}
             </button>
           </div>
         )}

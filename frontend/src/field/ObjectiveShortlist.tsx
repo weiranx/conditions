@@ -159,7 +159,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               <label>Trip hours<input type="number" min="1" max="24" step="1" required value={state.hours} onChange={e => setState(current => ({ ...current, hours: Number(e.target.value) }))} /></label>
             </div>
             <p className="field-muted">The same departure time in each objective’s local time zone. Limits follow your Preferences.</p>
-            {validation && <p className="shortlist-validation">{validation}</p>}
+            {validation && <p className={`shortlist-validation${state.objectives.length < 2 ? ' is-hint' : ''}`}>{validation}</p>}
             <button className="field-button field-button-primary" type="submit" disabled={!!validation || w.accountLoading}>
               {comparison.loading ? 'Comparing…' : 'Compare objectives'}<ArrowRight size={15} aria-hidden="true" />
             </button>
@@ -187,7 +187,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
         {comparison.needsRefresh && <p className="sky-notice is-info" role="status">Plan details or preferences changed. Compare again for matching forecasts.</p>}
         {comparison.loading && <p className="sky-notice is-info" role="status">Comparing objectives · {comparison.results.length} of {state.objectives.length} checked.</p>}
         {!comparison.results.length && !comparison.loading && <div className="sky-card sky-compare-empty shortlist-intro">
-          <MapPin size={30} aria-hidden="true" /><h2>Where should you go?</h2>
+          <MapPin size={30} aria-hidden="true" /><h2>Build a shortlist</h2>
           <p>Add 2–5 objectives and choose your available dates. Compare hazards, weather windows, views, and comfort before saving your first choice and a backup.</p>
           <button className="field-button" onClick={() => setState(current => ({ ...current, startDate: (() => {
             const now = new Date(`${w.todayDate}T12:00:00Z`); return addDaysToIsoDate(w.todayDate, (6 - now.getUTCDay() + 7) % 7);
