@@ -47,7 +47,9 @@ test('the frontend ships exactly when the backend released the tested commit', (
   const { backend, frontend } = jobs();
   assert.match(backend, /released: \$\{\{ steps\.release\.outputs\.released \}\}/);
   assert.match(backend, /capture_stdout: true/);
-  assert.ok(backend.includes('"==> Releasing tested commit $DEPLOY_SHA"'), 'matches the ci-deploy.sh release line');
+  assert.ok(backend.includes("format('==> Releasing tested commit {0}', github.event.workflow_run.head_sha)"), 'matches the ci-deploy.sh release line');
+  // The deploy log is too large to pass through the environment.
+  assert.doesNotMatch(backend, /: \$\{\{ steps\.ssh\.outputs\.stdout \}\}/);
   const bootstrap = readFileSync(new URL('../ci-deploy.sh', import.meta.url), 'utf8');
   assert.ok(bootstrap.includes('echo "==> Releasing tested commit $DEPLOY_SHA"'), 'ci-deploy.sh prints the release line');
   // A second supersession check could skip a frontend whose backend shipped.
