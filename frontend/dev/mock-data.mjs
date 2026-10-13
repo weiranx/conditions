@@ -123,6 +123,11 @@ export function makeReport(params = {}, scenario = "mixed") {
       reportChat: true,
       routeAnalysis: true,
       snowVision: true,
+      watchSummary: true,
+      fieldObservations: true,
+      planParse: true,
+      avalancheExtraction: true,
+      tripDebrief: true,
     },
     location: { lat, lon },
     forecast: {

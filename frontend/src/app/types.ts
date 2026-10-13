@@ -220,6 +220,11 @@ export interface SafetyData {
     reportChat?: boolean;
     routeAnalysis?: boolean;
     snowVision?: boolean;
+    watchSummary?: boolean;
+    fieldObservations?: boolean;
+    planParse?: boolean;
+    avalancheExtraction?: boolean;
+    tripDebrief?: boolean;
   };
   location: { lat: number; lon: number };
   /** A photo of the objective (a catalog peak) or, with `fallback`, of the forest or park it is in; with its license and credit. */

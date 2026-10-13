@@ -3,7 +3,7 @@ import { fetchApi } from '../lib/api-client';
 
 export const AI_AVAILABILITY_EVENT = 'summitsafe:ai-availability-change';
 const AI_AVAILABILITY_REFRESH_MS = 15_000;
-export const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision'] as const;
+export const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision', 'watchSummary', 'fieldObservations', 'planParse', 'avalancheExtraction', 'tripDebrief'] as const;
 export type AiFeatureKey = (typeof AI_FEATURE_KEYS)[number];
 export type AiFeatureAvailability = Record<AiFeatureKey, boolean>;
 

@@ -73,6 +73,9 @@ const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
+const { registerFieldObservationRoutes } = require('./src/routes/field-observations');
+const { registerPlanParseRoute } = require('./src/routes/plan-parse');
+const { registerTripDebriefRoute } = require('./src/routes/trip-debrief');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable } = require('./src/utils/ai-client');
 const { getFeatureFlags, initializeFeatureFlags } = require('./src/utils/feature-flags');
 const { sanitizeReportForFeatureFlags } = require('./src/utils/report-feature-filter');
@@ -1068,6 +1071,9 @@ registerAiBriefRoute({ app, askAI, ensureAccountAccess });
 registerReportChatRoute({ app, ensureAccountAccess });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
 registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision, ensureAccountAccess });
+registerFieldObservationRoutes({ app, askAI, ensureAccountAccess });
+registerPlanParseRoute({ app, askAI, ensureAccountAccess });
+registerTripDebriefRoute({ app, askAI, ensureAccountAccess });
 
 const startServer = async () => {
   await database.connect();
