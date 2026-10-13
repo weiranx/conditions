@@ -40,3 +40,15 @@ test('with the tables gone, long text and lists are shortened before anything is
   expect(fitted.safety.score).toBe(61);
   expect(fitReportForAI(report, 200)).toBeNull();
 });
+
+test('shortening never cuts the hours, checks or hazards behind the decision', () => {
+  const checks = Array.from({ length: 30 }, (_, i) => ({ id: `check-${i}`, ok: i !== 29, detail: 'z'.repeat(300) }));
+  const report = { ...bigReport(), evaluation: { ...bigReport().evaluation, decision: { level: 'CAUTION', checks } }, notes: Array.from({ length: 400 }, () => 'n'.repeat(300)) };
+  const fitted = fitReportForAI(report, 40000);
+  expect(JSON.stringify(fitted).length).toBeLessThanOrEqual(40000);
+  expect(fitted.weather.trend).toHaveLength(24);
+  expect(fitted.weather.trend[23].note).toHaveLength(200);
+  expect(fitted.evaluation.decision.checks).toHaveLength(30);
+  expect(fitted.evaluation.decision.checks[29]).toEqual(checks[29]);
+  expect(fitted.notes.length).toBeLessThan(400);
+});

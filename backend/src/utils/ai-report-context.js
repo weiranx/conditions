@@ -85,12 +85,29 @@ const withoutPath = (value, [key, ...rest]) => {
   return { ...value, [key]: withoutPath(value[key], rest) };
 };
 
-// Bounds every string and list, for a report whose own text is the bulk.
-const capSizes = (value, maxString, maxItems) => {
+// What the decision rests on is never shortened: a later hour, check or hazard
+// cut from these could leave the model unable to explain the decision it keeps.
+const PROTECTED_PATHS = new Set([
+  'safety',
+  'alerts',
+  'weather.trend',
+  'avalanche.problems',
+  'avalanche.bottomLine',
+  'reportInsights',
+  'evaluation.decision',
+  'evaluation.decisionSummary',
+  'evaluation.verdict',
+  'evaluation.criticalWindow',
+  'evaluation.windLoading',
+]);
+
+// Bounds every other string and list, for a report whose own text is the bulk.
+const capSizes = (value, maxString, maxItems, path = '') => {
+  if (PROTECTED_PATHS.has(path)) return value;
   if (typeof value === 'string') return value.length > maxString ? `${value.slice(0, maxString)}…` : value;
-  if (Array.isArray(value)) return value.slice(0, maxItems).map((item) => capSizes(item, maxString, maxItems));
+  if (Array.isArray(value)) return value.slice(0, maxItems).map((item) => capSizes(item, maxString, maxItems, `${path}[]`));
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, capSizes(item, maxString, maxItems)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, capSizes(item, maxString, maxItems, path ? `${path}.${key}` : key)]));
   }
   return value;
 };
@@ -101,7 +118,8 @@ const has = (value, path) => path.reduce((node, key) => (node && typeof node ===
  * Fits a compacted report under an AI prompt's size limit by leaving out
  * restated detail first, then shortening long text and lists. It says what it
  * left out in `omittedForLength`, so the model never mistakes a gap for a
- * reading. Returns null only when even the shortest form is too large.
+ * reading. The evidence behind the decision (PROTECTED_PATHS) is never
+ * shortened; when it alone is too large the result is null.
  */
 const fitReportForAI = (input, maxLength) => {
   let report = input;
