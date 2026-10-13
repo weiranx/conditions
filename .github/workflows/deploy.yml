@@ -65,11 +65,14 @@ jobs:
       # pairs this backend with an older frontend or the reverse.
       - name: Record whether the backend released this commit
         id: release
+        # The match runs in the expression: a full deploy log (image builds,
+        # migrations) can exceed the runner's environment size limit, which
+        # failed this step with "Argument list too long" after a real release.
         env:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-          DEPLOY_OUTPUT: ${{ steps.ssh.outputs.stdout }}
+          RELEASED: ${{ contains(steps.ssh.outputs.stdout, format('==> Releasing tested commit {0}', github.event.workflow_run.head_sha)) }}
         run: |
-          if grep -qF "==> Releasing tested commit $DEPLOY_SHA" <<< "$DEPLOY_OUTPUT"; then
+          if [ "$RELEASED" = true ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
           else
             echo "==> Backend skipped $DEPLOY_SHA; skipping the frontend too."
