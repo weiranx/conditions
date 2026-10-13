@@ -512,7 +512,7 @@ export function Report({
       briefAvailable={ai.aiBrief}
       chatAvailable={ai.reportChat}
       readOnly={w.viewingHistoryReport}
-      fallbackQuestions={starterQuestions(copy.limitingChecks, decision.level)}
+      fallbackQuestions={starterQuestions(decision.level)}
       onRequest={w.handleRequestAiBriefAction}
       onAsk={(text) => {
         if (!w.requestAiAccess()) return;

@@ -132,14 +132,13 @@ test('the AI opening shows only when it passed its checks against a decision no 
   assert.equal(parseAiBriefDetails({ ...details, hero: { headline: 'x' } }, details.narrative).hero, null);
 });
 
-test('starter questions name the check that sets the decision', () => {
-  assert.deepEqual(starterQuestions(['Wind gusts over your limit'], 'CAUTION'), [
-    'Why does wind gusts over your limit set the decision?',
+test('starter questions read as plain questions and never paste in a check sentence', () => {
+  assert.deepEqual(starterQuestions('CAUTION'), [
+    'What is driving this decision?',
     'What would have to change to make this a go?',
     'What should I check before I leave?',
   ]);
-  assert.equal(starterQuestions([], 'GO')[0], 'What is driving this decision?');
-  assert.equal(starterQuestions([], 'GO')[1], 'What would turn this into a no-go?');
+  assert.equal(starterQuestions('GO')[1], 'What would turn this into a no-go?');
 });
 
 test('saved AI read details belong only to the narrative they were written with', () => {

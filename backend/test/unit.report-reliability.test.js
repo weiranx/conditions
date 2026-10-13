@@ -68,7 +68,7 @@ test('brief validation rejects unsupported quantities, forged references, and pe
   expect(validateBrief(brief('Safe to go.'), report, 'GO')).toBeNull();
   expect(validateBrief(brief('Forecast gusts are 8 mph.'), { weather: { windGust: null } }, 'GO')).toBeNull();
   expect(validateBrief('unstructured answer', report, 'GO')).toBeNull();
-  expect(deterministicBrief({ safety: { assessmentStatus: 'insufficient_evidence' } }, 'CAUTION')).toMatch(/Insufficient evidence/);
+  expect(deterministicBrief({ safety: { assessmentStatus: 'insufficient_evidence' } }, 'CAUTION')).toMatch(/insufficient evidence/i);
 });
 
 test('brief follow-up questions are short, numberless questions and never fail the brief', () => {
@@ -100,6 +100,35 @@ test('chapter analyses are fact-checked one by one and a failing one is left out
   expect(Object.keys(validateBrief(withChapters, report, 'CAUTION').chapters)).toEqual(['forecast']);
 });
 
+test('fact checks accept ranges, rounding, converted units and negations, and keep the parts that pass', () => {
+  const report = { weather: { windGust: 8.4, windSpeed: 5, temp: 25, sunrise: '7:00 AM' }, terrain: { summitFt: 10000 } };
+  const ev = (...paths) => paths.map(path => ({ path, value: path.split('.').reduce((v, k) => v[k], report) }));
+  const one = (text, evidence, level = 'CAUTION', units) => validateBrief(JSON.stringify({ sections: headings.map(heading => ({ heading, text, evidence })) }), report, level, { units });
+  expect(one('Wind runs 5-8 mph from 7:00-8:00 AM.', ev('weather.windSpeed', 'weather.windGust', 'weather.sunrise'))).not.toBeNull();
+  expect(one('Wind runs 5-9 mph.', ev('weather.windSpeed', 'weather.windGust'))).toBeNull();
+  expect(one('It is not safe to linger on the ridge; proceed with caution.', ev('weather.windGust'))).not.toBeNull();
+  expect(one('Proceed with caution.', ev('weather.windGust'), 'NO-GO')).toBeNull();
+  expect(one('It is -4 C at the start with gusts of 14 km/h near 3050 m.', ev('weather.temp', 'weather.windGust', 'terrain.summitFt'), 'CAUTION', { temperature: 'c', wind: 'kph', elevation: 'm' })).not.toBeNull();
+  expect(one('It is -4 C at the start.', ev('weather.temp'))).toBeNull();
+  const problems = [];
+  const mixed = JSON.stringify({ sections: headings.map(heading => ({ heading, text: heading === 'WATCH CLOSELY' ? 'Gusts hit 30 mph.' : 'Gusts near 8 mph.', evidence: ev('weather.windGust') })) });
+  const kept = validateBrief(`Here you go:\n${mixed}`, report, 'CAUTION', { problems });
+  expect(kept.narrative).not.toMatch(/WATCH CLOSELY/);
+  expect(kept.evidence.map(section => section.heading)).not.toContain('WATCH CLOSELY');
+  expect(problems).toEqual(['WATCH CLOSELY: states 30 without citing a report field that holds it']);
+  const noLead = JSON.stringify({ sections: headings.map(heading => ({ heading, text: heading === 'BIG PICTURE' ? 'Gusts hit 30 mph.' : 'Gusts near 8 mph.', evidence: ev('weather.windGust') })) });
+  expect(validateBrief(noLead, report, 'CAUTION')).toBeNull();
+  const truncated = [];
+  expect(validateBrief(mixed.slice(0, 80), report, 'CAUTION', { problems: truncated })).toBeNull();
+  expect(truncated[0]).toMatch(/not valid JSON/);
+});
+
+test('the checks summary leads with what the evaluation says, not a stock line', () => {
+  const text = deterministicBrief({ evaluation: { decision: { headline: 'Wind crosses your limit after noon.' }, verdict: { reason: 'Gusts exceed your limit on the ridge.' } } }, 'CAUTION');
+  expect(text).toMatch(/^BIG PICTURE: The checks call this a go with caution\. Wind crosses your limit after noon\. Gusts exceed your limit on the ridge\./);
+  expect(text).not.toMatch(/Computed decision/);
+});
+
 test('the AI hero is fact-checked and never names another level or sounds safer', () => {
   const report = { weather: { windGust: 8 }, safety: { score: 62 } };
   const cite = (path, value) => [{ path, value }];
@@ -107,7 +136,7 @@ test('the AI hero is fact-checked and never names another level or sounds safer'
   expect(validateHero(hero('Wind sets the pace today.', 'Gusts reach 8 mph   on the ridge.'), report, 'CAUTION'))
     .toEqual({ headline: 'Wind sets the pace today', reason: 'Gusts reach 8 mph on the ridge.', evidence: cite('weather.windGust', 8) });
   expect(validateHero(hero('Wind sets the pace today', 'Gusts reach 30 mph.'), report, 'CAUTION')).toBeNull();
-  expect(validateHero(hero('Proceed with the full ridge', 'Gusts reach 8 mph.'), report, 'CAUTION')).toBeNull();
+  expect(validateHero(hero('Proceed with the full ridge', 'Gusts reach 8 mph.'), report, 'NO-GO')).toBeNull();
   expect(validateHero(hero('A no-go on the ridge today', 'Gusts reach 8 mph.'), report, 'CAUTION')).toBeNull();
   expect(validateHero(hero('A no-go on the ridge today', 'Gusts reach 8 mph.'), report, 'NO-GO')).not.toBeNull();
   expect(validateHero(hero('Short', 'Gusts reach 8 mph.'), report, 'GO')).toBeNull();
