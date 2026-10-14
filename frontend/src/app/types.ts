@@ -949,8 +949,8 @@ export interface AiBriefDetails {
     /** The AI's note on the hours judged below the objective, when the report has any. */
     note?: { text: string; evidence: AiBriefCitation[] };
   } | null;
-  /** What the backend's fact checks rejected in the AI answer, and how many answers it asked for. */
-  checks?: { attempts: number; problems: string[] };
+  /** What the backend's fact checks rejected in the AI answer, how many answers it asked for, and how many seconds each took. */
+  checks?: { attempts: number; problems: string[]; seconds?: number[] };
   /** `deterministic_fallback` when the AI answer failed the backend's checks. */
   validation: 'evidence_checked' | 'deterministic_fallback' | null;
 }
