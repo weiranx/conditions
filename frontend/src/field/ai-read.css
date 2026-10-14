@@ -38,6 +38,21 @@
   line-height: 1.5;
   color: var(--ai-secondary);
 }
+.ai-read-checks {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ai-secondary);
+}
+.ai-read-checks summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ai-read-checks ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
 .ai-read-cites {
   display: flex;
   flex-wrap: wrap;

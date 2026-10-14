@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AiChapterNote, AiRead } from '../src/field/AiRead';
 import { starterQuestions } from '../src/field/ai-explanation';
-import { aiHero, evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
+import { aiHero, isOutdatedRead, evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
 import { parseAiBriefDetails } from '../src/app/report-storage';
 import { ApproachNote } from '../src/field/sky/ApproachNote';
 import { getDefaultUserPreferences, normalizeUserPreferences } from '../src/app/preferences';
@@ -143,7 +143,8 @@ test('starter questions read as plain questions and never paste in a check sente
 });
 
 test('saved AI read details belong only to the narrative they were written with', () => {
-  assert.deepEqual(parseAiBriefDetails(details, narrative), { ...details, chapters: {}, hero: null });
+  assert.deepEqual(parseAiBriefDetails(details, narrative), { ...details, chapters: {} });
+  assert.equal(parseAiBriefDetails({ ...details, hero: null }, narrative).hero, null);
   assert.equal(parseAiBriefDetails(details, 'another brief'), null);
   assert.equal(parseAiBriefDetails(null, narrative), null);
   const messy = parseAiBriefDetails({
@@ -157,7 +158,6 @@ test('saved AI read details belong only to the narrative they were written with'
     evidence: [{ heading: 'BIG PICTURE', evidence: [{ path: 'weather.windGust', value: 32 }] }],
     questions: ['Fine?'],
     chapters: {},
-    hero: null,
     validation: null,
   });
 });
@@ -182,4 +182,21 @@ test('the AI writes the approach note in place of the template, keeping the trai
   assert.match(written, /Set trailhead/);
   const saved = parseAiBriefDetails({ ...details, hero: { headline: 'Wind sets the pace', reason: 'Gusts build.', evidence: [], level: 'CAUTION', note: { text: 'Judged lower down.', evidence: [{ path: 'approach.lowestFt', value: 11487 }, { bad: 1 }] } } }, details.narrative);
   assert.deepEqual(saved.hero.note, { text: 'Judged lower down.', evidence: [{ path: 'approach.lowestFt', value: 11487 }] });
+});
+
+test('a read saved before the AI wrote the opening is outdated; one whose opening failed is not', () => {
+  assert.equal(isOutdatedRead(null, null), false);
+  assert.equal(isOutdatedRead(details.narrative, null), true);
+  assert.equal(isOutdatedRead(details.narrative, parseAiBriefDetails(details, details.narrative)), true);
+  assert.equal(isOutdatedRead(details.narrative, { ...details, hero: null }), false);
+  assert.equal(isOutdatedRead(details.narrative, { ...details, hero: { headline: 'h', reason: 'r', evidence: [] } }), false);
+});
+
+test('the AI read shows what the fact checks rejected, and saved reads keep it', () => {
+  const checks = { attempts: 2, problems: ['OPENING: states 30 without citing a report field that holds it', 'first answer: the answer was not valid JSON'] };
+  const html = read({ details: { ...details, checks } });
+  assert.match(html, /Fact-check details · 2 issues across 2 AI answers/);
+  assert.match(html, /OPENING: states 30 without citing/);
+  assert.doesNotMatch(read(), /Fact-check details/);
+  assert.deepEqual(parseAiBriefDetails({ ...details, checks: { attempts: 2, problems: ['a', 3] } }, details.narrative).checks, { attempts: 2, problems: ['a'] });
 });

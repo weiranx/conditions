@@ -391,7 +391,15 @@ export function useSafetyData({
         evidence: Array.isArray(result.evidence) ? result.evidence : [],
         questions: Array.isArray(result.questions) ? result.questions.filter((q) => typeof q === 'string').slice(0, 3) : [],
         chapters: result.chapters && typeof result.chapters === 'object' ? result.chapters : {},
-        hero: result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null,
+        ...(result.checks && Array.isArray(result.checks.problems) ? {
+          checks: {
+            attempts: Number(result.checks.attempts) || 1,
+            problems: result.checks.problems.filter((problem): problem is string => typeof problem === 'string'),
+          },
+        } : {}),
+        ...(result.hero === undefined ? {} : {
+          hero: result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null,
+        }),
         validation: result.validation ?? null,
       });
     } catch (err) {

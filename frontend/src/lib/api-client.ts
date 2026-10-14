@@ -263,6 +263,7 @@ export interface AiBriefResponse {
   questions?: string[];
   chapters?: AiBriefDetails['chapters'];
   hero?: AiBriefDetails['hero'];
+  checks?: AiBriefDetails['checks'];
   validation?: AiBriefDetails['validation'];
 }
 

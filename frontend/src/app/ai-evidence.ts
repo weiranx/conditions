@@ -113,3 +113,11 @@ export function aiHero(details: AiBriefDetails | null, level: string): NonNullab
   if (written === undefined || shown === undefined || written < shown) return null;
   return hero;
 }
+
+/**
+ * A read written before the AI also wrote the report's opening: its details
+ * carry no hero at all (a read whose opening failed its checks has `hero: null`).
+ */
+export function isOutdatedRead(narrative: string | null, details: AiBriefDetails | null): boolean {
+  return Boolean(narrative) && (!details || details.hero === undefined);
+}

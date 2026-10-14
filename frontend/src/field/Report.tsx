@@ -23,7 +23,7 @@ import "./report-reading.css";
 import "./report-navigation.css";
 import { AiChapterNote, AiRead } from "./AiRead";
 import { starterQuestions } from "./ai-explanation";
-import { aiHero } from "../app/ai-evidence";
+import { aiHero, isOutdatedRead } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
@@ -257,12 +257,16 @@ export function Report({
     </p>
   );
   const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
+  // A read written before the AI also wrote the report's opening (no hero in its
+  // details) is outdated under AI-first, so it is written again once.
+  const outdatedRead = isOutdatedRead(w.aiBriefNarrative, w.aiBriefDetails);
   useEffect(() => {
-    if (!autoRead || w.aiBriefNarrative || w.aiBriefLoading || w.aiBriefError) return;
-    if (autoReadKey.current === readKey) return;
-    autoReadKey.current = readKey;
+    if (!autoRead || (w.aiBriefNarrative && !outdatedRead) || w.aiBriefLoading || w.aiBriefError) return;
+    const key = outdatedRead ? `${readKey}|outdated` : readKey;
+    if (autoReadKey.current === key) return;
+    autoReadKey.current = key;
     void w.handleRequestAiBriefAction();
-  }, [autoRead, readKey, w.aiBriefNarrative, w.aiBriefLoading, w.aiBriefError, w]);
+  }, [autoRead, readKey, outdatedRead, w.aiBriefNarrative, w.aiBriefLoading, w.aiBriefError, w]);
   function go(next: View, anchor?: string) {
     if (activeView === "brief") briefScroll.current = window.scrollY;
     focusRequest.current = next === "brief" ? "brief" : anchor ? { anchor } : "chapter";

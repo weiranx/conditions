@@ -118,6 +118,8 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
   // The unusable answer is retried once, with what failed, before falling back.
   expect(askAI).toHaveBeenCalledTimes(2);
   expect(askAI.mock.calls[1][0]).toMatch(/failed these fact checks[\s\S]*not valid JSON/);
+  expect(response.body.checks.problems[0]).toMatch(/^first answer: the answer was not valid JSON \(\d+ characters, ending "/);
+  expect(response.body.checks.problems).toEqual(expect.arrayContaining([expect.stringMatching(/^retry: the answer was not valid JSON/)]));
   const prompt = askAI.mock.calls[0][0];
   expect(prompt).toMatch(/Disabled product domains: avalanche/i);
   expect(prompt).toContain('Cloudy and windy');
@@ -159,6 +161,9 @@ test('AI brief keeps the first usable read when the retry request fails', async 
   expect(response.body.validation).toBe('evidence_checked');
   expect(response.body.narrative).not.toMatch(/WATCH CLOSELY/);
   expect(askAI).toHaveBeenCalledTimes(2);
+  // The reader can see why part of the read was left out.
+  expect(response.body.checks.attempts).toBe(2);
+  expect(response.body.checks.problems).toEqual(expect.arrayContaining(['WATCH CLOSELY: states 99 without citing a report field that holds it']));
 });
 
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {

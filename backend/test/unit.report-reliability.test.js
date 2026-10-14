@@ -115,7 +115,7 @@ test('fact checks accept ranges, rounding, converted units and negations, and ke
   const kept = validateBrief(`Here you go:\n${mixed}`, report, 'CAUTION', { problems });
   expect(kept.narrative).not.toMatch(/WATCH CLOSELY/);
   expect(kept.evidence.map(section => section.heading)).not.toContain('WATCH CLOSELY');
-  expect(problems).toEqual(['WATCH CLOSELY: states 30 without citing a report field that holds it']);
+  expect(problems).toEqual(['WATCH CLOSELY: states 30 without citing a report field that holds it', 'OPENING: missing or without a headline and reason']);
   const noLead = JSON.stringify({ sections: headings.map(heading => ({ heading, text: heading === 'BIG PICTURE' ? 'Gusts hit 30 mph.' : 'Gusts near 8 mph.', evidence: ev('weather.windGust') })) });
   expect(validateBrief(noLead, report, 'CAUTION')).toBeNull();
   const truncated = [];
