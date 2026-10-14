@@ -115,7 +115,7 @@ test('fact checks accept ranges, rounding, converted units and negations, and ke
   const kept = validateBrief(`Here you go:\n${mixed}`, report, 'CAUTION', { problems });
   expect(kept.narrative).not.toMatch(/WATCH CLOSELY/);
   expect(kept.evidence.map(section => section.heading)).not.toContain('WATCH CLOSELY');
-  expect(problems).toEqual(['WATCH CLOSELY: states 30 without citing a report field that holds it', 'OPENING: missing or without a headline and reason']);
+  expect(problems).toEqual(['WATCH CLOSELY: states 30, which is not a number in the report', 'OPENING: missing or without a headline and reason']);
   const noLead = JSON.stringify({ sections: headings.map(heading => ({ heading, text: heading === 'BIG PICTURE' ? 'Gusts hit 30 mph.' : 'Gusts near 8 mph.', evidence: ev('weather.windGust') })) });
   expect(validateBrief(noLead, report, 'CAUTION')).toBeNull();
   const truncated = [];
@@ -224,4 +224,52 @@ test('elevation estimates cannot invent calm wind when the baseline is missing',
   const bands = buildElevationForecastBands({ baseElevationFt: 10000, tempF: 55, windSpeedMph: null, windGustMph: null });
   expect(bands.length).toBeGreaterThan(0);
   expect(bands.every(band => band.windSpeed === null && band.windGust === null)).toBe(true);
+});
+
+// The Mount Ritter read (Oct 2026) fell back on both attempts: the model cited
+// shortened paths, a list, and numbers it didn't cite. These are its citations.
+test('fact checks resolve shortened paths, list items and uncited report numbers, and still reject invented ones', () => {
+  const report = {
+    weather: { temperatureContext24h: { daytimeHighF: 38 }, trend: [{ time: '07:00', feelsLike: 22, temp: 31 }] },
+    safety: { score: 64, confidenceReasons: ['Fire activity is near the objective.'] },
+    localConditions: {
+      access: { closedRoadCount: 4 },
+      closures: { alertCount: 1 },
+      wildfire: { incidents: [{ name: 'Example Fire', distanceKm: 12.5 }] },
+    },
+    pleasantness: { score: 100 },
+    evaluation: { decisionSummary: { actionLine: 'Make the listed adjustments before leaving.' } },
+  };
+  const section = (text, evidence) => ({ text, evidence });
+  const answer = {
+    'BIG PICTURE': section('Highs near 38 F with a fire about 12.5 km away.', [{ path: 'temperatureContext24h.daytimeHighF', value: 38 }, { path: 'wildfire.incidents.0.distanceKm', value: 12.5 }]),
+    'WHY IT MATTERS': section('Road access may be limited.', [{ path: 'closures.alertCount', value: 1 }]),
+    'WATCH CLOSELY': section('4 roads are closed and it feels like 22 F at the start.', [{ path: 'access.closedRoadCount', value: 4 }, { path: 'weather.trend[0].feelsLike', value: 22 }]),
+    'DATA CONFIDENCE': section('Fire activity is near the objective, with 4 closures to verify.', [{ path: 'safety.confidenceReasons', value: 'Fire activity is near the objective.' }]),
+    'COMFORT CHECK': section('Comfort scores 100 but it is 31 F at the start.', [{ path: 'weather.trend.0.feelsLike', value: 22 }]),
+    'BEST MOVE': section('Make the listed adjustments before leaving.', [{ path: 'decisionSummary.actionLine', value: 'Make the listed adjustments before leaving.' }, { path: 'made.up.path', value: 1 }]),
+  };
+  const raw = (sections) => JSON.stringify({ sections: Object.entries(sections).map(([heading, value]) => ({ heading, ...value })) });
+  const problems = [];
+  const read = validateBrief(raw(answer), report, 'CAUTION', { problems });
+  expect(problems).toEqual(['OPENING: missing or without a headline and reason']);
+  expect(read.evidence.map(({ heading }) => heading)).toEqual(headings);
+  // Citations come back as full report paths; an unresolvable extra citation is dropped.
+  expect(read.evidence.find(({ heading }) => heading === 'BIG PICTURE').evidence).toEqual([
+    { path: 'weather.temperatureContext24h.daytimeHighF', value: 38 },
+    { path: 'localConditions.wildfire.incidents.0.distanceKm', value: 12.5 },
+  ]);
+  expect(read.evidence.find(({ heading }) => heading === 'DATA CONFIDENCE').evidence).toEqual([{ path: 'safety.confidenceReasons.0', value: 'Fire activity is near the objective.' }]);
+  expect(read.evidence.find(({ heading }) => heading === 'BEST MOVE').evidence).toEqual([{ path: 'evaluation.decisionSummary.actionLine', value: 'Make the listed adjustments before leaving.' }]);
+
+  const failing = (sections) => { const found = []; validateBrief(raw({ ...answer, ...sections }), report, 'CAUTION', { problems: found }); return found.filter(problem => !problem.startsWith('OPENING')); };
+  // A number the report doesn't hold anywhere is still invented.
+  expect(failing({ 'COMFORT CHECK': section('It feels like 17 F at the start.', [{ path: 'weather.trend.0.feelsLike', value: 22 }]) }))
+    .toEqual(['COMFORT CHECK: states 17, which is not a number in the report']);
+  // A shortened path with the wrong value is a misquote.
+  expect(failing({ 'WATCH CLOSELY': section('Several roads are closed.', [{ path: 'access.closedRoadCount', value: 6 }]) }))
+    .toEqual(['WATCH CLOSELY: cited access.closedRoadCount as 6 but the report has 4']);
+  // Text whose only citation names nothing in the report fails.
+  expect(failing({ 'WHY IT MATTERS': section('Road access may be limited.', [{ path: 'closures.count', value: 1 }]) }))
+    .toEqual(['WHY IT MATTERS: cited path closures.count is not a value in the report']);
 });

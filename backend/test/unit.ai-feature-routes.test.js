@@ -142,7 +142,7 @@ test('AI brief retries once with the failed checks and keeps the corrected read'
   expect(response.body.validation).toBe('evidence_checked');
   expect(response.body.narrative).toMatch(/^BIG PICTURE: Gusts reach 42 mph\./);
   expect(askAI).toHaveBeenCalledTimes(2);
-  expect(askAI.mock.calls[1][0]).toContain('BIG PICTURE: states 55 without citing a report field that holds it');
+  expect(askAI.mock.calls[1][0]).toContain('BIG PICTURE: states 55, which is not a number in the report');
 });
 
 test('AI brief keeps the first usable read when the retry request fails', async () => {
@@ -163,7 +163,7 @@ test('AI brief keeps the first usable read when the retry request fails', async 
   expect(askAI).toHaveBeenCalledTimes(2);
   // The reader can see why part of the read was left out.
   expect(response.body.checks.attempts).toBe(2);
-  expect(response.body.checks.problems).toEqual(expect.arrayContaining(['WATCH CLOSELY: states 99 without citing a report field that holds it']));
+  expect(response.body.checks.problems).toEqual(expect.arrayContaining(['WATCH CLOSELY: states 99, which is not a number in the report']));
 });
 
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {
