@@ -580,8 +580,9 @@ export function WorkspacePlan({
             </p>
           </>
         )}
+        {multiDay && <ItineraryCamps workspace={w} onChooseMap={onChooseMap} />}
         <div className="field-form-divider">
-          <h2 className="sky-plan-step"><span aria-hidden="true">2</span>When</h2>
+          <h2 className="sky-plan-step"><span aria-hidden="true">{multiDay ? 3 : 2}</span>When</h2>
           {!comparison && !multiDay && (
             <button
               className="field-text-button"
@@ -698,7 +699,7 @@ export function WorkspacePlan({
           </>
         )}
         <fieldset className="sky-plan-activities">
-          <legend className="sky-plan-step"><span aria-hidden="true">3</span>Activity</legend>
+          <legend className="sky-plan-step"><span aria-hidden="true">{multiDay ? 4 : 3}</span>Activity</legend>
           <div className="sky-activity-grid" role="radiogroup" aria-label="Activity">
             {activities.map((option) => {
               const Icon = ACTIVITY_ICONS[option.icon] || Compass;
@@ -751,7 +752,6 @@ export function WorkspacePlan({
             </button>
           </details>
         </fieldset>
-        {multiDay && <ItineraryCamps workspace={w} onChooseMap={onChooseMap} />}
         <button
           className="field-button field-button-primary field-form-submit"
           type="submit"

@@ -4,6 +4,7 @@ import {
   type ItineraryAssessment,
   type ItineraryDraft,
   type ItineraryNightState,
+  type ItineraryPointRef,
 } from "../app/itinerary";
 import type { DecisionLevel } from "../app/types";
 
@@ -18,6 +19,8 @@ export interface TripOverlayPoint {
   label: string;
   title: string;
   tone: TripOverlayTone;
+  /** The draft point behind the pin, so dragging it can move that point; null when it cannot be dragged. */
+  ref: ItineraryPointRef | null;
 }
 
 export interface TripOverlay {
@@ -56,13 +59,14 @@ export function buildTripOverlay(draft: ItineraryDraft, assessment: ItineraryAss
       label: String(index + 1),
       title: `Night ${index + 1}${point.name ? ` · ${point.name}` : ""}${camp.layover ? " (layover)" : ""}`,
       tone: night ? NIGHT_TONE[night.state] : "plan",
+      ref: camp.layover ? null : { kind: "camp", index },
     });
   });
   const exit = itineraryExit(draft);
   if (exit) {
     path.push(exit);
     if (draft.exit) {
-      points.push({ key: "exit", kind: "exit", lat: exit.lat, lon: exit.lon, label: "X", title: `Exit · ${exit.name || "End of trip"}`, tone: "plan" });
+      points.push({ key: "exit", kind: "exit", lat: exit.lat, lon: exit.lon, label: "X", title: `Exit · ${exit.name || "End of trip"}`, tone: "plan", ref: { kind: "exit" } });
     }
   }
   draft.days.forEach((day, dayIndex) => {
@@ -77,11 +81,12 @@ export function buildTripOverlay(draft: ItineraryDraft, assessment: ItineraryAss
         label: "▲",
         title: `Day ${dayIndex + 1} · ${checkpoint.name || "High point"}`,
         tone: checked ? DAY_TONE[checked.decisionLevel] : assessment ? "unknown" : "plan",
+        ref: { kind: "checkpoint", day: dayIndex, index },
       });
     });
   });
   draft.bailPoints.forEach((point, index) => {
-    points.push({ key: `bail-${index}`, kind: "bail", lat: point.lat, lon: point.lon, label: "B", title: `Bail point · ${point.name || "Exit"}`, tone: "plan" });
+    points.push({ key: `bail-${index}`, kind: "bail", lat: point.lat, lon: point.lon, label: "B", title: `Bail point · ${point.name || "Exit"}`, tone: "plan", ref: { kind: "bail", index } });
   });
   return { points, path, track: draft.track && draft.track.length > 1 ? draft.track : null };
 }

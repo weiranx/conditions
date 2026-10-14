@@ -15,6 +15,7 @@ import "leaflet/dist/leaflet.css";
 import type { Plan } from "./data";
 import type { Workspace } from "./model/useWorkspace";
 import { MAP_STYLE_OPTIONS } from "../app/constants";
+import type { ItineraryPointRef } from "../app/itinerary";
 import type { MapStyle } from "../app/types";
 import { useProductFeatureFlags } from "../contexts/feature-flags";
 import { hasCoarsePointer } from "./touch";
@@ -33,7 +34,10 @@ function FitTrip({ trip }: { trip: TripOverlay }) {
   const key = trip.points.map((point) => `${point.lat.toFixed(4)},${point.lon.toFixed(4)}`).join("|");
   useEffect(() => {
     const bounds = trip.points.map((point) => [point.lat, point.lon] as [number, number]);
-    if (bounds.length >= 2) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+    // A point tapped or dragged into view leaves the map where it is; only one out of view refits.
+    if (bounds.length >= 2 && !bounds.every((point) => map.getBounds().contains(point))) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, key]);
   return null;
@@ -82,7 +86,7 @@ function FollowSize() {
   }, [map]);
   return null;
 }
-function Pick({ onPick }: { onPick?: (lat: number, lon: number) => void }) {
+function Pick({ onPick }: { onPick?: (lat: number, lon: number, fromDrag?: boolean) => void }) {
   useMapEvents({ click: (e) => onPick?.(e.latlng.lat, e.latlng.lng) });
   return null;
 }
@@ -118,10 +122,14 @@ export default function FieldMap({
   onPick,
   workspace: w,
   trip,
+  onMoveTripPoint,
   pinLocked = false,
 }: {
   plan: Plan;
-  onPick?: (lat: number, lon: number) => void;
+  /** `fromDrag` is true when the objective pin itself was dragged. */
+  onPick?: (lat: number, lon: number, fromDrag?: boolean) => void;
+  /** A dragged trip pin: the point behind it moves. */
+  onMoveTripPoint?: (ref: ItineraryPointRef, lat: number, lon: number) => void;
   workspace?: Workspace;
   /** A multi-day trip: its camps, exits and high points, drawn over the objective. */
   trip?: TripOverlay | null;
@@ -147,7 +155,7 @@ export default function FieldMap({
     () => ({
       dragend: (e: L.DragEndEvent) => {
         const point = (e.target as L.Marker).getLatLng();
-        onPick?.(point.lat, point.lng);
+        onPick?.(point.lat, point.lng, true);
       },
     }),
     [onPick],
@@ -227,6 +235,13 @@ export default function FieldMap({
                 icon={tripPin(point.label, point.kind, point.tone)}
                 title={point.title}
                 zIndexOffset={point.kind === "camp" ? 500 : 0}
+                draggable={Boolean(onMoveTripPoint && point.ref)}
+                eventHandlers={{
+                  dragend: (event: L.DragEndEvent) => {
+                    const moved = (event.target as L.Marker).getLatLng();
+                    if (point.ref) onMoveTripPoint?.(point.ref, moved.lat, moved.lng);
+                  },
+                }}
               >
                 <Tooltip>{point.title}</Tooltip>
               </Marker>

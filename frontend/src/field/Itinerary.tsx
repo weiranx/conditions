@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import {
+  isCoordinateLabel,
   itineraryEndDate,
+  pointLabel,
   type ItineraryDayAssessment,
   type ItineraryNightAssessment,
   type ItineraryNightState,
@@ -154,7 +156,7 @@ export function Itinerary({
           )}
           {coldest && coldestLow !== null && (
             <li>
-              Coldest night: {w.formatTempDisplay(coldestLow)} feels-like at {coldest.camp.name || `camp ${coldest.index + 1}`} (night {coldest.index + 1}).
+              Coldest night: {w.formatTempDisplay(coldestLow)} feels-like at {pointLabel(coldest.camp, `camp ${coldest.index + 1}`)} (night {coldest.index + 1}).
               Size the sleep system for it.
             </li>
           )}
@@ -191,6 +193,8 @@ export function Itinerary({
         {feedback && <p className="sky-notice is-info" role="status">{feedback}</p>}
       </section>
 
+      <TripGlance workspace={w} anchor={id} />
+
       <section className="sky-section" aria-labelledby={`${id}-timeline`}>
         <div className="sky-sh">
           <h2 id={`${id}-timeline`}>Day by day</h2>
@@ -198,8 +202,8 @@ export function Itinerary({
         </div>
         <ol className="sky-trip-timeline">
           {timeline.map((entry) => entry.kind === "day"
-            ? <DayCard key={`day-${entry.day.index}`} workspace={w} day={entry.day} stage={entry.stage} lastDay={entry.day.index === result.stages.length - 1} />
-            : <NightCard key={`night-${entry.night.index}`} workspace={w} night={entry.night} />)}
+            ? <DayCard key={`day-${entry.day.index}`} workspace={w} day={entry.day} stage={entry.stage} lastDay={entry.day.index === result.stages.length - 1} anchor={id} />
+            : <NightCard key={`night-${entry.night.index}`} workspace={w} night={entry.night} anchor={id} />)}
         </ol>
       </section>
       {!it.fromSaved && <OtherStarts workspace={w} />}
@@ -214,17 +218,18 @@ export function Itinerary({
   );
 }
 
-function DayCard({ workspace: w, day, stage, lastDay }: { workspace: Workspace; day: ItineraryDayAssessment; stage: ItineraryStage; lastDay: boolean }) {
+function DayCard({ workspace: w, day, stage, lastDay, anchor }: { workspace: Workspace; day: ItineraryDayAssessment; stage: ItineraryStage; lastDay: boolean; anchor: string }) {
   const checked = day.day;
   const tone = day.level === "GO" ? "ok" : day.level ? "over" : "missing";
   const label = day.level === "GO" ? "Go" : day.level === "NO-GO" ? "No-go" : day.level === "CAUTION" ? "Caution" : "Not checked";
   const timeStyle = w.preferences.timeStyle;
   const arrive = endClock(stage.start, stage.travelHours, timeStyle);
+  const toLabel = pointLabel(stage.to, lastDay ? "Exit" : `Camp ${stage.index + 1}`);
   const route = stage.layover
-    ? `Layover at ${stage.to.name || "camp"}`
-    : `${stage.from.name || "Start"} → ${stage.to.name || "camp"}`;
+    ? `Layover at ${toLabel}`
+    : `${pointLabel(stage.from, stage.index === 0 ? "Trailhead" : `Camp ${stage.index}`)} → ${toLabel}`;
   return (
-    <li className={`sky-card sky-trip-card is-day is-${tone}`}>
+    <li id={`${anchor}-day-${stage.index}`} tabIndex={-1} className={`sky-card sky-trip-card is-day is-${tone}`}>
       <div className="sky-trip-card-head">
         <span className="sky-trip-card-kicker">
           <Footprints size={15} aria-hidden="true" />
@@ -254,7 +259,7 @@ function DayCard({ workspace: w, day, stage, lastDay }: { workspace: Workspace; 
         <ul className="sky-limiting">
           {day.limitingChecks.slice(0, 3).map((message) => (
             <li key={message}>
-              {day.limitingPlace && day.limitingPlace !== stage.to.name ? `${day.limitingPlace}: ` : ""}
+              {day.limitingPlace && !isCoordinateLabel(day.limitingPlace) && day.limitingPlace !== stage.to.name ? `${day.limitingPlace}: ` : ""}
               {w.localizeUnitText(message)}
             </li>
           ))}
@@ -293,13 +298,13 @@ function DayCard({ workspace: w, day, stage, lastDay }: { workspace: Workspace; 
   );
 }
 
-function NightCard({ workspace: w, night }: { workspace: Workspace; night: ItineraryNightAssessment }) {
+function NightCard({ workspace: w, night, anchor }: { workspace: Workspace; night: ItineraryNightAssessment; anchor: string }) {
   const copy = NIGHT_COPY[night.state];
   const data = night.data?.status === "ok" ? night.data : null;
   const exit = night.nearestExit;
   const elevation = night.data?.elevationFt ?? night.camp.elevationFt;
   return (
-    <li className={`sky-card sky-trip-card is-night is-${copy.tone}`}>
+    <li id={`${anchor}-night-${night.index}`} tabIndex={-1} className={`sky-card sky-trip-card is-night is-${copy.tone}`}>
       <div className="sky-trip-card-head">
         <span className="sky-trip-card-kicker">
           <BedDouble size={15} aria-hidden="true" />
@@ -310,7 +315,7 @@ function NightCard({ workspace: w, night }: { workspace: Workspace; night: Itine
           {copy.label}
         </span>
       </div>
-      <h3>{night.camp.name || "Camp"}{elevation !== null && elevation !== undefined ? ` · ${w.formatElevationDisplay(elevation)}` : ""}</h3>
+      <h3>{pointLabel(night.camp, `Camp ${night.index + 1}`)}{elevation !== null && elevation !== undefined ? ` · ${w.formatElevationDisplay(elevation)}` : ""}</h3>
       {data ? (
         <dl className="sky-trip-readings">
           <div><dt>Low</dt><dd>{w.formatTempDisplay(data.lowTempF)}</dd></div>
@@ -326,7 +331,7 @@ function NightCard({ workspace: w, night }: { workspace: Workspace; night: Itine
       {exit && exit.miles > 0.2 && (
         <p className="sky-cap sky-trip-exit">
           <LogOut size={13} aria-hidden="true" />
-          Nearest way out: {exit.name || "trailhead"}, {w.formatDistanceDisplay(exit.miles)} in a straight line
+          Nearest way out: {pointLabel(exit, "trailhead")}, {w.formatDistanceDisplay(exit.miles)} in a straight line
         </p>
       )}
     </li>
@@ -386,6 +391,59 @@ function OtherStarts({ workspace: w }: { workspace: Workspace }) {
           })}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** The whole trip on one screen: each day and the night after it, to jump to its card. */
+function TripGlance({ workspace: w, anchor }: { workspace: Workspace; anchor: string }) {
+  const { result, assessment } = w.itinerary;
+  if (!result || !assessment || assessment.days.length < 2) return null;
+  const jump = (target: string) => {
+    const element = document.getElementById(`${anchor}-${target}`);
+    if (!element) return;
+    element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    element.focus({ preventScroll: true });
+  };
+  return (
+    <section aria-label="Trip at a glance">
+      <ol className="sky-card sky-trip-glance">
+        {assessment.days.map((day) => {
+          const stage = result.stages[day.index];
+          if (!stage) return null;
+          const night = assessment.nights.find((entry) => entry.index === day.index);
+          const checked = day.day;
+          const tone = day.level === "GO" ? "ok" : day.level ? "over" : "missing";
+          const label = day.level === "GO" ? "Go" : day.level === "NO-GO" ? "No-go" : day.level === "CAUTION" ? "Caution" : "Not checked";
+          const nightData = night?.data?.status === "ok" ? night.data : null;
+          const nightCopy = night ? NIGHT_COPY[night.state] : null;
+          return (
+            <li key={day.index}>
+              <button type="button" className="sky-trip-glance-day" onClick={() => jump(`day-${day.index}`)}>
+                <span className="sky-trip-glance-name">Day {day.index + 1}<small>{dateLabel(stage.date)}</small></span>
+                <span className={`sky-status is-${tone}`}>
+                  {tone === "ok" ? <Check size={13} aria-hidden="true" /> : tone === "over" ? <TriangleAlert size={13} aria-hidden="true" /> : <CircleDashed size={13} aria-hidden="true" />}
+                  {label}
+                </span>
+                <span className="sky-trip-glance-facts">
+                  {checked
+                    ? `${w.formatTempDisplay(checked.tempLowF)} – ${w.formatTempDisplay(checked.tempHighF)} · gusts ${w.formatWindDisplay(checked.peakGustMph)} · ${checked.peakPrecipChance !== null ? `${checked.peakPrecipChance}% rain or snow` : "no precip figure"}`
+                    : "Could not be checked"}
+                </span>
+              </button>
+              {night && nightCopy && (
+                <button type="button" className="sky-trip-glance-night" onClick={() => jump(`night-${night.index}`)}>
+                  <span className="sky-trip-glance-name"><BedDouble size={14} aria-hidden="true" />Night {night.index + 1}</span>
+                  <span className={`sky-status is-${nightCopy.tone}`}>{nightCopy.label}</span>
+                  <span className="sky-trip-glance-facts">
+                    {nightData ? `Feels like ${w.formatTempDisplay(nightData.minFeelsLikeF)} · gusts ${w.formatWindDisplay(nightData.peakGustMph)}` : "No forecast at camp"}
+                  </span>
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

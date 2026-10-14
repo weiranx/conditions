@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchApi } from "../../lib/api-client";
+import { lookupPointPlace } from "../../lib/search";
 import { ITINERARY_DRAFT_KEY } from "../../app/constants";
 import { parseMultiDayUsage, type MultiDayUsage } from "../../app/multi-day-usage";
 import { addDaysToIsoDate } from "../../app/core";
@@ -8,16 +9,21 @@ import {
   buildItineraryRequest,
   buildItineraryStages,
   createItineraryDraft,
+  firstEmptyCamp,
   itineraryEndDate,
   itineraryGaps,
   maxNightsWithinForecast,
+  moveDraftPoint,
+  nameDraftPointsAt,
   parseItineraryResults,
   parseStoredItinerary,
   readItineraryAssessment,
   setItineraryNights,
   type ItineraryCheckResult,
   type ItineraryDraft,
+  type ItineraryPickTarget,
   type ItineraryPoint,
+  type ItineraryPointRef,
   type PlanMode,
 } from "../../app/itinerary";
 
@@ -29,12 +35,7 @@ export interface ItineraryAlternative {
   loading: boolean;
 }
 
-/** Where the next map tap goes while building a trip; null moves the objective as usual. */
-export type ItineraryPickTarget =
-  | { kind: "camp"; index: number }
-  | { kind: "exit" }
-  | { kind: "checkpoint"; day: number }
-  | { kind: "bail" };
+export type { ItineraryPickTarget } from "../../app/itinerary";
 
 function loadStored() {
   try {
@@ -132,6 +133,20 @@ export function useItinerary({
     setDraftState((current) => setItineraryNights({ ...current, startDate: outOfRange ? todayDate : current.startDate }, Math.min(current.camps.length, fits)));
   }, [draft.startDate, draft.camps.length, todayDate, maxForecastDate]);
 
+  /**
+   * Names the trip's points at (lat, lon) after what is there, with their
+   * elevation. A name and elevation do not change the forecast, so a checked
+   * trip stays checked.
+   */
+  const nameAt = useCallback((lat: number, lon: number) => {
+    lookupPointPlace(lat, lon)
+      .then((found) => {
+        if (!found.name && found.elevationFt === null) return;
+        setDraftState((current) => nameDraftPointsAt(current, lat, lon, found));
+      })
+      .catch(() => undefined);
+  }, []);
+
   const draftRef = useRef(draft);
   draftRef.current = draft;
   /** Follows the plan's objective while the trip is being built. */
@@ -143,6 +158,24 @@ export function useItinerary({
     if (same) return;
     updateDraft((previous) => ({ ...previous, trailhead }));
   }, [updateDraft]);
+
+  /**
+   * Where the next map tap goes: the point chosen to be placed, else the first
+   * camp still to place, so a trip can be built by tapping the map in order.
+   * Null once every camp is set, when a tap places nothing.
+   */
+  const activeTarget = useMemo<ItineraryPickTarget | null>(() => {
+    if (pickTarget) return pickTarget;
+    if (!draft.trailhead) return null;
+    const index = firstEmptyCamp(draft);
+    return index === null ? null : { kind: "camp", index };
+  }, [pickTarget, draft]);
+
+  /** A pin dragged on the map: the point moves and is looked up again. */
+  const movePoint = useCallback((ref: ItineraryPointRef, lat: number, lon: number) => {
+    updateDraft((current) => moveDraftPoint(current, ref, lat, lon));
+    nameAt(lat, lon);
+  }, [updateDraft, nameAt]);
 
   const stages = useMemo(() => buildItineraryStages(draft), [draft]);
   const gaps = useMemo(() => itineraryGaps(draft), [draft]);
@@ -290,6 +323,7 @@ export function useItinerary({
     draft,
     updateDraft,
     setTrailhead,
+    nameAt,
     stages,
     gaps,
     result,
@@ -306,7 +340,9 @@ export function useItinerary({
     openDayIndex,
     setOpenDayIndex,
     pickTarget,
+    activeTarget,
     setPickTarget,
+    movePoint,
     maxNights: maxNightsWithinForecast(draft.startDate || todayDate, maxForecastDate),
   };
 }
