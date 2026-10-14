@@ -395,6 +395,7 @@ export function useSafetyData({
           checks: {
             attempts: Number(result.checks.attempts) || 1,
             problems: result.checks.problems.filter((problem): problem is string => typeof problem === 'string'),
+            ...(Array.isArray(result.checks.seconds) ? { seconds: result.checks.seconds.filter((second): second is number => typeof second === 'number') } : {}),
           },
         } : {}),
         ...(result.hero === undefined ? {} : {

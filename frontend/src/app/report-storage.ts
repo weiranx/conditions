@@ -124,6 +124,7 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
     ? {
       attempts: typeof value.checks.attempts === 'number' ? value.checks.attempts : 1,
       problems: value.checks.problems.filter((problem): problem is string => typeof problem === 'string'),
+      ...(Array.isArray(value.checks.seconds) ? { seconds: value.checks.seconds.filter((second): second is number => typeof second === 'number') } : {}),
     }
     : undefined;
   return { narrative, evidence, questions, chapters, ...(hero === undefined ? {} : { hero }), ...(checks ? { checks } : {}), validation };

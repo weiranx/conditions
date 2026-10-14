@@ -39,16 +39,21 @@ function Citations({ details, section, onOpen }: {
 /** Why AI text was replaced or left out: what the fact checks rejected, in their words. */
 function CheckDetails({ details }: { details: AiBriefDetails | null }) {
   const problems = details?.checks?.problems ?? [];
-  if (!problems.length) return null;
+  const seconds = details?.checks?.seconds ?? [];
+  if (!problems.length && !seconds.length) return null;
+  const took = seconds.length ? ` · took ${seconds.map((second) => `${Math.round(second)} s`).join(" + ")}` : "";
   return (
     <details className="ai-read-checks">
       <summary>
-        Fact-check details · {problems.length} {problems.length === 1 ? "issue" : "issues"}
+        Fact-check details · {problems.length ? `${problems.length} ${problems.length === 1 ? "issue" : "issues"}` : "all passed"}
         {details?.checks && details.checks.attempts > 1 ? ` across ${details.checks.attempts} AI answers` : ""}
+        {took}
       </summary>
-      <ul>
-        {problems.map((problem, index) => <li key={`${index}-${problem}`}>{problem}</li>)}
-      </ul>
+      {problems.length > 0 && (
+        <ul>
+          {problems.map((problem, index) => <li key={`${index}-${problem}`}>{problem}</li>)}
+        </ul>
+      )}
     </details>
   );
 }

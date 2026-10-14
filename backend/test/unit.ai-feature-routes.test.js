@@ -145,12 +145,12 @@ test('AI brief retries once with the failed checks and keeps the corrected read'
   expect(askAI.mock.calls[1][0]).toContain('BIG PICTURE: states 55, which is not a number in the report');
 });
 
-test('AI brief keeps the first usable read when the retry request fails', async () => {
+test('AI brief shows a usable read at once, without a second request for the part that failed', async () => {
   const app = express();
   app.use(express.json());
   const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
   const first = JSON.stringify({ sections: headings.map((heading) => ({ heading, text: heading === 'WATCH CLOSELY' ? 'Gusts reach 99 mph.' : 'Gusts reach 42 mph.', evidence: [{ path: 'weather.windGust', value: 42 }] })) });
-  const askAI = jest.fn().mockResolvedValueOnce(first).mockRejectedValueOnce(new Error('timeout'));
+  const askAI = jest.fn().mockResolvedValueOnce(first);
   registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)
@@ -160,10 +160,28 @@ test('AI brief keeps the first usable read when the retry request fails', async 
   expect(response.status).toBe(200);
   expect(response.body.validation).toBe('evidence_checked');
   expect(response.body.narrative).not.toMatch(/WATCH CLOSELY/);
-  expect(askAI).toHaveBeenCalledTimes(2);
-  // The reader can see why part of the read was left out.
-  expect(response.body.checks.attempts).toBe(2);
+  expect(askAI).toHaveBeenCalledTimes(1);
+  // The reader can see why part of the read was left out, and how long the answer took.
+  expect(response.body.checks.attempts).toBe(1);
+  expect(response.body.checks.seconds).toEqual([expect.any(Number)]);
   expect(response.body.checks.problems).toEqual(expect.arrayContaining(['WATCH CLOSELY: states 99, which is not a number in the report']));
+});
+
+test('AI brief falls back to the checks summary when the retry request fails', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn().mockResolvedValueOnce('not json').mockRejectedValueOnce(new Error('timeout'));
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { windGust: 47 }, safety: { explanations: ['Gusty.'] } } });
+
+  expect(response.status).toBe(200);
+  expect(response.body.validation).toBe('deterministic_fallback');
+  expect(askAI).toHaveBeenCalledTimes(2);
+  expect(response.body.checks.seconds).toHaveLength(2);
+  expect(response.body.checks.problems).toEqual(expect.arrayContaining(['retry: the retry request failed: timeout']));
 });
 
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {

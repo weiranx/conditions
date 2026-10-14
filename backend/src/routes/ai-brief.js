@@ -75,21 +75,30 @@ const registerAiBriefRoute = ({
       const userPrompt = `${describeUnitsInstruction(units)}\n\n${featureInstruction}\n\n${activityInstruction ? `${activityInstruction}\n\n` : ''}Decision level: ${effectiveDecision}\n\nFeature-filtered report data (JSON):\n${reportJson}`;
 
       const brief = await aiBriefCache.getOrFetch(cacheKey, async () => {
-        const ask = (prompt) => askAI(prompt, {
-          maxTokens: AI_BRIEF_MAX_TOKENS,
-          system: `${SYSTEM_PROMPT}\n\n${EVIDENCE_INSTRUCTION}`,
-          feature: 'report-brief',
-          userId: req.accountUser.id,
-        });
+        // How long each AI answer took, so a slow read shows where its time went.
+        const seconds = [];
+        const ask = async (prompt) => {
+          const started = Date.now();
+          try {
+            return await askAI(prompt, {
+              maxTokens: AI_BRIEF_MAX_TOKENS,
+              system: `${SYSTEM_PROMPT}\n\n${EVIDENCE_INSTRUCTION}`,
+              feature: 'report-brief',
+              userId: req.accountUser.id,
+            });
+          } finally {
+            seconds.push(Math.round((Date.now() - started) / 100) / 10);
+          }
+        };
         const problems = [];
         let validated = validateBrief(await ask(userPrompt), filteredReport, effectiveDecision, { units, problems });
         // What failed in the answer that is shown, so the reader can see why AI text was replaced.
         let shownProblems = problems;
         let attempts = 1;
-        // One retry that names what failed; most failures are a stray number or
-        // a citation path that is off by a key, which the model fixes when told.
-        // An answer that simply left out the opening is not worth a second request.
-        if (!validated || problems.some((problem) => !problem.startsWith('OPENING: missing'))) {
+        // One retry that names what failed, only when the answer can't be shown at
+        // all: a second request doubles the wait, and a read missing one section,
+        // a chapter or its opening is still worth showing at once.
+        if (!validated) {
           logger.warn({ problems: problems.slice(0, 12), decision: effectiveDecision }, 'ai-brief: answer failed fact checks; retrying');
           const retryProblems = [];
           let retried = null;
@@ -106,14 +115,16 @@ const registerAiBriefRoute = ({
             logger.warn({ err }, 'ai-brief: retry request failed');
             retryProblems.push(`the retry request failed: ${err?.message || 'unknown error'}`);
           }
-          if (retried && (!validated || retryProblems.length < problems.length)) {
+          if (retried) {
             validated = retried;
             shownProblems = retryProblems;
-          } else if (!validated) {
+          } else {
             shownProblems = [...problems.map((problem) => `first answer: ${problem}`), ...retryProblems.map((problem) => `retry: ${problem}`)];
           }
-          if (!validated) logger.warn({ problems: retryProblems.slice(0, 12), decision: effectiveDecision }, 'ai-brief: retry failed fact checks; using the checks summary');
+          if (!retried) logger.warn({ problems: retryProblems.slice(0, 12), decision: effectiveDecision }, 'ai-brief: retry failed fact checks; using the checks summary');
         }
+        logger.info({ seconds, attempts, validated: Boolean(validated) }, 'ai-brief: answered');
+        const checks = (limit) => ({ attempts, problems: shownProblems.slice(0, limit), seconds });
         return validated
           ? {
             narrative: removeDisabledNarrativeReferences(validated.narrative, featureFlags),
@@ -123,7 +134,7 @@ const registerAiBriefRoute = ({
               .filter(([, chapter]) => removeDisabledNarrativeReferences(chapter.text, featureFlags) === chapter.text)),
             hero: heroWithoutDisabledDomains(validated.hero, featureFlags, effectiveDecision),
             validation: 'evidence_checked',
-            checks: { attempts, problems: shownProblems.slice(0, 12) },
+            checks: checks(12),
           }
           : {
             narrative: removeDisabledNarrativeReferences(deterministicBrief(filteredReport, effectiveDecision), featureFlags),
@@ -132,7 +143,7 @@ const registerAiBriefRoute = ({
             chapters: {},
             hero: null,
             validation: 'deterministic_fallback',
-            checks: { attempts, problems: shownProblems.slice(0, 16) },
+            checks: checks(16),
           };
       });
 

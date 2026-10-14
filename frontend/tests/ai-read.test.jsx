@@ -199,4 +199,7 @@ test('the AI read shows what the fact checks rejected, and saved reads keep it',
   assert.match(html, /OPENING: states 30 without citing/);
   assert.doesNotMatch(read(), /Fact-check details/);
   assert.deepEqual(parseAiBriefDetails({ ...details, checks: { attempts: 2, problems: ['a', 3] } }, details.narrative).checks, { attempts: 2, problems: ['a'] });
+  // How long the AI took shows even when every check passed.
+  assert.match(read({ details: { ...details, checks: { attempts: 1, problems: [], seconds: [23.6] } } }), /Fact-check details · all passed · took 24 s/);
+  assert.deepEqual(parseAiBriefDetails({ ...details, checks: { attempts: 1, problems: [], seconds: [12.5, 'x'] } }, details.narrative).checks, { attempts: 1, problems: [], seconds: [12.5] });
 });
