@@ -1,8 +1,4 @@
 const HEADINGS = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
-const readPath = (report, path) => {
-  if (typeof path !== 'string' || !/^[a-zA-Z0-9_.]+$/.test(path)) return undefined;
-  return path.split('.').reduce((value, key) => value && Object.hasOwn(value, key) ? value[key] : undefined, report);
-};
 // A minus sign counts only when it starts a number, so "10-15 mph" and
 // "7:00-9:00" read as ranges, not negative values.
 // Thousands separators are read as part of the number: "13,026 ft" is 13026.
@@ -59,30 +55,100 @@ const forms = (number, kind, units) => {
   return values;
 };
 const PERMISSIVE = /\b(?<!not |n't |never )(safe to|all clear|risk.free|guaranteed|no (?:risk|hazards))\b/i;
-// Why a piece of AI text fails, or null when it passes: every citation must
-// match the report, every number it states must come from a citation, and it
-// may never read as more permissive than the backend's decision.
-const claimProblem = (text, evidence, report, decisionLevel, units) => {
-  if (typeof text !== 'string' || !text.trim()) return 'empty text';
-  if (!Array.isArray(evidence) || !evidence.length) return 'no citations';
-  const allowed = new Set();
-  for (const claim of evidence) {
-    if (!claim || typeof claim !== 'object') return 'malformed citation';
-    const actual = readPath(report, claim.path);
-    if (actual === undefined || actual === null || typeof actual === 'object') return `cited path ${claim.path} is not a value in the report`;
-    if (actual !== claim.value) return `cited ${claim.path} as ${JSON.stringify(claim.value)} but the report has ${JSON.stringify(actual)}`;
-    for (const { number, kind } of citedNumbers(claim.path, actual)) for (const form of forms(number, kind, units)) allowed.add(form);
-  }
-  const stray = numbers(text).filter(number => !allowed.has(number));
-  if (stray.length) return `states ${stray.join(', ')} without citing a report field that holds it`;
-  // Conservative fail-closed checks; citations are traceability, not semantic proof.
-  if (PERMISSIVE.test(text)) return 'uses a permissive phrase (safe to, all clear, no risk)';
-  if (decisionLevel === 'NO-GO' && /\b(proceed|go ahead|good to go|green light|recommend going)\b/i.test(text)) return 'encourages going on a NO-GO day';
-  if (decisionLevel === 'CAUTION' && /\b(good to go|green light|go ahead as planned|no concerns)\b/i.test(text)) return 'reads as a go on a CAUTION day';
-  if (decisionLevel === 'NO-GO' && /\bGO\b/.test(text.replace(/NO-GO/g, ''))) return 'names GO on a NO-GO day';
-  return null;
+const isScalar = value => value !== null && value !== undefined && typeof value !== 'object';
+// Every path in the report and its value, built once per report. Lists are
+// indexed with ".0" so a citation can name one item.
+const pathIndexes = new WeakMap();
+const pathIndex = (report) => {
+  if (!report || typeof report !== 'object') return new Map();
+  if (pathIndexes.has(report)) return pathIndexes.get(report);
+  const index = new Map();
+  const walk = (value, path, depth) => {
+    if (path) index.set(path, value);
+    if (!value || typeof value !== 'object' || depth > 12) return;
+    for (const [key, item] of Object.entries(value)) walk(item, path ? `${path}.${key}` : key, depth + 1);
+  };
+  walk(report, '', 0);
+  pathIndexes.set(report, index);
+  return index;
 };
-const checkClaim = (text, evidence, report, decisionLevel, units) => !claimProblem(text, evidence, report, decisionLevel, units);
+const sameValue = (actual, cited) => {
+  if (actual === cited) return true;
+  if (typeof actual === 'number' && typeof cited === 'string' && cited.trim() !== '') return Number(cited) === actual;
+  if (typeof actual === 'string' && typeof cited === 'string') return actual.replace(/\s+/g, ' ').trim() === cited.replace(/\s+/g, ' ').trim();
+  return false;
+};
+// Finds what a citation points at. Models often shorten a path
+// ("decisionSummary.actionLine" for "evaluation.decisionSummary.actionLine"),
+// write list items as "[0]", or cite a list by one of its items; each still
+// counts when the value matches the report exactly. A path that names nothing
+// is unresolved; one that names a different value is a misquote.
+const resolveClaim = (claim, report) => {
+  if (!claim || typeof claim !== 'object' || typeof claim.path !== 'string') return { malformed: true };
+  const path = claim.path.trim().replace(/\[(\d+)\]/g, '.$1').replace(/^report\./, '').replace(/^\.+|\.+$/g, '');
+  if (!/^[a-zA-Z0-9_.]+$/.test(path)) return { unresolved: claim.path };
+  const index = pathIndex(report);
+  const candidates = index.has(path) ? [path] : [...index.keys()].filter(key => key.endsWith(`.${path}`));
+  for (const candidate of candidates) {
+    const actual = index.get(candidate);
+    if (isScalar(actual) && sameValue(actual, claim.value)) return { path: candidate, value: actual };
+    if (Array.isArray(actual) && isScalar(claim.value)) {
+      const item = actual.findIndex(entry => isScalar(entry) && sameValue(entry, claim.value));
+      if (item >= 0) return { path: `${candidate}.${item}`, value: actual[item] };
+    }
+  }
+  const misquoted = candidates.find(candidate => isScalar(index.get(candidate)));
+  if (misquoted) return { misquote: `cited ${claim.path} as ${JSON.stringify(claim.value)} but the report has ${JSON.stringify(index.get(misquoted))}` };
+  return { unresolved: claim.path };
+};
+// Every number the report holds, in each form a citation of it may be written.
+const reportNumberSets = new WeakMap();
+const reportNumbers = (report, units) => {
+  if (!report || typeof report !== 'object') return new Set();
+  const key = JSON.stringify(units || {});
+  const byUnits = reportNumberSets.get(report) || new Map();
+  reportNumberSets.set(report, byUnits);
+  if (!byUnits.has(key)) {
+    const all = new Set();
+    for (const [path, value] of pathIndex(report)) {
+      if (typeof value !== 'number' && typeof value !== 'string') continue;
+      for (const { number, kind } of citedNumbers(path, value)) for (const form of forms(number, kind, units)) all.add(form);
+    }
+    byUnits.set(key, all);
+  }
+  return byUnits.get(key);
+};
+// Checks a piece of AI text and returns why it fails (or null) with its
+// citations resolved to full report paths. Every citation that resolves must
+// match the report; at least one must resolve. Every number it states must be
+// a value in the report, cited or not: the citations are traceability, while a
+// number the report doesn't hold at all is invented. It may never read as more
+// permissive than the backend's decision.
+const checkText = (text, evidence, report, decisionLevel, units) => {
+  const fail = problem => ({ problem, evidence: [] });
+  if (typeof text !== 'string' || !text.trim()) return fail('empty text');
+  if (!Array.isArray(evidence) || !evidence.length) return fail('no citations');
+  const claims = [];
+  const unresolved = [];
+  for (const claim of evidence) {
+    const resolved = resolveClaim(claim, report);
+    if (resolved.misquote) return fail(resolved.misquote);
+    if (resolved.unresolved) unresolved.push(resolved.unresolved);
+    else if (!resolved.malformed && !claims.some(kept => kept.path === resolved.path)) claims.push(resolved);
+  }
+  if (!claims.length) return fail(unresolved.length ? `cited path ${unresolved[0]} is not a value in the report` : 'malformed citation');
+  const allowed = new Set();
+  for (const { path, value } of claims) for (const { number, kind } of citedNumbers(path, value)) for (const form of forms(number, kind, units)) allowed.add(form);
+  const inReport = reportNumbers(report, units);
+  const stray = numbers(text).filter(number => !allowed.has(number) && !inReport.has(number));
+  if (stray.length) return fail(`states ${stray.join(', ')}, which is not a number in the report`);
+  // Conservative fail-closed checks; citations are traceability, not semantic proof.
+  if (PERMISSIVE.test(text)) return fail('uses a permissive phrase (safe to, all clear, no risk)');
+  if (decisionLevel === 'NO-GO' && /\b(proceed|go ahead|good to go|green light|recommend going)\b/i.test(text)) return fail('encourages going on a NO-GO day');
+  if (decisionLevel === 'CAUTION' && /\b(good to go|green light|go ahead as planned|no concerns)\b/i.test(text)) return fail('reads as a go on a CAUTION day');
+  if (decisionLevel === 'NO-GO' && /\bGO\b/.test(text.replace(/NO-GO/g, ''))) return fail('names GO on a NO-GO day');
+  return { problem: null, evidence: claims };
+};
 const CHAPTERS = ['forecast', 'timing', 'terrain', 'sources'];
 const MAX_CHAPTER_LENGTH = 700;
 // The AI's analysis of each report chapter. Each one is checked on its own and
@@ -94,9 +160,9 @@ const validateChapters = (value, report, decisionLevel, units, problems = []) =>
     const entry = value[chapter];
     if (!entry || typeof entry !== 'object' || typeof entry.text !== 'string') continue;
     const text = entry.text.replace(/\s+/g, ' ').trim();
-    const problem = text.length > MAX_CHAPTER_LENGTH ? `longer than ${MAX_CHAPTER_LENGTH} characters` : claimProblem(text, entry.evidence, report, decisionLevel, units);
+    const { problem, evidence } = text.length > MAX_CHAPTER_LENGTH ? { problem: `longer than ${MAX_CHAPTER_LENGTH} characters` } : checkText(text, entry.evidence, report, decisionLevel, units);
     if (problem) { problems.push(`${chapter} chapter: ${problem}`); continue; }
-    chapters[chapter] = { text, evidence: entry.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
+    chapters[chapter] = { text, evidence };
   }
   return chapters;
 };
@@ -120,15 +186,15 @@ const validateHero = (value, report, decisionLevel, units, problems = []) => {
     ...(/\bCAUTION\b/.test(text) ? ['CAUTION'] : []),
   ];
   if (named.some(level => level !== decisionLevel)) return fail(`names ${named.join(', ')} beside a ${decisionLevel} badge`);
-  const problem = claimProblem(text, value.evidence, report, decisionLevel, units);
-  if (problem) return fail(problem);
-  const hero = { headline, reason, evidence: value.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
+  const checked = checkText(text, value.evidence, report, decisionLevel, units);
+  if (checked.problem) return fail(checked.problem);
+  const hero = { headline, reason, evidence: checked.evidence };
   // An optional note on the hours judged below the objective; it is checked on its own and dropped alone.
   if (value.note && typeof value.note === 'object' && typeof value.note.text === 'string') {
     const note = value.note.text.replace(/\s+/g, ' ').trim();
-    const problem = note.length > MAX_HERO_NOTE ? `longer than ${MAX_HERO_NOTE} characters` : claimProblem(note, value.note.evidence, report, decisionLevel, units);
+    const { problem, evidence } = note.length > MAX_HERO_NOTE ? { problem: `longer than ${MAX_HERO_NOTE} characters` } : checkText(note, value.note.evidence, report, decisionLevel, units);
     if (problem) problems.push(`OPENING note: ${problem}`);
-    else hero.note = { text: note, evidence: value.note.evidence.map(({ path, value: cited }) => ({ path, value: cited })) };
+    else hero.note = { text: note, evidence };
   }
   return hero;
 };
@@ -182,9 +248,9 @@ const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}
     const section = parsed.sections.find(item => item && typeof item.heading === 'string' && item.heading.trim().toUpperCase().replace(/:$/, '') === heading);
     if (!section) { problems.push(`${heading}: missing`); continue; }
     const text = typeof section.text === 'string' ? section.text.replace(/\s+/g, ' ').trim() : '';
-    const problem = claimProblem(text, section.evidence, report, decisionLevel, units);
+    const { problem, evidence } = checkText(text, section.evidence, report, decisionLevel, units);
     if (problem) { problems.push(`${heading}: ${problem}`); continue; }
-    kept.push({ heading, text, evidence: section.evidence.map(({ path, value: cited }) => ({ path, value: cited })) });
+    kept.push({ heading, text, evidence });
   }
   if (!REQUIRED_HEADINGS.every(heading => kept.some(section => section.heading === heading))) return null;
   return {
