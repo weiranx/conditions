@@ -176,6 +176,17 @@ describe('AI provider client wrapper', () => {
     );
   });
 
+  test('a caller can give a fast-tier request a longer timeout', async () => {
+    mockOpenAICreate.mockResolvedValue({ status: 'completed', output_text: '[]' });
+    const { askAI } = loadClient('openai');
+
+    await askAI('routes', { tier: 'fast', timeoutMs: 15000 });
+    expect(mockOpenAICreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.6-luna' }),
+      { timeout: 15000, maxRetries: 0 },
+    );
+  });
+
   test('sends base64 images as OpenAI vision input', async () => {
     mockOpenAICreate.mockResolvedValue({ status: 'completed', output_text: 'snow coverage' });
     const { askAIVision } = loadClient('openai');
