@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -30,6 +30,7 @@ import { ApproachNote } from "./sky/ApproachNote";
 import { RouteNote } from "./sky/RouteNote";
 import { summarizePlannedRoute } from "./route-planning";
 import { closeDetailsOnOutsidePress } from "./touch";
+import { placeToReturnTo, reportPlaceKey, useKeepReportPlace, type ReportPlace } from "./report-place";
 import { BriefSections } from "./sky/BriefSections";
 import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
@@ -69,11 +70,19 @@ const TripDebrief = lazy(() => import("./TripDebrief").then((m) => ({ default: m
 const chapters = REPORT_CHAPTERS;
 type Chapter = ReportChapter;
 type View = Chapter | "brief" | "all";
-function viewFromHash(): View {
+function viewFromHash(fallback: View = "brief"): View {
   const hash = parseReportSectionHash(window.location.hash) || "";
-  if (!hash) return "brief";
+  if (!hash) return fallback;
   if (hash === "planner-section-all") return "all";
   return chapterFromHash(hash);
+}
+function writeSectionHash(view: View) {
+  const hash = view === "brief" ? "" : buildReportSectionHash(`planner-section-${view}`);
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${window.location.search}${hash}`,
+  );
 }
 function chapterFromHash(hash: string): Chapter {
   if (/route/.test(hash)) return "route";
@@ -99,6 +108,7 @@ export function Report({
   actionBusy,
   feedback,
   feedbackAction,
+  place,
 }: {
   report: PersistedReport;
   workspace: Workspace;
@@ -113,11 +123,16 @@ export function Report({
   actionBusy: boolean;
   feedback: string;
   feedbackAction?: { label: string; onClick: () => void };
+  /** Where the reader was in a report, kept while the report is closed for another page. */
+  place?: MutableRefObject<ReportPlace | null>;
 }) {
-  const [view, setView] = useState<View>(viewFromHash);
+  const placeKey = reportPlaceKey(report);
+  // Back from another page, the report opens where it was left; a section in the address still wins.
+  const [returning] = useState(() => placeToReturnTo(place?.current, placeKey));
+  const [view, setView] = useState<View>(() => viewFromHash((returning?.view as View | undefined) ?? "brief"));
   const topRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
-  const briefScroll = useRef(0);
+  const briefScroll = useRef(returning?.briefScrollY ?? 0);
   // An anchor asks to land on a specific part of a (possibly lazy) chapter.
   const focusRequest = useRef<"chapter" | "brief" | { anchor: string } | null>(null);
   const [navigation, setNavigation] = useState(0);
@@ -152,6 +167,17 @@ export function Report({
   const chapterIndex = visibleChapters.findIndex((c) => c.id === activeView);
   const activeChapter = chapterIndex >= 0 ? visibleChapters[chapterIndex] : null;
   const fullReport = activeView === "all";
+  useKeepReportPlace(place, placeKey, activeView, briefScroll, returning);
+  useEffect(() => {
+    if (!returning || returning.view === "brief") return;
+    // The address names the chapter again once the page's own address is written.
+    const frame = window.requestAnimationFrame(() => {
+      if (!window.location.hash) writeSectionHash(activeView);
+    });
+    return () => window.cancelAnimationFrame(frame);
+    // Only as the report reopens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The planned day, as the sky and day strip draw it.
   const plannedApproach = evaluation.travelWindow.planned.approachSummary;
@@ -313,12 +339,7 @@ export function Report({
     focusRequest.current = next === "brief" ? "brief" : anchor ? { anchor } : "chapter";
     setView(next);
     setNavigation((n) => n + 1);
-    const hash = next === "brief" ? "" : buildReportSectionHash(`planner-section-${next}`);
-    window.history.replaceState(
-      window.history.state,
-      "",
-      `${window.location.pathname}${window.location.search}${hash}`,
-    );
+    writeSectionHash(next);
   }
   function download() {
     const url = URL.createObjectURL(
