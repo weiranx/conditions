@@ -1,0 +1,8 @@
+.forecast-discussion-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 4px 0 0; }
+.forecast-discussion-meta .sky-chip { white-space: normal; }
+.forecast-discussion-body { margin-top: 10px; }
+.forecast-discussion-body h3 { margin: 14px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--sky-secondary); }
+.forecast-discussion-body h3:first-child { margin-top: 0; }
+.forecast-discussion-body p { margin: 4px 0 0; font-size: 15px; line-height: 1.55; color: var(--sky-label); overflow-wrap: anywhere; }
+.forecast-discussion .ai-brief-empty { margin-top: 12px; }
+.forecast-discussion > .field-source-link { margin-top: 12px; }

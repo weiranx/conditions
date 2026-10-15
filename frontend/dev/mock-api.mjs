@@ -14,6 +14,7 @@ import planContext from "../../backend/src/utils/plan-context.js";
 import planEvaluation from "../../backend/src/utils/plan-evaluation.js";
 import planParse from "../../backend/src/utils/plan-parse.js";
 import tripDebrief from "../../backend/src/utils/trip-debrief.js";
+import discussionSummary from "../../backend/src/utils/discussion-summary.js";
 import startTimeScenarios from "../../backend/src/utils/start-time-scenarios.js";
 import dayOverDay from "../../backend/src/utils/day-over-day.js";
 import tripDays from "../../backend/src/utils/trip-days.js";
@@ -917,6 +918,20 @@ export function createMockApi({ databasePath } = {}) {
         return ok(planParse.validateTripParse(answer, { text, today: body.today, units: body.units || {} }));
       }
       return ok(planParse.validatePlanParse(answer, { text, today: body.today, units: body.units || {} }));
+    }
+    if (p === "/api/forecast-discussion/summary") {
+      // No model: a canned reading, put through the backend's own context and checks.
+      const context = discussionSummary.buildDiscussionContext(body.report, { objectiveName: body.objectiveName });
+      if (!context) return fail(422, "This report has no forecast discussion to summarize.");
+      const name = context.objective.name || "your objective";
+      const answer = discussionSummary.validateDiscussionSummary({
+        summary: "Demo reading: forecasters expect afternoon winds to pick up across the region, with breezy afternoons through tomorrow and a cooler, showery pattern later in the week.",
+        forObjective: `Your trip falls in the breezy period the discussion covers, so expect wind to build at ${name} after midday, in line with the point forecast. The cooler showers come after your date.`,
+        watch: ["Afternoon wind arriving earlier than the point forecast shows.", "Showers in the later period moving in sooner."],
+        forecasterConfidence: "moderate",
+      }, context, body.units || {});
+      if (!answer) return fail(503, "Could not summarize the forecast discussion right now.");
+      return ok({ ...answer, coversTripDate: context.discussion.coversTripDate, office: context.discussion.office || null, issuedTime: context.discussion.issuedTime || null, generatedAt: now() });
     }
     if (p === "/api/trip-debrief") {
       if (!body?.report || !Array.isArray(body?.track?.points) || body.track.points.length < 2)

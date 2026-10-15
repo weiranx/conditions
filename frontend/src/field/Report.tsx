@@ -22,6 +22,7 @@ import { ReportInsights } from "./ReportInsights";
 import "./report-reading.css";
 import "./report-navigation.css";
 import { AiChapterNote, AiRead } from "./AiRead";
+import { ForecastDiscussion } from "./ForecastDiscussion";
 import { starterQuestions, suggestedQuestions } from "./ai-explanation";
 import { isOutdatedRead, shownAiHero } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
@@ -588,6 +589,15 @@ export function Report({
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
         <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
+        {aiEnabled && (
+          <ForecastDiscussion
+            report={data}
+            objectiveName={report.plan.objectiveName}
+            units={{ temperature: w.preferences.temperatureUnit, wind: w.preferences.windSpeedUnit, elevation: w.preferences.elevationUnit }}
+            available={ai.aiBrief}
+            timeStyle={w.preferences.timeStyle}
+          />
+        )}
         <Conditions workspace={w} hours={skyHours} />
       </section>
     );
