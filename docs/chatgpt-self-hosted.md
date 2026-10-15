@@ -2,7 +2,7 @@
 
 Conditions can use your eligible ChatGPT plan when you run this open-source tool for personal use, locally or on a server you control. This uses OpenAI's supported OAuth registration and Responses API. No partner client ID, client secret, or Platform API key is needed for this flow.
 
-Each allowlisted Conditions account that belongs to you has its own connection, model choice, and disconnect controls. Only that account's foreground browser requests use its connection. Visitors, MCP clients, admin tasks, and automatic watch jobs cannot use your subscription. Subscription failures never fall back to a separately billed API provider. Existing Conditions sign-in still controls access to your Conditions account; connecting ChatGPT separately grants plan usage.
+Every Conditions account has its own connection, model choice, and disconnect controls. Only that account's foreground browser requests use its connection. Anonymous visitors, MCP clients, admin tasks, and automatic watch jobs cannot use your subscription. Accounts that have never connected ChatGPT continue using the existing server provider; availability alone does not authorize subscription usage. Subscription failures never fall back to a separately billed API provider. Existing Conditions sign-in still controls access to your Conditions account; connecting ChatGPT separately grants plan usage.
 
 ## Sign in locally
 
@@ -58,19 +58,13 @@ docker compose exec -T --user appuser backend rmdir /app/data/chatgpt-transfer
 
 The default store `/app/data/chatgpt` persists across container recreation. Do not mount it into the monitor container, put it in shared backups, or run multiple replicas against the same session. An overridden directory must be persistent, private, and writable by `appuser`.
 
-## Enable your personal Conditions accounts
+## Enabled by default
 
-Sign into Conditions and open **Account → Use your ChatGPT plan → Set up personal ChatGPT access**. Copy each of your Conditions account UUIDs. In the server's existing environment configuration, list them separated by commas:
+Every signed-in Conditions account can connect ChatGPT immediately. No account UUID allowlist or per-account server environment setup is required. Repeat local login and export/import with a different `--user` UUID for each account. The server chooses credentials from the authenticated Conditions session, never a caller-supplied account ID. Each account must separately approve plan usage; making the feature available does not grant access to anyone else's subscription.
 
-```dotenv
-CHATGPT_ACCOUNT_USER_IDS=first-conditions-account-uuid,second-conditions-account-uuid
-```
+Importing a connection takes effect immediately without a backend restart. Complete a fresh login for each profile; importing the same renewable session into two profiles is rejected. Accounts that have never connected ChatGPT retain their existing server-provider behavior. Once an account has connected, a disconnected, expired, or failed connection does not fall back to separately billed API providers.
 
-Use Conditions UUIDs, not emails or OpenAI client/subject IDs. Repeat local login and export/import with a different `--user` UUID for each of your accounts. The server chooses a profile from the authenticated Conditions session; a request cannot choose another account's profile. Completing a fresh login for each profile creates a separate renewable session; importing the same refresh token into two profiles is rejected. Restart the backend to pick up the environment change. With this repository's Compose deployment:
-
-```bash
-docker compose up -d --no-deps --force-recreate backend
-```
+An optional installation-wide `CHATGPT_ENABLED=false` environment setting disables connection access for all accounts. Restart/recreate the backend only when changing this setting. The old `CHATGPT_ACCOUNT_USER_IDS` list is no longer used and can be removed.
 
 Outbound HTTPS to `auth.openai.com` and `api.openai.com` is required. Ensure `APP_BASE_URL` or `CORS_ORIGIN` includes the frontend origin; settings writes require an explicit allowed Origin.
 
@@ -100,7 +94,7 @@ Refreshes are serialized with a filesystem lock and committed atomically. If a p
 
 ## Existing single-owner setup
 
-Keep `CHATGPT_OWNER_USER_ID` set to its original UUID if you already use the single-owner setup. That account continues using the original unscoped credential profile. Add your other account IDs to `CHATGPT_ACCOUNT_USER_IDS`; they use separate profiles. CLI commands without `--user` manage the legacy profile; passing the UUID matching `CHATGPT_OWNER_USER_ID` also selects that legacy profile. Do not remove the legacy environment variable while relying on its original connection.
+Keep `CHATGPT_OWNER_USER_ID` set to its original UUID if you already use the single-owner setup. That account continues using the original unscoped credential profile. All other accounts can connect by default and use separate profiles. CLI commands without `--user` manage the legacy profile; passing the UUID matching `CHATGPT_OWNER_USER_ID` also selects that legacy profile. Do not remove the legacy environment variable while relying on its original connection.
 
 ## Verification
 
