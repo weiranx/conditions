@@ -18,6 +18,7 @@ export function Chat({
   initialMessages = [],
   onMessagesChange,
   readOnly = false,
+  starters,
   ask = null,
 }: {
   reportPayload: string;
@@ -26,6 +27,8 @@ export function Chat({
   initialMessages?: PersistedReportChatMessage[];
   onMessagesChange?: (messages: PersistedReportChatMessage[]) => void;
   readOnly?: boolean;
+  /** The questions offered before the first message; the report passes the AI read's. */
+  starters?: string[];
   /** A question asked elsewhere on the page; a new id opens the chat and sends it. */
   ask?: { id: number; text: string } | null;
 }) {
@@ -129,6 +132,7 @@ export function Chat({
               initialMessages={initialMessages}
               onMessagesChange={onMessagesChange}
               readOnly={readOnly}
+              starters={starters}
               pendingQuestion={asked}
             />
           </Suspense>

@@ -103,3 +103,11 @@ export function starterQuestions(level: string): string[] {
     "What should I check before I leave?",
   ];
 }
+
+/**
+ * The questions the report suggests, shared by the AI read and the chat so both
+ * offer the same ones: the read's own when it wrote some, otherwise the starters.
+ */
+export function suggestedQuestions(written: readonly string[] | undefined, starters: string[]): string[] {
+  return (written?.length ? [...written] : starters).slice(0, 3);
+}

@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { ArrowUp, Check, ChevronRight, Info, RefreshCw, Sparkles } from "lucide-react";
 import { AiBriefSection, AiExplanationSkeleton } from "./AiExplanation";
-import { parseExplanation, type ExplanationSection } from "./ai-explanation";
+import { parseExplanation, suggestedQuestions, type ExplanationSection } from "./ai-explanation";
 import {
   evidenceLinks,
   sectionCitations,
@@ -186,7 +186,7 @@ export function AiRead({
   const action = sections.filter((s) => s.kind === "action");
   const more = sections.filter((s) => !["overview", "note", "action"].includes(s.kind));
   const fallback = details?.validation === "deterministic_fallback";
-  const questions = (details?.questions.length ? details.questions : fallbackQuestions).slice(0, 3);
+  const questions = suggestedQuestions(details?.questions, fallbackQuestions);
   const render = (section: ExplanationSection, index: number) => (
     <AiBriefSection
       key={`${section.kind}-${index}`}

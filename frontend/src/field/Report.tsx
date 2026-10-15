@@ -22,7 +22,7 @@ import { ReportInsights } from "./ReportInsights";
 import "./report-reading.css";
 import "./report-navigation.css";
 import { AiChapterNote, AiRead } from "./AiRead";
-import { starterQuestions } from "./ai-explanation";
+import { starterQuestions, suggestedQuestions } from "./ai-explanation";
 import { isOutdatedRead, shownAiHero } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
@@ -532,6 +532,7 @@ export function Report({
     return null;
   };
   const showChat = ai.reportChat || w.reportChatMessages.length > 0;
+  const starters = starterQuestions(decision.level);
   const aiRead = (
     <AiRead
       narrative={w.aiBriefNarrative}
@@ -541,7 +542,7 @@ export function Report({
       briefAvailable={ai.aiBrief}
       chatAvailable={ai.reportChat}
       readOnly={w.viewingHistoryReport}
-      fallbackQuestions={starterQuestions(decision.level)}
+      fallbackQuestions={starters}
       run={w.aiReadRun}
       acrossReport={aiFirst}
       openingRewritten={Boolean(hero)}
@@ -562,6 +563,7 @@ export function Report({
         initialMessages={w.reportChatMessages}
         onMessagesChange={w.setReportChatMessages}
         readOnly={w.viewingHistoryReport}
+        starters={suggestedQuestions(w.aiBriefDetails?.questions, starters)}
         ask={chatAsk?.session === w.reportChatSessionKey ? chatAsk : null}
       />
     </Suspense>
