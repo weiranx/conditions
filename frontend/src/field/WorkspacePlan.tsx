@@ -35,7 +35,8 @@ import { SuggestionLabel } from "./SuggestionLabel";
 import { ItineraryCamps, ItineraryWhen } from "./ItineraryPlan";
 import { PlanDateChips } from "./PlanDateChips";
 import { usePlanDaylight } from "../hooks/usePlanDaylight";
-import { PlanSentence } from "./PlanSentence";
+import { PlanSentence, type DescribedPlace } from "./PlanSentence";
+import { clearSearchMatch, normalizeSuggestionText } from "../lib/search";
 
 /** "6:31:02 AM" as a time input's "06:31". */
 function clockInput(value: string) {
@@ -216,13 +217,47 @@ export function WorkspacePlan({
   }, [w.activeSuggestionIndex, w.showSuggestions, w.suggestions]);
   // A sentence fills a day trip's plan or a multi-day trip; the place (or trailhead) goes through the search like typing it.
   const sentenceAvailable = useAiAvailability().planParse && !comparison;
+  const [describedPlace, setDescribedPlace] = useState<DescribedPlace | null>(null);
   function searchFor(query: string) {
     setError("");
     setRenaming(null);
     // The search shows even when the sentence names the place already chosen.
     setChangingPlace(placeKey);
+    setDescribedPlace({ query, state: "searching" });
     w.handleInputChange({ target: { value: query } } as ChangeEvent<HTMLInputElement>);
   }
+  // The described place is chosen only when its results hold one clear match;
+  // otherwise, or once the traveler types over it, the search waits for a pick.
+  useEffect(() => {
+    if (describedPlace?.state !== "searching") return;
+    const { query } = describedPlace;
+    if (normalizeSuggestionText(w.searchQuery) !== normalizeSuggestionText(query)) {
+      setDescribedPlace({ query, state: "pick" });
+      return;
+    }
+    if (w.searchLoading) return;
+    const match = clearSearchMatch(w.suggestions, query);
+    if (!match) {
+      setDescribedPlace({ query, state: "pick" });
+      return;
+    }
+    w.selectSuggestion(match);
+    setChangingPlace(null);
+    const name = match.class === "saved" ? match.name : match.name.split(",")[0];
+    setDescribedPlace({
+      query,
+      state: "picked",
+      label: match.where ? `${name}, ${match.where}` : name,
+      lat: Number(match.lat),
+      lon: Number(match.lon),
+    });
+    // selectSuggestion is read from the render holding these results.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [describedPlace, w.searchQuery, w.searchLoading, w.suggestions]);
+  const placeFromDescription =
+    describedPlace?.state === "picked" &&
+    Math.abs(describedPlace.lat - w.position.lat) < 0.0005 &&
+    Math.abs(describedPlace.lon - w.position.lng) < 0.0005;
   const gpxAllowed = w.featureFlags.gpxImport && !multiDay && !comparison;
   const chooseGpx = () => file.current?.click();
   return (
@@ -294,6 +329,7 @@ export function WorkspacePlan({
             onStart={setStart}
             onDuration={setDuration}
             onPlaceQuery={searchFor}
+            describedPlace={describedPlace}
           />
         )}
         <h2 className="sky-plan-step"><span aria-hidden="true">1</span>{multiDay ? "Trailhead" : "Where"}</h2>
@@ -370,6 +406,11 @@ export function WorkspacePlan({
                     {w.position.lat.toFixed(4)}, {w.position.lng.toFixed(4)}
                     {w.objectiveTimezone && <> · <span>{w.objectiveTimezone.replace(/_/g, " ")}</span></>}
                   </small>
+                  {placeFromDescription && (
+                    <small className="sky-plan-place-described">
+                      Picked as the only match for your description. Not this one? Change it.
+                    </small>
+                  )}
                 </div>
               )}
               {renaming !== null ? (

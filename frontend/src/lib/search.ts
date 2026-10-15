@@ -92,8 +92,12 @@ export function suggestionMatchesQuery(name: string, query: string): boolean {
 const SAME_PLACE_DEGREES = 0.01;
 
 // "Mount San Antonio (Mt Baldy)" in the catalog is OpenStreetMap's "Mount San Antonio".
+function primaryPlaceName(name: string): string {
+  return normalizeSuggestionText((name.split(',')[0] ?? '').replace(/\([^)]*\)/g, ''));
+}
+
 function primarySuggestionName(suggestion: Suggestion): string {
-  return normalizeSuggestionText((suggestion.name.split(',')[0] ?? '').replace(/\([^)]*\)/g, ''));
+  return primaryPlaceName(suggestion.name);
 }
 
 export function isSameSuggestionPlace(a: Suggestion, b: Suggestion): boolean {
@@ -150,6 +154,45 @@ export function rankAndDeduplicateSuggestions(items: Suggestion[], query: string
     })
     .map(({ item }) => item)
     .slice(0, 8);
+}
+
+function isSettlement(suggestion: Suggestion): boolean {
+  return (
+    suggestion.kind === 'Town' ||
+    suggestion.kind === 'Locality' ||
+    suggestion.class === 'place' ||
+    (suggestion.class === 'boundary' && suggestion.type === 'administrative')
+  );
+}
+
+/**
+ * The one place a described plan's place name clearly means, or null when the
+ * traveler should pick it. Only places with exactly that name count: one of them
+ * is the match, and among several, the only one that is not a town (a plan's
+ * place is a mountain, trail or trailhead; "Mount Rainier" is not the town in
+ * Maryland). Two summits of that name are left to the traveler. A qualifier
+ * after a comma ("Split Mountain, California") must appear in the place's name
+ * or where it is.
+ */
+export function clearSearchMatch(items: Suggestion[], query: string): Suggestion | null {
+  const [head = '', ...rest] = query.split(',');
+  const wanted = primaryPlaceName(head);
+  if (!wanted) {
+    return null;
+  }
+  const qualifier = normalizeSuggestionText(rest.join(' '));
+  const named = uniqueSuggestionPlaces(items).filter(
+    (item) =>
+      primarySuggestionName(item) === wanted &&
+      Number.isFinite(Number(item.lat)) &&
+      Number.isFinite(Number(item.lon)) &&
+      (!qualifier || normalizeSuggestionText(`${item.name} ${item.where ?? ''}`).includes(qualifier)),
+  );
+  if (named.length === 1) {
+    return named[0];
+  }
+  const outdoors = named.filter((item) => !isSettlement(item));
+  return outdoors.length === 1 ? outdoors[0] : null;
 }
 
 export function getLocalPopularSuggestions(query: string): Suggestion[] {
