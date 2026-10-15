@@ -223,8 +223,9 @@ const resolveModel = (provider, { model, tier = 'primary' } = {}, allowExplicitM
   return tier === 'fast' ? MODEL_CONFIG[provider].fast : MODEL_CONFIG[provider].primary;
 };
 
-const requestOptions = (tier) => ({
-  timeout: tier === 'fast' ? FAST_TIMEOUT_MS : PRIMARY_TIMEOUT_MS,
+// A caller whose answer is longer than the fast tier's 8s allows passes its own timeoutMs.
+const requestOptions = (tier, timeoutMs) => ({
+  timeout: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : (tier === 'fast' ? FAST_TIMEOUT_MS : PRIMARY_TIMEOUT_MS),
   maxRetries: 0,
 });
 
@@ -290,7 +291,7 @@ const readGeminiText = (completion, { maxTokens, model, operation }) => {
 };
 
 const callTextProvider = async (provider, prompt, options, allowExplicitModel) => {
-  const { maxTokens, model, system, tier, feature, userId } = options;
+  const { maxTokens, model, system, tier, timeoutMs, feature, userId } = options;
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
   const startedAt = Date.now();
   let response;
@@ -317,7 +318,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
         messages: [{ role: 'user', content: prompt }],
       };
       if (system) params.system = system;
-      response = await getAnthropicClient().messages.create(params, requestOptions(tier));
+      response = await getAnthropicClient().messages.create(params, requestOptions(tier, timeoutMs));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
@@ -331,7 +332,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
         model: resolvedModel,
         max_tokens: maxTokens,
         messages,
-      }, tier), requestOptions(tier));
+      }, tier), requestOptions(tier, timeoutMs));
       const text = readGeminiText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
@@ -344,7 +345,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
     };
     if (system) params.instructions = system;
     withOpenAIReasoning(params, tier);
-    response = await getOpenAIClient().responses.create(params, requestOptions(tier));
+    response = await getOpenAIClient().responses.create(params, requestOptions(tier, timeoutMs));
     const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
     await finish('success');
     return text;
@@ -501,8 +502,8 @@ const runWithFailover = async (operation, tier, invoke) => {
   );
 };
 
-const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary', feature = 'text-generation', userId } = {}) => {
-  const options = { maxTokens, model, system, tier, feature, userId };
+const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary', timeoutMs, feature = 'text-generation', userId } = {}) => {
+  const options = { maxTokens, model, system, tier, timeoutMs, feature, userId };
   return runWithFailover('askAI', tier, (provider, allowExplicitModel) => (
     callTextProvider(provider, prompt, options, allowExplicitModel)
   ));

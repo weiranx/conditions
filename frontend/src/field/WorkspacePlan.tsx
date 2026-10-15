@@ -213,8 +213,8 @@ export function WorkspacePlan({
     else if (optionBounds.bottom > listBottom)
       list.scrollTop += optionBounds.bottom - listBottom;
   }, [w.activeSuggestionIndex, w.showSuggestions, w.suggestions]);
-  // A sentence fills a day trip's plan; the place goes through the search like typing it.
-  const sentenceAvailable = useAiAvailability().planParse && !comparison && !multiDay;
+  // A sentence fills a day trip's plan or a multi-day trip; the place (or trailhead) goes through the search like typing it.
+  const sentenceAvailable = useAiAvailability().planParse && !comparison;
   function searchFor(query: string) {
     setError("");
     setRenaming(null);
@@ -285,7 +285,9 @@ export function WorkspacePlan({
         )}
         {sentenceAvailable && (
           <PlanSentence
+            key={multiDay ? "multi" : "day"}
             workspace={w}
+            multiDay={multiDay}
             placeKey={placeKey}
             onDate={setDate}
             onStart={setStart}
