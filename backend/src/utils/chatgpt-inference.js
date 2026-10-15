@@ -7,7 +7,23 @@ const assertLive = (subscription) => {
   if (!subscription.alive) throw new ChatGPTError('This request has ended. Start a new request.', 'CHATGPT_REQUEST_ENDED', 409);
 };
 
-const chatGPTInference = async (subscription, input, { system, maxTokens = 4096, timeoutMs = 45000, onDelta, signal } = {}) => {
+const DEFAULT_INSTRUCTIONS = 'You are the Conditions backcountry planning assistant.';
+
+// Plan usage accepts a narrower Responses request than API keys: an input array, instructions
+// instead of system-role messages, and no max_output_tokens (rejected with a 400).
+const planRequestInput = (input, system) => {
+  const messages = typeof input === 'string'
+    ? [{ role: 'user', content: [{ type: 'input_text', text: input }] }]
+    : input;
+  const isInstruction = (message) => message.role === 'system' || message.role === 'developer';
+  const instructions = [system, ...messages.filter(isInstruction).map((message) => (
+    typeof message.content === 'string' ? message.content
+      : message.content.map((part) => part.text || '').join('\n')
+  ))].filter(Boolean).join('\n\n');
+  return { input: messages.filter((message) => !isInstruction(message)), instructions: instructions || DEFAULT_INSTRUCTIONS };
+};
+
+const chatGPTInference = async (subscription, input, { system, timeoutMs = 45000, onDelta, signal } = {}) => {
   assertLive(subscription);
   const { service } = subscription;
   const model = await service.modelForRequest();
@@ -17,8 +33,7 @@ const chatGPTInference = async (subscription, input, { system, maxTokens = 4096,
   let completed;
   try {
     const stream = await client.responses.create({
-      model, input, ...(system ? { instructions: system } : {}), max_output_tokens: maxTokens,
-      store: false, stream: true,
+      model, ...planRequestInput(input, system), store: false, stream: true,
     }, { timeout: timeoutMs, maxRetries: 0, ...(signal ? { signal } : {}) });
     try {
       for await (const event of stream) {
