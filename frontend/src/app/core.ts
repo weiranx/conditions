@@ -529,6 +529,13 @@ export function formatSnowfallAmountForElevationUnit(
 }
 
 /** A measured reading. null, undefined and NaN are missing data, never 0. */
+/** US dollars to the cent; a nonzero amount under a cent reads "<$0.01". */
+export function formatUsd(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value > 0 && value < 0.01) return "<$0.01";
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }

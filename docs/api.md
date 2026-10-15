@@ -384,9 +384,11 @@ Returns account availability and the current user, if signed in:
     "unlimited": false,
     "usedRequests": 12,
     "usedTokens": 12500,
-    "limitTokens": 250000,
-    "remainingTokens": 237500,
-    "percentUsed": 5,
+    "usedUsd": 0.0475,
+    "limitUsd": 1,
+    "limitSource": "default",
+    "remainingUsd": 0.9525,
+    "percentUsed": 4.8,
     "periodStart": "2026-07-01T00:00:00.000Z",
     "periodEnd": "2026-08-01T00:00:00.000Z",
     "resetAt": "2026-08-01T00:00:00.000Z",
@@ -400,8 +402,10 @@ subscription with `active` or `trialing` status. When the database is not config
 available and returns `available: false`.
 
 Free accounts receive separate monthly allowances: generated reports are count-based, while AI usage is metered
-by total input and output tokens. Both meters reset at the next UTC month. `usedRequests` remains available for
-activity analytics but does not determine the AI limit. For Premium accounts, both usage objects set `unlimited`
+in US dollars: each call's estimated provider cost (input, cached input and output tokens at the model's list
+price, `backend/src/utils/ai-pricing.js`) counts against `limitUsd`, and a model without a known price is charged
+a flat $10 per million tokens. Both meters reset at the next UTC month. `usedRequests` and `usedTokens` remain
+available for activity analytics but do not determine the AI limit. For Premium accounts, both usage objects set `unlimited`
 to `true`; their limit, remaining, and percentage fields are `null`, while current-month totals remain
 visible. `reportCount` remains the lifetime saved total.
 

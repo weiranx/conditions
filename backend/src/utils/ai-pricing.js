@@ -1,8 +1,12 @@
 'use strict';
 
 const ONE_MILLION = 1_000_000;
-const PRICING_VERSION = '2026-07-12';
+const PRICING_VERSION = '2026-10-14';
 const CLAUDE_SONNET_5_PROMO_END = Date.parse('2026-09-01T00:00:00.000Z');
+const GEMINI_FLASH_PROMO_END = Date.parse('2027-01-01T00:00:00.000Z');
+// Spend limits charge a model with no known price at this rate (USD per
+// million tokens) so an unpriced model cannot run free of the monthly limit.
+const UNPRICED_MODEL_USD_PER_MILLION_TOKENS = 10;
 
 const asTokenCount = (value) => {
   const number = Number(value);
@@ -61,6 +65,22 @@ const resolveAnthropicPricing = (model, timestamp) => {
   return null;
 };
 
+const resolveGeminiPricing = (model, timestamp) => {
+  if (/^gemini-3\.[678]-flash(?:-|$)/.test(model)) {
+    const occurredAt = new Date(timestamp).getTime();
+    return Number.isFinite(occurredAt) && occurredAt < GEMINI_FLASH_PROMO_END
+      ? rates(0.75, 3.75)
+      : rates(1.5, 7.5);
+  }
+  if (/^gemini-3\.5-flash-lite(?:-|$)/.test(model)) return rates(0.3, 2.5);
+  if (/^gemini-3-pro(?:-|$)/.test(model)) return rates(2, 12);
+  if (/^gemini-3-flash(?:-|$)/.test(model)) return rates(0.5, 3);
+  if (/^gemini-2\.5-pro(?:-|$)/.test(model)) return rates(1.25, 10);
+  if (/^gemini-2\.5-flash-lite(?:-|$)/.test(model)) return rates(0.1, 0.4);
+  if (/^gemini-2\.5-flash(?:-|$)/.test(model)) return rates(0.3, 2.5);
+  return null;
+};
+
 const resolveAIModelPricing = ({ provider, model, timestamp = new Date().toISOString() } = {}) => {
   const normalizedProvider = String(provider || '').trim().toLowerCase();
   const normalizedModel = String(model || '').trim().toLowerCase();
@@ -69,13 +89,18 @@ const resolveAIModelPricing = ({ provider, model, timestamp = new Date().toISOSt
     return OPENAI_PRICING.find(([pattern]) => pattern.test(normalizedModel))?.[1] ?? null;
   }
   if (normalizedProvider === 'anthropic') return resolveAnthropicPricing(normalizedModel, timestamp);
+  if (normalizedProvider === 'gemini') return resolveGeminiPricing(normalizedModel, timestamp);
   return null;
 };
 
 const normalizeBillableTokens = (usage = {}) => {
   const rawInputTokens = asTokenCount(usage.inputTokens ?? usage.input_tokens ?? usage.prompt_tokens);
   const outputTokens = asTokenCount(usage.outputTokens ?? usage.output_tokens ?? usage.completion_tokens);
-  const inputDetails = usage.inputTokenDetails ?? usage.input_tokens_details ?? usage.inputTokensDetails ?? {};
+  const inputDetails = usage.inputTokenDetails
+    ?? usage.input_tokens_details
+    ?? usage.inputTokensDetails
+    ?? usage.prompt_tokens_details
+    ?? {};
   const topLevelCacheRead = asTokenCount(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens);
   const nestedCacheRead = asTokenCount(
     inputDetails.cached_tokens ?? inputDetails.cacheReadTokens ?? inputDetails.cachedTokens,
@@ -133,6 +158,7 @@ const estimateAIUsageCost = ({ provider, model, usage, timestamp } = {}) => {
 
 module.exports = {
   PRICING_VERSION,
+  UNPRICED_MODEL_USD_PER_MILLION_TOKENS,
   estimateAIUsageCost,
   normalizeBillableTokens,
   resolveAIModelPricing,

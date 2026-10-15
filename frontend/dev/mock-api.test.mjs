@@ -28,7 +28,7 @@ test("Premium session returns unlimited reports, AI and multi-day usage", async 
   for (const [usage, limit] of [
     [payload.reportUsage, "limitReports"],
     [payload.multiDayUsage, "limitRuns"],
-    [payload.aiUsage, "limitTokens"],
+    [payload.aiUsage, "limitUsd"],
   ]) {
     assert.equal(usage.unlimited, true);
     assert.equal(usage[limit], null);
@@ -70,12 +70,12 @@ test("mock admin dashboard has a week of traffic and simulated account actions",
   const directory = (await api.handle("/api/admin/users")).payload;
   const member = directory.users.find((user) => !user.isOwner && user.status === "active");
   await api.handle(`/api/admin/users/${member.id}`, "PATCH", { status: "suspended" });
-  await api.handle(`/api/admin/users/${member.id}/usage-limit`, "PATCH", { limit: 5000 });
+  await api.handle(`/api/admin/users/${member.id}/usage-limit`, "PATCH", { limit: 2.5 });
   const updated = (await api.handle("/api/admin/users")).payload;
   const changed = updated.users.find((user) => user.id === member.id);
   assert.equal(changed.status, "suspended");
   assert.equal(changed.activeSessions, 0);
-  assert.equal(changed.aiTokenLimitOverride, 5000);
+  assert.equal(changed.aiCostLimitOverrideUsd, 2.5);
   assert.equal(updated.summary.suspended, directory.summary.suspended + 1);
   assert.equal(
     (await api.handle(`/api/admin/users/${member.id}/usage-limit`, "PATCH", { limit: -1 })).status,
@@ -86,7 +86,7 @@ test("mock admin dashboard has a week of traffic and simulated account actions",
     403,
   );
   const audit = (await api.handle("/api/admin/audit-log")).payload;
-  assert.match(audit[0].summary, /monthly AI token limit to 5,000/);
+  assert.match(audit[0].summary, /monthly AI spend limit to \$2\.50/);
   assert.match(audit[1].summary, /^Suspended /);
 
   const cleared = await api.handle("/api/admin/maintenance/caches", "POST");

@@ -5,6 +5,7 @@ import type { Workspace } from "./model/useWorkspace";
 import { GoogleAuth } from "./GoogleAuth";
 import { GUEST_REPORT_LIMIT } from "../app/guest-report-limit";
 import { dateLabel } from "./data";
+import { formatUsd } from "../app/core";
 import "./account.css";
 
 function Usage({
@@ -14,6 +15,7 @@ function Usage({
   remaining,
   unlimited,
   resetAt,
+  format = (value) => value.toLocaleString(),
 }: {
   label: string;
   used: number | undefined;
@@ -21,6 +23,7 @@ function Usage({
   remaining: number | null | undefined;
   unlimited?: boolean;
   resetAt?: string;
+  format?: (value: number) => string;
 }) {
   const share = !unlimited && typeof limit === "number" && limit > 0 && used !== undefined ? used / limit : null;
   return (
@@ -31,11 +34,11 @@ function Usage({
       ) : (
         <>
           <strong className="sky-usage-value">
-            {used.toLocaleString()}
+            {format(used)}
             <small>
               {unlimited
                 ? " used · unlimited"
-                : ` / ${limit?.toLocaleString() ?? "—"}`}
+                : ` / ${typeof limit === "number" ? format(limit) : "—"}`}
             </small>
           </strong>
           {share !== null && typeof limit === "number" && (
@@ -48,7 +51,7 @@ function Usage({
           <p>
             {unlimited
               ? "No monthly cap"
-              : `${remaining?.toLocaleString() ?? "—"} remaining`}
+              : `${typeof remaining === "number" ? format(remaining) : "—"} remaining`}
             {resetAt && ` · Resets ${dateLabel(resetAt)}`}
           </p>
         </>
@@ -206,12 +209,13 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
                 resetAt={account.multiDayUsage?.resetAt}
               />
               <Usage
-                label="AI tokens"
-                used={account.aiUsage?.usedTokens}
-                limit={account.aiUsage?.limitTokens}
-                remaining={account.aiUsage?.remainingTokens}
+                label="AI spend"
+                used={account.aiUsage?.usedUsd}
+                limit={account.aiUsage?.limitUsd}
+                remaining={account.aiUsage?.remainingUsd}
                 unlimited={account.aiUsage?.unlimited}
                 resetAt={account.aiUsage?.resetAt}
+                format={formatUsd}
               />
             </div>
           </section>
@@ -236,7 +240,7 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
               <p className="sky-cap is-body">
                 {account.tier?.key === "premium"
                   ? "Unlimited AI, report generation, and multi-day comparisons. Up to 10 watches with automatic checks, email alerts, and 90 days of history."
-                  : "Separate monthly allowances for reports, AI tokens, and comparisons. One watch with manual refresh and 14 days of check history."}
+                  : "Separate monthly allowances for reports, AI spend, and comparisons. One watch with manual refresh and 14 days of check history."}
               </p>
             </div>
           </section>

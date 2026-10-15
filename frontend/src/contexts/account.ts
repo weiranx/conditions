@@ -25,6 +25,8 @@ interface AccountAIUsageBase {
   tierKey: AccountTierKey;
   usedRequests: number;
   usedTokens: number;
+  /** Estimated provider spend this period, in US dollars. */
+  usedUsd: number;
   periodStart: string;
   periodEnd: string;
   resetAt: string;
@@ -34,15 +36,15 @@ interface AccountAIUsageBase {
 export type AccountAIUsage = AccountAIUsageBase & (
   | {
     unlimited: true;
-    limitTokens: null;
-    remainingTokens: null;
+    limitUsd: null;
+    remainingUsd: null;
     percentUsed: null;
     exhausted: false;
   }
   | {
     unlimited: false;
-    limitTokens: number;
-    remainingTokens: number;
+    limitUsd: number;
+    remainingUsd: number;
     percentUsed: number;
   }
 );

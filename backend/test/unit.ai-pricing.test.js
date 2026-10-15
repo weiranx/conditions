@@ -14,7 +14,7 @@ describe('AI usage cost estimation', () => {
     })).toEqual({
       estimatedCostUsd: 0.004,
       pricingMatched: true,
-      pricingVersion: '2026-07-12',
+      pricingVersion: '2026-10-14',
     });
 
     expect(estimateAIUsageCost({
@@ -55,6 +55,30 @@ describe('AI usage cost estimation', () => {
     })).toMatchObject({ inputPerMillion: 3, outputPerMillion: 15 });
   });
 
+  test('prices Gemini models, including cached prompt tokens and the Flash promotion', () => {
+    expect(estimateAIUsageCost({
+      provider: 'gemini',
+      model: 'gemini-3.7-flash',
+      usage: { prompt_tokens: 1000, completion_tokens: 100 },
+      timestamp: '2026-10-14T12:00:00.000Z',
+    }).estimatedCostUsd).toBe(0.001125);
+    expect(estimateAIUsageCost({
+      provider: 'gemini',
+      model: 'gemini-3.7-flash',
+      usage: { prompt_tokens: 1000, completion_tokens: 100 },
+      timestamp: '2027-01-01T00:00:00.000Z',
+    }).estimatedCostUsd).toBe(0.00225);
+    expect(estimateAIUsageCost({
+      provider: 'gemini',
+      model: 'gemini-3.5-flash-lite',
+      usage: {
+        prompt_tokens: 1000,
+        completion_tokens: 100,
+        prompt_tokens_details: { cached_tokens: 500 },
+      },
+    }).estimatedCostUsd).toBe(0.000415);
+  });
+
   test('marks unknown models as unpriced instead of guessing', () => {
     expect(estimateAIUsageCost({
       provider: 'openai',
@@ -63,7 +87,7 @@ describe('AI usage cost estimation', () => {
     })).toEqual({
       estimatedCostUsd: null,
       pricingMatched: false,
-      pricingVersion: '2026-07-12',
+      pricingVersion: '2026-10-14',
     });
   });
 });

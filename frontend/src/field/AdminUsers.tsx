@@ -5,6 +5,7 @@ import type {
 } from "./model/useAdministration";
 import { AdminNotice } from "./Administration";
 import { Details } from "./Details";
+import { formatUsd } from "../app/core";
 
 type LimitState = "near" | "at" | null;
 function limitState(used: number, limit: number | null | undefined): LimitState {
@@ -67,11 +68,14 @@ function LimitEditor({
   onDraft,
   onSave,
   onReset,
+  currency = false,
 }: {
   label: string;
   draft: string | undefined;
   saved: number | null | undefined;
   custom: boolean;
+  /** A dollar amount to the cent rather than a whole count. */
+  currency?: boolean;
   onDraft: (value: string) => void;
   onSave: (value: number) => void;
   onReset: () => void;
@@ -85,8 +89,9 @@ function LimitEditor({
         {label}
         <input
           type="number"
-          min="1"
-          inputMode="numeric"
+          min={currency ? "0.01" : "1"}
+          step={currency ? "0.01" : "1"}
+          inputMode={currency ? "decimal" : "numeric"}
           placeholder="Default"
           value={value}
           onChange={(e) => onDraft(e.target.value)}
@@ -116,13 +121,13 @@ const methodLabel = (method: string) =>
 
 function AccountRow({ a, user }: { a: Administration; user: AdminUserRecord }) {
   const premium = user.tier === "premium";
-  const defaultAI = a.usageSettings?.freeMonthlyAITokenLimit;
+  const defaultAI = a.usageSettings?.freeMonthlyAICostLimitUsd;
   const defaultReports = a.usageSettings?.freeMonthlyReportUsageLimit;
-  const aiLimit = user.aiTokenLimitOverride ?? defaultAI;
+  const aiLimit = user.aiCostLimitOverrideUsd ?? defaultAI;
   const reportLimit = user.reportUsageLimitOverride ?? defaultReports;
   const worst = premium
     ? null
-    : [limitState(user.savedReports, reportLimit), limitState(user.aiTokens, aiLimit)].reduce<LimitState>(
+    : [limitState(user.savedReports, reportLimit), limitState(user.aiCostUsd, aiLimit)].reduce<LimitState>(
         (state, next) => (state === "at" || next === "at" ? "at" : state || next),
         null,
       );
@@ -166,8 +171,8 @@ function AccountRow({ a, user }: { a: Administration; user: AdminUserRecord }) {
             </div>
             <div className="admin-resource">
               <div>
-                <span>AI tokens this month</span>
-                <strong>{a.formatTokenCount(user.aiTokens)}</strong>
+                <span>AI spend this month</span>
+                <strong>{formatUsd(user.aiCostUsd)}</strong>
               </div>
               <small>Unlimited on Premium</small>
             </div>
@@ -182,11 +187,11 @@ function AccountRow({ a, user }: { a: Administration; user: AdminUserRecord }) {
               format={(n) => n.toLocaleString()}
             />
             <UsageMeter
-              label="AI tokens this month"
-              used={user.aiTokens}
+              label="AI spend this month"
+              used={user.aiCostUsd}
               limit={aiLimit}
-              custom={user.aiTokenLimitOverride !== null}
-              format={a.formatTokenCount}
+              custom={user.aiCostLimitOverrideUsd !== null}
+              format={formatUsd}
             />
           </>
         )}
@@ -252,7 +257,7 @@ function AccountRow({ a, user }: { a: Administration; user: AdminUserRecord }) {
           )}
           <button
             className="field-button"
-            disabled={!user.aiTokens && !user.savedReports}
+            disabled={!user.aiTokens && !user.aiCostUsd && !user.savedReports}
             onClick={() => void a.resetManagedUserUsage(user)}
           >
             Reset monthly usage
@@ -274,10 +279,11 @@ function AccountRow({ a, user }: { a: Administration; user: AdminUserRecord }) {
               onReset={() => void a.updateManagedUserReportUsageLimit(user, null)}
             />
             <LimitEditor
-              label="Monthly AI token limit"
+              label="Monthly AI spend limit (USD)"
               draft={a.userUsageLimitDrafts[user.id]}
               saved={aiLimit}
-              custom={user.aiTokenLimitOverride !== null}
+              custom={user.aiCostLimitOverrideUsd !== null}
+              currency
               onDraft={(value) =>
                 a.setUserUsageLimitDrafts((v) => ({ ...v, [user.id]: value }))
               }
@@ -297,12 +303,12 @@ export function AdminUsers({ a }: { a: Administration }) {
   const settings = a.usageSettings;
   const allowancesChanged =
     !!settings &&
-    (a.usageLimitDraft !== String(settings.freeMonthlyAITokenLimit) ||
+    (a.usageLimitDraft !== String(settings.freeMonthlyAICostLimitUsd) ||
       a.reportLimitDraft !== String(settings.freeMonthlyReportUsageLimit));
   const atDeploymentDefaults =
     !!settings &&
-    settings.freeMonthlyAITokenLimit ===
-      settings.environmentFreeMonthlyAITokenLimit &&
+    settings.freeMonthlyAICostLimitUsd ===
+      settings.environmentFreeMonthlyAICostLimitUsd &&
     settings.freeMonthlyReportUsageLimit ===
       settings.environmentFreeMonthlyReportUsageLimit;
   const filterCount = (value: string) =>
@@ -408,7 +414,7 @@ export function AdminUsers({ a }: { a: Administration }) {
           Monthly defaults apply to accounts without individual overrides.
           Premium accounts have unlimited usage.
           {settings &&
-            ` Deployment defaults: ${settings.environmentFreeMonthlyAITokenLimit.toLocaleString()} AI tokens and ${settings.environmentFreeMonthlyReportUsageLimit.toLocaleString()} reports.`}
+            ` Deployment defaults: ${formatUsd(settings.environmentFreeMonthlyAICostLimitUsd)} of AI spend and ${settings.environmentFreeMonthlyReportUsageLimit.toLocaleString()} reports.`}
         </p>
         <AdminNotice message={a.usageSettingsError} />
         {settings && !settings.persistent && (
@@ -416,12 +422,13 @@ export function AdminUsers({ a }: { a: Administration }) {
         )}
         <div className="field-action-row">
           <label className="field-form-label">
-            AI tokens per month
+            AI spend per month (USD)
             <input
               type="number"
-              min="1"
-              inputMode="numeric"
-              max={settings?.maxMonthlyAITokenLimit}
+              min={settings?.minMonthlyAICostLimitUsd ?? 0.01}
+              step="0.01"
+              inputMode="decimal"
+              max={settings?.maxMonthlyAICostLimitUsd}
               value={a.usageLimitDraft}
               onChange={(e) => a.setUsageLimitDraft(e.target.value)}
             />
@@ -450,7 +457,7 @@ export function AdminUsers({ a }: { a: Administration }) {
             onClick={() =>
               settings &&
               void a.updateDefaultUsageLimits(
-                String(settings.environmentFreeMonthlyAITokenLimit),
+                String(settings.environmentFreeMonthlyAICostLimitUsd),
                 String(settings.environmentFreeMonthlyReportUsageLimit),
               )
             }

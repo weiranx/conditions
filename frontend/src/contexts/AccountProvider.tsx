@@ -83,18 +83,20 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     || !Number.isFinite(record.usedRequests)
     || typeof record.usedTokens !== 'number'
     || !Number.isFinite(record.usedTokens)
+    || typeof record.usedUsd !== 'number'
+    || !Number.isFinite(record.usedUsd)
     || dateFields.some((field) => typeof record[field] !== 'string')
     || typeof record.exhausted !== 'boolean'
     || (record.tierKey !== undefined && record.tierKey !== 'free' && record.tierKey !== 'premium')
     || (record.unlimited !== undefined && typeof record.unlimited !== 'boolean')
     || (unlimited && record.tierKey !== 'premium')
     || (unlimited && (
-      record.limitTokens !== null
-      || record.remainingTokens !== null
+      record.limitUsd !== null
+      || record.remainingUsd !== null
       || record.percentUsed !== null
       || record.exhausted
     ))
-    || (!unlimited && [record.limitTokens, record.remainingTokens, record.percentUsed]
+    || (!unlimited && [record.limitUsd, record.remainingUsd, record.percentUsed]
       .some((field) => typeof field !== 'number' || !Number.isFinite(field)))
   ) {
     return null;
@@ -104,6 +106,7 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     tierKey,
     usedRequests: record.usedRequests as number,
     usedTokens: record.usedTokens as number,
+    usedUsd: record.usedUsd as number,
     periodStart: record.periodStart as string,
     periodEnd: record.periodEnd as string,
     resetAt: record.resetAt as string,
@@ -112,8 +115,8 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     return {
       ...baseUsage,
       unlimited: true,
-      limitTokens: null,
-      remainingTokens: null,
+      limitUsd: null,
+      remainingUsd: null,
       percentUsed: null,
       exhausted: false,
     };
@@ -121,8 +124,8 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
   return {
     ...baseUsage,
     unlimited: false,
-    limitTokens: record.limitTokens as number,
-    remainingTokens: record.remainingTokens as number,
+    limitUsd: record.limitUsd as number,
+    remainingUsd: record.remainingUsd as number,
     percentUsed: record.percentUsed as number,
     exhausted: record.exhausted,
   };

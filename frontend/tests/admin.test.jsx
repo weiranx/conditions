@@ -237,11 +237,12 @@ test("health-check history shows availability, incidents, and alert emails", () 
 
 const usageSettings = {
   persistent: true,
-  freeMonthlyAITokenLimit: 100000,
-  environmentFreeMonthlyAITokenLimit: 100000,
+  freeMonthlyAICostLimitUsd: 1,
+  environmentFreeMonthlyAICostLimitUsd: 1,
   freeMonthlyReportUsageLimit: 20,
   environmentFreeMonthlyReportUsageLimit: 20,
-  maxMonthlyAITokenLimit: 10000000,
+  minMonthlyAICostLimitUsd: 0.01,
+  maxMonthlyAICostLimitUsd: 10000,
   maxFreeMonthlyUsageLimit: 10000,
 };
 const freeUser = {
@@ -260,7 +261,8 @@ const freeUser = {
   savedReports: 18,
   aiCalls: 3,
   aiTokens: 1200,
-  aiTokenLimitOverride: null,
+  aiCostUsd: 0.04,
+  aiCostLimitOverrideUsd: null,
   reportUsageLimitOverride: null,
   isOwner: false,
 };
@@ -270,7 +272,7 @@ function directory(overrides = {}) {
     users: [freeUser],
     filteredUsers: [freeUser],
     usageSettings,
-    usageLimitDraft: "100000",
+    usageLimitDraft: "1",
     reportLimitDraft: "20",
     userUsageLimitDrafts: {},
     userReportLimitDrafts: {},
@@ -283,7 +285,7 @@ test("accounts show monthly usage against their limits", () => {
   assert.match(html, /Active just now/);
   assert.match(html, /18 of 20/);
   assert.match(html, /data-tone="warning">Near limit/);
-  assert.match(html, /1\.2K of 100K/);
+  assert.match(html, /\$0\.04 of \$1\.00/);
   assert.match(html, /Default limit/);
 
   const premium = { ...freeUser, tier: "premium", savedReports: 400 };
@@ -291,6 +293,7 @@ test("accounts show monthly usage against their limits", () => {
     <AdminUsers a={directory({ users: [premium], filteredUsers: [premium] })} />,
   );
   assert.match(premiumHtml, /Unlimited on Premium/);
+  assert.match(premiumHtml, /AI spend this month<\/span><strong>\$0\.04/);
   assert.doesNotMatch(premiumHtml, /Near limit|At limit|Save limit/);
 });
 
@@ -314,7 +317,7 @@ test("limits can only be saved once they differ from the saved value", () => {
   assert.match(html, /disabled="">Save allowances/);
   assert.match(html, /disabled="">Restore deployment defaults/);
   assert.doesNotMatch(
-    renderToStaticMarkup(<AdminUsers a={directory({ usageLimitDraft: "150000" })} />),
+    renderToStaticMarkup(<AdminUsers a={directory({ usageLimitDraft: "1.5" })} />),
     /disabled="">Save allowances/,
   );
 });
