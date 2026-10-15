@@ -12,6 +12,7 @@ import {
   MAX_BAIL_POINTS,
   MAX_DAY_CHECKPOINTS,
   campPoint,
+  consumePlaceHint,
   isCoordinateLabel,
   pointLabel,
   setItineraryNights,
@@ -115,12 +116,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
     : undefined;
   const hints = it.placeHints;
   // A described place waits in its search until it is picked; picking or setting it otherwise uses it up.
-  const dropCampHint = (index: number) => {
-    if (hints.camps[index]) it.setPlaceHints((current) => ({ ...current, camps: current.camps.map((hint, i) => (i === index ? null : hint)) }));
-  };
-  const dropExitHint = () => {
-    if (hints.exit) it.setPlaceHints((current) => ({ ...current, exit: null }));
-  };
+  const dropCampHint = (index: number) => it.setPlaceHints((current) => consumePlaceHint(current, { kind: "camp", index }));
+  const dropExitHint = () => it.setPlaceHints((current) => consumePlaceHint(current, { kind: "exit" }));
   // Searches near the trailhead: a described place searches again once the trailhead is picked.
   const trailheadKey = draft.trailhead ? `${draft.trailhead.lat},${draft.trailhead.lon}` : "";
   const setCamp = (index: number, point: ItineraryPoint | null) => {
@@ -411,14 +408,7 @@ function DayRow({
   const layover = index < it.draft.camps.length && it.draft.camps[index].layover;
   // A pass the trip's description named, next in line to be picked.
   const passHint = it.placeHints.checkpoints[index]?.[0] ?? null;
-  const consumePassHint = () => {
-    if (passHint) {
-      it.setPlaceHints((current) => ({
-        ...current,
-        checkpoints: current.checkpoints.map((queue, day) => (day === index ? queue.slice(1) : queue)),
-      }));
-    }
-  };
+  const consumePassHint = () => it.setPlaceHints((current) => consumePlaceHint(current, { kind: "checkpoint", day: index }));
   return (
     <details className="sky-trip-day" open={passHint ? true : undefined}>
       <summary>

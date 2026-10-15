@@ -174,6 +174,13 @@ describe('multi-day trip dates', () => {
     expect(resolveTripDates({ text: 'Oct 16 through Oct 18', today: TODAY })).toMatchObject({ startDate: '2026-10-16', nights: 2 });
   });
 
+  test('a weekday range keeps its order when its first day has passed this week', () => {
+    // 2026-10-17 is a Saturday: this Friday has gone, so the trip is next Friday to the Monday after.
+    expect(resolveTripDates({ text: 'Friday to Monday', today: '2026-10-17' })).toEqual({ startDate: '2026-10-23', nights: 3, notes: [] });
+    expect(resolveTripDates({ text: 'leave Sunday, out Tuesday', today: '2026-10-17' })).toMatchObject({ startDate: '2026-10-18', nights: 2 });
+    expect(resolveTripDates({ text: 'out Oct 18, in on Oct 16', today: TODAY })).toMatchObject({ startDate: '2026-10-16', nights: 2 });
+  });
+
   test('the model start date is used only when the text names none', () => {
     expect(resolveTripDates({ text: 'sometime soon', today: TODAY, modelDate: '2026-10-20' }).startDate).toBe('2026-10-20');
     expect(resolveTripDates({ text: 'Saturday', today: TODAY, modelDate: '2026-10-20' }).startDate).toBe('2026-10-17');

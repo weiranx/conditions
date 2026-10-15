@@ -526,6 +526,21 @@ export interface ItineraryPlaceHints {
 
 export const EMPTY_PLACE_HINTS: ItineraryPlaceHints = { camps: [], exit: null, checkpoints: [] };
 
+/**
+ * The hints once a point is placed at `target`, by search or map tap: that
+ * camp's or the exit's hint is used up, and a day's next pass moves up.
+ */
+export function consumePlaceHint(hints: ItineraryPlaceHints, target: ItineraryPickTarget): ItineraryPlaceHints {
+  if (target.kind === 'camp' && hints.camps[target.index]) {
+    return { ...hints, camps: hints.camps.map((hint, index) => (index === target.index ? null : hint)) };
+  }
+  if (target.kind === 'exit' && hints.exit) return { ...hints, exit: null };
+  if (target.kind === 'checkpoint' && hints.checkpoints[target.day]?.length) {
+    return { ...hints, checkpoints: hints.checkpoints.map((queue, day) => (day === target.day ? queue.slice(1) : queue)) };
+  }
+  return hints;
+}
+
 export const hasPlaceHints = (hints: ItineraryPlaceHints) =>
   Boolean(hints.exit) || hints.camps.some(Boolean) || hints.checkpoints.some((day) => day.length > 0);
 

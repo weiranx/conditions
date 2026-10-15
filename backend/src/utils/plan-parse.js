@@ -316,6 +316,24 @@ const validatePlanParse = (raw, { text, today, units = {} } = {}) => {
   };
 };
 
+const WEEKDAY_PHRASE = new RegExp(`\\b(${WEEKDAY_PATTERN})\\b`);
+
+/**
+ * The dates a trip's text names, as days of the trip. Each weekday reads as
+ * its next occurrence, so a weekday named after the first date ("Friday to
+ * Monday", written on a Saturday) rolls on a week until it is not before it.
+ */
+const tripDatesInText = (text, today) => {
+  const found = findDatesInText(text, today);
+  if (!found.length) return [];
+  const first = found[0].date;
+  return [...new Set(found.map(({ date, phrase }) => {
+    let day = date;
+    if (WEEKDAY_PHRASE.test(phrase)) while (day < first) day = addDays(day, 7);
+    return day;
+  }))].sort();
+};
+
 /**
  * A trip's first day and nights. Dates the text names are read in code: one is
  * the first day, and two or more span the trip from the earliest to the
@@ -323,7 +341,7 @@ const validatePlanParse = (raw, { text, today, units = {} } = {}) => {
  */
 const resolveTripDates = ({ text, today, modelDate, modelNights }) => {
   const notes = [];
-  const found = [...new Set(findDatesInText(text, today).map((entry) => entry.date))].sort();
+  const found = tripDatesInText(text, today);
   let startDate = found[0] ?? null;
   let nights = null;
   if (found.length > 1) nights = daysBetween(found[0], found[found.length - 1]);

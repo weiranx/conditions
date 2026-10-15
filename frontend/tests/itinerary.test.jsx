@@ -6,6 +6,7 @@ import { getDefaultUserPreferences } from '../src/app/preferences';
 import itineraryAssessment from '../../backend/src/utils/itinerary-assessment.js';
 import {
   applyDescribedTrip,
+  consumePlaceHint,
   EMPTY_PLACE_HINTS,
   buildItineraryRequest,
   buildItineraryStages,
@@ -456,4 +457,13 @@ test('Camps puts each described place in its search, and shows a described exit'
   assert.match(html, /aria-label="Exit trailhead results"|placeholder="Exit trailhead: search or lat, lon"/);
   assert.match(html, /<details class="sky-trip-day" open="">/, 'a day with a described pass opens to show it');
   assert.match(html, /value="Glen Pass"/);
+});
+
+test('placing a described point, by search or map tap, uses up its suggestion', () => {
+  const hints = { camps: ['Kearsarge Lakes', 'Rae Lakes'], exit: 'Cottonwood Lakes', checkpoints: [['Kearsarge Pass', 'University Pass']] };
+  assert.deepEqual(consumePlaceHint(hints, { kind: 'camp', index: 1 }).camps, ['Kearsarge Lakes', null]);
+  assert.equal(consumePlaceHint(hints, { kind: 'exit' }).exit, null);
+  assert.deepEqual(consumePlaceHint(hints, { kind: 'checkpoint', day: 0 }).checkpoints, [['University Pass']], 'the next pass moves up');
+  assert.equal(consumePlaceHint(hints, { kind: 'bail' }), hints);
+  assert.equal(consumePlaceHint(EMPTY_PLACE_HINTS, { kind: 'camp', index: 0 }), EMPTY_PLACE_HINTS, 'nothing to use up changes nothing');
 });

@@ -37,7 +37,7 @@ import {
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { buildTripOverlay } from "./itinerary-overlay";
-import { placeDraftPoint } from "../app/itinerary";
+import { consumePlaceHint, placeDraftPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer, shareOrCopyLink } from "./touch";
@@ -271,6 +271,8 @@ export default function FieldApp() {
     // It is named after what is there once the lookup returns.
     it.nameAt(lat, lon);
     it.updateDraft((draft) => placeDraftPoint(draft, target, lat, lon));
+    // A place the trip's description named is placed now; its search stops offering it.
+    it.setPlaceHints((hints) => consumePlaceHint(hints, target));
     it.setPickTarget(null);
   }
   async function tripAction(kind: "save" | "watch") {
