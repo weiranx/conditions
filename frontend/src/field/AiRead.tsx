@@ -109,7 +109,9 @@ function useNow(active: boolean) {
 function ReadProgress({ run, satellite = false }: { run: AiReadRun | null; satellite?: boolean }) {
   const now = useNow(Boolean(run));
   const elapsed = run ? Math.max(0, Math.round((now - run.startedAt) / 1000)) : null;
-  const steps: { state: "done" | "active" | "kept"; text: string }[] = [];
+  const steps: { state: "done" | "active" | "kept" | "next"; text: string }[] = [];
+  // The full read starts once the opening has answered, so until then it waits its turn.
+  const waiting = run?.opening === "pending";
   if (run && run.opening !== "off") {
     steps.push(run.opening === "pending"
       ? { state: "active", text: "Rewriting the opening at the top of the report" }
@@ -117,8 +119,11 @@ function ReadProgress({ run, satellite = false }: { run: AiReadRun | null; satel
         ? { state: "done", text: `Rewrote the opening${run.openingSeconds != null ? ` in ${run.openingSeconds} s` : ""}` }
         : { state: "kept", text: "Kept the checks’ opening" });
   }
-  if (satellite) steps.push({ state: "active", text: "Looking at a recent satellite image of the snow around your objective" });
-  steps.push({ state: "active", text: "Writing the full read: why, what to watch, the best move, and a note for each section" });
+  const next = waiting ? "next" : "active";
+  if (satellite) steps.push({ state: next, text: "Looking at a recent satellite image of the snow around your objective" });
+  steps.push({ state: next, text: waiting
+    ? "Then the full read: why, what to watch, the best move, and a note for each section"
+    : "Writing the full read: why, what to watch, the best move, and a note for each section" });
   return (
     <div className="ai-read-progress">
       <p className="ai-read-status">

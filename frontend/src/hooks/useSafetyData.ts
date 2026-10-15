@@ -428,25 +428,23 @@ export function useSafetyData({
     // The opening the reader has already seen; the full read keeps it rather than
     // changing the top of the report a second time.
     let openingHero: AiBriefHero | null = null;
-    let readArrived = false;
     if (params.opening) {
-      void fetchAiOpening(request).then(
-        (result) => {
-          if (!current() || readArrived) return;
-          const hero = result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
-          openingHero = hero;
-          setAiReadRun((run) => run && { ...run, opening: hero ? 'written' : 'kept', hero, openingSeconds: secondsSince() });
-        },
-        () => {
-          if (!current() || readArrived) return;
-          setAiReadRun((run) => run && { ...run, opening: 'kept', openingSeconds: secondsSince() });
-        },
-      );
+      // The opening goes first and alone: the full read starts only once it has
+      // answered or failed, so no other AI request competes with the top of the report.
+      try {
+        const result = await fetchAiOpening(request);
+        if (!current()) return;
+        const hero = result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
+        openingHero = hero;
+        setAiReadRun((run) => run && { ...run, opening: hero ? 'written' : 'kept', hero, openingSeconds: secondsSince() });
+      } catch {
+        if (!current()) return;
+        setAiReadRun((run) => run && { ...run, opening: 'kept', openingSeconds: secondsSince() });
+      }
     }
     try {
       const result = await fetchAiBrief(request);
       if (!current()) return;
-      readArrived = true;
       const readHero = result.hero === undefined
         ? undefined
         : result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
@@ -478,8 +476,7 @@ export function useSafetyData({
     } catch (err) {
       if (!current()) return;
       setAiBriefError(err instanceof Error ? err.message : 'AI brief unavailable');
-      // An opening already written stays; one still pending is no longer awaited.
-      readArrived = true;
+      // An opening already written stays.
       setAiReadRun((run) => run && (run.opening === 'pending' ? { ...run, opening: 'kept' } : run));
     } finally {
       if (current()) setAiBriefLoadingState(false);
