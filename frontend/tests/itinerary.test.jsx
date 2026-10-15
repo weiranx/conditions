@@ -5,6 +5,8 @@ import { makeReport } from '../dev/mock-data.mjs';
 import { getDefaultUserPreferences } from '../src/app/preferences';
 import itineraryAssessment from '../../backend/src/utils/itinerary-assessment.js';
 import {
+  applyDescribedTrip,
+  EMPTY_PLACE_HINTS,
   buildItineraryRequest,
   buildItineraryStages,
   campPoint,
@@ -364,7 +366,7 @@ test('Camps waits for the trailhead, then marks the camp the next map tap places
       workspace={{
         ...workspaceFor(checked(['clear', 'clear', 'clear'])),
         featureFlags: {},
-        itinerary: { draft, stages: null, activeTarget, pickTarget: null, maxNights: 6, updateDraft: () => {}, setPickTarget: () => {}, nameAt: () => {} },
+        itinerary: { draft, stages: null, activeTarget, pickTarget: null, maxNights: 6, placeHints: EMPTY_PLACE_HINTS, updateDraft: () => {}, setPickTarget: () => {}, setPlaceHints: () => {}, nameAt: () => {} },
       }}
     />,
   );
@@ -380,4 +382,78 @@ test('Camps waits for the trailhead, then marks the camp the next map tap places
   assert.match(html, /Tap the map to place it/);
   assert.match(html, /Add a night/);
   assert.match(html, /Remove last night/);
+});
+
+test('a described trip sets the days and nights, and leaves each named place to be picked', () => {
+  const draft = draftFor((current) => ({ ...current, exit: CAMP_2 }));
+  const plan = {
+    date: date(2),
+    startTime: '08:00',
+    params: { travel_window_hours: 6 },
+    trip: {
+      name: 'Enchantments traverse',
+      nights: 3,
+      camps: [{ placeQuery: 'Colchuck Lake', layover: false }, { placeQuery: null, layover: true }, { placeQuery: null, layover: false }],
+      exit: 'Stuart Lake trailhead',
+      passes: [['Aasgard Pass'], [], [], [], ['Past the end']],
+    },
+  };
+  const { draft: next, hints, notes, nightsCut } = applyDescribedTrip(draft, plan, { todayDate: today, maxForecastDate: date(10) });
+  assert.equal(next.startDate, date(2));
+  assert.equal(next.name, 'Enchantments traverse');
+  assert.equal(next.camps.length, 3);
+  assert.equal(nightsCut, false);
+  assert.deepEqual(next.camps, [{ point: null, layover: false }, { point: null, layover: true }, { point: null, layover: false }]);
+  assert.equal(next.exit, null, 'a named exit replaces the one there, to be picked');
+  assert.ok(next.days.every((day) => day.start === '08:00' && day.travelHours === 6));
+  assert.deepEqual(next.days[0].checkpoints, []);
+  assert.deepEqual(hints, { camps: ['Colchuck Lake'], exit: 'Stuart Lake trailhead', checkpoints: [['Aasgard Pass']] });
+  assert.match(notes[0], /Past the end: past the trip's last day/);
+  assert.equal(next.trailhead, TRAILHEAD, 'the trailhead goes through the plan search');
+
+  const unnamed = applyDescribedTrip(draft, { date: null, startTime: null, params: {}, trip: { name: null, nights: null, camps: [], exit: null, passes: [] } }, { todayDate: today, maxForecastDate: date(10) });
+  assert.deepEqual(unnamed.draft, draft, 'what the description does not name stays');
+});
+
+test('a described trip is cut to the forecast days, and a start past them is a note', () => {
+  const draft = draftFor();
+  const plan = { date: date(4), startTime: null, params: {}, trip: { name: null, nights: 5, camps: [], exit: null, passes: [] } };
+  const cut = applyDescribedTrip(draft, plan, { todayDate: today, maxForecastDate: date(6) });
+  assert.equal(cut.draft.camps.length, 2);
+  assert.equal(cut.nightsCut, true);
+  assert.match(cut.notes[0], /forecast reaches 2 nights/);
+
+  const late = applyDescribedTrip(draft, { ...plan, date: date(9) }, { todayDate: today, maxForecastDate: date(6) });
+  assert.equal(late.draft.startDate, draft.startDate);
+  assert.match(late.notes[0], /past the forecast days/);
+});
+
+test('Camps puts each described place in its search, and shows a described exit', () => {
+  const draft = { ...createItineraryDraft({ startDate: date(1), start: '07:00', travelHours: 7, nights: 2 }), trailhead: TRAILHEAD };
+  const html = renderToStaticMarkup(
+    <ItineraryCamps
+      onChooseMap={() => {}}
+      workspace={{
+        ...workspaceFor(checked(['clear', 'clear', 'clear'])),
+        featureFlags: {},
+        itinerary: {
+          draft,
+          stages: null,
+          activeTarget: null,
+          pickTarget: null,
+          maxNights: 6,
+          placeHints: { camps: [null, 'Rae Lakes'], exit: 'Cottonwood Lakes', checkpoints: [['Glen Pass']] },
+          updateDraft: () => {},
+          setPickTarget: () => {},
+          setPlaceHints: () => {},
+          nameAt: () => {},
+        },
+      }}
+    />,
+  );
+  assert.match(html, /value="Rae Lakes"/);
+  assert.match(html, /value="Cottonwood Lakes"/);
+  assert.match(html, /aria-label="Exit trailhead results"|placeholder="Exit trailhead: search or lat, lon"/);
+  assert.match(html, /<details class="sky-trip-day" open="">/, 'a day with a described pass opens to show it');
+  assert.match(html, /value="Glen Pass"/);
 });

@@ -908,6 +908,19 @@ export function createMockApi({ databasePath } = {}) {
         maxGust: gust ? { value: Number(gust[1]), unit: gust[2].toLowerCase().replace("km/h", "kph") } : null,
         notes: ["Demo parse: no AI provider was contacted."],
       };
+      if (body.mode === "multi") {
+        // "camps A, B, layover, out at C": the camps after "camp(s)", the exit after "out at".
+        const nights = text.match(/(\d+)\s*nights?/i);
+        const camps = text.match(/\bcamps?(?: at)?\s*:?\s*([^.;]+?)(?:,?\s*out at\b|[.;]|$)/i);
+        const exit = text.match(/\bout at\s+([^,.;]+)/i);
+        Object.assign(answer, {
+          nights: nights ? Number(nights[1]) : null,
+          camps: camps ? camps[1].split(/,\s*/).filter(Boolean).map((camp) => (/^layover$/i.test(camp.trim()) ? { place: null, layover: true } : { place: camp.trim(), layover: false })) : [],
+          exit: exit ? exit[1].trim() : null,
+          passes: [],
+        });
+        return ok(planParse.validateTripParse(answer, { text, today: body.today, units: body.units || {} }));
+      }
       return ok(planParse.validatePlanParse(answer, { text, today: body.today, units: body.units || {} }));
     }
     if (p === "/api/trip-debrief") {

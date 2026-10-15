@@ -1,6 +1,6 @@
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { isCalendarDate } = require('../utils/plan-context');
-const { PLAN_TEXT_MAX_LENGTH, parsePlanSentence } = require('../utils/plan-parse');
+const { PLAN_TEXT_MAX_LENGTH, TRIP_TEXT_MAX_LENGTH, parsePlanSentence } = require('../utils/plan-parse');
 const { logger } = require('../utils/logger');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 
@@ -15,9 +15,11 @@ const readUnits = (units) => {
 };
 
 /**
- * POST /api/plan-parse { text, today, units? }: a sentence describing a plan,
- * read into the plan form's fields. Nothing is searched or evaluated here; the
- * client puts the place through its search and the fields through its form.
+ * POST /api/plan-parse { text, today, units?, mode? }: a sentence describing a
+ * plan, read into the plan form's fields; `mode: "multi"` reads a multi-day
+ * trip, adding its nights, camps, exit and passes under `trip`. Nothing is
+ * searched or evaluated here; the client puts each place through its search
+ * and the fields through its form.
  */
 const registerPlanParseRoute = ({
   app,
@@ -26,13 +28,18 @@ const registerPlanParseRoute = ({
   ensureFeatureEnabled = () => assertAIFeatureEnabled('planParse'),
 }) => {
   app.post('/api/plan-parse', async (req, res) => {
-    const { text, today, units } = req.body || {};
+    const { text, today, units, mode } = req.body || {};
     const sentence = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
     if (!sentence || !isCalendarDate(today)) {
       return res.status(400).json({ error: 'Missing required fields: text, today (YYYY-MM-DD)' });
     }
-    if (sentence.length > PLAN_TEXT_MAX_LENGTH) {
-      return res.status(413).json({ error: `Describe the plan in ${PLAN_TEXT_MAX_LENGTH} characters or fewer.` });
+    if (mode !== undefined && mode !== 'day' && mode !== 'multi') {
+      return res.status(400).json({ error: 'mode must be "day" or "multi"' });
+    }
+    const trip = mode === 'multi';
+    const maxLength = trip ? TRIP_TEXT_MAX_LENGTH : PLAN_TEXT_MAX_LENGTH;
+    if (sentence.length > maxLength) {
+      return res.status(413).json({ error: `Describe the ${trip ? 'trip' : 'plan'} in ${maxLength} characters or fewer.` });
     }
     if (!(await ensureAccountAccess(req, res))) return;
     try {
@@ -48,6 +55,7 @@ const registerPlanParseRoute = ({
         units: readUnits(units),
         askAI,
         userId: req.accountUser.id,
+        trip,
       });
       return res.json(plan);
     } catch (error) {
