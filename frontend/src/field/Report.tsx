@@ -275,20 +275,22 @@ export function Report({
   const hero = aiFirst ? shownAiHero(w.aiReadRun, w.aiBriefDetails, decision.level) : null;
   const heroHeadline = hero?.headline ?? headline;
   const heroReason = hero?.reason ?? copy.reason;
-  const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
+  const autoReadWanted = aiFirst && w.preferences.autoAiRead && ai.aiBrief && !w.viewingHistoryReport;
+  const autoRead = autoReadWanted && Boolean(w.accountUser);
   // A read written before the AI also wrote the report's opening (no hero in its
   // details) is outdated under AI-first, so it is written again once.
   const outdatedRead = isOutdatedRead(w.aiBriefNarrative, w.aiBriefDetails);
   const [checksWording, setChecksWording] = useState(false);
   const openingPending = aiFirst && !hero && w.aiBriefLoading && w.aiReadRun?.opening === "pending";
   // When an AI read is about to write this report's first opening, the top waits
-  // for it rather than showing the checks' wording and swapping it seconds later;
-  // the badge, timeline and checks show meanwhile. A read that can't start, fails
-  // or runs slow lets the checks' wording through (useOpeningHold's time limit).
+  // for it rather than showing the checks' wording and swapping it later, including
+  // while the account it needs is still loading; the badge, timeline and checks
+  // show meanwhile. An opening that fails, a reader who turns out to be signed out,
+  // or an answer that never arrives (useOpeningHold's time limit) lets the checks' wording through.
   const firstRead = !w.aiBriefNarrative || outdatedRead;
+  const readStarting = autoReadWanted && (Boolean(w.accountUser) || w.accountLoading) && !w.aiBriefLoading;
   const opening = useOpeningHold({
-    expected: aiFirst && !hero && firstRead && !w.aiBriefError
-      && (openingPending || (autoRead && !w.aiBriefLoading)),
+    expected: aiFirst && !hero && firstRead && !w.aiBriefError && (openingPending || readStarting),
     key: readKey,
   });
   // Says which text is the AI's and keeps the checks' own wording one tap away,

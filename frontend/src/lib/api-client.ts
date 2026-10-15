@@ -131,7 +131,8 @@ async function overNetwork<T>(step: Promise<T>): Promise<T> {
   }
 }
 
-export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFetchResult> {
+/** `retries` caps the retries after a 408/429/502/503 or a dropped request (default 2). */
+export async function fetchApi(path: string, init?: RequestInit, { retries = MAX_RETRIES }: { retries?: number } = {}): Promise<ApiFetchResult> {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   // Retrying cannot help with no network, and would keep the person waiting on a loading state.
   if (!import.meta.env.DEV && isOffline()) throw new NetworkUnavailableError(true);
@@ -145,7 +146,7 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
     }
     const requestUrl = attemptUrls[index];
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
         const response = await fetch(requestUrl, {
           credentials: 'include',
@@ -158,7 +159,7 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
           break;
         }
 
-        if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
+        if (isRetryableStatus(response.status) && attempt < retries) {
           await delay(RETRY_DELAYS_MS[attempt], init?.signal);
           continue;
         }
@@ -173,7 +174,7 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
           throw error;
         }
         lastError = error;
-        if (attempt < MAX_RETRIES) {
+        if (attempt < retries) {
           await delay(RETRY_DELAYS_MS[attempt], init?.signal);
           continue;
         }
@@ -290,11 +291,13 @@ export interface AiOpeningResponse {
 
 /** The report's AI opening alone, written by a fast model while the full read is still being written. */
 export async function fetchAiOpening(data: AiBriefRequest): Promise<AiOpeningResponse> {
+  // Never retried: the top of the report waits for this answer, and a failed
+  // opening is better replaced by the checks' wording at once than asked again.
   const { response, payload } = await fetchApi('/api/ai-brief/opening', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
-  });
+  }, { retries: 0 });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'AI opening unavailable'));
   return payload as AiOpeningResponse;
 }

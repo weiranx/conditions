@@ -220,6 +220,14 @@ test('a failed opening keeps the checks\' wording until the read brings its own'
   assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the read');
 });
 
+test('an opening that times out is not asked again: the checks\' wording shows at once', async t => {
+  const h = await startAiRead(t);
+  await act(async () => h.requests[0].respond({ error: 'Request timed out.' }, 503));
+  assert.equal(h.requests.length, 2, 'no second opening request while the read is written');
+  assert.equal(h.current.aiReadRun.opening, 'kept');
+  assert.equal(h.current.aiBriefLoading, true);
+});
+
 test('an opening that arrives after the read is ignored', async t => {
   const h = await startAiRead(t);
   await act(async () => h.requests[1].respond(aiRead(aiHeroFor('Opening from the read'))));
