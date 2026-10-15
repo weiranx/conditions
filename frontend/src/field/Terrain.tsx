@@ -641,6 +641,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               <SnowAnalysis
                 text={w.snowVisionAnalysis}
                 image={w.snowVisionImage}
+                imagery={w.snowVisionImagery}
                 stale={w.snowVisionLoading}
               />
               <p className="ai-brief-footnote">
@@ -654,8 +655,9 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               <div className="ai-brief-empty">
                 <p>
                   An AI read of recent Sentinel-2 imagery around your objective,
-                  checked against nearby snow stations. Imagery can lag current
-                  conditions by days.
+                  checked against nearby snow stations. It runs with the
+                  report’s AI read. Imagery can lag current conditions by days,
+                  so check the date it was taken.
                 </p>
                 <button
                   className="field-button field-button-primary"

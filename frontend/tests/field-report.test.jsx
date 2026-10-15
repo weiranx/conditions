@@ -475,8 +475,24 @@ test("snow analysis splits upper-case labels only and leads with coverage and ta
     ["coverage", "takeaway", "terrain", "ground", "uncertainty"],
   );
   assert.match(html, /ai-explanation-supporting is-three/);
-  assert.match(html, /<figcaption>Sentinel-2/);
+  assert.match(html, /<figcaption>[^]*Sentinel-2 true colour/);
   assert.doesNotMatch(renderToStaticMarkup(<SnowAnalysis text={text} />), /<figure/);
+});
+
+test("snow analysis shows the date its satellite image was taken", () => {
+  const text = "SNOW COVERAGE: Mostly snow-covered. TRAVEL TAKEAWAY: Expect snow from the trailhead.";
+  const imagery = { acquiredAt: "2026-10-03T18:40:00Z", cloudCover: 7.6 };
+  const dated = renderToStaticMarkup(
+    <SnowAnalysis text={text} image="data:image/png;base64,AA==" imagery={imagery} />,
+  );
+  assert.match(dated, /class="ai-snow-stamp"[^>]*>Oct 3, 2026</, "the date is stamped on the image");
+  assert.match(dated, /<figcaption>[^]*Imaged <strong>Oct 3, 2026 · \d+ days? ago<\/strong> · 8% cloud/);
+  assert.match(dated, /alt="[^"]*imaged Oct 3, 2026/);
+  // Without the image the date still leads the analysis.
+  assert.match(renderToStaticMarkup(<SnowAnalysis text={text} imagery={imagery} />), /^<p class="ai-snow-date">[^]*Oct 3, 2026/);
+  // Analyses saved before the date was kept, or a 30-day mosaic, say so instead of guessing.
+  assert.match(renderToStaticMarkup(<SnowAnalysis text={text} />), /Least-cloudy pass in the last 30 days · date not reported/);
+  assert.doesNotMatch(renderToStaticMarkup(<SnowAnalysis text={text} image="data:image/png;base64,AA==" imagery={{ acquiredAt: null }} />), /ai-snow-stamp/);
 });
 
 import {

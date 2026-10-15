@@ -323,13 +323,17 @@ export function Report({
       </p>
     </div>
   ) : null;
+  // The satellite snow analysis is part of the AI read: it is read alongside it wherever the
+  // report shows satellite snow imagery, and saved reports keep what was read.
+  const snowRead = flags.satelliteImagery && flags.snowpackDetails && (ai.snowVision || Boolean(w.snowVisionAnalysis));
+  const readSnow = snowRead && ai.snowVision;
   useEffect(() => {
     if (!autoRead || (w.aiBriefNarrative && !outdatedRead) || w.aiBriefLoading || w.aiBriefError) return;
     const key = outdatedRead ? `${readKey}|outdated` : readKey;
     if (autoReadKey.current === key) return;
     autoReadKey.current = key;
-    void w.handleRequestAiBriefAction({ opening: true });
-  }, [autoRead, readKey, outdatedRead, w.aiBriefNarrative, w.aiBriefLoading, w.aiBriefError, w]);
+    void w.handleRequestAiBriefAction({ opening: true, snowVision: readSnow });
+  }, [readSnow, autoRead, readKey, outdatedRead, w.aiBriefNarrative, w.aiBriefLoading, w.aiBriefError, w]);
   function go(next: ReportPlace, anchor?: string, smooth = true) {
     const hash = next === "summary" ? "" : buildReportSectionHash(`planner-section-${next}`);
     window.history.replaceState(
@@ -618,7 +622,15 @@ export function Report({
       run={w.aiReadRun}
       acrossReport={aiFirst}
       openingRewritten={Boolean(hero)}
-      onRequest={() => void w.handleRequestAiBriefAction({ opening: aiFirst })}
+      snow={snowRead ? {
+        analysis: w.snowVisionAnalysis,
+        image: w.snowVisionImage,
+        imagery: w.snowVisionImagery,
+        loading: w.snowVisionLoading,
+        error: w.snowVisionError,
+        onOpen: () => go("terrain", "sky-terrain-satellite"),
+      } : null}
+      onRequest={() => void w.handleRequestAiBriefAction({ opening: aiFirst, snowVision: readSnow })}
       onAsk={(text) => {
         if (!w.requestAiAccess()) return;
         setChatAsk((previous) => ({ id: (previous?.id ?? 0) + 1, text, session: w.reportChatSessionKey }));

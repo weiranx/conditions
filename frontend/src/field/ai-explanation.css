@@ -225,6 +225,38 @@
   line-height: 1.45;
   color: var(--ai-secondary);
 }
+.ai-snow-frame {
+  position: relative;
+}
+.ai-snow-stamp {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  background: rgb(0 0 0 / 62%);
+  font-variant-numeric: tabular-nums;
+}
+.ai-snow-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ai-secondary);
+}
+.ai-snow-date svg {
+  flex: none;
+}
+.ai-snow-date strong {
+  font-weight: 600;
+  color: var(--ai-label, currentColor);
+}
 .ai-explanation-skeleton {
   display: grid;
   gap: 10px;

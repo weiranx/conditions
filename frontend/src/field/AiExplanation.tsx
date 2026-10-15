@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import {
   Binoculars,
+  CalendarDays,
   Compass,
   Gauge,
   Info,
@@ -19,6 +20,8 @@ import {
   parseSnowAnalysis,
   type LabeledSection,
 } from "./ai-explanation";
+import { imageryDateLabel } from "./data";
+import type { SnowVisionImagery } from "../app/types";
 import "./ai-explanation.css";
 
 type Layout = {
@@ -152,31 +155,56 @@ export function AiExplanation({
   );
 }
 
+/** When the analyzed pass was imaged; older saved analyses only know it was within 30 days. */
+export function SnowImageryDate({ imagery }: { imagery?: SnowVisionImagery | null }) {
+  const date = imageryDateLabel(imagery?.acquiredAt);
+  const cloud = imagery?.cloudCover != null ? ` · ${Math.round(imagery.cloudCover)}% cloud` : "";
+  return (
+    <p className="ai-snow-date">
+      <CalendarDays size={14} aria-hidden="true" />
+      {date ? (
+        <span>Imaged <strong>{date}</strong>{cloud}</span>
+      ) : (
+        <span>Least-cloudy pass in the last 30 days · date not reported</span>
+      )}
+    </p>
+  );
+}
+
 export function SnowAnalysis({
   text,
   image,
+  imagery,
   stale = false,
 }: {
   text: string;
   image?: string | null;
+  imagery?: SnowVisionImagery | null;
   stale?: boolean;
 }) {
+  const date = imageryDateLabel(imagery?.acquiredAt);
   const media = image ? (
     <figure className="ai-snow-figure">
-      <img src={image} alt="Sentinel-2 true-colour satellite image used for the snow analysis" />
+      <div className="ai-snow-frame">
+        <img src={image} alt={`Sentinel-2 true-colour satellite image used for the snow analysis${date ? `, imaged ${date}` : ""}`} />
+        {date && <span className="ai-snow-stamp" aria-hidden="true">{date.split(" · ")[0]}</span>}
+      </div>
       <figcaption>
-        Sentinel-2 true colour · about 5 × 5 km centred on the objective ·
-        least-cloudy pass in the last 30 days
+        <SnowImageryDate imagery={imagery} />
+        Sentinel-2 true colour · about 5 × 5 km centred on the objective
       </figcaption>
     </figure>
   ) : undefined;
   return (
-    <AiSections
-      sections={parseSnowAnalysis(text)}
-      layout={snowLayout}
-      stale={stale}
-      media={media}
-    />
+    <>
+      {!image && <SnowImageryDate imagery={imagery} />}
+      <AiSections
+        sections={parseSnowAnalysis(text)}
+        layout={snowLayout}
+        stale={stale}
+        media={media}
+      />
+    </>
   );
 }
 

@@ -6,7 +6,7 @@ import {
 } from './constants';
 import { isValidLatLon, parseTimeInputMinutes } from './core';
 import { hasStoredUserPreferences, normalizeUserPreferences } from './preferences';
-import type { ActivityType, AiBriefCitation, AiBriefDetails, SafetyData, UserPreferences } from './types';
+import type { ActivityType, AiBriefCitation, AiBriefDetails, SafetyData, SnowVisionImagery, UserPreferences } from './types';
 import { buildSafetyRequestKey } from './url-state';
 import { reportActivity } from './activity-profiles';
 import type { RouteAnalysisResult, RouteOption, RouteShapeChoice } from '../hooks/useRouteAnalysis';
@@ -35,6 +35,8 @@ export interface PersistedReportAiFields {
   aiBriefDetails?: AiBriefDetails | null;
   snowVisionAnalysis: string | null;
   snowVisionImage: string | null;
+  /** The pass `snowVisionAnalysis` read; reports saved before it was kept have none. */
+  snowVisionImagery?: SnowVisionImagery | null;
   reportChatMessages: PersistedReportChatMessage[];
 }
 
@@ -77,6 +79,13 @@ const citations = (list: unknown[]): AiBriefCitation[] => list
     && typeof claim.path === 'string'
     && ['string', 'number', 'boolean'].includes(typeof claim.value))
   .map(({ path, value: cited }) => ({ path, value: cited }));
+
+export function parseSnowVisionImagery(value: unknown): SnowVisionImagery | null {
+  if (!isRecord(value)) return null;
+  const acquiredAt = typeof value.acquiredAt === 'string' && Number.isFinite(Date.parse(value.acquiredAt)) ? value.acquiredAt : null;
+  const cloudCover = typeof value.cloudCover === 'number' && Number.isFinite(value.cloudCover) ? value.cloudCover : null;
+  return { acquiredAt, cloudCover };
+}
 
 export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBriefDetails | null {
   if (!isRecord(value) || typeof narrative !== 'string' || value.narrative !== narrative) return null;
@@ -319,6 +328,9 @@ export function parsePersistedReport(value: unknown): PersistedReport | null {
         : null,
       snowVisionImage: isRecord(value.ai) && typeof value.ai.snowVisionImage === 'string'
         ? value.ai.snowVisionImage
+        : null,
+      snowVisionImagery: isRecord(value.ai) && typeof value.ai.snowVisionAnalysis === 'string'
+        ? parseSnowVisionImagery(value.ai.snowVisionImagery)
         : null,
       reportChatMessages: isRecord(value.ai)
         ? parseChatMessages(value.ai.reportChatMessages)
