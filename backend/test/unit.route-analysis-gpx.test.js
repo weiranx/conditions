@@ -59,7 +59,25 @@ test('route suggestions use the fast model tier', async () => {
 
   expect(response.status).toBe(200);
   expect(calls).toHaveLength(1);
-  expect(calls[0].options).toMatchObject({ tier: 'fast', maxTokens: 2048 });
+  expect(calls[0].options).toMatchObject({ tier: 'fast', maxTokens: 2048, timeoutMs: 15000 });
+});
+
+test('route suggestions that time out say what to do next', async () => {
+  const app = express();
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => { throw new Error('Request timed out.'); },
+    invokeSafetyHandler: jest.fn(),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+  });
+
+  const response = await request(app)
+    .get('/api/route-suggestions')
+    .query({ peak: 'Slow Provider Peak', lat: 46.1912, lon: -122.1944 });
+
+  expect(response.status).toBe(504);
+  expect(response.body.error).toBe('Finding routes took too long. Try again, or enter a route name.');
 });
 
 test('disabled product route analysis blocks suggestions before checking AI', async () => {

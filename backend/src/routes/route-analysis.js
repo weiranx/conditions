@@ -61,6 +61,12 @@ const MAX_MAPPED_GAP_KM = 2;
 // An AI landmark found on the map within this distance of a mapped checkpoint names it.
 const MAPPED_NAME_MATCH_KM = 0.6;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
+// Three routes as JSON is more than the fast tier's 8s budget reliably allows, so each
+// provider gets longer. The whole lookup, failover included, ends before nginx's 30s
+// read timeout on /api/ so the caller gets an answer it can show rather than a gateway page.
+const ROUTE_SUGGESTION_PROVIDER_TIMEOUT_MS = 15000;
+const ROUTE_SUGGESTION_TIMEOUT_MS = 27000;
+const ROUTE_SUGGESTION_TIMEOUT_MESSAGE = 'Finding routes took too long. Try again, or enter a route name.';
 
 // Named routes and landmarks don't change day to day, so AI answers are kept for a
 // week without background regeneration, which would also reshuffle checkpoints.
@@ -488,15 +494,22 @@ const registerRouteAnalysisRoutes = ({
 
     try {
       const suggestCacheKey = `${normalizeTextKey(safePeak)}|${normalizeCoordKey(safeLat, safeLon)}`;
-      const routes = await routeSuggestionsCache.getOrFetch(suggestCacheKey, async () => {
+      // A lookup that outlasts this request keeps running and fills the cache, so trying again finds it.
+      const routes = await withTimeout(routeSuggestionsCache.getOrFetch(suggestCacheKey, async () => {
         const text = await askAI(
-          `List all well-known hiking, climbing, and scrambling routes for ${safePeak} near coordinates (${safeLat}, ${safeLon}) in the United States. Include 3 routes covering a range of difficulty levels.
+          `List 3 well-known hiking, climbing, or scrambling routes for ${safePeak} near coordinates (${safeLat}, ${safeLon}) in the United States, covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-          { maxTokens: 2048, tier: 'fast', feature: 'route-suggestions', userId: req.accountUser.id }
+          {
+            maxTokens: 2048,
+            tier: 'fast',
+            timeoutMs: ROUTE_SUGGESTION_PROVIDER_TIMEOUT_MS,
+            feature: 'route-suggestions',
+            userId: req.accountUser.id,
+          }
         );
         return parseJsonArrayFromAI(text);
-      });
+      }), ROUTE_SUGGESTION_TIMEOUT_MS, 'Route suggestions');
       // Suggestions are cached per objective; the time depends on the caller's pace, so it is added per request.
       const pace = sanitizeRoutePace({
         minutesPerMile: req.query.pace_min_per_mile,
@@ -517,6 +530,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       }) : routes);
     } catch (err) {
       logger.error({ err }, 'route-suggestions error');
+      // Provider SDKs report a timeout as "Request timed out.", which says nothing about what to do next.
+      if (/timed out/i.test(err?.message || '')) return res.status(504).json({ error: ROUTE_SUGGESTION_TIMEOUT_MESSAGE });
       return res.status(500).json({ error: err.message });
     }
   });
