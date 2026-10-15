@@ -242,31 +242,38 @@ test('the opening a read in progress just wrote leads, beside a decision no stri
   assert.equal(shownAiHero(run, null, 'NO-GO'), null);
 });
 
-const snowText = 'SNOW COVERAGE: About 70% snow above 9,000 ft. TERRAIN PATTERN: North slopes hold more. GROUND CHECK: The station agrees. UNCERTAINTY: Some shadow. TRAVEL TAKEAWAY: Carry traction above treeline.';
-const snow = (overrides = {}) => ({
-  analysis: snowText, image: 'data:image/png;base64,AA==', imagery: { acquiredAt: '2026-10-03T18:40:00Z', cloudCover: 4 },
-  loading: false, error: null, onOpen() {}, ...overrides,
+const satellite = {
+  text: 'The image from October 8, six days before the trip, shows continuous snow above treeline and bare slopes lower down.',
+  evidence: [{ path: 'satelliteImage.acquiredDate', value: '2026-10-08' }],
+  image: 'data:image/png;base64,AA==',
+  imagery: { acquiredAt: '2026-10-08T18:40:12Z', cloudCover: 4 },
+};
+
+test('where snow shapes the trip, the AI read shows the satellite image it looked at, with its date and what it saw', () => {
+  const html = read({ details: { ...details, satellite } });
+  assert.match(html, /Best move[^]*ai-read-snow[^]*<img class="ai-read-snow-image" src="data:image\/png;base64,AA=="[^>]*alt="[^"]*taken Oct 8, 2026[^]*Satellite snow cover[^]*Imaged <strong>Oct 8, 2026[^]*4% cloud[^]*continuous snow above treeline[^]*Based on[^]*Satellite image date[^]*ai-read-more/);
+  assert.match(read({ details: { ...details, satellite: { ...satellite, text: null, evidence: [] } } }), /ai-read-snow[^]*didn’t pass the report’s fact checks, so only the image is shown/);
+  assert.doesNotMatch(read(), /ai-read-snow/, 'no image when snow does not shape the trip');
 });
 
-test('the AI read includes the satellite snow analysis with the date its image was taken', () => {
-  const html = read({ snow: snow() });
-  assert.match(html, /Best move[^]*ai-read-snow[^]*Satellite snow imagery[^]*Imaged <strong>Oct 3, 2026[^]*Snow coverage\.<\/strong> About 70% snow[^]*Travel takeaway\.<\/strong> Carry traction[^]*Full satellite analysis[^]*ai-read-more/);
-  assert.doesNotMatch(html, /North slopes hold more/, 'the rest stays in Terrain');
-  assert.match(read({ snow: snow({ analysis: null, image: null, imagery: null, loading: true }) }), /ai-read-snow is-loading[^]*Reading recent Sentinel-2 satellite imagery/);
-  assert.match(read({ snow: snow({ analysis: null, image: null, imagery: null, error: 'Satellite snow analysis unavailable' }) }), /role="alert">Satellite snow analysis unavailable/);
-  assert.doesNotMatch(read({ snow: snow({ analysis: null, image: null, imagery: null }) }), /ai-read-snow/);
-  assert.doesNotMatch(read(), /ai-read-snow/);
-});
-
-test('while the AI writes, it says when it is reading satellite imagery and which pass it read', () => {
+test('while the AI writes a read where snow matters, it says it is looking at satellite imagery', () => {
   const run = { startedAt: Date.now(), opening: 'off', hero: null, openingSeconds: null, seconds: null };
-  const reading = read({ narrative: null, details: null, loading: true, run, snow: snow({ analysis: null, loading: true }) });
-  assert.match(reading, /<li class="is-active">[^]*Reading recent satellite imagery for snow cover[^]*<li class="is-active">[^]*Writing the full read/);
-  const done = read({ narrative: null, details: null, loading: true, run, snow: snow() });
-  assert.match(done, /<li class="is-done">[^]*Read satellite imagery from Oct 3, 2026/);
+  assert.match(read({ narrative: null, details: null, loading: true, run, readsSatellite: true }), /<li class="is-active">[^]*Looking at a recent satellite image of the snow[^]*<li class="is-active">[^]*Writing the full read/);
+  assert.doesNotMatch(read({ narrative: null, details: null, loading: true, run }), /satellite/);
+});
+
+test('a saved read keeps the satellite image it looked at, and drops a malformed one', () => {
+  assert.deepEqual(parseAiBriefDetails({ ...details, satellite }, narrative).satellite, satellite);
+  assert.equal(parseAiBriefDetails({ ...details, satellite: { ...satellite, image: 'https://example.com/x.png' } }, narrative).satellite, undefined);
+  assert.equal(parseAiBriefDetails(details, narrative).satellite, undefined);
+  assert.deepEqual(parseAiBriefDetails({ ...details, satellite: { image: satellite.image, imagery: { acquiredAt: 'nope' } } }, narrative).satellite,
+    { text: null, evidence: [], image: satellite.image, imagery: { acquiredAt: null, cloudCover: null } });
+  assert.equal(evidenceLabel('satelliteImage.acquiredDate'), 'Satellite image date');
+  assert.equal(evidenceChapter('satelliteImage.acquiredDate'), null);
 });
 
 test('a saved report keeps the date of the satellite pass its snow analysis read', () => {
+  const snowText = 'SNOW COVERAGE: About 70% snow above 9,000 ft. TRAVEL TAKEAWAY: Carry traction above treeline.';
   const plan = { lat: 46.85, lon: -121.76, forecastDate: '2026-10-14', alpineStartTime: '07:00', travelWindowHours: 10, objectiveName: 'Rainier', searchQuery: '', targetElevationInput: '' };
   const data = makeReport({ lat: plan.lat, lon: plan.lon, date: plan.forecastDate, start: plan.alpineStartTime, travel_window_hours: 10 }, 'clear');
   const ai = { aiBriefNarrative: null, snowVisionAnalysis: snowText, snowVisionImage: null, reportChatMessages: [] };

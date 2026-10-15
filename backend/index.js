@@ -1086,7 +1086,7 @@ registerRouteAnalysisRoutes({
   ensureAccountAccess,
   fetchElevationFt: (lat, lon) => fetchObjectiveElevationFt(lat, lon, { headers: DEFAULT_FETCH_HEADERS }),
 });
-registerAiBriefRoute({ app, askAI, ensureAccountAccess });
+registerAiBriefRoute({ app, askAI, askAIVision, fetchWithTimeout, tileCache: satelliteTileCache, ensureAccountAccess });
 registerReportChatRoute({ app, ensureAccountAccess });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
 registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision, ensureAccountAccess });
