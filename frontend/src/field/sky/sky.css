@@ -65,6 +65,15 @@
 .sky-pill.is-stop { color: #9e2f22; }
 .sky-pill.is-go { color: #1e5a43; }
 .sky-hero h2 { margin: 12px 0 0; font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.022em; max-width: 26ch; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); outline: none; }
+/* Where the AI's opening will go while it is written: the shape of a headline and reason. */
+.sky-hero :is(h2, .sky-lede).is-writing { display: grid; gap: 8px; }
+.sky-hero h2.is-writing { padding: 5px 0; }
+.sky-hero .sky-lede.is-writing { gap: 7px; padding: 3px 0; }
+.sky-writing-line { display: block; width: min(22ch, 100%); height: 0.8em; border-radius: 6px; background: linear-gradient(90deg, rgba(255, 255, 255, 0.16) 30%, rgba(255, 255, 255, 0.34) 50%, rgba(255, 255, 255, 0.16) 70%) 0 0 / 300% 100%; animation: ai-brief-shimmer 1.4s ease-in-out infinite; }
+.sky-writing-line.is-short { width: min(14ch, 70%); }
+.sky-lede.is-writing .sky-writing-line { width: min(52ch, 100%); height: 0.85em; }
+.sky-lede.is-writing .sky-writing-line.is-short { width: min(34ch, 70%); }
+@media (prefers-reduced-motion: reduce) { .sky-writing-line { animation: none; } }
 .sky-ai-byline { margin: 8px 0 0; max-width: 62ch; font-size: 12px; line-height: 1.4; }
 .sky-ai-byline > p { margin: 0; opacity: 0.85; }
 .sky-ai-byline > p > svg { display: inline-block; vertical-align: -2px; margin-right: 6px; }
