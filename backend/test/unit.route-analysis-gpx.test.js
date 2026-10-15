@@ -80,6 +80,35 @@ test('route suggestions that time out say what to do next', async () => {
   expect(response.body.error).toBe('Finding routes took too long. Try again, or enter a route name.');
 });
 
+test('time spent on the account check comes out of the route suggestion deadline', async () => {
+  const app = express();
+  const askAI = jest.fn(() => new Promise(() => {}));
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler: jest.fn(),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    ensureAccountAccess: async (req) => {
+      // An account check that used up the whole budget leaves the lookup no time at all.
+      jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 27000);
+      req.accountUser = { id: '8c696be4-e175-4b6a-965b-82bdf3758e0c' };
+      return true;
+    },
+  });
+
+  try {
+    const response = await request(app)
+      .get('/api/route-suggestions')
+      .query({ peak: 'Slow Account Peak', lat: 46.1912, lon: -122.1944 });
+
+    expect(response.status).toBe(504);
+    expect(askAI).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.restoreAllMocks();
+  }
+});
+
 test('disabled product route analysis blocks suggestions before checking AI', async () => {
   const app = express();
   const askAI = jest.fn();

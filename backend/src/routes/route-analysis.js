@@ -62,8 +62,8 @@ const MAX_MAPPED_GAP_KM = 2;
 const MAPPED_NAME_MATCH_KM = 0.6;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 // Three routes as JSON is more than the fast tier's 8s budget reliably allows, so each
-// provider gets longer. The whole lookup, failover included, ends before nginx's 30s
-// read timeout on /api/ so the caller gets an answer it can show rather than a gateway page.
+// provider gets longer. The whole request, account check and failover included, ends before
+// nginx's 30s read timeout on /api/ so the caller gets an answer it can show rather than a gateway page.
 const ROUTE_SUGGESTION_PROVIDER_TIMEOUT_MS = 15000;
 const ROUTE_SUGGESTION_TIMEOUT_MS = 27000;
 const ROUTE_SUGGESTION_TIMEOUT_MESSAGE = 'Finding routes took too long. Try again, or enter a route name.';
@@ -470,6 +470,8 @@ const registerRouteAnalysisRoutes = ({
   });
   // GET /api/route-suggestions?peak=Mt+Whitney&lat=36.578&lon=-118.292
   app.get('/api/route-suggestions', async (req, res) => {
+    // The lookup's deadline counts from here, so a slow account check leaves it less time, not more.
+    const receivedAt = Date.now();
     const { peak, lat, lon } = req.query;
     if (!peak || !lat || !lon) {
       return res.status(400).json({ error: 'peak, lat, and lon are required' });
@@ -509,7 +511,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           }
         );
         return parseJsonArrayFromAI(text);
-      }), ROUTE_SUGGESTION_TIMEOUT_MS, 'Route suggestions');
+      }), Math.max(0, ROUTE_SUGGESTION_TIMEOUT_MS - (Date.now() - receivedAt)), 'Route suggestions');
       // Suggestions are cached per objective; the time depends on the caller's pace, so it is added per request.
       const pace = sanitizeRoutePace({
         minutesPerMile: req.query.pace_min_per_mile,
