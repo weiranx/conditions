@@ -946,11 +946,14 @@ export function useWorkspace() {
   const showAdminNotFound =
     view === "admin" && !accountLoading && !isAdminAccount;
 
+  // Off on the plan form, nothing asks the AI, and nobody is asked to sign in for it.
+  const aiEnabled = preferences.aiEnabled;
   const requestAiAccess = useCallback(() => {
+    if (!aiEnabled) return false;
     if (accountUser) return true;
     setAccountAccessReason("ai");
     return false;
-  }, [accountUser]);
+  }, [accountUser, aiEnabled]);
   const requestNewReportAccess = useCallback(() => {
     if (import.meta.env.DEV) return true;
     if (accountUser) {
@@ -963,8 +966,8 @@ export function useWorkspace() {
     return false;
   }, [accountReportUsage?.exhausted, accountUser, guestReportCount]);
   const aiAccessContextValue = useMemo(
-    () => ({ requestAiAccess }),
-    [requestAiAccess],
+    () => ({ requestAiAccess, aiEnabled }),
+    [requestAiAccess, aiEnabled],
   );
   const closeAccountAccessPrompt = useCallback(
     () => setAccountAccessReason(null),
@@ -1503,9 +1506,11 @@ export function useWorkspace() {
     () => planParamsQuery({ ...planSettingsParams(preferences), ...approachParams }),
     [preferences, approachParams],
   );
+  // A report without AI, and its comparisons, ask the server not to read the avalanche bulletin with AI either.
+  const reportQuery = preferences.aiEnabled ? planSettingsQuery : `${planSettingsQuery}&ai=off`;
   useEffect(() => {
-    planQueryRef.current = planSettingsQuery;
-  }, [planSettingsQuery]);
+    planQueryRef.current = reportQuery;
+  }, [reportQuery]);
   const { handleRetryFetch, handleGenerateReport, pendingAutoGenerate, setPendingAutoGenerate } = useReportGeneration({
     autoGenerateInitially: initialLinkState.hasObjective && !initialRestoredReport,
     hasObjective, forecastDate, alpineStartTime, objectiveTimezone,
@@ -2286,7 +2291,7 @@ export function useWorkspace() {
 
   const { dayOverDay, startTimeScenarios } = useReportComparisons({
     hasObjective, view, safetyData, forecastDate, currentStartTime: alpineStartTime,
-    position: { lat: position.lat, lng: position.lng }, preferences, planSettingsQuery,
+    position: { lat: position.lat, lng: position.lng }, preferences, planSettingsQuery: reportQuery,
     viewingHistoryReport, loading: loading || reportGenerationPending,
     startTimeComparisonsEnabled: featureFlags.startTimeComparisons,
   });

@@ -167,6 +167,9 @@ test('the AI read is written automatically unless turned off', () => {
   assert.equal(normalizeUserPreferences({}).autoAiRead, true);
   assert.equal(normalizeUserPreferences({ autoAiRead: false }).autoAiRead, false);
   assert.equal(normalizeUserPreferences({ autoAiRead: 'no' }).autoAiRead, true);
+  assert.equal(getDefaultUserPreferences().aiEnabled, true);
+  assert.equal(normalizeUserPreferences({}).aiEnabled, true, 'preferences saved before the switch keep AI on');
+  assert.equal(normalizeUserPreferences({ aiEnabled: false }).aiEnabled, false);
 });
 
 test('the AI writes the approach note in place of the template, keeping the trailhead button', () => {

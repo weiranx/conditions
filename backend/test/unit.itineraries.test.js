@@ -98,6 +98,18 @@ test('checks each day at its camp and each high point, one usage run in total', 
   expect(passCheck.camp_night).toBeUndefined();
 });
 
+test('a trip planned without AI checks every day and high point without it', async () => {
+  const invokeSafetyHandler = echoInvoker();
+  await post(makeApp({ invokeSafetyHandler }), { ...threeDays(), ai: false });
+  const queries = invokeSafetyHandler.mock.calls.map(([query]) => query);
+  expect(queries).toHaveLength(4);
+  expect(queries.every((query) => query.ai === 'off')).toBe(true);
+
+  invokeSafetyHandler.mockClear();
+  await post(makeApp({ invokeSafetyHandler }), threeDays(), 'itinerary-ai-on');
+  expect(invokeSafetyHandler.mock.calls.every(([query]) => query.ai === undefined)).toBe(true);
+});
+
 test('an unknown start elevation or a layover day turns the approach off', async () => {
   const invokeSafetyHandler = echoInvoker();
   const body = threeDays();

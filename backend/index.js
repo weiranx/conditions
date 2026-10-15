@@ -114,7 +114,7 @@ const { buildAtmosphericData } = require('./src/utils/atmospheric');
 const { createAtmosphericService } = require('./src/utils/atmospheric-fetch');
 const { createLocalConditionsService } = require('./src/utils/local-conditions-fetch');
 const { fetchAvalanchePipeline, applyAvalanchePostProcessing } = require('./src/utils/avalanche-pipeline');
-const { createAvalancheAiExtraction } = require('./src/utils/avalanche-ai-extraction');
+const { createAvalancheAiExtraction, stripBulletinSource } = require('./src/utils/avalanche-ai-extraction');
 // Reads problems/danger/bottom line out of bulletin text the feed left unstructured.
 const avalancheAiExtraction = createAvalancheAiExtraction({
   askAI,
@@ -284,6 +284,7 @@ const buildSafetyResponsePayload = ({
   contingencyData = null,
   campNightData = null,
   featureFlags,
+  aiOff = false,
   partial = null,
 }) => {
   const stampGeneratedTime = (value) => {
@@ -298,10 +299,13 @@ const buildSafetyResponsePayload = ({
 
   const payload = {
     generatedAt,
-    capabilities: {
-      ai: isAIAvailable(),
-      ...getAIFeatureAvailability(),
-    },
+    // A report the traveler asked for without AI reports every AI feature off.
+    capabilities: aiOff
+      ? Object.fromEntries(['ai', ...Object.keys(getAIFeatureAvailability())].map((key) => [key, false]))
+      : {
+        ai: isAIAvailable(),
+        ...getAIFeatureAvailability(),
+      },
     featureFlags,
     location: { lat: parsedLat, lon: parsedLon },
     forecast: {
@@ -402,6 +406,8 @@ const safetyHandler = async (req, res) => {
   const approachRequest = parseApproachQuery(req.query);
   // Optional: the day ends at camp, so describe the night that follows.
   const campNightRequested = req.query.camp_night === '1' || req.query.camp_night === 'true';
+  // Optional: the traveler turned AI off for this report, so nothing in it is written or read by AI.
+  const aiOff = ['off', '0', 'false'].includes(String(req.query.ai ?? '').trim().toLowerCase());
 
   // Pre-initialize everything to avoid "access before initialization" errors
   let avalancheData = createUnknownAvalancheData("no_center_coverage");
@@ -436,7 +442,7 @@ const safetyHandler = async (req, res) => {
         fetchWithTimeout,
         avyLog,
       }))
-      .then((value) => avalancheAiExtraction.apply(value))
+      .then((value) => (aiOff ? stripBulletinSource(value) : avalancheAiExtraction.apply(value)))
       .then(
         (value) => ({ status: 'fulfilled', value }),
         (reason) => ({ status: 'rejected', reason }),
@@ -737,6 +743,7 @@ const safetyHandler = async (req, res) => {
       contingencyData,
       campNightData,
       featureFlags: scoreFeatures,
+      aiOff,
     }), req.query, { onError: logEvaluationError });
     timing.mark('evaluation');
     if (req.safetySignal?.aborted || res.headersSent) {
@@ -894,6 +901,7 @@ const safetyHandler = async (req, res) => {
           })
         : null,
       featureFlags: scoreFeatures,
+      aiOff,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     }), req.query, { onError: logEvaluationError });
     await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
