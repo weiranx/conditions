@@ -43,7 +43,7 @@ import "./sky/skin.css";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
-import { useAiAvailability } from "../hooks/useAiAvailability";
+import { useAiAvailability, useAiEnabled } from "../hooks/useAiAvailability";
 import { getPastPlannedStart } from "../app/planned-start";
 import {
   parseReportSectionHash,
@@ -126,6 +126,8 @@ export function Report({
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
+  // Turned off on the plan form, the report is the checks' alone: no AI read, chat or route analysis.
+  const aiEnabled = useAiEnabled();
   // The app shows a report only once the backend has evaluated it for the plan.
   const evaluation = w.evaluation!;
   const decision = evaluation.decision;
@@ -141,8 +143,9 @@ export function Report({
     const index = activity.report.chapters.indexOf(id as ActivityChapter);
     return index < 0 ? chapters.findIndex((c) => c.id === id) + activity.report.chapters.length : index;
   };
+  const routeChapter = Boolean(flags.routeAnalysis) && aiEnabled;
   const visibleChapters = chapters
-    .filter((c) => c.id !== "route" || flags.routeAnalysis)
+    .filter((c) => c.id !== "route" || routeChapter)
     .filter((c) => c.id !== "gear" || flags.gearRecommendations)
     .sort((a, b) => chapterRank(a.id) - chapterRank(b.id));
   const activeView: View = view === "brief" || view === "all" || visibleChapters.some((c) => c.id === view)
@@ -165,7 +168,7 @@ export function Report({
   // Say what crosses your limits and when, in plain words; the decision's own headline covers the rest.
   const headline = plainHeadline(skyHours, clock) ?? decision.headline;
   // The route chosen in the plan, once the report has a Route chapter to show it.
-  const route = flags.routeAnalysis
+  const route = routeChapter
     ? summarizePlannedRoute({
       name: w.plannedRouteName,
       analysis: w.routeAnalysis,
@@ -183,7 +186,7 @@ export function Report({
   // A route can cross boundaries, so the areas come from everywhere it goes.
   const routePoints = w.routeAnalysis?.routeGeometry ?? w.routeAnalysis?.waypoints;
   const { lat: objectiveLat, lon: objectiveLon } = data.location;
-  const hasRoute = Boolean(flags.routeAnalysis);
+  const hasRoute = routeChapter;
   const wherePoints = useMemo(
     () => [{ lat: objectiveLat, lon: objectiveLon }, ...(hasRoute && routePoints ? routePoints : [])],
     [objectiveLat, objectiveLon, hasRoute, routePoints],
@@ -528,11 +531,11 @@ export function Report({
     if (id === "timing") return <Timing key="timing" workspace={w} hours={skyHours} />;
     if (id === "terrain") return <Terrain key="terrain" workspace={w} hours={skyHours} />;
     if (id === "sources") return <Sources key="sources" workspace={w} />;
-    if (id === "route" && flags.routeAnalysis) return <Route key="route" workspace={w} />;
+    if (id === "route" && routeChapter) return <Route key="route" workspace={w} />;
     return null;
   };
-  const showChat = ai.reportChat || w.reportChatMessages.length > 0;
-  const aiRead = (
+  const showChat = aiEnabled && (ai.reportChat || w.reportChatMessages.length > 0);
+  const aiRead = aiEnabled && (
     <AiRead
       narrative={w.aiBriefNarrative}
       details={w.aiBriefDetails}

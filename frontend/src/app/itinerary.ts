@@ -1,7 +1,7 @@
 import type { CampNightData, DecisionLevel, MultiDayTripForecastDay, SafetyData, UserPreferences } from './types';
 import { DATE_FMT, MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from './constants';
 import { addDaysToIsoDate, parseTimeInputMinutes } from './core';
-import { planSettingsParams } from './plan-evaluation';
+import { aiRequestFields, planSettingsParams } from './plan-evaluation';
 import { describeGpxStretch, estimateRouteDurationHours, type GpxStretch, type ParsedGpxRoute, type RouteTimingProfile } from '../lib/gpx';
 
 /**
@@ -285,6 +285,7 @@ export function buildItineraryRequest(draft: ItineraryDraft, stages: ItinerarySt
     activity: preferences.defaultActivity,
     // The traveler's limits and units; the backend checks every day against them.
     plan: planSettingsParams(preferences),
+    ...aiRequestFields(preferences),
     bailPoints: draft.bailPoints.map(point),
     startDate: draft.startDate,
     stages: stages.map((stage) => ({

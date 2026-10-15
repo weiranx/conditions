@@ -78,6 +78,19 @@ test('runs seven internal forecasts and counts one successful guest comparison',
   expect(usageService.finish).toHaveBeenCalledWith(expect.objectContaining({ succeeded: true }));
 });
 
+test('days compared without AI are each checked without it', async () => {
+  const invokeSafetyHandler = jest.fn(async (query) => ({
+    statusCode: 200,
+    payload: { forecast: { selectedDate: query.date } },
+  }));
+  await request(makeApp({ invokeSafetyHandler }))
+    .post('/api/trip-forecasts')
+    .set('Idempotency-Key', 'multi-day-request-ai-off')
+    .send({ lat: 47.4, lon: -121.4, startDate: '2026-07-14', startTime: '07:00', durationDays: 2, travelWindowHours: 12, ai: false });
+  expect(invokeSafetyHandler).toHaveBeenCalledTimes(2);
+  expect(invokeSafetyHandler.mock.calls.every(([query]) => query.ai === 'off')).toBe(true);
+});
+
 test('returns the quota contract when the multi-day limit is reached', async () => {
   const limitError = Object.assign(new Error('Guest multi-day forecast limit reached.'), {
     code: 'MULTI_DAY_USAGE_LIMIT_REACHED',

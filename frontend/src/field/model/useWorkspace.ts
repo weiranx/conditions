@@ -946,11 +946,14 @@ export function useWorkspace() {
   const showAdminNotFound =
     view === "admin" && !accountLoading && !isAdminAccount;
 
+  // Off on the plan form, nothing asks the AI, and nobody is asked to sign in for it.
+  const aiEnabled = preferences.aiEnabled;
   const requestAiAccess = useCallback(() => {
+    if (!aiEnabled) return false;
     if (accountUser) return true;
     setAccountAccessReason("ai");
     return false;
-  }, [accountUser]);
+  }, [accountUser, aiEnabled]);
   const requestNewReportAccess = useCallback(() => {
     if (import.meta.env.DEV) return true;
     if (accountUser) {
@@ -963,8 +966,8 @@ export function useWorkspace() {
     return false;
   }, [accountReportUsage?.exhausted, accountUser, guestReportCount]);
   const aiAccessContextValue = useMemo(
-    () => ({ requestAiAccess }),
-    [requestAiAccess],
+    () => ({ requestAiAccess, aiEnabled }),
+    [requestAiAccess, aiEnabled],
   );
   const closeAccountAccessPrompt = useCallback(
     () => setAccountAccessReason(null),
@@ -1504,8 +1507,9 @@ export function useWorkspace() {
     [preferences, approachParams],
   );
   useEffect(() => {
-    planQueryRef.current = planSettingsQuery;
-  }, [planSettingsQuery]);
+    // A report without AI asks the server not to read its avalanche bulletin with AI either.
+    planQueryRef.current = preferences.aiEnabled ? planSettingsQuery : `${planSettingsQuery}&ai=off`;
+  }, [planSettingsQuery, preferences.aiEnabled]);
   const { handleRetryFetch, handleGenerateReport, pendingAutoGenerate, setPendingAutoGenerate } = useReportGeneration({
     autoGenerateInitially: initialLinkState.hasObjective && !initialRestoredReport,
     hasObjective, forecastDate, alpineStartTime, objectiveTimezone,

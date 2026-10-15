@@ -164,6 +164,16 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.status).toBe(200);
   }, 20000);
 
+  test('GET /api/safety with ai=off reports every AI capability off', async () => {
+    const res = await request(app)
+      .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00&ai=off`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.capabilities.ai).toBe(false);
+    expect(Object.keys(res.body.capabilities).length).toBeGreaterThan(1);
+    expect(Object.values(res.body.capabilities).every((value) => value === false)).toBe(true);
+  });
+
   test('GET /api/safety returns 200 with the expected top-level shape when upstreams succeed', async () => {
     const res = await request(app)
       .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00`);

@@ -130,6 +130,12 @@ test('the request carries each day with its points and high points', () => {
   assert.deepEqual(Object.keys(body).sort(), ['activity', 'bailPoints', 'name', 'plan', 'stages', 'startDate']);
 });
 
+test('a trip planned without AI asks the server to check it without AI', () => {
+  const draft = draftFor();
+  const body = buildItineraryRequest(draft, buildItineraryStages(draft), { ...preferences, aiEnabled: false });
+  assert.equal(body.ai, false);
+});
+
 test('a day the server did not return is kept as a failed one', () => {
   const stages = buildItineraryStages(draftFor());
   const report = makeReport({ date: stages[0].date }, 'clear');
