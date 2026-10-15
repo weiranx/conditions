@@ -224,6 +224,7 @@ export interface SafetyData {
     tripReports?: boolean;
     planParse?: boolean;
     avalancheExtraction?: boolean;
+    avalancheRelevance?: boolean;
     tripDebrief?: boolean;
     aiReport?: boolean;
   };
@@ -317,6 +318,8 @@ export interface SafetyData {
     staleWarning?: '48h' | '72h';
     /** Set when problems, band ratings or the bottom line were read from the bulletin text by AI. */
     extraction?: { method: 'ai'; fields?: string[]; source?: string; extractedAt?: string; note?: string };
+    /** Set when AI, not the seasonal rules, decided whether this plan needs the avalanche check. */
+    relevanceCheck?: { method: 'ai'; rulesRelevant: boolean; note: string };
   };
   alerts?: {
     source?: string;

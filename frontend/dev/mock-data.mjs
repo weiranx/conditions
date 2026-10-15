@@ -127,6 +127,7 @@ export function makeReport(params = {}, scenario = "mixed") {
       tripReports: true,
       planParse: true,
       avalancheExtraction: true,
+      avalancheRelevance: true,
       tripDebrief: true,
       aiReport: true,
     },
