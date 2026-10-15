@@ -29,8 +29,26 @@ function campsLabel(camps: NonNullable<ParsedPlan["trip"]>["camps"]) {
 }
 
 /**
+ * What became of the place a sentence named: still being searched, chosen
+ * because the search found one clear match (`label` names it), or left in the
+ * search for the traveler to pick.
+ */
+export type DescribedPlace =
+  | { query: string; state: "searching" | "pick" }
+  | { query: string; state: "picked"; label: string; lat: number; lon: number };
+
+function describedPlaceLabel(query: string, place: DescribedPlace | null) {
+  if (place?.query === query && place.state === "picked") {
+    return `${place.label} (picked: the only match)`;
+  }
+  if (place?.query === query && place.state === "searching") return `${query} (searching…)`;
+  return `${query} (pick it from the results)`;
+}
+
+/**
  * "Describe your plan": one sentence read into the plan form. The place goes
- * into the search box for the traveler to pick; the day, start, duration,
+ * into the search box, and is chosen when the search finds one clear match
+ * (`describedPlace`); otherwise the traveler picks it. The day, start, duration,
  * activity and limits go through the form's own setters. Nothing is run.
  *
  * For a multi-day trip (`multiDay`) the description also names the nights,
@@ -45,6 +63,7 @@ export function PlanSentence({
   onStart,
   onDuration,
   onPlaceQuery,
+  describedPlace = null,
 }: {
   workspace: Workspace;
   multiDay?: boolean;
@@ -54,12 +73,14 @@ export function PlanSentence({
   onStart: (time: string) => void;
   onDuration: (hours: number) => void;
   onPlaceQuery: (query: string) => void;
+  /** The place the latest sentence put in the search, and whether it was chosen. */
+  describedPlace?: DescribedPlace | null;
 }) {
   const id = useId();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [summary, setSummary] = useState<{ filled: string[]; notes: string[]; placesToPick: boolean } | null>(null);
+  const [summary, setSummary] = useState<{ placeQuery: string | null; filled: string[]; notes: string[]; placesToPick: boolean } | null>(null);
   // A new place clears the target elevation, so one read with a place waits for it.
   const [pendingElevation, setPendingElevation] = useState<{ feet: number; placeKey: string } | null>(null);
   const request = useRef<AbortController | null>(null);
@@ -160,11 +181,8 @@ export function PlanSentence({
       else applyElevation(target);
       filled.push(`target ${w.formatElevationDisplay(target)}`);
     }
-    if (plan.placeQuery) {
-      onPlaceQuery(plan.placeQuery);
-      filled.unshift(`${plan.placeQuery} (pick it from the results)`);
-    }
-    setSummary({ filled, notes, placesToPick });
+    if (plan.placeQuery) onPlaceQuery(plan.placeQuery);
+    setSummary({ placeQuery: plan.placeQuery, filled, notes, placesToPick });
   }
 
   async function submit() {
@@ -201,6 +219,9 @@ export function PlanSentence({
     }
   }
 
+  const filled = summary
+    ? [...(summary.placeQuery ? [describedPlaceLabel(summary.placeQuery, describedPlace)] : []), ...summary.filled]
+    : [];
   const fieldProps = {
     id: `${id}-sentence`,
     value: text,
@@ -246,8 +267,8 @@ export function PlanSentence({
         ) : summary ? (
           <>
             <p className="sky-plan-sentence-summary">
-              {summary.filled.length
-                ? <>Filled in: {summary.filled.join(" · ")}. {summary.placesToPick
+              {filled.length
+                ? <>Filled in: {filled.join(" · ")}. {summary.placesToPick
                   ? "Pick each camp, exit and pass from its results under Camps, then check the trip."
                   : multiDay ? "Review it, then check the trip." : "Review it, then create the brief."}</>
                 : multiDay

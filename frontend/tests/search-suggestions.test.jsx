@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useSearchSuggestions } from "../src/hooks/useSearchSuggestions";
-import { getLocalPopularSuggestions, isSameSuggestionPlace, rankAndDeduplicateSuggestions, searchRequestPath } from "../src/lib/search";
+import { clearSearchMatch, getLocalPopularSuggestions, isSameSuggestionPlace, rankAndDeduplicateSuggestions, searchRequestPath } from "../src/lib/search";
 import { filterSuggestionBucket, mergeSuggestionBuckets, normalizeStoredSuggestion } from "../src/app/suggestion-storage";
 import { SuggestionLabel } from "../src/field/SuggestionLabel";
 
@@ -50,6 +50,26 @@ test("the server's order stands among places whose own name matches", () => {
   const baldy = { name: "Mount Baldy, Salt Lake County, Utah", lat: 40.57, lon: -111.63, kind: "Peak" };
   assert.deepEqual(rankAndDeduplicateSuggestions([volcano, town], "rainier").map((s) => s.kind), ["Volcano", "Town"]);
   assert.deepEqual(rankAndDeduplicateSuggestions([byOtherName, baldy], "mt baldy").map((s) => s.name.split(",")[0]), ["Mount Baldy", "Mount San Antonio"]);
+});
+
+test("a described place is chosen only when the results hold one place of that name", () => {
+  const volcano = { name: "Mount Rainier, Pierce County, Washington", lat: 46.853, lon: -121.76, kind: "Volcano", class: "natural" };
+  const town = { name: "Mount Rainier, Prince George's County, Maryland", lat: 38.941, lon: -76.965, kind: "Town", class: "place" };
+  const park = { name: "Mount Rainier National Park, Washington", lat: 46.88, lon: -121.73, kind: "Park" };
+  // The browser's catalog and the server's copy of one summit are one place.
+  const both = [...getLocalPopularSuggestions("mount rainier"), volcano, park];
+  assert.equal(clearSearchMatch(both, "Mount Rainier")?.name, "Mount Rainier, Washington");
+  assert.equal(clearSearchMatch([town, volcano, park], "Mt. Rainier"), volcano, "the summit, not the town of that name");
+
+  const sierra = { name: "Split Mountain, Inyo County, California", lat: 37.0216, lon: -118.4223, kind: "Peak", where: "Inyo NF, CA" };
+  const utah = { name: "Split Mountain, Uintah County, Utah", lat: 40.45, lon: -109.25, kind: "Peak", where: "Dinosaur NM, UT" };
+  assert.equal(clearSearchMatch([sierra, utah], "Split Mountain"), null, "two summits of that name are the traveler's to pick");
+  assert.equal(clearSearchMatch([sierra, utah], "Split Mountain, CA"), sierra, "a qualifier after the comma tells them apart");
+  assert.equal(clearSearchMatch([sierra, utah], "Split Mountain, Nevada"), null);
+
+  assert.equal(clearSearchMatch([park], "Rainier"), null, "a name that only starts the place's is not a match");
+  assert.equal(clearSearchMatch([], "Split Mountain"), null);
+  assert.equal(clearSearchMatch([town], "Mount Rainier"), town, "the only place of that name, even a town");
 });
 
 test("a recent pick takes the elevation the server knows for the same summit", () => {

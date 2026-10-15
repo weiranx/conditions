@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
-import { act, createRef } from 'react';
+import { act, createRef, useState } from 'react';
 // React's event support is detected when React DOM is first imported.
 const bootstrap = new JSDOM('<html><body></body></html>');
 const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
@@ -165,6 +165,70 @@ test('a sentence fills the plan through the form and puts the place in the searc
   const status = document.querySelector('.sky-plan-sentence [role="status"]').textContent;
   assert.match(status, /Filled in: Split Mountain \(pick it from the results\) · Sat, Sep 12 · leave 3:00 AM · out 10 h · Ski touring · gusts ≤ 30 mph/);
   assert.match(status, /Not set: route: north couloir/);
+});
+
+/**
+ * The plan form over a search that answers `results(query)` a moment after it
+ * is typed, and whose picks move the place, as the workspace's does.
+ */
+function SearchingPlan({ base, results }) {
+  const [search, setSearch] = useState({ searchQuery: base.searchQuery, searchLoading: false, suggestions: [] });
+  const [place, setPlace] = useState({ position: base.position, committedSearchQuery: base.committedSearchQuery, objectiveName: base.objectiveName });
+  const w = {
+    ...base,
+    ...search,
+    ...place,
+    handleInputChange: (event) => {
+      const query = event.target.value;
+      base.calls.push(['handleInputChange', query]);
+      setSearch({ searchQuery: query, searchLoading: true, suggestions: [] });
+      setTimeout(() => setSearch({ searchQuery: query, searchLoading: false, suggestions: results(query) }), 0);
+    },
+    selectSuggestion: (item) => {
+      base.calls.push(['selectSuggestion', item.name]);
+      const label = item.name.split(',')[0];
+      setSearch((current) => ({ ...current, searchQuery: label }));
+      setPlace({ position: { lat: item.lat, lng: item.lon }, committedSearchQuery: label, objectiveName: label });
+    },
+  };
+  return <WorkspacePlan workspace={w} />;
+}
+
+const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+const sierraSplit = { name: 'Split Mountain, Inyo County, California', lat: 37.0216, lon: -118.4223, kind: 'Peak', where: 'Inyo NF, CA' };
+const utahSplit = { name: 'Split Mountain, Uintah County, Utah', lat: 40.45, lon: -109.25, kind: 'Peak', where: 'Dinosaur NM, UT' };
+const campground = { name: 'Split Mountain Campground, Uintah County, Utah', lat: 40.44, lon: -109.26, kind: 'Campground' };
+
+test('a described place with one clear match is chosen, with a way to change it', async (t) => {
+  const env = setup(t, { parse: () => json({ placeQuery: 'Split Mountain', date: null, startTime: '03:00', activity: null, params: {}, notes: [] }) });
+  const w = planWorkspace();
+  await env.render(<SearchingPlan base={w} results={() => [sierraSplit, campground]} />);
+  await describe('Split Mountain, 3am start');
+  await settle();
+
+  assert.deepEqual(w.calls.filter(([name]) => name === 'selectSuggestion'), [['selectSuggestion', 'Split Mountain, Inyo County, California']]);
+  assert.equal(document.querySelector('input[role="combobox"]'), null, 'the chosen place shows instead of the search');
+  assert.equal(document.querySelector('.sky-plan-place-title strong').textContent, 'Split Mountain');
+  assert.match(document.querySelector('.sky-plan-place-described').textContent, /Not this one\? Change it/);
+  assert.ok(document.querySelector('button[aria-label="Change place"]'));
+  assert.match(
+    document.querySelector('.sky-plan-sentence [role="status"]').textContent,
+    /Filled in: Split Mountain, Inyo NF, CA \(picked: the only match\) · leave 3:00 AM/,
+  );
+});
+
+test('a described place with two matches waits in the search for the traveler', async (t) => {
+  const env = setup(t, { parse: () => json({ placeQuery: 'Split Mountain', date: null, startTime: null, activity: null, params: {}, notes: [] }) });
+  const w = planWorkspace();
+  await env.render(<SearchingPlan base={w} results={() => [sierraSplit, utahSplit, campground]} />);
+  await describe('Split Mountain');
+  await settle();
+
+  assert.equal(w.calls.filter(([name]) => name === 'selectSuggestion').length, 0);
+  assert.ok(document.querySelector('input[role="combobox"]'), 'the search stays open to pick from');
+  assert.equal(document.querySelectorAll('[role="option"]').length, 0, 'the fixture keeps the results closed');
+  assert.match(document.querySelector('.sky-plan-sentence [role="status"]').textContent, /Filled in: Split Mountain \(pick it from the results\)/);
+  assert.equal(document.querySelector('.sky-plan-place-described'), null);
 });
 
 test('a day past the forecast days is a note, and a target elevation waits for the picked place', async (t) => {

@@ -185,6 +185,8 @@
 .sky-plan-place-name small { font-size: 12.5px; color: var(--sky-secondary, var(--f-muted)); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 /* The elevation and the timezone stay whole; the caption wraps between the parts, never inside "America/Los Angeles". */
 .sky-plan-place-name small > span { white-space: nowrap; }
+/* A place chosen from "Describe your plan" says so, beside the Change that undoes it. */
+.sky-plan-place-name .sky-plan-place-described { font-variant-numeric: normal; color: var(--sky-label, var(--f-ink)); }
 .sky-plan-place-head .field-text-button { flex: none; min-height: 44px; padding: 0 10px; }
 .sky-plan-place > .field-route-import { margin: 0 12px 12px; }
 .field-location-status .sky-plan-keep { display: inline; min-height: 0; padding: 0; font-size: inherit; }
