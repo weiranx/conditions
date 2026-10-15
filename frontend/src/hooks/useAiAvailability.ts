@@ -10,6 +10,7 @@ export type AiFeatureAvailability = Record<AiFeatureKey, boolean>;
 
 interface AiStatusPayload {
   available?: unknown;
+  billingSource?: unknown;
   features?: Partial<Record<AiFeatureKey, { available?: unknown }>>;
 }
 
@@ -32,11 +33,13 @@ function readAvailability(payload: unknown): AiFeatureAvailability | null {
 // open still makes a single request per interval. Polling runs only while a
 // consumer is mounted, and skips hidden tabs until they are shown again.
 let availability: AiFeatureAvailability | null = null;
+let billingSource: 'api' | 'chatgpt' = 'api';
 const listeners = new Set<() => void>();
 let stopPolling: (() => void) | null = null;
 
-function setAvailability(next: AiFeatureAvailability) {
+function setAvailability(next: AiFeatureAvailability, source: unknown = 'api') {
   availability = next;
+  billingSource = source === 'chatgpt' ? 'chatgpt' : 'api';
   listeners.forEach((listener) => listener());
 }
 
@@ -51,7 +54,7 @@ function startPolling() {
       const result = await fetchApi('/api/healthz', { signal: controller.signal });
       if (!result.response.ok) return;
       const nextAvailability = readAvailability(result.payload);
-      if (nextAvailability !== null) setAvailability(nextAvailability);
+      if (nextAvailability !== null) setAvailability(nextAvailability, (result.payload as { ai?: AiStatusPayload }).ai?.billingSource);
     } catch {
       // Retain the last known state when the health endpoint is unreachable.
     } finally {
@@ -88,11 +91,15 @@ const getAvailability = () => availability;
 export function publishAiAvailability(status: AiStatusPayload): void {
   const nextAvailability = readAvailability({ ai: status });
   if (!nextAvailability) return;
-  setAvailability(nextAvailability);
+  setAvailability(nextAvailability, status.billingSource);
   window.dispatchEvent(new CustomEvent(AI_AVAILABILITY_EVENT, { detail: nextAvailability }));
 }
 
 const AI_OFF = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, false])) as AiFeatureAvailability;
+
+export function useAIBillingSource(): 'api' | 'chatgpt' {
+  return useSyncExternalStore(subscribe, () => billingSource, () => 'api');
+}
 
 /** Whether the traveler wants AI in this plan and report; on outside the planner. */
 export function useAiEnabled(): boolean {

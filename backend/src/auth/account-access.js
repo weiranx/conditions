@@ -49,6 +49,14 @@ const createAccountAccessGuard = ({ service, tierService, usageService } = {}) =
       });
       return false;
     }
+    // A personal plan has its own OpenAI limits, independent of the app's API spend allowance.
+    // Only the foreground browser middleware can establish this owner context.
+    if (req.chatgptUser?.id === user.id) {
+      req.accountUser = user;
+      req.accountTier = { ...FREE_ACCOUNT_TIER };
+      req.aiUsage = null;
+      return true;
+    }
     if (!usageService?.available || typeof usageService.assertUserCanGenerate !== 'function') {
       res.status(503).json({
         error: 'AI usage is temporarily unavailable. Please try again later.',
