@@ -4,69 +4,34 @@ Conditions can use your eligible ChatGPT plan when you run this open-source tool
 
 Every Conditions account has its own connection, model choice, and disconnect controls. Only that account's foreground browser requests use its connection. Anonymous visitors, MCP clients, admin tasks, and automatic watch jobs cannot use your subscription. Accounts that have never connected ChatGPT continue using the existing server provider; availability alone does not authorize subscription usage. Subscription failures never fall back to a separately billed API provider. Existing Conditions sign-in still controls access to your Conditions account; connecting ChatGPT separately grants plan usage.
 
-## Sign in locally
+## Connect in the browser
 
-Use Node 22 or later. Sign into the Conditions account you want to connect and copy its UUID from **Account → Use your ChatGPT plan → Set up personal ChatGPT access**. On the computer running your browser, from a checkout, set the UUID and run:
+After deploying the updated frontend and backend, sign in to Conditions and open **Account → Use your ChatGPT plan**:
 
-```bash
-conditions_account_id='your-conditions-account-uuid'
-cd backend
-npm ci
-npm run chatgpt -- login --user "$conditions_account_id"
-```
+1. Choose **Continue with ChatGPT**. A new tab opens OpenAI sign-in. If popups are blocked, use **Open ChatGPT sign-in** in the form.
+2. Sign in and approve access to your eligible plan. Identity sign-in alone does not authorize plan usage.
+3. When OpenAI redirects to an address beginning with `http://127.0.0.1:1455/auth/callback`, copy the **entire address** from that tab's address bar.
+4. Return to Conditions, paste it into **ChatGPT return address**, and choose **Finish sign-in** within ten minutes.
 
-The tool opens OpenAI's sign-in page. Choose **Continue with ChatGPT**, select your account/workspace, and approve plan usage. Eligibility and limits are determined by OpenAI. Identity sign-in alone does not authorize plan usage.
+No terminal, API key, account UUID, or credential-file transfer is needed. The connection takes effect immediately. Repeat these steps while signed into each of your Conditions accounts to connect them independently.
 
-The callback listener binds only to `127.0.0.1:1455` and closes after success, failure, or ten minutes. Port 1455 must be available locally. `--no-browser` prints a URL to open on that same computer. The tool checks state, PKCE, ID-token signature, issuer, audience, expiry, subject, and nonce.
+The localhost page may say it cannot be reached. That is expected: the callback points at the computer running your browser, while Conditions runs on your server. Copy its address anyway. Conditions uses the pasted address to finish the exchange on your server. This manual return-address handoff has fixture coverage, but still needs live validation with an eligible OpenAI account; OpenAI's documented loopback flow normally uses a local callback listener.
 
-The protected store is `backend/data/chatgpt/credentials.json` (directory `0700`, file `0600`). It contains separate account profiles sharing one stable host ID and one serialized mutation lock. Never transfer the complete store when it contains several accounts; export only the selected connection as shown below. This directory is excluded from Git and Docker builds. Set `CHATGPT_AUTH_DIR` to choose another dedicated private directory. Never paste, log, or commit the contents.
+Keep the return address private and paste it only into the Conditions page where you started sign-in. Conditions binds the attempt to that account and browser session, checks state, PKCE, ID-token signature, issuer, audience, expiry, subject, and nonce, and accepts a completion only once. The PKCE verifier and renewable credentials remain on the server. The return address is cleared from the form on submission and is not saved in browser storage.
 
-For a local backend, skip the transfer step.
+**Cancel sign-in** discards the pending attempt. Reopening Account in the same browser session restores an unexpired pending attempt. Starting again replaces the previous attempt. A backend restart also discards pending attempts; start again if sign-in expires or was interrupted.
 
-## Transfer to your personal server
+## Server configuration
 
-Loopback callbacks reach the computer running the browser, not a remote VM. Finish OAuth locally, securely transfer the selected registration, preserve the server's host ID, and let only the server refresh the transferred session.
+Connections are enabled by default for every signed-in account. No account UUID allowlist or per-account environment configuration is required. The server chooses credentials from the authenticated Conditions session, never a caller-supplied account ID. Each account must separately approve plan usage.
 
-First export only this Conditions account's selected connection into a dedicated private directory:
+The protected store is `backend/data/chatgpt/credentials.json` (directory `0700`, file `0600`). In the repository's Docker Compose deployment it is `/app/data/chatgpt`, inside the existing persistent backend-only volume. Deploy both updated frontend and backend images. The directory must be private, persistent, and writable by the backend service user; `CHATGPT_AUTH_DIR` can override it. It is excluded from Git and Docker builds. Do not share this store with other running installations or multiple backend replicas. Pending sign-ins are held in memory on one backend process.
 
-```bash
-npm run chatgpt -- export /private/transfer/credentials.json --user "$conditions_account_id"
-```
+Outbound HTTPS to `auth.openai.com` and `api.openai.com` is required. Serve Conditions over HTTPS and ensure `APP_BASE_URL` or `CORS_ORIGIN` includes the frontend origin; settings writes require an explicit allowed Origin.
 
-Use SSH/SCP to transfer that exported `credentials.json` into a private (`0700`) temporary directory on your server, preserving file permissions (`0600`). On the server, set `conditions_account_id` to the same UUID. For a backend running directly on the server, run as its service user:
+An optional installation-wide `CHATGPT_ENABLED=false` setting disables connection access for all accounts. Restart/recreate the backend when changing this setting. The old `CHATGPT_ACCOUNT_USER_IDS` list is no longer used and can be removed.
 
-```bash
-cd /path/to/conditions/backend
-npm run chatgpt -- init
-npm run chatgpt -- import /private/transfer/credentials.json --user "$conditions_account_id"
-```
-
-Use the running backend's `CHATGPT_AUTH_DIR`. Import preserves or creates a distinct server host ID; do not overwrite the destination store with the laptop's file. Stop using the laptop's copy after transfer so two runtimes do not race a rotating refresh token. Remove the temporary transfer file after import.
-
-For this repository's Docker Compose deployment, first rebuild the backend with this integration. `/app/data` is already a persistent backend-only volume:
-
-```bash
-docker compose exec -T --user appuser backend mkdir -m 700 -p /app/data/chatgpt-transfer
-docker compose cp /private/transfer/credentials.json backend:/app/data/chatgpt-transfer/credentials.json
-docker compose exec -T --user root backend chown -R appuser:appgroup /app/data/chatgpt-transfer
-docker compose exec -T --user appuser backend chmod 600 /app/data/chatgpt-transfer/credentials.json
-docker compose exec -T --user appuser backend npm run chatgpt -- init
-docker compose exec -T --user appuser backend npm run chatgpt -- import /app/data/chatgpt-transfer/credentials.json --user "$conditions_account_id"
-docker compose exec -T --user appuser backend rm /app/data/chatgpt-transfer/credentials.json
-docker compose exec -T --user appuser backend rmdir /app/data/chatgpt-transfer
-```
-
-The default store `/app/data/chatgpt` persists across container recreation. Do not mount it into the monitor container, put it in shared backups, or run multiple replicas against the same session. An overridden directory must be persistent, private, and writable by `appuser`.
-
-## Enabled by default
-
-Every signed-in Conditions account can connect ChatGPT immediately. No account UUID allowlist or per-account server environment setup is required. Repeat local login and export/import with a different `--user` UUID for each account. The server chooses credentials from the authenticated Conditions session, never a caller-supplied account ID. Each account must separately approve plan usage; making the feature available does not grant access to anyone else's subscription.
-
-Importing a connection takes effect immediately without a backend restart. Complete a fresh login for each profile; importing the same renewable session into two profiles is rejected. Accounts that have never connected ChatGPT retain their existing server-provider behavior. Once an account has connected, a disconnected, expired, or failed connection does not fall back to separately billed API providers.
-
-An optional installation-wide `CHATGPT_ENABLED=false` environment setting disables connection access for all accounts. Restart/recreate the backend only when changing this setting. The old `CHATGPT_ACCOUNT_USER_IDS` list is no longer used and can be removed.
-
-Outbound HTTPS to `auth.openai.com` and `api.openai.com` is required. Ensure `APP_BASE_URL` or `CORS_ORIGIN` includes the frontend origin; settings writes require an explicit allowed Origin.
+Accounts that have never connected ChatGPT retain their existing server-provider behavior. Once an account has connected, a disconnected, expired, or failed connection does not fall back to separately billed API providers.
 
 ## Choose a model and use AI
 
@@ -78,17 +43,9 @@ Your ChatGPT limits apply. Usage records use provider `chatgpt` and zero Platfor
 
 ## Reconnect, switch accounts, disconnect
 
-```bash
-npm run chatgpt -- status --user "$conditions_account_id"
-npm run chatgpt -- login --user "$conditions_account_id"
-npm run chatgpt -- login --new-account --user "$conditions_account_id"
-npm run chatgpt -- use oaiapp_your_saved_client_id --user "$conditions_account_id"
-npm run chatgpt -- logout --user "$conditions_account_id"
-```
+Choose **Continue with ChatGPT** to reconnect the selected saved registration. Choose **Use another ChatGPT account** to create a separate registration, then complete the same browser flow. When multiple registrations are saved, **Saved ChatGPT account** switches the active connection within the current Conditions account. Client IDs, verified identities, model choices, and credentials remain separate.
 
-Registrations keep their client IDs, verified identities, model choices, and credentials separate. `status` prints metadata only. Login reuses the selected registration and host ID; `--new-account` creates a separate registration. For remote servers, repeat local sign-in and transfer when reconnecting.
-
-**Disconnect ChatGPT** in Account attempts to revoke the renewable session and clears local access, refresh, and ID tokens. It retains the account/client mapping and host ID. If remote revocation cannot be confirmed, the UI says so; disconnect Conditions in ChatGPT settings too. Disconnecting one Conditions account leaves your other accounts connected and does not enable API-key fallback for the disconnected account. Generated AI caches are scoped by Conditions account, ChatGPT registration, and selected model.
+**Disconnect ChatGPT** attempts to revoke the renewable session and clears local access, refresh, and ID tokens. It retains the account/client mapping and host ID. If remote revocation cannot be confirmed, the UI says so; disconnect Conditions in ChatGPT settings too. Disconnecting one Conditions account leaves your other accounts connected and does not enable API-key fallback for the disconnected account. Generated AI caches are scoped by Conditions account, ChatGPT registration, and selected model.
 
 Refreshes are serialized with a filesystem lock and committed atomically. If a process crashes while holding `CHATGPT_AUTH_DIR/.lock`, stop all backend/CLI processes using the store before removing the stale lock directory and restarting. A busy lock is never automatically stolen.
 
@@ -98,13 +55,6 @@ Keep `CHATGPT_OWNER_USER_ID` set to its original UUID if you already use the sin
 
 ## Verification
 
-```bash
-cd backend
-npm test -- --runTestsByPath test/unit.chatgpt.test.js test/unit.chatgpt-access.test.js test/unit.chatgpt-inference.test.js test/unit.chatgpt-profiles.test.js
-cd ../frontend
-npm run build
-```
-
-Tests use local fixtures for OAuth, real JWT verification, refresh rotation, permissions, per-account isolation, secure single-account export/import, cache isolation, CSRF protection, inference, and no API failover. Live sign-in and a real eligible request still need your account after deployment.
+Automated tests use local fixtures for browser sign-in, state and PKCE validation, JWT verification, refresh rotation, permissions, per-account and browser-session isolation, expiry, cancellation, replay protection, saved-account selection, CSRF protection, inference, and no API failover. Frontend tests cover the browser form, popup-blocked link, completion, cancellation, model selection, and disconnect. Live sign-in and a real eligible request still need your account after deployment.
 
 Official references: [sign-in](https://developers.openai.com/siwc/token-sharing-open-source/sign-in), [self-hosted VMs](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms), [inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), [sessions](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions).

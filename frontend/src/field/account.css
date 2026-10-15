@@ -50,6 +50,11 @@
 /* Plan and AI apps */
 .sky-account-section .sky-card > .sky-cap.is-body { margin: 0; }
 .sky-ai-card { gap: 14px; }
+.sky-chatgpt-signin { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--sky-separator); border-radius: 12px; }
+.sky-chatgpt-signin :is(h3, p, ol) { margin: 0; }
+.sky-chatgpt-signin ol { padding-left: 22px; }
+.sky-chatgpt-signin textarea { width: 100%; min-height: 88px; box-sizing: border-box; padding: 12px; resize: vertical; border: 1px solid var(--sky-separator); border-radius: 10px; color: var(--sky-label); background: var(--sky-fill); font: inherit; overflow-wrap: anywhere; }
+.sky-chatgpt-signin textarea:focus-visible { outline: 2px solid var(--sky-accent); outline-offset: 2px; }
 .sky-ai-card .sky-card-lede { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.5; }
 .sky-ai-card code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
 .sky-mcp-url { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 6px 6px 14px; border-radius: 12px; background: var(--sky-fill); }

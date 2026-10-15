@@ -217,6 +217,15 @@ const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore
     await store.update((value) => { activeRecord(value).model = catalog[0].id; });
     return catalog[0].id;
   };
+  const selectAccount = async (clientId) => {
+    await store.update((value) => {
+      if (!value.registrations.some((record) => record.client_id === clientId)) {
+        throw new ChatGPTError('Choose a ChatGPT account saved for this Conditions account.', 'CHATGPT_INVALID_ACCOUNT', 400);
+      }
+      value.activeClientId = clientId;
+    });
+    return status();
+  };
   const disconnect = async () => {
     let revoked = false;
     await store.update(async (value) => {
@@ -241,7 +250,7 @@ const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore
     });
     return { ...status(), revoked };
   };
-  return { store, status, hasRegistration: () => Boolean(activeRecord(store.read())), begin, complete, accessToken, models, selectModel, modelForRequest, disconnect, apiError };
+  return { store, status, hasRegistration: () => Boolean(activeRecord(store.read())), begin, complete, accessToken, models, selectModel, selectAccount, modelForRequest, disconnect, apiError };
 };
 
 const chatGPTService = createChatGPTService();
