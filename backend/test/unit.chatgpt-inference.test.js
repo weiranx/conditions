@@ -31,6 +31,29 @@ test('text and vision use OAuth, the account model, streaming and store:false; u
   expect(OpenAI.mock.calls[0][0]).toMatchObject({ apiKey: 'test-oauth-access', baseURL: 'https://api.openai.com/v1', maxRetries: 0 });
   expect(create.mock.calls[0][0]).toMatchObject({ model: 'account-model', store: false, stream: true });
   expect(create.mock.calls[1][0].input[0].content[0].type).toBe('input_image');
+});
+
+test('requests use the plan-usage shape: input array, instructions, no max_output_tokens', async () => {
+  create.mockImplementation(() => completed());
+  const subscription = { service, userId: 'owner', alive: true };
+  await runWithChatGPT(subscription, () => askAI('Hi', { system: 'Be brief.', maxTokens: 500 }));
+  const text = create.mock.calls[0][0];
+  expect(text).not.toHaveProperty('max_output_tokens');
+  expect(text.input).toEqual([{ role: 'user', content: [{ type: 'input_text', text: 'Hi' }] }]);
+  expect(text.instructions).toBe('Be brief.');
+
+  await runWithChatGPT(subscription, () => askAI('Hi'));
+  expect(create.mock.calls[1][0].instructions).toEqual(expect.any(String));
+  expect(create.mock.calls[1][0].instructions.length).toBeGreaterThan(0);
+
+  const { chatGPTInference } = require('../src/utils/chatgpt-inference');
+  await chatGPTInference(subscription, [
+    { role: 'system', content: 'Rules.' }, { role: 'user', content: 'Q' }, { role: 'assistant', content: 'A' },
+  ], { system: 'Report.', maxTokens: 900 });
+  const chat = create.mock.calls[2][0];
+  expect(chat).not.toHaveProperty('max_output_tokens');
+  expect(chat.instructions).toBe('Report.\n\nRules.');
+  expect(chat.input.map((message) => message.role)).toEqual(['user', 'assistant']);
   expect(recordAIUsage).toHaveBeenCalledWith(expect.objectContaining({ provider: 'chatgpt', userId: 'owner' }));
   expect(estimateAIUsageCost({ provider: 'chatgpt', model: 'account-model', usage: { input_tokens: 4000000 } })).toMatchObject({ estimatedCostUsd: 0, pricingMatched: true });
   expect(getAIStatus().billingSource).not.toBe('chatgpt');
