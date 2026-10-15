@@ -78,7 +78,6 @@ export interface UseSafetyDataReturn {
     decisionLevel: DecisionLevel;
     /** The analyzed route, sent alongside the report when there is one. */
     route?: unknown;
-    fieldObservations?: unknown[] | null;
     /** Also ask a fast model for the report's opening, shown as soon as it is written. */
     opening?: boolean;
   }) => Promise<void>;
@@ -400,7 +399,6 @@ export function useSafetyData({
     safetyData: SafetyData;
     decisionLevel: DecisionLevel;
     route?: unknown;
-    fieldObservations?: unknown[] | null;
     opening?: boolean;
   }) => {
     if (aiBriefLoading) return;
@@ -417,7 +415,6 @@ export function useSafetyData({
       report: {
         ...params.safetyData,
         ...(params.route ? { route: params.route } : {}),
-        ...(params.fieldObservations?.length ? { fieldObservations: params.fieldObservations } : {}),
       },
       units: {
         temperature: preferences.temperatureUnit,

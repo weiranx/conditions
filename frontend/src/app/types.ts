@@ -221,7 +221,6 @@ export interface SafetyData {
     routeAnalysis?: boolean;
     snowVision?: boolean;
     watchSummary?: boolean;
-    tripReports?: boolean;
     planParse?: boolean;
     avalancheExtraction?: boolean;
     avalancheRelevance?: boolean;

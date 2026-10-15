@@ -8,7 +8,6 @@ import {
   Bot,
   CalendarRange,
   Clock3,
-  Eye,
   FileUp,
   Gauge,
   Grid3X3,
@@ -334,7 +333,6 @@ export type AIFeatureKey =
   | "routeAnalysis"
   | "snowVision"
   | "watchSummary"
-  | "tripReports"
   | "planParse"
   | "avalancheExtraction"
   | "avalancheRelevance"
@@ -373,13 +371,6 @@ const AI_FEATURE_CONTROLS = [
     description:
       "Adds a short AI explanation of what changed and what to adjust to Objective Watch alerts.",
     icon: BellRing,
-  },
-  {
-    key: "tripReports",
-    label: "Field observations",
-    description:
-      "Extracts dated snow and trail observations from pasted trip reports.",
-    icon: Eye,
   },
   {
     key: "planParse",
