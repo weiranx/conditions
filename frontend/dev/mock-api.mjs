@@ -286,7 +286,7 @@ export function createMockApi({ databasePath } = {}) {
       primaryModel: "fixture",
       fastModel: "fixture",
       features: Object.fromEntries(
-        ["aiBrief", "reportChat", "routeAnalysis", "snowVision", "watchSummary", "tripReports", "planParse", "avalancheExtraction", "tripDebrief", "aiReport"].map((k) => [
+        ["aiBrief", "reportChat", "routeAnalysis", "snowVision", "watchSummary", "planParse", "avalancheExtraction", "avalancheRelevance", "tripDebrief", "aiReport"].map((k) => [
           k,
           {
             available:
@@ -891,24 +891,6 @@ export function createMockApi({ databasePath } = {}) {
         } : {}),
         validation: "evidence_checked",
       }) };
-    if (p === "/api/field-observations/extract") {
-      const text = typeof body.text === "string" ? body.text : "";
-      if (!text.trim()) return { status: 400, payload: { error: "Paste a trip report or what you saw." } };
-      if (text.length > 12000) return { status: 413, payload: { error: "Keep the text under 12,000 characters." } };
-      // Demo extraction: one observation per sentence, surface guessed from keywords.
-      const surfaces = [["slush", "slush"], ["verglas", "verglas"], ["ice", "ice"], ["posthol", "soft-snow"], ["soft snow", "soft-snow"], ["snow", "firm-snow"], ["mud", "mud"], ["dry", "dry-trail"]];
-      const observations = (text.match(/[^.!?\n]+[.!?]?/g) || [])
-        .map((sentence) => sentence.trim())
-        .filter((sentence) => sentence.length > 8)
-        .slice(0, 3)
-        .map((quote) => ({
-          observedDate: null, ageDays: null, stale: true, location: body.objective?.name || "Objective",
-          elevationFt: null, aspect: null, snowlineFt: null, confidence: "low", quote,
-          surface: surfaces.find(([word]) => quote.toLowerCase().includes(word))?.[1] || "unknown",
-          hazards: /posthol/i.test(quote) ? ["postholing"] : [],
-        }));
-      return ok({ observations, plannedDate: body.date || null, generatedAt: now() });
-    }
     if (p === "/api/plan-parse") {
       // No model: a few patterns stand in for it, and the backend's checks decide.
       const text = typeof body.text === "string" ? body.text.trim() : "";
@@ -1465,9 +1447,9 @@ export function createMockApi({ databasePath } = {}) {
           routeAnalysis: true,
           snowVision: true,
           watchSummary: true,
-          tripReports: true,
           planParse: true,
           avalancheExtraction: true,
+          avalancheRelevance: true,
           tripDebrief: true,
           aiReport: true,
         },

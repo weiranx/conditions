@@ -73,7 +73,6 @@ const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
-const { registerFieldObservationRoutes } = require('./src/routes/field-observations');
 const { registerPlanParseRoute } = require('./src/routes/plan-parse');
 const { registerTripDebriefRoute } = require('./src/routes/trip-debrief');
 const { registerForecastDiscussionRoute } = require('./src/routes/forecast-discussion');
@@ -116,8 +115,14 @@ const { createAtmosphericService } = require('./src/utils/atmospheric-fetch');
 const { createLocalConditionsService } = require('./src/utils/local-conditions-fetch');
 const { fetchAvalanchePipeline, applyAvalanchePostProcessing } = require('./src/utils/avalanche-pipeline');
 const { createAvalancheAiExtraction, stripBulletinSource } = require('./src/utils/avalanche-ai-extraction');
+const { createAvalancheAiRelevance } = require('./src/utils/avalanche-ai-relevance');
 // Reads problems/danger/bottom line out of bulletin text the feed left unstructured.
 const avalancheAiExtraction = createAvalancheAiExtraction({
+  askAI,
+  isFeatureAvailable: isAIFeatureAvailable,
+});
+// Decides whether the plan needs the avalanche check when the traveler's Use AI switch is on.
+const avalancheAiRelevance = createAvalancheAiRelevance({
   askAI,
   isFeatureAvailable: isAIFeatureAvailable,
 });
@@ -632,7 +637,7 @@ const safetyHandler = async (req, res) => {
     });
     heatRiskData = buildHeatRiskData({ weatherData });
 
-    const avalancheRelevance = evaluateAvalancheRelevance({
+    const relevanceInputs = {
       lat: parsedLat,
       selectedDate: selectedForecastDate,
       weatherData,
@@ -640,11 +645,23 @@ const safetyHandler = async (req, res) => {
       snowpackData,
       rainfallData,
       activity: requestedActivity,
+    };
+    const avalancheRelevancePromise = avalancheAiRelevance.decide({
+      ...relevanceInputs,
+      lon: parsedLon,
+      name: logName,
+      startClock: requestedStartClock,
+      travelWindowHours: requestedTravelWindowHours,
+      rules: evaluateAvalancheRelevance(relevanceInputs),
+      aiOff,
     });
+    timing.track('avalancheRelevance', avalancheRelevancePromise);
+    const avalancheRelevance = await avalancheRelevancePromise;
     avalancheData = {
       ...avalancheData,
       relevant: avalancheRelevance.relevant,
       relevanceReason: avalancheRelevance.reason,
+      ...(avalancheRelevance.check ? { relevanceCheck: avalancheRelevance.check } : {}),
     };
 
     const contingencyData = buildContingencyAssessment({
@@ -1091,7 +1108,6 @@ registerAiBriefRoute({ app, askAI, askAIVision, fetchWithTimeout, tileCache: sat
 registerReportChatRoute({ app, ensureAccountAccess });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
 registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision, ensureAccountAccess });
-registerFieldObservationRoutes({ app, askAI, ensureAccountAccess });
 registerPlanParseRoute({ app, askAI, ensureAccountAccess });
 registerTripDebriefRoute({ app, askAI, ensureAccountAccess });
 registerForecastDiscussionRoute({ app, askAI, ensureAccountAccess });

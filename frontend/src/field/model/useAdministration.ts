@@ -8,7 +8,6 @@ import {
   Bot,
   CalendarRange,
   Clock3,
-  Eye,
   FileUp,
   Gauge,
   Grid3X3,
@@ -334,9 +333,9 @@ export type AIFeatureKey =
   | "routeAnalysis"
   | "snowVision"
   | "watchSummary"
-  | "tripReports"
   | "planParse"
   | "avalancheExtraction"
+  | "avalancheRelevance"
   | "tripDebrief"
   | "aiReport";
 const AI_FEATURE_CONTROLS = [
@@ -374,13 +373,6 @@ const AI_FEATURE_CONTROLS = [
     icon: BellRing,
   },
   {
-    key: "tripReports",
-    label: "Field observations",
-    description:
-      "Extracts dated snow and trail observations from pasted trip reports.",
-    icon: Eye,
-  },
-  {
     key: "planParse",
     label: "Describe your plan",
     description:
@@ -392,6 +384,13 @@ const AI_FEATURE_CONTROLS = [
     label: "Avalanche bulletin extraction",
     description:
       "Reads avalanche problems from scraped bulletins when a center's feed leaves them out.",
+    icon: Mountain,
+  },
+  {
+    key: "avalancheRelevance",
+    label: "Avalanche check decision",
+    description:
+      "Decides whether a plan needs the avalanche check from its objective, activity, date, snowpack and forecast. It can add the check but never removes it from snow travel, Considerable or higher danger, or a heavy snow forecast.",
     icon: Mountain,
   },
   {

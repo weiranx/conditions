@@ -1,5 +1,4 @@
 import { SurfacePrediction } from "./SurfacePrediction";
-import { FieldObservations } from "./FieldObservations";
 import { lazy, Suspense, useState } from "react";
 import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
@@ -404,20 +403,6 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
         )}
       </div>
 
-      {aiEnabled && <FieldObservations
-        key={`${data.location.lat},${data.location.lon},${data.forecast?.selectedDate ?? ""}`}
-        objective={{
-          name: w.reportSnapshot?.plan.objectiveName || "Objective",
-          lat: data.location.lat,
-          lon: data.location.lon,
-          elevationFt: objectiveFt,
-        }}
-        date={data.forecast?.selectedDate ?? w.reportSnapshot?.plan.forecastDate ?? null}
-        available={available.tripReports}
-        readOnly={w.viewingHistoryReport}
-        formatElevation={w.formatElevationDisplay}
-      />}
-
       {flags.terrainWindow && <TerrainWindow workspace={w} />}
 
       {flags.avalancheDetails && (
@@ -480,7 +465,10 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 {data.avalanche?.advice && <p className="sky-cap is-body">{data.avalanche.advice}</p>}
               </>
             ) : (
-              <p className="sky-cap is-body">{avalanche.notApplicableReason || "No avalanche forecast applies to this plan."}</p>
+              <>
+                <p className="sky-cap is-body">{avalanche.notApplicableReason || "No avalanche forecast applies to this plan."}</p>
+                {data.avalanche?.relevanceCheck?.method === "ai" && <p className="sky-cap">{data.avalanche.relevanceCheck.note}</p>}
+              </>
             )}
             <SourceLink url={w.safeAvalancheLink}>Read the complete bulletin</SourceLink>
             <Evidence
@@ -496,6 +484,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 data.avalanche?.staleWarning ? `This bulletin is more than ${data.avalanche.staleWarning === "72h" ? "72" : "48"} hours old.` : null,
                 data.avalanche?.extraction?.method === "ai" ? data.avalanche.extraction.note || "Parts of this bulletin were read from the center's page automatically. Verify with the center." : null,
                 avalanche.relevant ? data.avalanche?.relevanceReason : null,
+                avalanche.relevant && data.avalanche?.relevanceCheck?.method === "ai" ? data.avalanche.relevanceCheck.note : null,
               ]}
             />
           </div>

@@ -200,26 +200,72 @@ test('AI opening is written by the fast model alone and fact-checked like the re
   expect(response.body.checks).toEqual({ problems: [], seconds: [expect.any(Number)] });
   expect(askAI).toHaveBeenCalledTimes(1);
   // Written from the whole report, the opening needs more than the fast tier's 8s default.
-  expect(askAI.mock.calls[0][1]).toMatchObject({ tier: 'fast', feature: 'report-opening', timeoutMs: 20000 });
+  // Room for the model's thinking as well as the JSON.
+  expect(askAI.mock.calls[0][1]).toMatchObject({ tier: 'fast', feature: 'report-opening', timeoutMs: 20000, maxTokens: 6000 });
   expect(askAI.mock.calls[0][1].system).toMatch(/"hero"/);
   expect(askAI.mock.calls[0][1].system).not.toMatch(/"sections"/);
 });
 
-test('AI opening that fails its checks is left out, with the reason', async () => {
+const failingOpening = JSON.stringify({
+  hero: { headline: 'Gusts top out near 90 mph today', reason: 'Gusts reach 90 mph.', evidence: [{ path: 'weather.windGust', value: 41 }] },
+});
+const passingOpening = JSON.stringify({
+  hero: { headline: 'Gusts build to 41 mph on the ridge', reason: 'Gusts reach 41 mph.', evidence: [{ path: 'weather.windGust', value: 41 }] },
+});
+const openingBody = (description) => ({ decisionLevel: 'CAUTION', report: { weather: { description, windGust: 41 }, safety: { explanations: ['Gusty.'] } } });
+
+test('AI opening that fails its checks is asked for once more, naming what failed', async () => {
   const app = express();
   app.use(express.json());
-  const askAI = jest.fn().mockResolvedValueOnce(JSON.stringify({
-    hero: { headline: 'Gusts top out near 90 mph today', reason: 'Gusts reach 90 mph.', evidence: [{ path: 'weather.windGust', value: 41 }] },
-  }));
+  const askAI = jest.fn().mockResolvedValueOnce(failingOpening).mockResolvedValueOnce(passingOpening);
   registerAiBriefRoute({ app, askAI });
 
-  const response = await request(app)
-    .post('/api/ai-brief/opening')
-    .send({ decisionLevel: 'CAUTION', report: { weather: { description: 'Failing opening fixture', windGust: 41 }, safety: { explanations: ['Gusty.'] } } });
+  const response = await request(app).post('/api/ai-brief/opening').send(openingBody('Retried opening fixture'));
+
+  expect(response.status).toBe(200);
+  expect(response.body.hero).toMatchObject({ headline: 'Gusts build to 41 mph on the ridge' });
+  expect(response.body.checks).toEqual({ problems: [], seconds: [expect.any(Number), expect.any(Number)] });
+  expect(askAI).toHaveBeenCalledTimes(2);
+  expect(askAI.mock.calls[1][0]).toMatch(/failed these fact checks:\n- OPENING: /);
+  expect(askAI.mock.calls[1][1]).toMatchObject({ tier: 'fast', feature: 'report-opening' });
+});
+
+test('AI opening that fails twice is left out, with the reason', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn().mockResolvedValue(failingOpening);
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app).post('/api/ai-brief/opening').send(openingBody('Failing opening fixture'));
 
   expect(response.status).toBe(200);
   expect(response.body.hero).toBeNull();
   expect(response.body.checks.problems).toEqual([expect.stringMatching(/^OPENING: /)]);
+  expect(askAI).toHaveBeenCalledTimes(2);
+});
+
+test('AI opening whose request fails is retried, and a failure is not kept for the report', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn()
+    .mockRejectedValueOnce(new Error('Unexpected response format from Anthropic API (stop_reason: max_tokens)'))
+    .mockResolvedValueOnce(passingOpening);
+  registerAiBriefRoute({ app, askAI });
+
+  const retried = await request(app).post('/api/ai-brief/opening').send(openingBody('Errored opening fixture'));
+  expect(retried.status).toBe(200);
+  expect(retried.body.hero).toMatchObject({ headline: 'Gusts build to 41 mph on the ridge' });
+  // A failed request is asked again as it was, not as a failed fact check.
+  expect(askAI.mock.calls[1][0]).not.toMatch(/failed these fact checks/);
+
+  askAI.mockReset();
+  askAI.mockRejectedValue(new Error('Request timed out.'));
+  const failed = await request(app).post('/api/ai-brief/opening').send(openingBody('Timed-out opening fixture'));
+  expect(failed.status).toBe(503);
+  askAI.mockReset();
+  askAI.mockResolvedValueOnce(passingOpening);
+  const again = await request(app).post('/api/ai-brief/opening').send(openingBody('Timed-out opening fixture'));
+  expect(again.body.hero).toMatchObject({ headline: 'Gusts build to 41 mph on the ridge' });
 });
 
 test('AI opening reuses a full read already written for the same report', async () => {

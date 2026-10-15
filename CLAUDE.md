@@ -116,7 +116,7 @@ When the plan changes after a report loads (limits, units, approach, target elev
 
 Persisted in browser local storage under `USER_PREFERENCES_KEY` (`frontend/src/app/constants.ts`, `…user-preferences:v1`). Report numbers stay imperial (°F, mph, ft, in) and the frontend formats them for display; the evaluation's text (reasons, captions, labels) is written in the units sent as plan params (`temp_unit`, `wind_unit`, `elevation_unit`, `time_style`).
 
-`aiEnabled` is the plan form's **Use AI** switch (`PlanAi` in `field/WorkspacePlan.tsx`). Off, `useAiAvailability` reports every AI feature unavailable and `requestAiAccess` refuses, so the report has no AI read, chat, chapter notes, route analysis, snow imagery, field observations or debrief write-up; report requests send `ai=off` (`/api/safety`) or `ai: false` (trip forecasts, itineraries, trip debrief) so the server skips its AI bulletin reader and write-ups too. Gate new AI features through `useAiAvailability`/`useAiEnabled` so the switch covers them.
+`aiEnabled` is the plan form's **Use AI** switch (`PlanAi` in `field/WorkspacePlan.tsx`). Off, `useAiAvailability` reports every AI feature unavailable and `requestAiAccess` refuses, so the report has no AI read, chat, chapter notes, route analysis, snow imagery or debrief write-up; report requests send `ai=off` (`/api/safety`) or `ai: false` (trip forecasts, itineraries, trip debrief) so the server skips its AI bulletin reader and write-ups too. Gate new AI features through `useAiAvailability`/`useAiEnabled` so the switch covers them.
 
 ## Design Constraints
 

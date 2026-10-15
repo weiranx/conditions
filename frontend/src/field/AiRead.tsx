@@ -117,7 +117,7 @@ function ReadProgress({ run, satellite = false }: { run: AiReadRun | null; satel
       ? { state: "active", text: "Rewriting the opening at the top of the report" }
       : run.opening === "written"
         ? { state: "done", text: `Rewrote the opening${run.openingSeconds != null ? ` in ${run.openingSeconds} s` : ""}` }
-        : { state: "kept", text: "Kept the checks’ opening" });
+        : { state: "kept", text: "The quick opening didn’t pass its checks; the full read writes it" });
   }
   const next = waiting ? "next" : "active";
   if (satellite) steps.push({ state: next, text: "Looking at a recent satellite image of the snow around your objective" });

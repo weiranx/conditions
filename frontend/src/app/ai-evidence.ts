@@ -21,7 +21,6 @@ const CHAPTER_BY_ROOT: Record<string, EvidenceChapter> = {
   snowpack: 'terrain',
   terrainCondition: 'terrain',
   trail: 'terrain',
-  fieldObservations: 'terrain',
   route: 'route',
   gear: 'gear',
   contingency: 'gear',
@@ -44,7 +43,6 @@ const ROOT_LABEL: Record<string, string> = {
   route: 'Route',
   reportInsights: 'Source insight',
   supplementalEvidence: 'Source',
-  fieldObservations: 'Trip report',
   localConditions: 'Local observation',
 };
 

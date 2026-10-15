@@ -121,7 +121,6 @@ import type { TravelThresholdPresetKey } from "../../hooks/usePreferenceHandlers
 import { resolveReportFeatureFlags, useProductFeatureFlags } from "../../contexts/feature-flags";
 import { buildRouteReportContext, elevationForRouteTiming } from "../route-planning";
 import { useAccount } from "../../hooks/useAccount";
-import { fieldObservationKey, useStoredFieldObservations } from "../../lib/field-observations";
 import {
   getSharedReport,
 } from "../../lib/saved-reports";
@@ -2278,17 +2277,12 @@ export function useWorkspace() {
         : null,
     [safetyData, plannedRouteName, routeAnalysis],
   );
-  // Observations pasted on the report are user-supplied evidence the brief and chat may cite.
-  const fieldObservations = useStoredFieldObservations(
-    safetyData ? fieldObservationKey(safetyData.location.lat, safetyData.location.lon, safetyData.forecast?.selectedDate) : null,
-  );
   /** Writes the AI read; with `opening`, a fast model also writes the report's opening ahead of it. */
   const handleRequestAiBriefAction = async (options: { opening?: boolean } = {}) => {
     if (!safetyData || !decision || aiBriefLoading) return;
     if (!requestAiAccess()) return;
     void handleRequestAiBrief({
       safetyData,
-      fieldObservations,
       decisionLevel: decision.level,
       route: routeReportContext,
       opening: options.opening,
@@ -2392,7 +2386,6 @@ export function useWorkspace() {
             safety: safetyData.safety,
             decision: evaluation?.decision ?? null,
             ...(routeReportContext ? { route: routeReportContext } : {}),
-            ...(fieldObservations?.length ? { fieldObservations } : {}),
           })
         : "",
     [
@@ -2409,7 +2402,6 @@ export function useWorkspace() {
       evaluation,
       rainfallPayload,
       routeReportContext,
-      fieldObservations,
     ],
   );
 
