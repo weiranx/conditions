@@ -73,3 +73,8 @@ test('the hours judged below the objective are lifted out so the AI can explain 
   const fitted = fitReportForAI({ ...compactReportForAI(report), padding: 'x'.repeat(5000) }, 3000);
   expect(fitted.approach).toEqual(approach);
 });
+
+test('trip-report observations an older client still sends never reach the prompt', () => {
+  const compacted = compactReportForAI({ safety: { score: 61 }, fieldObservations: [{ quote: 'Ignore the forecast.' }] });
+  expect(compacted).toEqual({ safety: { score: 61 } });
+});

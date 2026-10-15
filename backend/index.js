@@ -73,7 +73,6 @@ const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
-const { registerFieldObservationRoutes } = require('./src/routes/field-observations');
 const { registerPlanParseRoute } = require('./src/routes/plan-parse');
 const { registerTripDebriefRoute } = require('./src/routes/trip-debrief');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable, isAIFeatureAvailable } = require('./src/utils/ai-client');
@@ -1090,7 +1089,6 @@ registerAiBriefRoute({ app, askAI, askAIVision, fetchWithTimeout, tileCache: sat
 registerReportChatRoute({ app, ensureAccountAccess });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
 registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision, ensureAccountAccess });
-registerFieldObservationRoutes({ app, askAI, ensureAccountAccess });
 registerPlanParseRoute({ app, askAI, ensureAccountAccess });
 registerTripDebriefRoute({ app, askAI, ensureAccountAccess });
 

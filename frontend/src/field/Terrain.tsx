@@ -1,5 +1,4 @@
 import { SurfacePrediction } from "./SurfacePrediction";
-import { FieldObservations } from "./FieldObservations";
 import { lazy, Suspense, useState } from "react";
 import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
@@ -403,20 +402,6 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
           </section>
         )}
       </div>
-
-      {aiEnabled && <FieldObservations
-        key={`${data.location.lat},${data.location.lon},${data.forecast?.selectedDate ?? ""}`}
-        objective={{
-          name: w.reportSnapshot?.plan.objectiveName || "Objective",
-          lat: data.location.lat,
-          lon: data.location.lon,
-          elevationFt: objectiveFt,
-        }}
-        date={data.forecast?.selectedDate ?? w.reportSnapshot?.plan.forecastDate ?? null}
-        available={available.tripReports}
-        readOnly={w.viewingHistoryReport}
-        formatElevation={w.formatElevationDisplay}
-      />}
 
       {flags.terrainWindow && <TerrainWindow workspace={w} />}
 

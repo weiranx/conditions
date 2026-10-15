@@ -6,7 +6,7 @@ const { recordAIUsage } = require('./ai-usage');
 
 const PROVIDER_IDS = ['openai', 'anthropic', 'gemini'];
 const SUPPORTED_PROVIDERS = new Set(PROVIDER_IDS);
-const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision', 'watchSummary', 'tripReports', 'planParse', 'avalancheExtraction', 'tripDebrief', 'aiReport'];
+const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision', 'watchSummary', 'planParse', 'avalancheExtraction', 'tripDebrief', 'aiReport'];
 const AI_FEATURE_KEY_SET = new Set(AI_FEATURE_KEYS);
 const MODEL_TIER_KEYS = ['primary', 'fast'];
 const MODEL_TIER_KEY_SET = new Set(MODEL_TIER_KEYS);
