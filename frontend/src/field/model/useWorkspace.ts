@@ -2289,9 +2289,7 @@ export function useWorkspace() {
   const handleRequestAiBriefAction = async (options: { opening?: boolean; snowVision?: boolean } = {}) => {
     if (!safetyData || !decision || aiBriefLoading) return;
     if (!requestAiAccess()) return;
-    if (options.snowVision && !snowVisionAnalysis && !snowVisionLoading && !viewingHistoryReport) {
-      void handleRequestSnowVision(safetyData.location.lat, safetyData.location.lon, safetyData.snowpack);
-    }
+    // The opening and the read go out first: the top of the report waits for them.
     void handleRequestAiBrief({
       safetyData,
       fieldObservations,
@@ -2299,6 +2297,9 @@ export function useWorkspace() {
       route: routeReportContext,
       opening: options.opening,
     });
+    if (options.snowVision && !snowVisionAnalysis && !snowVisionLoading && !viewingHistoryReport) {
+      void handleRequestSnowVision(safetyData.location.lat, safetyData.location.lon, safetyData.snowpack);
+    }
   };
 
   const { dayOverDay, startTimeScenarios } = useReportComparisons({

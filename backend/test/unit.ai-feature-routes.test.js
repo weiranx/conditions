@@ -199,7 +199,8 @@ test('AI opening is written by the fast model alone and fact-checked like the re
   expect(response.body.hero).toMatchObject({ headline: 'Wind builds through the afternoon', level: 'CAUTION' });
   expect(response.body.checks).toEqual({ problems: [], seconds: [expect.any(Number)] });
   expect(askAI).toHaveBeenCalledTimes(1);
-  expect(askAI.mock.calls[0][1]).toMatchObject({ tier: 'fast', feature: 'report-opening' });
+  // Written from the whole report, the opening needs more than the fast tier's 8s default.
+  expect(askAI.mock.calls[0][1]).toMatchObject({ tier: 'fast', feature: 'report-opening', timeoutMs: 20000 });
   expect(askAI.mock.calls[0][1].system).toMatch(/"hero"/);
   expect(askAI.mock.calls[0][1].system).not.toMatch(/"sections"/);
 });

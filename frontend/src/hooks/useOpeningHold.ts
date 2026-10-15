@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 
-/** How long the top of the report waits for the AI's opening before showing the checks' own. */
-export const OPENING_WAIT_MS = 6000;
+/**
+ * How long the top of the report waits for the AI's opening before showing the checks' own:
+ * past the server's 20 s budget for writing it, so the AI's opening always comes first and
+ * the checks' wording shows only when the AI fails (which ends the wait at once) or the
+ * answer never arrives.
+ */
+export const OPENING_WAIT_MS = 25000;
 
 /**
  * Whether the top of the report waits for the AI's opening instead of showing
