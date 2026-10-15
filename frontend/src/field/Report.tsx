@@ -282,15 +282,16 @@ export function Report({
   const outdatedRead = isOutdatedRead(w.aiBriefNarrative, w.aiBriefDetails);
   const [checksWording, setChecksWording] = useState(false);
   const openingPending = aiFirst && !hero && w.aiBriefLoading && w.aiReadRun?.opening === "pending";
-  // When an AI read is about to write this report's first opening, the top waits
-  // for it rather than showing the checks' wording and swapping it later, including
-  // while the account it needs is still loading; the badge, timeline and checks
-  // show meanwhile. An opening that fails, a reader who turns out to be signed out,
-  // or an answer that never arrives (useOpeningHold's time limit) lets the checks' wording through.
+  // The checks' wording never comes first: while an AI read is about to write this
+  // report's first opening, or is writing it, the top waits for the AI, including
+  // while the account it needs is loading and after the fast opening fails, until
+  // the full read brings its own. The badge, timeline and checks show meanwhile.
+  // Only a read that ends without an opening, a reader who turns out to be signed
+  // out, or an answer that never arrives (useOpeningHold's time limit) lets the checks' wording through.
   const firstRead = !w.aiBriefNarrative || outdatedRead;
-  const readStarting = autoReadWanted && (Boolean(w.accountUser) || w.accountLoading) && !w.aiBriefLoading;
+  const readStarting = autoReadWanted && (Boolean(w.accountUser) || w.accountLoading);
   const opening = useOpeningHold({
-    expected: aiFirst && !hero && firstRead && !w.aiBriefError && (openingPending || readStarting),
+    expected: aiFirst && !hero && firstRead && !w.aiBriefError && (w.aiBriefLoading || readStarting),
     key: readKey,
   });
   // Says which text is the AI's and keeps the checks' own wording one tap away,
@@ -573,6 +574,7 @@ export function Report({
       onEdit={w.viewingHistoryReport ? undefined : () => go("terrain", "sky-terrain-approach")}
       terms={w.objectiveTerms}
       text={hero?.note?.text}
+      writing={opening.holding}
     />
   );
   const routeNote = (

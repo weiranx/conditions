@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { OPENING_WAIT_MS, useOpeningHold } from '../src/hooks/useOpeningHold';
 import { SkyHero } from '../src/field/sky/SkyHero';
+import { ApproachNote } from '../src/field/sky/ApproachNote';
 
 async function mountHold(t, props) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -68,4 +69,16 @@ test('while the AI writes, the hero holds the shape of a headline instead of the
   assert.match(writing, /Caution/, 'the decision badge still shows');
   const written = hero(false);
   assert.match(written, /<h2 id="field-verdict-title">Strong wind after noon<\/h2><p class="sky-lede">Gusts reach 31 mph\.<\/p>/);
+});
+
+test('the approach note under the opening waits for the AI too, instead of the template\'s wording', () => {
+  const summary = { adjustedRuns: [], inversionRuns: [], adjustedHours: 3, lowFt: 9800, highFt: 11800 };
+  const note = (props) => renderToStaticMarkup(<ApproachNote hours={[]} summary={summary} source="estimated"
+    clock={(m) => `${m}`} elevation={(ft) => `${ft} ft`} onEdit={() => {}} {...props} />);
+  const writing = note({ writing: true });
+  assert.match(writing, /AI is writing this note/);
+  assert.match(writing, /sky-writing-line/);
+  assert.doesNotMatch(writing, /judged lower down|Set trailhead/);
+  assert.match(note({}), /is judged lower down/);
+  assert.match(note({ text: 'The morning is judged on the way up.' }), /The morning is judged on the way up\./);
 });
