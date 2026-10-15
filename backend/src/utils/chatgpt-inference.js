@@ -42,6 +42,7 @@ const chatGPTInference = async (subscription, input, { system, tier = 'primary',
   // The client timeout ends at the response headers; this one also bounds the streamed body.
   const deadline = AbortSignal.timeout(timeoutMs);
   let completed;
+  let streamedText = '';
   try {
     const stream = await client.responses.create({
       model, ...planRequestInput(input, system), ...reasoningFor(efforts, tier), store: false, stream: true,
@@ -49,7 +50,10 @@ const chatGPTInference = async (subscription, input, { system, tier = 'primary',
     try {
       for await (const event of stream) {
         assertLive(subscription);
-        if (event.type === 'response.output_text.delta' && onDelta) onDelta(event.delta);
+        if (event.type === 'response.output_text.delta') {
+          streamedText += event.delta;
+          if (onDelta) onDelta(event.delta);
+        }
         if (event.type === 'response.failed' || event.type === 'error' || event.type === 'response.incomplete') {
           throw new ChatGPTError('ChatGPT did not complete this response. Try again.');
         }
@@ -63,8 +67,10 @@ const chatGPTInference = async (subscription, input, { system, tier = 'primary',
     throw new ChatGPTError('ChatGPT could not complete the request. Try again.');
   }
   if (!completed) throw new ChatGPTError('ChatGPT stream ended before completion. Try again.');
-  const text = completed.output?.filter((item) => item.type === 'message')
-    .flatMap((item) => item.content || []).filter((part) => part.type === 'output_text').map((part) => part.text).join('').trim();
+  // Plan streams can omit output from the terminal event even after delivering
+  // every text delta. Keep those deltas, but accept them only after completion.
+  const text = (completed.output?.filter((item) => item.type === 'message')
+    .flatMap((item) => item.content || []).filter((part) => part.type === 'output_text').map((part) => part.text).join('') || streamedText).trim();
   if (!text) throw new ChatGPTError('ChatGPT returned no text. Try another model.');
   return { text, model, usage: completed.usage };
 };
