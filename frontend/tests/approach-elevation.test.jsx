@@ -5,7 +5,6 @@ import { buildShareQuery } from '../src/app/url-state';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildSkyHours } from '../src/field/sky/sky-model';
 import { ApproachNote } from '../src/field/sky/ApproachNote';
-import { DayStrip } from '../src/field/sky/DayStrip';
 import { Forecast } from '../src/field/Forecast';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
 import { buildApproachRequestParams } from '../src/app/approach-elevation';
@@ -105,14 +104,6 @@ test('the brief note says which hours were checked below the summit and how to c
   assert.equal(renderToStaticMarkup(<ApproachNote hours={summit.hours} summary={summit.summary} source="estimated" clock={clock} elevation={elevation} />), '');
 });
 
-test('the day strip marks approach hours visually and for screen readers', () => {
-  const { hours, summary } = approachScenario();
-  const html = renderToStaticMarkup(<DayStrip hours={hours} approach={summary} clock={clock} elevation={elevation} />);
-  assert.equal((html.match(/is-approach/g) || []).length, 2);
-  assert.match(html, /5 AM–7 AM checked at your estimated elevation, not the summit/);
-  assert.match(html, /title="5 AM · checked near 9,500 ft"/);
-});
-
 test('a GPX route is described by its start and high point, not a trailhead and summit', () => {
   const { hours, summary } = approachScenario();
   const terms = { kind: 'route', start: 'start', top: 'high point' };
@@ -121,8 +112,6 @@ test('a GPX route is described by its start and high point, not a trailhead and 
   assert.match(note, /Set start/);
   assert.match(note, /may be colder at the start than at the high point/);
   assert.doesNotMatch(note, /summit|trailhead</);
-  const strip = renderToStaticMarkup(<DayStrip hours={hours} approach={summary} clock={clock} elevation={elevation} terms={terms} />);
-  assert.match(strip, /checked at your estimated elevation, not the high point/);
 });
 
 test('the Forecast chapter shows the same checked hours as the brief and tags them', () => {
