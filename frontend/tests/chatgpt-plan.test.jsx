@@ -2,20 +2,31 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+const bootstrap = new JSDOM('<html><body></body></html>');
+globalThis.window = bootstrap.window;
+globalThis.document = bootstrap.window.document;
+const { createRoot } = await import('react-dom/client');
+bootstrap.window.close();
+delete globalThis.window;
+delete globalThis.document;
 import { ChatGPTPlan } from '../src/field/ChatGPTPlan';
 
-test('personal ChatGPT setup can refresh, select an account model, and disconnect once', async (t) => {
+test('browser-only ChatGPT setup can sign in, cancel, choose a model, and disconnect', async (t) => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://conditions.example.com/' });
   const previous = { window: globalThis.window, document: globalThis.document, localStorage: globalThis.localStorage, fetch: globalThis.fetch, CustomEvent: globalThis.CustomEvent };
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, CustomEvent: dom.window.CustomEvent, IS_REACT_ACT_ENVIRONMENT: true });
-  let connection = { enabled: false };
+  let connection = { enabled: true, connected: false };
+  dom.window.open = () => null;
+  const signIn = { id: 'attempt-id', authorizationUrl: 'https://auth.openai.com/api/accounts/authorize?state=test', expiresAt: Date.now() + 600000 };
   const requests = [];
   globalThis.fetch = async (url, init = {}) => {
     const pathname = new URL(String(url), dom.window.location.origin).pathname;
     requests.push({ pathname, ...init });
     let payload;
     if (pathname === '/api/account/chatgpt') payload = connection;
+    else if (pathname.endsWith('/signin/start')) payload = { signIn };
+    else if (pathname.endsWith('/signin/cancel')) payload = { canceled: true };
+    else if (pathname.endsWith('/signin/complete')) payload = connection = { enabled: true, connected: true, state: 'connected', email: 'me@example.com', model: null };
     else if (pathname === '/api/healthz') payload = { ai: { available: true, billingSource: 'chatgpt' } };
     else if (pathname === '/api/account/chatgpt/models') payload = { models: [{ id: 'account-model', name: 'My model' }] };
     else if (pathname === '/api/account/chatgpt/model') payload = connection = { ...connection, model: JSON.parse(init.body).model };
@@ -36,9 +47,25 @@ test('personal ChatGPT setup can refresh, select an account model, and disconnec
     button.click();
   });
   await act(async () => root.render(<ChatGPTPlan userId="conditions-owner-id" />));
-  assert.ok(document.body.textContent.includes('conditions-owner-id'));
-  connection = { enabled: true, connected: true, state: 'connected', email: 'me@example.com', model: null };
-  await press('Refresh connection');
+  assert.ok(!document.body.textContent.includes('npm run'));
+  await press('Continue with ChatGPT');
+  assert.ok(document.querySelector('a[href="' + signIn.authorizationUrl + '"]'));
+  await press('Cancel sign-in');
+  assert.equal(document.querySelector('textarea'), null);
+  await press('Continue with ChatGPT');
+  const callbackUrl = 'http://127.0.0.1:1455/auth/callback?code=private-code&state=test&client_id=oaiapp_test';
+  await act(async () => {
+    const input = document.querySelector('textarea');
+    Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(input, callbackUrl);
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    input.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  });
+  await press('Finish sign-in');
+  const completed = requests.filter((request) => request.pathname.endsWith('/signin/complete'));
+  assert.equal(completed.length, 1);
+  assert.deepEqual(JSON.parse(completed[0].body), { signInId: signIn.id, callbackUrl });
+  assert.equal(document.querySelector('textarea'), null);
+  assert.ok(!JSON.stringify(localStorage).includes('private-code'));
   assert.ok(document.body.textContent.includes('You’re using your ChatGPT plan'));
   await press('Got it');
   assert.equal(localStorage.getItem('conditions:chatgpt-welcome:conditions-owner-id'), 'seen');

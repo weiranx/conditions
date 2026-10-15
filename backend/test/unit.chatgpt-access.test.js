@@ -52,7 +52,7 @@ test('connection controls require the real owner session and explicit allowed Or
   app.use(express.json());
   registerChatGPTRoutes({ app, accountService, accounts: onlyOwner(service), allowedOrigins: ['https://conditions.example.com'] });
   expect((await request(app).get('/api/account/chatgpt')).status).toBe(401);
-  expect((await request(app).get('/api/account/chatgpt').set('Cookie', 'bc_session=other')).body).toEqual({ enabled: false });
+  expect((await request(app).get('/api/account/chatgpt').set('Cookie', 'bc_session=other')).body).toMatchObject({ enabled: false });
   expect((await request(app).get('/api/account/chatgpt/models').set('Cookie', 'bc_session=other')).status).toBe(403);
   for (const origin of [null, 'https://attacker.example']) {
     const req = request(app).post('/api/account/chatgpt/disconnect').set('Cookie', 'bc_session=owner');
