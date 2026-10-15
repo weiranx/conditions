@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { flushSync } from "react-dom";
 import {
   ArrowDown,
@@ -33,6 +33,7 @@ import { BriefSections, StatusTag } from "./sky/BriefSections";
 import { buildBrief, sectionChecks } from "./sky/brief-model";
 import { DeferredSection, ReportNav, type ReportPlace } from "./sky/ReportNav";
 import { landOn, sectionsReady } from "./sky/report-scroll";
+import { placeToReturnTo, reportPlaceKey, useKeepReportPlace, type ReadingPlace } from "./report-place";
 import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
 import { plainHeadline } from "./sky/plain-headline";
@@ -97,6 +98,7 @@ export function Report({
   actionBusy,
   feedback,
   feedbackAction,
+  kept,
 }: {
   report: PersistedReport;
   workspace: Workspace;
@@ -111,13 +113,21 @@ export function Report({
   actionBusy: boolean;
   feedback: string;
   feedbackAction?: { label: string; onClick: () => void };
+  /** Where the reader was in a report, kept while the report is closed for another page. */
+  kept?: MutableRefObject<ReadingPlace | null>;
 }) {
+  const placeKey = reportPlaceKey(report);
+  // Back from another page, the report opens where it was left.
+  const [returning] = useState(() => placeToReturnTo(kept?.current, placeKey));
   const topRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   // The report is one page: the summary, then every section. The bar marks where the reader is.
   const [place, setPlace] = useState<ReportPlace>("summary");
   // Sections render as the reader nears them, or when they jump to one.
-  const [mounted, setMounted] = useState<ReadonlySet<Chapter>>(() => new Set());
+  // Back at an old spot, the sections above it render at once so the page is as tall as it was.
+  const [mounted, setMounted] = useState<ReadonlySet<Chapter>>(() => new Set(
+    chapters.map((c) => c.id).filter((id) => returning?.sections.includes(id)),
+  ));
   // A jump lands on a part of a section once it, and every section above it, has rendered.
   const landing = useRef<{ chapter: Chapter; anchor?: string; smooth: boolean; needed: Chapter[] } | null>(null);
   const [navigation, setNavigation] = useState(0);
@@ -191,6 +201,7 @@ export function Report({
   // The brief's checks also say which sections hold a problem.
   const brief = buildBrief({ w, hours: skyHours, clock, route, activity: reportActivity(report) });
 
+  useKeepReportPlace(kept, placeKey, mounted, returning);
   const mount = useCallback((id: Chapter) => {
     setMounted((previous) => (previous.has(id) ? previous : new Set(previous).add(id)));
   }, []);
@@ -363,11 +374,12 @@ export function Report({
       const chapter = chapterFromHash();
       if (chapter) goRef.current?.(chapter, undefined, smooth);
     };
-    open(false);
+    // Back from another page, the spot the reader left beats the section last jumped to.
+    if (!returning) open(false);
     const listener = () => open(true);
     window.addEventListener("hashchange", listener);
     return () => window.removeEventListener("hashchange", listener);
-  }, []);
+  }, [returning]);
   function download() {
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }),

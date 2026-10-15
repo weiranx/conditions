@@ -43,6 +43,7 @@ import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer, shareOrCopyLink } from "./touch";
 import { describeShare, SHARE_READY_FEEDBACK } from "./share-feedback";
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from "./page-scroll";
+import type { ReadingPlace } from "./report-place";
 import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
 import "./workspace.css";
@@ -88,6 +89,8 @@ export default function FieldApp() {
   );
   const [touch] = useState(hasCoarsePointer);
   const mapRef = useRef<HTMLDivElement>(null);
+  // The spot the reader left the report at, for when they come back to it.
+  const readingPlace = useRef<ReadingPlace | null>(null);
   // Anyone who has opened the planner goes straight back to it from `/`.
   useEffect(markLandingSeen, []);
   const plan: Plan = {
@@ -713,6 +716,7 @@ export default function FieldApp() {
                     key={`${w.safetyData?.generatedAt}-${w.reportChatSessionKey}`}
                     report={w.reportSnapshot}
                     workspace={w}
+                    kept={readingPlace}
                     onEdit={() => (w.restoredReportSource === "itinerary" ? editTrip() : w.handleEditPlan())}
                     onSave={() => void action("save")}
                     onShare={() => void action("share")}

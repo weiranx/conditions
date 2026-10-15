@@ -201,13 +201,12 @@ export function useWorkspace() {
     if (
       !initialPersistedReport ||
       parsedInitialLinkState.hasObjective ||
-      parsedInitialLinkState.sharedReportToken ||
-      (parsedInitialLinkState.view !== "home" &&
-        parsedInitialLinkState.view !== "planner")
+      parsedInitialLinkState.sharedReportToken
     ) {
       return parsedInitialLinkState;
     }
-    // Restore the last report's plan behind the requested page; opening `/`
+    // Restore the last report's plan behind the requested page, so a reload on
+    // Settings or Saved reports still finds it under the brief; opening `/`
     // stays on the workspace instead of jumping to the brief.
     const plan = initialPersistedReport.plan;
     return {
