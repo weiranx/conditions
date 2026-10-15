@@ -36,7 +36,7 @@ function useArrival(text: string) {
 }
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, headline, reason, bridge, limitingChecks = [], note, actions, photo, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, headline, reason, writing = false, bridge, limitingChecks = [], note, actions, photo, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
@@ -50,6 +50,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   level: "GO" | "CAUTION" | "NO-GO" | string;
   headline: string;
   reason: string;
+  /** The AI is writing the headline and reason: placeholders stand in, so the checks' wording isn't swapped out under the reader. */
+  writing?: boolean;
   bridge?: string;
   limitingChecks?: string[];
   /** Extra context under the reason, e.g. hours checked below the summit. */
@@ -113,7 +115,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
     return Math.max(0, Math.min(hours.length - 1, index));
   };
 
-  const arrival = useArrival(`${headline}\n${reason}`);
+  const arrival = useArrival(writing ? "" : `${headline}\n${reason}`);
   // Geometry is measured from the bottom so the text block above can grow freely.
   const [heroHeight, setHeroHeight] = useState(640);
   useEffect(() => {
@@ -317,8 +319,24 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
           {tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
           <span><span className="sr-only">Trip decision: </span>{toneWord}</span>
         </span>
-        <h2 id="field-verdict-title" ref={arrival.headline}>{headline}</h2>
-        <p className="sky-lede" ref={arrival.lede}>{reason}</p>
+        {writing ? (
+          <>
+            <h2 id="field-verdict-title" ref={arrival.headline} className="is-writing">
+              <span className="sr-only">AI is writing the opening</span>
+              <span className="sky-writing-line" aria-hidden="true" />
+              <span className="sky-writing-line is-short" aria-hidden="true" />
+            </h2>
+            <p className="sky-lede is-writing" ref={arrival.lede} aria-hidden="true">
+              <span className="sky-writing-line" />
+              <span className="sky-writing-line is-short" />
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 id="field-verdict-title" ref={arrival.headline}>{headline}</h2>
+            <p className="sky-lede" ref={arrival.lede}>{reason}</p>
+          </>
+        )}
         {bridge && <p className="sky-lede sky-bridge">{bridge}</p>}
         {limitingChecks.length > 0 && (
           <ul className="sky-limiting" aria-label="Checks setting the decision">

@@ -12,6 +12,7 @@ import {
   MAX_BAIL_POINTS,
   MAX_DAY_CHECKPOINTS,
   campPoint,
+  consumePlaceHint,
   isCoordinateLabel,
   pointLabel,
   setItineraryNights,
@@ -113,16 +114,26 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
         onChooseMap();
       }
     : undefined;
-  const setCamp = (index: number, point: ItineraryPoint | null) =>
+  const hints = it.placeHints;
+  // A described place waits in its search until it is picked; picking or setting it otherwise uses it up.
+  const dropCampHint = (index: number) => it.setPlaceHints((current) => consumePlaceHint(current, { kind: "camp", index }));
+  const dropExitHint = () => it.setPlaceHints((current) => consumePlaceHint(current, { kind: "exit" }));
+  // Searches near the trailhead: a described place searches again once the trailhead is picked.
+  const trailheadKey = draft.trailhead ? `${draft.trailhead.lat},${draft.trailhead.lon}` : "";
+  const setCamp = (index: number, point: ItineraryPoint | null) => {
+    dropCampHint(index);
     it.updateDraft((current) => ({
       ...current,
       camps: current.camps.map((camp, campIndex) => (campIndex === index ? { point, layover: false } : camp)),
     }));
-  const setLayover = (index: number, layover: boolean) =>
+  };
+  const setLayover = (index: number, layover: boolean) => {
+    dropCampHint(index);
     it.updateDraft((current) => ({
       ...current,
       camps: current.camps.map((camp, campIndex) => (campIndex === index ? { ...camp, layover } : camp)),
     }));
+  };
   const setDay = (index: number, patch: Partial<ItineraryDraft["days"][number]>) =>
     it.updateDraft((current) => ({
       ...current,
@@ -225,6 +236,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
               <DayRow
                 workspace={w}
                 index={index}
+                trailheadKey={trailheadKey}
                 fromName={pointLabel(from, index === 0 ? "Trailhead" : `Camp ${index}`)}
                 miles={stage && !stage.layover ? stageStraightLineMiles(stage) : null}
                 longDay={Boolean(longDay)}
@@ -246,6 +258,8 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                     </p>
                   ) : (
                     <PlaceField
+                      key={hints.camps[index] ? `hint:${hints.camps[index]}@${trailheadKey}` : "camp"}
+                      suggestedQuery={hints.camps[index] ?? undefined}
                       onResolve={it.nameAt}
                       elevationUnit={w.preferences.elevationUnit}
                       near={placeSearchNear(w)}
@@ -269,15 +283,18 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                     <Flag size={15} aria-hidden="true" />
                     Exit
                   </span>
-                  {draft.exit || choosingExit ? (
+                  {draft.exit || choosingExit || hints.exit ? (
                     <>
                       <PlaceField
+                        key={hints.exit ? `hint:${hints.exit}@${trailheadKey}` : "exit"}
+                        suggestedQuery={hints.exit ?? undefined}
                         onResolve={it.nameAt}
                         elevationUnit={w.preferences.elevationUnit}
                         near={placeSearchNear(w)}
                         label="Exit trailhead"
                         value={draft.exit}
                         onChange={(exit) => {
+                          dropExitHint();
                           it.updateDraft((current) => ({ ...current, exit }));
                           setChoosingExit(false);
                         }}
@@ -290,6 +307,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
                         className="field-text-button"
                         onClick={() => {
                           setChoosingExit(false);
+                          dropExitHint();
                           if (draft.exit) it.updateDraft((current) => ({ ...current, exit: null }));
                         }}
                       >
@@ -367,6 +385,7 @@ export function ItineraryCamps({ workspace: w, onChooseMap }: { workspace: Works
 function DayRow({
   workspace: w,
   index,
+  trailheadKey,
   fromName,
   miles,
   longDay,
@@ -375,6 +394,7 @@ function DayRow({
 }: {
   workspace: Workspace;
   index: number;
+  trailheadKey: string;
   fromName: string;
   /** Straight-line distance from the day's start to its camp; null while either is missing or on a layover. */
   miles: number | null;
@@ -386,8 +406,11 @@ function DayRow({
   const day = it.draft.days[index];
   // A day spent at camp: the night after it is a layover at the same camp.
   const layover = index < it.draft.camps.length && it.draft.camps[index].layover;
+  // A pass the trip's description named, next in line to be picked.
+  const passHint = it.placeHints.checkpoints[index]?.[0] ?? null;
+  const consumePassHint = () => it.setPlaceHints((current) => consumePlaceHint(current, { kind: "checkpoint", day: index }));
   return (
-    <details className="sky-trip-day">
+    <details className="sky-trip-day" open={passHint ? true : undefined}>
       <summary>
         <span className="sky-trip-day-label">Day {index + 1}</span>
         <span className="sky-trip-day-summary">
@@ -437,13 +460,17 @@ function DayRow({
       ))}
       {day.checkpoints.length < MAX_DAY_CHECKPOINTS && (
         <PlaceField
+          key={passHint ? `hint:${passHint}@${trailheadKey}` : "pass"}
+          suggestedQuery={passHint ?? undefined}
           onResolve={it.nameAt}
           elevationUnit={w.preferences.elevationUnit}
           near={placeSearchNear(w)}
           label="Add a pass or high point"
           value={null}
           onChange={(point) => {
-            if (point) onChange({ checkpoints: [...day.checkpoints, point] });
+            if (!point) return;
+            consumePassHint();
+            onChange({ checkpoints: [...day.checkpoints, point] });
           }}
           onPickOnMap={onPickOnMap ? () => onPickOnMap({ kind: "checkpoint", day: index }) : undefined}
           picking={it.activeTarget?.kind === "checkpoint" && it.activeTarget.day === index}
@@ -469,9 +496,12 @@ export function PlaceField({
   mapHint = false,
   elevationUnit,
   near,
+  suggestedQuery,
 }: {
   label: string;
   elevationUnit: ElevationUnit;
+  /** A place a trip description named, searched for the traveler to pick; give the field a new key when it changes. */
+  suggestedQuery?: string;
   /** Where results should lean toward: the trip's trailhead or objective. */
   near: SearchNear | null;
   value: ItineraryPoint | null;
@@ -484,7 +514,7 @@ export function PlaceField({
   mapHint?: boolean;
 }) {
   const id = useId();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(suggestedQuery ?? "");
   const [results, setResults] = useState<Suggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [editing, setEditing] = useState(false);

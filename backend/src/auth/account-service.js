@@ -277,6 +277,9 @@ const validateAccountPreferences = (value) => {
     ...(preferences.autoAiRead === undefined
       ? {}
       : { autoAiRead: validatePreferenceBoolean(preferences, 'autoAiRead') }),
+    ...(preferences.aiEnabled === undefined
+      ? {}
+      : { aiEnabled: validatePreferenceBoolean(preferences, 'aiEnabled') }),
     ...validateActivityPreferences(preferences),
   };
 };

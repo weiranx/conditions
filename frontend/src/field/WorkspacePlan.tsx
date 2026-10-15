@@ -11,6 +11,7 @@ import {
   Plus,
   Route as RouteIcon,
   Search,
+  Sparkles,
   Star,
   Upload,
   X,
@@ -213,8 +214,8 @@ export function WorkspacePlan({
     else if (optionBounds.bottom > listBottom)
       list.scrollTop += optionBounds.bottom - listBottom;
   }, [w.activeSuggestionIndex, w.showSuggestions, w.suggestions]);
-  // A sentence fills a day trip's plan; the place goes through the search like typing it.
-  const sentenceAvailable = useAiAvailability().planParse && !comparison && !multiDay;
+  // A sentence fills a day trip's plan or a multi-day trip; the place (or trailhead) goes through the search like typing it.
+  const sentenceAvailable = useAiAvailability().planParse && !comparison;
   function searchFor(query: string) {
     setError("");
     setRenaming(null);
@@ -285,7 +286,9 @@ export function WorkspacePlan({
         )}
         {sentenceAvailable && (
           <PlanSentence
+            key={multiDay ? "multi" : "day"}
             workspace={w}
+            multiDay={multiDay}
             placeKey={placeKey}
             onDate={setDate}
             onStart={setStart}
@@ -407,10 +410,18 @@ export function WorkspacePlan({
                 </span>
               )}
             </div>
-            {multiDay || comparison ? null : w.featureFlags.routeAnalysis ? (
+            {multiDay || comparison ? null : w.featureFlags.routeAnalysis && w.preferences.aiEnabled ? (
               <PlanRoute workspace={w} selected={selected} onImportGpx={gpxAllowed ? chooseGpx : undefined} />
-            ) : (
+            ) : w.importedGpxRoute || !gpxAllowed || !w.featureFlags.routeAnalysis ? (
               <GpxSummary workspace={w} />
+            ) : (
+              // Named routes are found and checked by AI; a GPX track still times the approach.
+              <div className="sky-plan-gpx-only">
+                <button type="button" className="field-text-button" onClick={chooseGpx}>
+                  <Upload size={14} aria-hidden="true" />
+                  Import a GPX track
+                </button>
+              </div>
             )}
           </div>
         ) : (
@@ -752,6 +763,13 @@ export function WorkspacePlan({
             </button>
           </details>
         </fieldset>
+        <PlanAi
+          workspace={w}
+          onChange={() => {
+            // Like the activity, it makes a different report: the next one is built fresh.
+            if (!comparison && !multiDay && w.safetyData) w.handleEditPlan();
+          }}
+        />
         <button
           className="field-button field-button-primary field-form-submit"
           type="submit"
@@ -775,6 +793,37 @@ export function WorkspacePlan({
         </p>
       )}
     </form>
+  );
+}
+
+/** Whether this plan's report uses AI. Off, the report is the checks' alone. */
+function PlanAi({ workspace: w, onChange }: { workspace: Workspace; onChange: () => void }) {
+  const id = useId();
+  const on = w.preferences.aiEnabled;
+  return (
+    <div className="sky-plan-ai">
+      <label className="sky-switch">
+        <input
+          type="checkbox"
+          checked={on}
+          aria-describedby={`${id}-hint`}
+          onChange={(event) => {
+            onChange();
+            w.updatePreferences({ aiEnabled: event.target.checked });
+          }}
+        />
+        <span aria-hidden="true" />
+        <strong>
+          <Sparkles size={15} aria-hidden="true" />
+          Use AI
+        </strong>
+      </label>
+      <p id={`${id}-hint`}>
+        {on
+          ? "The report adds an AI read and chat, and can check named routes and snow imagery."
+          : "The report is the forecast and checks alone: no AI read, chat, route analysis or imagery."}
+      </p>
+    </div>
   );
 }
 

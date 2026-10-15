@@ -72,7 +72,7 @@ describe('decision', () => {
     const decision = decide(report);
     expect(check(decision, 'feels-like').ok).toBe(true);
     expect(check(decision, 'feels-like').detail).not.toMatch(/-\d+°F|\b0°F/);
-    expect(decision.cautions.some((text) => /Apparent temperature falls/.test(text))).toBe(false);
+    expect(decision.cautions.some((text) => /It feels like/.test(text))).toBe(false);
   });
 
   test('the heat blocker uses the hottest hour of the window, not the coldest', () => {
@@ -80,7 +80,50 @@ describe('decision', () => {
     report.weather.trend[6].temp = 101;
     const decision = decide(report);
     expect(decision.level).toBe('NO-GO');
-    expect(decision.blockers.some((text) => /Apparent temperature reaches about 101°F/.test(text))).toBe(true);
+    expect(decision.blockers.some((text) => /It feels like about 101°F/.test(text))).toBe(true);
+  });
+
+  test('a failed limit check never leaves the plan at GO', () => {
+    // Alpine climbing allows 35%; a 45% hour used to fail the check yet read GO.
+    const wet = makeReport();
+    wet.weather.trend[4].precipChance = 45;
+    const alpine = decide(wet, { activity: 'alpine-climbing', max_gust_mph: '40', min_feels_like_f: '-10' });
+    expect(check(alpine, 'precipitation').ok).toBe(false);
+    expect(alpine.level).toBe('CAUTION');
+    expect(alpine.cautions).toContain('Rain or snow chance reaches 45% around 11:00 AM, above your 35% limit. Allow extra time, bring rain gear and traction, and turn back if footing or visibility gets bad.');
+  });
+
+  test('a reading exactly at a limit passes its check and adds no caution', () => {
+    const report = makeReport();
+    report.weather.trend[2].gust = 25;
+    const decision = decide(report, { max_gust_mph: '25' });
+    expect(check(decision, 'wind-gust').ok).toBe(true);
+    expect(decision.cautions.some((text) => /Gusts reach/.test(text))).toBe(false);
+  });
+
+  test('the decision checks the traveler’s own heat limit, not only the fixed no-go point', () => {
+    const report = makeReport();
+    report.weather.trend[6].temp = 88;
+    const runner = decide(report, { activity: 'trail-running' });
+    expect(check(runner, 'heat-limit')).toMatchObject({ ok: false, label: 'Feels-like temperature is at or below 85°F' });
+    expect(check(runner, 'heat-limit').detail).toBe('Hottest 88°F at 1:00 PM in window (limit 85°F).');
+    expect(runner.level).toBe('CAUTION');
+    expect(runner.cautions.some((text) => text.startsWith('It feels like about 88°F around 1:00 PM, above your 85°F limit.'))).toBe(true);
+    // A traveler who accepts more heat moves the no-go point with their limit.
+    report.weather.trend[6].temp = 98;
+    expect(decide(report, { max_feels_like_f: '95' }).level).toBe('NO-GO');
+    expect(decide(report, { max_feels_like_f: '100' }).blockers.some((text) => /hot enough for heat illness/.test(text))).toBe(false);
+  });
+
+  test('frostbite-level cold blocks the plan instead of only asking for layers', () => {
+    const report = makeReport();
+    report.weather.trend.forEach((hour) => { hour.temp = 30; hour.wind = 5; });
+    report.weather.trend[1] = { ...report.weather.trend[1], temp: -5, wind: 15 };
+    const decision = decide(report, { min_feels_like_f: '0' });
+    expect(decision.level).toBe('NO-GO');
+    expect(decision.blockers.some((text) => /exposed skin can get frostbite in about 30 minutes/.test(text))).toBe(true);
+    // A traveler who sets a colder limit keeps a clear margin before it blocks.
+    expect(decide(report, { min_feels_like_f: '-30' }).blockers.some((text) => /frostbite/.test(text))).toBe(false);
   });
 
   test('missing gust and precipitation are reported as unavailable, not as passing at 0', () => {
@@ -113,7 +156,7 @@ describe('decision', () => {
     };
     const decision = decide(report);
     expect(decision.level).toBe('NO-GO');
-    expect(decision.blockers[0]).toBe('Fire risk is extreme: The Garda Falls fire (73 acres, 0% contained) is about 5 mi away. Choose another area or time, verify closures, and do not enter fire-affected terrain.');
+    expect(decision.blockers[0]).toBe('Fire risk is extreme: The Garda Falls fire (73 acres, 0% contained) is about 5 mi away. Pick another area or time, check for closures, and stay out of fire-affected terrain.');
     expect(check(decision, 'fire-risk')).toMatchObject({
       label: 'Fire risk is below High',
       detail: 'Extreme (L4). The Garda Falls fire (73 acres, 0% contained) is about 5 mi away.',
@@ -134,7 +177,7 @@ describe('decision', () => {
     const decision = decide(report, { wind_unit: 'kph', temp_unit: 'c' });
     expect(check(decision, 'wind-gust').label).toBe('Wind gusts are at or below 40 km/h');
     expect(check(decision, 'wind-gust').detail).toBe('Peak 48 km/h at 9:00 AM in window (limit 40 km/h).');
-    expect(check(decision, 'feels-like').label).toBe('Apparent temperature is at or above -15°C');
+    expect(check(decision, 'feels-like').label).toBe('Feels-like temperature is at or above -15°C');
     // The clock follows the traveler's style too, in every check.
     const twentyFour = decide(report, { wind_unit: 'kph', temp_unit: 'c', time_style: '24h' });
     expect(check(twentyFour, 'wind-gust').detail).toBe('Peak 48 km/h at 09:00 in window (limit 40 km/h).');
@@ -156,7 +199,7 @@ describe('decision', () => {
     expect(check(late, 'daylight').ok).toBe(false);
     // Start, return and sunset read on one clock: the traveler's, not 24-hour for two and the provider's for the third.
     expect(check(late, 'daylight').detail).toMatch(/12:00 PM start • back by 10:00 PM • 7:30 PM sunset • 150 min after sunset/);
-    expect(late.cautions.some((text) => /Turnaround time is 150 minutes after sunset \(7:30 PM\)/.test(text))).toBe(true);
+    expect(late.cautions.some((text) => /turn around 150 minutes after sunset \(7:30 PM\)/.test(text))).toBe(true);
     const twentyFour = decide(makeReport({ start: '12:00' }), { start: '12:00', travel_window_hours: '10', time_style: '24h' });
     expect(check(twentyFour, 'daylight').detail).toMatch(/12:00 start • back by 22:00 • 19:30 sunset • 150 min after sunset/);
     expect(twentyFour.cautions.some((text) => /150 minutes after sunset \(19:30\)/.test(text))).toBe(true);
@@ -235,7 +278,7 @@ describe('approach', () => {
     safety: { score: 80, factors: [] },
   });
   const limits = { max_gust_mph: '25', min_feels_like_f: '5', travel_window_hours: '4' };
-  const gustCaution = (decision) => [...decision.cautions, ...decision.blockers].some((item) => /Wind gusts reach/.test(item));
+  const gustCaution = (decision) => [...decision.cautions, ...decision.blockers].some((item) => /Gusts reach/.test(item));
 
   test('early hours at the trailhead no longer fail on summit gusts, later hours still do', () => {
     const report = reportWith(['05:00', '06:00', '07:00', '08:00'].map((time) => ({ ...hour, time })));
@@ -279,10 +322,10 @@ describe('approach', () => {
   test('a cold caution caused by a likely inversion says so', () => {
     const report = reportWith([{ time: '4 AM', temp: 8, wind: 2, gust: 5, precipChance: 0, cloudCover: 5, condition: 'Clear' }]);
     const caution = (params) => evaluateDecision(report, buildPlanContext({ start: '04:00', ...limits, ...params }, report))
-      .cautions.find((item) => /Apparent temperature/.test(item)) || '';
+      .cautions.find((item) => /It feels like/.test(item)) || '';
     expect(caution({ approach: 'off' })).toBe('');
     expect(caution({ trailhead_ft: '7000' }))
-      .toMatch(/low on the approach: clear, calm conditions can pool colder air in the valley than higher up/);
+      .toMatch(/The coldest spot is low on the approach, where clear, calm nights pool cold air in the valley/);
   });
 
   test('an off-the-hour start checks each reading at the elevation for its own minutes', () => {
@@ -502,7 +545,7 @@ describe('verdict', () => {
 
   test('a strong score under a caution explains that the decision is set by the checks', () => {
     const verdict = verdictFor({ level: 'CAUTION', cautions: ['Cold start. Layer up.'] });
-    expect(verdict.bridge).toBe('The score of 91 rates conditions overall. The decision is set by a check that needs attention.');
+    expect(verdict.bridge).toBe('The score of 91 rates conditions overall, but the decision follows the most limiting check: here, a check that needs attention.');
     expect(verdict.tone).toBe('watch');
   });
 
@@ -530,7 +573,7 @@ describe('verdict', () => {
     windy.weather.trend[6].gust = 45;
     const evaluation = evaluatePlan(windy, contextFor(windy));
     expect(evaluation.decisionSummary.orderedChecks[0]).toMatchObject({ key: 'wind-gust', ok: false, failedLabel: 'Wind gusts are above your limit' });
-    expect(evaluation.decisionSummary.primaryReason).toMatch(/Wind gusts reach about 45 mph/);
+    expect(evaluation.decisionSummary.primaryReason).toMatch(/Gusts reach about 45 mph/);
     expect(evaluation.verdict.tone).toBe('stop');
   });
 });
@@ -612,13 +655,13 @@ describe('decision and verdict edge cases', () => {
     const relaxed = { max_gust_mph: '80', max_precip_chance: '100', min_feels_like_f: '-40', max_feels_like_f: '120' };
     const decision = decide(report, relaxed);
     expect(decision.level).toBe('GO');
-    for (const text of ['Air quality is moderate', 'Fire risk is elevated', 'Heat risk is elevated', 'Terrain and trail surfaces']) {
+    for (const text of ['Air quality is moderate', 'Fire risk is elevated', 'Heat risk is elevated', 'The trail surface needs care']) {
       expect(decision.advisories.some((item) => item.startsWith(text))).toBe(true);
     }
     report.terrainCondition = { code: 'snow_ice', label: 'Icy / Firm Snow', impact: 'high' };
     const icy = decide(report, relaxed);
     expect(icy.level).toBe('CAUTION');
-    expect(icy.cautions.some((item) => item.startsWith('Terrain and trail surfaces'))).toBe(true);
+    expect(icy.cautions.some((item) => item.startsWith('The trail surface needs care'))).toBe(true);
   });
 
   test('the verdict explains a high score under a stricter decision only when they disagree', () => {
@@ -628,8 +671,8 @@ describe('decision and verdict edge cases', () => {
       return buildVerdict(report, full, buildDecisionSummary(full), []);
     };
     expect(verdict({ level: 'CAUTION', cautions: ['Cold', 'Wind'] }).bridge)
-      .toBe('The score of 91 rates conditions overall. The decision is set by 2 checks that need attention.');
-    expect(verdict({ level: 'NO-GO', blockers: ['Storm'] }).bridge).toMatch(/The decision is set by a blocking check\./);
+      .toBe('The score of 91 rates conditions overall, but the decision follows the most limiting check: here, 2 checks that need attention.');
+    expect(verdict({ level: 'NO-GO', blockers: ['Storm'] }).bridge).toMatch(/here, a blocking check\./);
     expect(verdict({ level: 'GO' }).bridge).toBe('');
     report.safety.score = 78;
     expect(verdict({ level: 'CAUTION', cautions: ['Cold'] }).bridge).toBe('');

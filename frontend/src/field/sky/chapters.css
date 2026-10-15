@@ -241,25 +241,54 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
   .sky-check-body { padding-left: 10px; }
 }
 
-/* Full report: one document, chapter after chapter. */
-/* .report-overview (report-reading.css) loads later in the Report chunk and would
-   otherwise turn this into a two-column grid that squeezes The numbers. */
-.report-overview.sky-full-summary { display: block; }
-/* The hero dims this line over the sky; on the summary card it is secondary text at full strength. */
-.sky-full-summary .sky-subtitle-meta { opacity: 1; }
 .sky-verdict-card { margin-top: 20px; padding: 22px 24px; border-radius: 24px; background: var(--sky-surface); box-shadow: var(--sky-elevation); }
 .sky-verdict-card .sky-pill { margin-top: 0; box-shadow: inset 0 0 0 1px var(--sky-separator); }
 .sky-verdict-card h2 { margin: 12px 0 0; max-width: 34ch; font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
 .sky-verdict-reason { margin: 8px 0 0; max-width: 64ch; font-size: 17px; line-height: 1.5; color: var(--sky-label); }
 .sky-verdict-card .sky-cap { margin: 8px 0 0; }
 .sky-verdict-card .sky-limiting { color: var(--sky-label); }
+/* ---------- One report: the brief, then every section below it ---------- */
+/* The toolbar scrolls away over the sky, so the section bar pins to the top of the screen. */
+.field-content:has(.sky-report) { --field-sticky-top: var(--safe-top, 0px); }
+.sky-report { --sky-nav-h: 54px; }
+/* A jump lands its section just under the section bar, and moves focus there without a ring. */
+.sky-report :is(section, details, [id]) { scroll-margin-top: calc(var(--field-sticky-top, 0px) + var(--sky-nav-h) + 16px); }
+.field-report.sky-report :is(h2, section, [id])[tabindex="-1"]:focus { outline: none; }
+.sky-report-nav { margin-bottom: 4px; }
+.sky-report-nav button { display: inline-flex; align-items: center; gap: 6px; }
+.sky-nav-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.sky-nav-dot.is-over { background: var(--sky-caution); }
+.sky-nav-dot.is-missing { box-shadow: inset 0 0 0 1.5px currentColor; opacity: 0.7; }
+
+/* The brief hands the reader on to the first section. */
+.sky-continue {
+  flex-direction: row; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; margin-top: 16px; padding: 16px 20px; border: 0; text-align: left; color: var(--sky-label); font: inherit; cursor: pointer;
+}
+.sky-continue-text { display: grid; gap: 2px; min-width: 0; }
+.sky-continue strong { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+.sky-continue > svg { flex: none; color: var(--sky-accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .sky-continue:hover > svg { transform: translateY(2px); transition: transform 0.2s ease; }
+}
+
 .sky-chapter-block { margin-top: 64px; }
-.sky-chapter-name { margin: 0; padding-top: 20px; border-top: 1px solid var(--sky-separator); font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
-.sky-chapter-block > .sky-chapter-name { margin-bottom: 0; }
+.sky-chapter-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; padding-top: 20px; border-top: 1px solid var(--sky-separator); }
+.sky-chapter-name { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; outline: none; }
+/* Each section says up front how its checks came out. */
+.sky-chapter-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; }
+.sky-chapter-checks li { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sky-secondary); }
+.sky-chapter-checks .sky-status { text-align: left; }
+/* A section not yet rendered keeps its place, so the page and the section bar read true. */
+.sky-section-placeholder { min-height: 70vh; }
+.sky-section-loading { margin-top: 20px; }
 @media (max-width: 650px) {
   .sky-verdict-card { padding: 18px; border-radius: 20px; }
   .sky-verdict-card h2 { font-size: 23px; }
   .sky-chapter-name { font-size: 26px; }
+  .sky-chapter-block { margin-top: 48px; }
+  .sky-continue { padding: 14px 16px; }
+  .sky-continue strong { font-size: 18px; }
 }
 
 /* Facts in a three-up grid (route checkpoint, compared day). */

@@ -37,12 +37,13 @@ import {
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { buildTripOverlay } from "./itinerary-overlay";
-import { placeDraftPoint } from "../app/itinerary";
+import { consumePlaceHint, placeDraftPoint } from "../app/itinerary";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer, shareOrCopyLink } from "./touch";
 import { describeShare, SHARE_READY_FEEDBACK } from "./share-feedback";
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from "./page-scroll";
+import type { ReadingPlace } from "./report-place";
 import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
 import "./workspace.css";
@@ -88,6 +89,8 @@ export default function FieldApp() {
   );
   const [touch] = useState(hasCoarsePointer);
   const mapRef = useRef<HTMLDivElement>(null);
+  // The spot the reader left the report at, for when they come back to it.
+  const readingPlace = useRef<ReadingPlace | null>(null);
   // Anyone who has opened the planner goes straight back to it from `/`.
   useEffect(markLandingSeen, []);
   const plan: Plan = {
@@ -271,6 +274,8 @@ export default function FieldApp() {
     // It is named after what is there once the lookup returns.
     it.nameAt(lat, lon);
     it.updateDraft((draft) => placeDraftPoint(draft, target, lat, lon));
+    // A place the trip's description named is placed now; its search stops offering it.
+    it.setPlaceHints((hints) => consumePlaceHint(hints, target));
     it.setPickTarget(null);
   }
   async function tripAction(kind: "save" | "watch") {
@@ -711,6 +716,7 @@ export default function FieldApp() {
                     key={`${w.safetyData?.generatedAt}-${w.reportChatSessionKey}`}
                     report={w.reportSnapshot}
                     workspace={w}
+                    kept={readingPlace}
                     onEdit={() => (w.restoredReportSource === "itinerary" ? editTrip() : w.handleEditPlan())}
                     onSave={() => void action("save")}
                     onShare={() => void action("share")}

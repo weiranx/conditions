@@ -21,6 +21,11 @@ export function planSettingsParams(preferences: PlanPreferences): Record<string,
   };
 }
 
+/** For requests that build reports: a plan with AI turned off asks the server to use none. */
+export function aiRequestFields(preferences: Pick<UserPreferences, 'aiEnabled'>): { ai?: false } {
+  return preferences.aiEnabled === false ? { ai: false } : {};
+}
+
 /** The full plan a report is checked against: when, for how long, the settings and the approach. */
 export function buildPlanParams(input: {
   preferences: PlanPreferences;

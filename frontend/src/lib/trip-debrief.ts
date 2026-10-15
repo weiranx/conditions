@@ -155,6 +155,8 @@ export async function requestTripDebrief(
   points: RecordedTrackPoint[],
   notes = '',
   signal?: AbortSignal,
+  /** False skips the AI write-up; the comparison comes back either way. */
+  ai = true,
 ): Promise<TripDebriefResult> {
   const { response, payload } = await fetchApi('/api/trip-debrief', {
     method: 'POST',
@@ -163,6 +165,7 @@ export async function requestTripDebrief(
       report: reportForDebrief(report),
       track: { points: thinTrackPoints(points) },
       ...(notes.trim() ? { notes: notes.trim().slice(0, 2000) } : {}),
+      ...(ai ? {} : { ai: false }),
     }),
     signal,
   });

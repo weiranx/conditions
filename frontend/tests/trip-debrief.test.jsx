@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { act } from 'react';
 import { parseGpxRecordedTrack, parseGpxText } from '../src/lib/gpx';
 import { formatDuration, thinTrackPoints } from '../src/lib/trip-debrief';
+import { AiAccessContext } from '../src/contexts/ai-access';
 
 const bootstrap = new JSDOM('<html><body></body></html>');
 const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
@@ -118,7 +119,7 @@ const comparison = {
   notes: ['Example note from the comparison.'],
 };
 
-async function mount(t, handler) {
+async function mount(t, handler, { aiEnabled = true } = {}) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch, DOMParser: globalThis.DOMParser };
   globalThis.window = dom.window;
@@ -133,7 +134,11 @@ async function mount(t, handler) {
   };
   const root = createRoot(document.getElementById('root'));
   await act(async () => {
-    root.render(<TripDebrief report={report} aiAvailable formatClock={(clock) => `[${clock}]`} />);
+    root.render(
+      <AiAccessContext.Provider value={{ requestAiAccess: () => aiEnabled, aiEnabled }}>
+        <TripDebrief report={report} aiAvailable={aiEnabled} formatClock={(clock) => `[${clock}]`} />
+      </AiAccessContext.Provider>,
+    );
   });
   t.after(async () => {
     await act(async () => root.unmount());
@@ -178,6 +183,7 @@ test('debriefs a recorded GPX against the saved report', async (t) => {
   assert.equal(requests[0].body.track.points.length, 3);
   assert.equal(requests[0].body.track.points[2].time, '2026-07-10T14:30:00.000Z');
   assert.equal(requests[0].body.notes, 'Gusts much stronger than forecast on the ridge');
+  assert.equal(requests[0].body.ai, undefined, 'a report with AI asks for the write-up');
   assert.equal(requests[0].body.report.ai, undefined, 'AI text and images stay behind');
   assert.equal(requests[0].body.report.plan.objectiveName, 'Test Peak');
 
@@ -194,6 +200,18 @@ test('debriefs a recorded GPX against the saved report', async (t) => {
   assert.match(text, /Example note from the comparison/);
   assert.ok(document.querySelector('.trip-debrief-narrative'), 'The written debrief is shown');
   assert.match(document.querySelector('.trip-debrief-narrative').textContent, /half the planned time/);
+});
+
+test('a report made without AI compares the track without asking for a written debrief', async (t) => {
+  const { requests, chooseFile, click } = await mount(t, () => ({ body: { comparison, narrative: null, narrativeStatus: 'unavailable' } }), { aiEnabled: false });
+  assert.equal(document.querySelector('textarea'), null, 'no notes for a write-up that will not be written');
+  await chooseFile(new File([GPX], 'hike.gpx', { type: 'application/gpx+xml' }));
+  await click('Compare with the plan');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.ai, false);
+  assert.equal(requests[0].body.notes, undefined);
+  assert.match(document.body.textContent, /Distance4\.2 mi4\.0 mi−0\.2 mi/);
+  assert.equal(document.querySelector('.trip-debrief-narrative'), null);
 });
 
 test('shows the comparison without a written debrief when AI is off', async (t) => {

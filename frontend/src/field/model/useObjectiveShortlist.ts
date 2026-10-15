@@ -4,7 +4,7 @@ import { readTripDays } from '../../app/plan-evaluation';
 import { parseMultiDayUsage, type MultiDayUsage } from '../../app/multi-day-usage';
 import { shortlistDates, shortlistValidation, type ShortlistState, type ShortlistResult } from '../../app/objective-shortlist';
 import type { UserPreferences } from '../../app/types';
-import { planSettingsParams } from '../../app/plan-evaluation';
+import { aiRequestFields, planSettingsParams } from '../../app/plan-evaluation';
 
 export function useObjectiveShortlist(state: ShortlistState, preferences: UserPreferences, callbacks: {
   accountKey?: string;
@@ -38,7 +38,7 @@ export function useObjectiveShortlist(state: ShortlistState, preferences: UserPr
               // Each day is scored for the traveler's activity, as Compare days does.
               activity: preferences.defaultActivity,
               // Objectives are compared on every hazard, avalanche included.
-              includeAvalanche: true, plan: planSettingsParams(preferences) }),
+              includeAvalanche: true, plan: planSettingsParams(preferences), ...aiRequestFields(preferences) }),
           });
           if (!isActive()) break;
           const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};

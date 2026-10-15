@@ -384,7 +384,7 @@ const AI_FEATURE_CONTROLS = [
     key: "planParse",
     label: "Describe your plan",
     description:
-      "Fills in the plan form from a sentence such as a peak, day, start time and wind limit.",
+      "Fills in the plan form from a sentence such as a peak, day, start time and wind limit, or a multi-day trip's nights, camps and exit.",
     icon: WandSparkles,
   },
   {
