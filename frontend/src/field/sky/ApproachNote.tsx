@@ -9,7 +9,7 @@ const roundTo100 = (ft: number) => Math.round(ft / 100) * 100;
  * Plain-language note for hours checked below the objective, so a changed
  * verdict never comes from an adjustment the reader cannot see.
  */
-export function ApproachNote({ hours, summary, source, clock, elevation, onEdit, terms = SUMMIT_TERMS, text }: {
+export function ApproachNote({ hours, summary, source, clock, elevation, onEdit, terms = SUMMIT_TERMS, text, writing = false }: {
   hours: SkyHour[];
   /** The hours checked below the objective, as the backend evaluated them. */
   summary: ApproachSummary | null;
@@ -20,8 +20,22 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
   terms?: ObjectiveTerms;
   /** The AI's fact-checked wording of this note, in place of the template's. */
   text?: string;
+  /** The AI is writing this note with the opening: placeholders stand in for the template's wording. */
+  writing?: boolean;
 }) {
   if (!summary || !source) return null;
+  if (writing) {
+    return (
+      <div className="sky-approach-note is-writing">
+        <Mountain size={16} aria-hidden="true" />
+        <p>
+          <span className="sr-only">AI is writing this note</span>
+          <span className="sky-writing-line" aria-hidden="true" />
+          <span className="sky-writing-line is-short" aria-hidden="true" />
+        </p>
+      </div>
+    );
+  }
   const spans = summary.adjustedRuns.map((run) => spanLabel(hours, run, clock)).filter(Boolean).join(" and ");
   const low = roundTo100(summary.lowFt);
   const high = roundTo100(summary.highFt);

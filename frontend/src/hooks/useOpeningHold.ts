@@ -2,18 +2,17 @@ import { useEffect, useState } from 'react';
 
 /**
  * How long the top of the report waits for the AI's opening before showing the checks' own:
- * past the server's 20 s budget for writing it, so the AI's opening always comes first and
- * the checks' wording shows only when the AI fails (which ends the wait at once) or the
- * answer never arrives.
+ * past the 120 s nginx allows an AI read, by which time every read has answered or failed
+ * (which ends the wait at once). Only an answer that never arrives reaches it.
  */
-export const OPENING_WAIT_MS = 25000;
+export const OPENING_WAIT_MS = 130000;
 
 /**
  * Whether the top of the report waits for the AI's opening instead of showing
  * the checks' wording first and swapping it a few seconds later.
  *
  * It waits only while an opening is `expected`, and at most `ms` per report
- * (`key`): a slow or failed AI never leaves the headline blank for long.
+ * (`key`): a failed AI ends the wait at once, and a lost answer can't leave the headline blank for good.
  * `expired` says the wait ran out while the opening was still expected.
  */
 export function useOpeningHold({ expected, key, ms = OPENING_WAIT_MS }: {
