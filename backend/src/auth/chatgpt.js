@@ -196,12 +196,23 @@ const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore
     if (!response.ok) throw apiError(response);
     return response;
   };
+  let reasoningCatalog = null;
   const models = async () => {
     const response = await authenticatedFetch(`${RESOURCE}/models`);
     const result = await response.json();
     if (!Array.isArray(result.models)) throw new ChatGPTError('ChatGPT returned an invalid model catalog.');
-    return result.models.filter((m) => m.visibility === 'list' && typeof m.slug === 'string' && /^[A-Za-z0-9._:/-]{1,120}$/.test(m.slug))
+    const catalog = result.models.filter((m) => typeof m.slug === 'string' && /^[A-Za-z0-9._:/-]{1,120}$/.test(m.slug));
+    // Levels arrive as strings or { effort } objects; a model without them gets no reasoning parameter.
+    reasoningCatalog = new Map(catalog.map((m) => [m.slug, (Array.isArray(m.supported_reasoning_levels) ? m.supported_reasoning_levels : [])
+      .map((level) => (typeof level === 'string' ? level : level?.effort)).filter((level) => typeof level === 'string')]));
+    return catalog.filter((m) => m.visibility === 'list')
       .map((m) => ({ id: m.slug, name: typeof m.display_name === 'string' ? m.display_name : m.slug }));
+  };
+  const reasoningEffortsFor = async (model) => {
+    if (!reasoningCatalog) {
+      try { await models(); } catch { return []; }
+    }
+    return reasoningCatalog?.get(model) || [];
   };
   const selectModel = async (model) => {
     const catalog = await models();
@@ -250,7 +261,7 @@ const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore
     });
     return { ...status(), revoked };
   };
-  return { store, status, hasRegistration: () => Boolean(activeRecord(store.read())), begin, complete, accessToken, models, selectModel, selectAccount, modelForRequest, disconnect, apiError };
+  return { store, status, hasRegistration: () => Boolean(activeRecord(store.read())), begin, complete, accessToken, models, reasoningEffortsFor, selectModel, selectAccount, modelForRequest, disconnect, apiError };
 };
 
 const chatGPTService = createChatGPTService();

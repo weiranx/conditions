@@ -55,7 +55,7 @@ async function main() {
     return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
   };
   try {
-    const service = { modelForRequest: async () => 'test-account-model', accessToken: async () => 'test-oauth', apiError: () => new Error('test API error') };
+    const service = { modelForRequest: async () => 'test-account-model', reasoningEffortsFor: async () => [], accessToken: async () => 'test-oauth', apiError: () => new Error('test API error') };
     const stream = await runWithChatGPT({ service, userId: 'test-owner', alive: true }, () => createReportChatStream({
       messages: [{ id: 'question', role: 'user', parts: [{ type: 'text', text: 'What is the wind?' }] }],
       reportJson: '{}', abortSignal: new AbortController().signal, userId: 'test-owner',
