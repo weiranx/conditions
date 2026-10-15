@@ -285,7 +285,7 @@ export function createMockApi({ databasePath } = {}) {
       primaryModel: "fixture",
       fastModel: "fixture",
       features: Object.fromEntries(
-        ["aiBrief", "reportChat", "routeAnalysis", "snowVision", "watchSummary", "planParse", "avalancheExtraction", "tripDebrief", "aiReport"].map((k) => [
+        ["aiBrief", "reportChat", "routeAnalysis", "snowVision", "watchSummary", "planParse", "avalancheExtraction", "avalancheRelevance", "tripDebrief", "aiReport"].map((k) => [
           k,
           {
             available:
@@ -1434,6 +1434,7 @@ export function createMockApi({ databasePath } = {}) {
           watchSummary: true,
           planParse: true,
           avalancheExtraction: true,
+          avalancheRelevance: true,
           tripDebrief: true,
           aiReport: true,
         },

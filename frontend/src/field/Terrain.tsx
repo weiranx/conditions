@@ -465,7 +465,10 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 {data.avalanche?.advice && <p className="sky-cap is-body">{data.avalanche.advice}</p>}
               </>
             ) : (
-              <p className="sky-cap is-body">{avalanche.notApplicableReason || "No avalanche forecast applies to this plan."}</p>
+              <>
+                <p className="sky-cap is-body">{avalanche.notApplicableReason || "No avalanche forecast applies to this plan."}</p>
+                {data.avalanche?.relevanceCheck?.method === "ai" && <p className="sky-cap">{data.avalanche.relevanceCheck.note}</p>}
+              </>
             )}
             <SourceLink url={w.safeAvalancheLink}>Read the complete bulletin</SourceLink>
             <Evidence
@@ -481,6 +484,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                 data.avalanche?.staleWarning ? `This bulletin is more than ${data.avalanche.staleWarning === "72h" ? "72" : "48"} hours old.` : null,
                 data.avalanche?.extraction?.method === "ai" ? data.avalanche.extraction.note || "Parts of this bulletin were read from the center's page automatically. Verify with the center." : null,
                 avalanche.relevant ? data.avalanche?.relevanceReason : null,
+                avalanche.relevant && data.avalanche?.relevanceCheck?.method === "ai" ? data.avalanche.relevanceCheck.note : null,
               ]}
             />
           </div>

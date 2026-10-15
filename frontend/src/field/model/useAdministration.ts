@@ -335,6 +335,7 @@ export type AIFeatureKey =
   | "watchSummary"
   | "planParse"
   | "avalancheExtraction"
+  | "avalancheRelevance"
   | "tripDebrief"
   | "aiReport";
 const AI_FEATURE_CONTROLS = [
@@ -383,6 +384,13 @@ const AI_FEATURE_CONTROLS = [
     label: "Avalanche bulletin extraction",
     description:
       "Reads avalanche problems from scraped bulletins when a center's feed leaves them out.",
+    icon: Mountain,
+  },
+  {
+    key: "avalancheRelevance",
+    label: "Avalanche check decision",
+    description:
+      "Decides whether a plan needs the avalanche check from its objective, activity, date, snowpack and forecast. It can add the check but never removes it from snow travel, Considerable or higher danger, or a heavy snow forecast.",
     icon: Mountain,
   },
   {
