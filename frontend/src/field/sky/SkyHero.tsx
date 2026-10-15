@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useWidth } from "./useWidth";
 import { plainRule } from "./status";
 import { Check, CircleHelp, TriangleAlert } from "lucide-react";
@@ -13,6 +13,27 @@ type Formatters = {
 };
 
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
+
+/**
+ * New wording settles into place when the headline changes under the reader
+ * (the AI's opening replacing the checks' own), so the change is seen, not missed.
+ * It runs before paint, so the new text never flashes in first.
+ */
+function useArrival(text: string) {
+  const headline = useRef<HTMLHeadingElement>(null);
+  const lede = useRef<HTMLParagraphElement>(null);
+  const shown = useRef(text);
+  useLayoutEffect(() => {
+    if (shown.current === text) return;
+    shown.current = text;
+    if (typeof window === "undefined" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    [headline, lede].forEach((ref, index) => ref.current?.animate?.(
+      [{ opacity: 0, filter: "blur(6px)", transform: "translateY(6px)" }, { opacity: 1, filter: "blur(0)", transform: "none" }],
+      { duration: 700, delay: index * 90, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "backwards" },
+    ));
+  }, [text]);
+  return { headline, lede };
+}
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
 export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, headline, reason, bridge, limitingChecks = [], note, actions, photo, format }: {
@@ -92,6 +113,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
     return Math.max(0, Math.min(hours.length - 1, index));
   };
 
+  const arrival = useArrival(`${headline}\n${reason}`);
   // Geometry is measured from the bottom so the text block above can grow freely.
   const [heroHeight, setHeroHeight] = useState(640);
   useEffect(() => {
@@ -295,8 +317,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
           {tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
           <span><span className="sr-only">Trip decision: </span>{toneWord}</span>
         </span>
-        <h2 id="field-verdict-title">{headline}</h2>
-        <p className="sky-lede">{reason}</p>
+        <h2 id="field-verdict-title" ref={arrival.headline}>{headline}</h2>
+        <p className="sky-lede" ref={arrival.lede}>{reason}</p>
         {bridge && <p className="sky-lede sky-bridge">{bridge}</p>}
         {limitingChecks.length > 0 && (
           <ul className="sky-limiting" aria-label="Checks setting the decision">

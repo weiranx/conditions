@@ -65,9 +65,22 @@
 .sky-pill.is-stop { color: #9e2f22; }
 .sky-pill.is-go { color: #1e5a43; }
 .sky-hero h2 { margin: 12px 0 0; font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.022em; max-width: 26ch; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); outline: none; }
-.sky-ai-byline { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; line-height: 1.4; opacity: 0.8; }
+.sky-ai-byline { margin: 8px 0 0; max-width: 62ch; font-size: 12px; line-height: 1.4; }
+.sky-ai-byline > p { margin: 0; opacity: 0.85; }
+.sky-ai-byline > p > svg { display: inline-block; vertical-align: -2px; margin-right: 6px; }
+.sky-ai-byline button { margin-left: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.sky-ai-byline button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 2px; }
+/* The checks' own opening, kept beside the AI's so the reader can compare them. */
+.sky-checks-wording { margin: 8px 0 0; padding: 8px 10px; border-left: 2px solid currentColor; border-radius: 0 8px 8px 0; font-size: 13px; line-height: 1.45; }
+.sky-checks-wording strong { font-weight: 600; }
+.sky-checks-wording-label { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
+.sky-hero .sky-checks-wording { background: rgba(10, 22, 34, 0.45); }
+.sky-verdict-card .sky-checks-wording { background: var(--sky-fill); }
+.sky-ai-byline.is-pending svg { animation: ai-read-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .sky-ai-byline.is-pending svg { animation: none; } }
 .sky-hero .sky-ai-byline { color: rgba(255, 255, 255, 0.92); }
-.sky-verdict-card .sky-ai-byline { color: var(--sky-secondary); opacity: 1; }
+.sky-verdict-card .sky-ai-byline { color: var(--sky-secondary); }
+.sky-verdict-card .sky-ai-byline > p { opacity: 1; }
 .sky-lede { margin: 10px 0 0; font-size: 15px; line-height: 1.5; color: rgba(255, 255, 255, 0.92); max-width: 58ch; }
 .sky-bridge { opacity: 0.9; }
 /* The checks behind a Caution or No-go, named instead of counted. */
@@ -450,6 +463,7 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
   .sky-canvas, .sky-hero-actions, .sky-chapter-tabs, .sky-pager, .sky-hint { display: none; }
   .sky-hero-in { padding-bottom: 0; }
   .sky-hero :is(h1, h2, .sky-lede, .sky-limiting, .sky-subtitle, .sky-kicker, .sky-ai-byline) { color: #000; text-shadow: none; }
+  .sky-ai-byline button, .sky-ai-byline.is-pending { display: none; }
 }
 
 /* Elevation ladder in the Terrain check: highest band first. */

@@ -931,6 +931,36 @@ export interface AiBriefCitation {
   value: string | number | boolean;
 }
 
+/** The AI's opening for the top of the report: a headline and reason in place of the checks' own. */
+export interface AiBriefHero {
+  headline: string;
+  reason: string;
+  evidence: AiBriefCitation[];
+  /** The decision level the hero was written against; it is shown only beside a level no stricter. */
+  level?: string;
+  /** The AI's note on the hours judged below the objective, when the report has any. */
+  note?: { text: string; evidence: AiBriefCitation[] };
+}
+
+/**
+ * An AI read being written, or just written, for the report on screen: when it
+ * started, how its opening went, and how long each part took.
+ */
+export interface AiReadRun {
+  startedAt: number;
+  /**
+   * `pending` while a fast model writes the opening ahead of the full read,
+   * `written` once it passed its checks, `kept` when the checks' opening stays,
+   * `off` when no opening was asked for.
+   */
+  opening: 'pending' | 'written' | 'kept' | 'off';
+  /** The opening written for this read, shown before the full read arrives. */
+  hero: AiBriefHero | null;
+  openingSeconds: number | null;
+  /** Seconds until the full read arrived; null while it is being written or when it failed. */
+  seconds: number | null;
+}
+
 /** What the AI read returns beside its text: its citations and follow-up questions. */
 export interface AiBriefDetails {
   /** The narrative these details belong to; they never apply to any other text. */
@@ -940,15 +970,7 @@ export interface AiBriefDetails {
   /** The AI's fact-checked analysis of each report chapter; a chapter that failed its checks is absent. */
   chapters?: Partial<Record<'forecast' | 'timing' | 'terrain' | 'sources', { text: string; evidence: AiBriefCitation[] }>>;
   /** The AI's fact-checked headline and reason for the top of the report; null when it failed its checks. */
-  hero?: {
-    headline: string;
-    reason: string;
-    evidence: AiBriefCitation[];
-    /** The decision level the hero was written against; it is shown only beside a level no stricter. */
-    level?: string;
-    /** The AI's note on the hours judged below the objective, when the report has any. */
-    note?: { text: string; evidence: AiBriefCitation[] };
-  } | null;
+  hero?: AiBriefHero | null;
   /** What the backend's fact checks rejected in the AI answer, how many answers it asked for, and how many seconds each took. */
   checks?: { attempts: number; problems: string[]; seconds?: number[] };
   /** `deterministic_fallback` when the AI answer failed the backend's checks. */

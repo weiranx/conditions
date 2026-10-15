@@ -24,10 +24,118 @@
 .ai-read > .field-warning {
   margin: 12px 0 0;
 }
-.ai-read-status {
+/* While the AI writes: what it is doing now, what it has done, and the time so far. */
+.ai-read-progress {
   margin: 14px 0 0;
+}
+.ai-read-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
   font-size: 14px;
+  font-weight: 600;
+  color: var(--ai-label);
+}
+.ai-read-status svg {
+  color: var(--ai-accent);
+}
+.ai-read-elapsed {
+  margin-left: auto;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   color: var(--ai-secondary);
+}
+.ai-read-pulse {
+  animation: ai-read-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ai-read-pulse {
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+.ai-read-steps {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ai-secondary);
+}
+.ai-read-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ai-read-step-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ai-separator);
+}
+.ai-read-steps .is-active .ai-read-step-mark {
+  border-color: var(--ai-accent);
+  border-right-color: transparent;
+  animation: ai-brief-spin 0.9s linear infinite;
+}
+.ai-read-steps .is-active {
+  color: var(--ai-label);
+}
+.ai-read-steps .is-done .ai-read-step-mark {
+  border-color: var(--ai-accent);
+  background: var(--ai-accent);
+  color: var(--sky-surface, var(--f-paper));
+}
+.ai-read-steps .is-kept .ai-read-step-mark {
+  border-style: dashed;
+}
+.ai-read-progress + .ai-read-body {
+  margin-top: 14px;
+}
+/* Where the AI's text went across the report, once it is written. */
+.ai-read-changes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ai-secondary);
+}
+.ai-read-changes-lead svg {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -2px;
+  color: var(--ai-accent);
+}
+.ai-read-changes button {
+  padding: 2px 9px;
+  border: 1px solid var(--ai-separator);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ai-label);
+  font: inherit;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.ai-read-changes button:hover {
+  border-color: var(--ai-accent);
+  color: var(--ai-accent);
+}
+.ai-read-changes button:focus-visible {
+  outline: 3px solid var(--ai-accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-read-pulse,
+  .ai-read-steps .is-active .ai-read-step-mark {
+    animation: none;
+  }
 }
 .ai-read-fallback {
   margin: 0;

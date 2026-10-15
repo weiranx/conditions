@@ -261,6 +261,18 @@ const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}
     hero: validateHero(parsed.hero, report, decisionLevel, units, problems),
   };
 };
+/**
+ * Checks the report's AI opening written on its own, ahead of the full read:
+ * the same hero checks, from an answer that holds only `hero`.
+ */
+const validateOpening = (raw, report, decisionLevel, { units, problems = [] } = {}) => {
+  const parsed = parseJson(raw);
+  if (!parsed || typeof parsed !== 'object') {
+    problems.push('OPENING: the answer was not valid JSON');
+    return null;
+  }
+  return validateHero(parsed.hero ?? parsed, report, decisionLevel, units, problems);
+};
 const deterministicBrief = (report, decisionLevel) => {
   const safety = report.safety || {};
   const insights = report.reportInsights?.items || [];
@@ -285,4 +297,4 @@ const deterministicBrief = (report, decisionLevel) => {
     `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : concerns.slice(0, 2).map(item => item.action).join(' ') || 'Resolve failed checks and missing evidence before committing.'}`,
   ].join('\n');
 };
-module.exports = { validateBrief, validateQuestions, validateChapters, validateHero, deterministicBrief };
+module.exports = { validateBrief, validateOpening, validateQuestions, validateChapters, validateHero, deterministicBrief };

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { fetchApi, readApiErrorMessage, fetchAiBrief, fetchSnowVisionAnalysis } from '../lib/api-client';
-import type { AiBriefDetails, SafetyData, UserPreferences, DecisionLevel } from '../app/types';
+import { fetchApi, readApiErrorMessage, fetchAiBrief, fetchAiOpening, fetchSnowVisionAnalysis } from '../lib/api-client';
+import type { AiBriefDetails, AiBriefHero, AiReadRun, SafetyData, UserPreferences, DecisionLevel } from '../app/types';
 import {
   DATE_FMT,
   BACKEND_WAKE_RETRY_DELAY_MS,
@@ -43,7 +43,10 @@ export interface UseSafetyDataReturn {
   aiBriefDetails: AiBriefDetails | null;
   setAiBriefDetails: React.Dispatch<React.SetStateAction<AiBriefDetails | null>>;
   aiBriefLoading: boolean;
+  /** Setting it to false also drops any read still being written, so its answer can't land on another report. */
   setAiBriefLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  /** The read being written, or the last one written, for the report on screen. */
+  aiReadRun: AiReadRun | null;
   aiBriefError: string | null;
   setAiBriefError: React.Dispatch<React.SetStateAction<string | null>>;
   snowVisionAnalysis: string | null;
@@ -70,6 +73,8 @@ export interface UseSafetyDataReturn {
     /** The analyzed route, sent alongside the report when there is one. */
     route?: unknown;
     fieldObservations?: unknown[] | null;
+    /** Also ask a fast model for the report's opening, shown as soon as it is written. */
+    opening?: boolean;
   }) => Promise<void>;
 }
 
@@ -94,8 +99,19 @@ export function useSafetyData({
   // narrative anywhere can never leave another brief's citations showing.
   const [aiBriefDetailsState, setAiBriefDetails] = useState<AiBriefDetails | null>(initialAiBriefDetails);
   const aiBriefDetails = aiBriefDetailsState && aiBriefDetailsState.narrative === aiBriefNarrative ? aiBriefDetailsState : null;
-  const [aiBriefLoading, setAiBriefLoading] = useState(false);
+  const [aiBriefLoading, setAiBriefLoadingState] = useState(false);
   const [aiBriefError, setAiBriefError] = useState<string | null>(null);
+  const [aiReadRun, setAiReadRun] = useState<AiReadRun | null>(null);
+  // Each read gets a number; a newer read, or a report replacing this one, makes
+  // an older read's answers stale, so they are dropped instead of shown.
+  const aiReadIdRef = useRef(0);
+  const setAiBriefLoading = useCallback<React.Dispatch<React.SetStateAction<boolean>>>((value) => {
+    if (value === false) {
+      aiReadIdRef.current += 1;
+      setAiReadRun(null);
+    }
+    setAiBriefLoadingState(value);
+  }, []);
   const [snowVisionAnalysis, setSnowVisionAnalysis] = useState<string | null>(initialSnowVisionAnalysis);
   const [snowVisionImage, setSnowVisionImage] = useState<string | null>(initialSnowVisionImage);
   const [snowVisionLoading, setSnowVisionLoading] = useState(false);
@@ -344,7 +360,7 @@ export function useSafetyData({
         }
       }
     },
-    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, preferences.defaultActivity, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, extraQueryRef, onNewReportGenerated],
+    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, preferences.defaultActivity, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, extraQueryRef, onNewReportGenerated, setAiBriefLoading],
   );
 
   useEffect(() => {
@@ -367,24 +383,56 @@ export function useSafetyData({
     decisionLevel: DecisionLevel;
     route?: unknown;
     fieldObservations?: unknown[] | null;
+    opening?: boolean;
   }) => {
     if (aiBriefLoading) return;
-    setAiBriefLoading(true);
+    const id = aiReadIdRef.current + 1;
+    aiReadIdRef.current = id;
+    const current = () => aiReadIdRef.current === id;
+    const startedAt = Date.now();
+    const secondsSince = () => Math.round((Date.now() - startedAt) / 1000);
+    setAiBriefLoadingState(true);
     setAiBriefError(null);
+    setAiReadRun({ startedAt, opening: params.opening ? 'pending' : 'off', hero: null, openingSeconds: null, seconds: null });
+    const request = {
+      decisionLevel: params.decisionLevel,
+      report: {
+        ...params.safetyData,
+        ...(params.route ? { route: params.route } : {}),
+        ...(params.fieldObservations?.length ? { fieldObservations: params.fieldObservations } : {}),
+      },
+      units: {
+        temperature: preferences.temperatureUnit,
+        wind: preferences.windSpeedUnit,
+        elevation: preferences.elevationUnit,
+      },
+    };
+    // The opening the reader has already seen; the full read keeps it rather than
+    // changing the top of the report a second time.
+    let openingHero: AiBriefHero | null = null;
+    let readArrived = false;
+    if (params.opening) {
+      void fetchAiOpening(request).then(
+        (result) => {
+          if (!current() || readArrived) return;
+          const hero = result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
+          openingHero = hero;
+          setAiReadRun((run) => run && { ...run, opening: hero ? 'written' : 'kept', hero, openingSeconds: secondsSince() });
+        },
+        () => {
+          if (!current() || readArrived) return;
+          setAiReadRun((run) => run && { ...run, opening: 'kept', openingSeconds: secondsSince() });
+        },
+      );
+    }
     try {
-      const result = await fetchAiBrief({
-        decisionLevel: params.decisionLevel,
-        report: {
-          ...params.safetyData,
-          ...(params.route ? { route: params.route } : {}),
-          ...(params.fieldObservations?.length ? { fieldObservations: params.fieldObservations } : {}),
-        },
-        units: {
-          temperature: preferences.temperatureUnit,
-          wind: preferences.windSpeedUnit,
-          elevation: preferences.elevationUnit,
-        },
-      });
+      const result = await fetchAiBrief(request);
+      if (!current()) return;
+      readArrived = true;
+      const readHero = result.hero === undefined
+        ? undefined
+        : result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
+      const hero = openingHero ?? readHero;
       setAiBriefNarrative(result.narrative);
       setAiBriefDetails({
         narrative: result.narrative,
@@ -398,15 +446,23 @@ export function useSafetyData({
             ...(Array.isArray(result.checks.seconds) ? { seconds: result.checks.seconds.filter((second): second is number => typeof second === 'number') } : {}),
           },
         } : {}),
-        ...(result.hero === undefined ? {} : {
-          hero: result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null,
-        }),
+        ...(hero === undefined ? {} : { hero }),
         validation: result.validation ?? null,
       });
+      setAiReadRun((run) => run && {
+        ...run,
+        opening: run.opening === 'pending' ? (hero ? 'written' : 'kept') : run.opening,
+        hero: hero ?? null,
+        seconds: secondsSince(),
+      });
     } catch (err) {
+      if (!current()) return;
       setAiBriefError(err instanceof Error ? err.message : 'AI brief unavailable');
+      // An opening already written stays; one still pending is no longer awaited.
+      readArrived = true;
+      setAiReadRun((run) => run && (run.opening === 'pending' ? { ...run, opening: 'kept' } : run));
     } finally {
-      setAiBriefLoading(false);
+      if (current()) setAiBriefLoadingState(false);
     }
   }, [aiBriefLoading, preferences.temperatureUnit, preferences.windSpeedUnit, preferences.elevationUnit]);
 
@@ -437,6 +493,7 @@ export function useSafetyData({
     setAiBriefDetails,
     aiBriefLoading,
     setAiBriefLoading,
+    aiReadRun,
     aiBriefError,
     setAiBriefError,
     snowVisionAnalysis,

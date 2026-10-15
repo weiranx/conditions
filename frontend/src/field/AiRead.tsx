@@ -1,5 +1,5 @@
-import { useId, useState, type FormEvent } from "react";
-import { ArrowUp, ChevronRight, Info, RefreshCw, Sparkles } from "lucide-react";
+import { useEffect, useId, useState, type FormEvent } from "react";
+import { ArrowUp, Check, ChevronRight, Info, RefreshCw, Sparkles } from "lucide-react";
 import { AiBriefSection, AiExplanationSkeleton } from "./AiExplanation";
 import { parseExplanation, type ExplanationSection } from "./ai-explanation";
 import {
@@ -9,7 +9,7 @@ import {
   type EvidenceChapter,
 } from "../app/ai-evidence";
 import { chapterLabel } from "./sky/report-chapters";
-import type { AiBriefDetails } from "../app/types";
+import type { AiBriefDetails, AiReadRun } from "../app/types";
 import "./ai-explanation.css";
 import "./ai-read.css";
 
@@ -58,6 +58,81 @@ function CheckDetails({ details }: { details: AiBriefDetails | null }) {
   );
 }
 
+/** The current time, ticking each second while `active`. */
+function useNow(active: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return now;
+}
+
+/**
+ * What the AI is doing while it writes: the opening first, from a fast model,
+ * then the full read, with the time so far, so a long wait is never a blank one.
+ */
+function ReadProgress({ run }: { run: AiReadRun | null }) {
+  const now = useNow(Boolean(run));
+  const elapsed = run ? Math.max(0, Math.round((now - run.startedAt) / 1000)) : null;
+  const steps: { state: "done" | "active" | "kept"; text: string }[] = [];
+  if (run && run.opening !== "off") {
+    steps.push(run.opening === "pending"
+      ? { state: "active", text: "Rewriting the opening at the top of the report" }
+      : run.opening === "written"
+        ? { state: "done", text: `Rewrote the opening${run.openingSeconds != null ? ` in ${run.openingSeconds} s` : ""}` }
+        : { state: "kept", text: "Kept the checks’ opening" });
+  }
+  steps.push({ state: "active", text: "Writing the full read: why, what to watch, the best move, and a note for each section" });
+  return (
+    <div className="ai-read-progress">
+      <p className="ai-read-status">
+        <Sparkles size={14} aria-hidden="true" className="ai-read-pulse" />
+        <span>AI is reading the report</span>
+        {elapsed !== null && <span className="ai-read-elapsed" aria-hidden="true">{elapsed} s</span>}
+      </p>
+      <ol className="ai-read-steps" aria-live="polite">
+        {steps.map((step) => (
+          <li key={step.text} className={`is-${step.state}`}>
+            <span className="ai-read-step-mark" aria-hidden="true">{step.state === "done" ? <Check size={12} /> : null}</span>
+            {step.text}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * Where the AI's text went across the report, so the reader can tell what changed:
+ * the opening it rewrote and the sections it added notes to, each one tap away.
+ */
+function ReadChanges({ details, run, openingRewritten, onOpen }: {
+  details: AiBriefDetails | null;
+  run: AiReadRun | null;
+  openingRewritten: boolean;
+  onOpen: (chapter: EvidenceChapter) => void;
+}) {
+  if (!details || details.validation !== "evidence_checked") return null;
+  const chapters = (["forecast", "timing", "terrain", "sources"] as const).filter((chapter) => details.chapters?.[chapter]?.text);
+  if (!openingRewritten && !chapters.length) return null;
+  const took = run?.seconds != null ? `Written in ${run.seconds} s. ` : "";
+  const lead = openingRewritten
+    ? chapters.length ? "Rewrote the report’s opening and added notes to" : "Rewrote the report’s opening."
+    : "Added notes to";
+  return (
+    <p className="ai-read-changes">
+      <span className="ai-read-changes-lead"><Check size={14} aria-hidden="true" />{took}{lead}</span>
+      {chapters.map((chapter) => (
+        <button key={chapter} type="button" onClick={() => onOpen(chapter)} title={`Open ${chapterLabel(chapter)}`}>
+          {chapterLabel(chapter)}
+        </button>
+      ))}
+    </p>
+  );
+}
+
 /**
  * The report's AI read: what the decision means for this plan, the move to make,
  * the evidence behind each part, and a place to ask a follow-up. It explains
@@ -67,6 +142,9 @@ export function AiRead({
   narrative,
   details,
   loading,
+  run = null,
+  acrossReport = false,
+  openingRewritten = false,
   error,
   briefAvailable,
   chatAvailable,
@@ -79,6 +157,12 @@ export function AiRead({
   narrative: string | null;
   details: AiBriefDetails | null;
   loading: boolean;
+  /** The read being written, or the one just written, with its timings. */
+  run?: AiReadRun | null;
+  /** The read's opening and chapter notes are shown across the report, not only here. */
+  acrossReport?: boolean;
+  /** The report's opening on screen is the AI's. */
+  openingRewritten?: boolean;
   error: string | null;
   /** The AI read can be written on this server. */
   briefAvailable: boolean;
@@ -141,8 +225,12 @@ export function AiRead({
         )}
       </div>
       {error && <p className="field-warning" role="alert">{error}</p>}
+      {loading && narrative && <ReadProgress run={run} />}
       {narrative ? (
         <div className={`ai-explanation ai-read-body${loading ? " is-stale" : ""}`}>
+          {!loading && acrossReport && (
+            <ReadChanges details={details} run={run} openingRewritten={openingRewritten} onOpen={onOpen} />
+          )}
           {fallback && (
             <p className="ai-read-fallback">
               The AI answer didn’t pass the report’s fact checks, so this summary comes straight from the checks.
@@ -165,7 +253,7 @@ export function AiRead({
         </div>
       ) : loading ? (
         <>
-          <p className="ai-read-status" role="status">Reading the report…</p>
+          <ReadProgress run={run} />
           <AiExplanationSkeleton />
         </>
       ) : canWrite ? (

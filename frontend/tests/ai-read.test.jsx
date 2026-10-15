@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AiChapterNote, AiRead } from '../src/field/AiRead';
 import { starterQuestions } from '../src/field/ai-explanation';
-import { aiHero, isOutdatedRead, evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
+import { aiHero, isOutdatedRead, shownAiHero, evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
 import { parseAiBriefDetails } from '../src/app/report-storage';
 import { ApproachNote } from '../src/field/sky/ApproachNote';
 import { getDefaultUserPreferences, normalizeUserPreferences } from '../src/app/preferences';
@@ -70,7 +70,7 @@ test('the AI read says when its text came from the checks rather than the model'
 });
 
 test('the AI read waits, offers, or steps aside depending on what is available', () => {
-  assert.match(read({ narrative: null, details: null, loading: true }), /Reading the report…[^]*ai-explanation-skeleton/);
+  assert.match(read({ narrative: null, details: null, loading: true }), /AI is reading the report[^]*Writing the full read[^]*ai-explanation-skeleton/);
   assert.match(read({ narrative: null, details: null }), /Write the AI read/);
   const askOnly = read({ narrative: null, details: null, briefAvailable: false });
   assert.match(askOnly, /Ask about this plan/);
@@ -202,4 +202,38 @@ test('the AI read shows what the fact checks rejected, and saved reads keep it',
   // How long the AI took shows even when every check passed.
   assert.match(read({ details: { ...details, checks: { attempts: 1, problems: [], seconds: [23.6] } } }), /Fact-check details · all passed · took 24 s/);
   assert.deepEqual(parseAiBriefDetails({ ...details, checks: { attempts: 1, problems: [], seconds: [12.5, 'x'] } }, details.narrative).checks, { attempts: 1, problems: [], seconds: [12.5] });
+});
+
+test('while the AI writes, the read says what it is doing and what it has done', () => {
+  const run = { startedAt: Date.now(), opening: 'pending', hero: null, openingSeconds: null, seconds: null };
+  const pending = read({ narrative: null, details: null, loading: true, run });
+  assert.match(pending, /<li class="is-active">[^]*Rewriting the opening[^]*<li class="is-active">[^]*Writing the full read/);
+  const written = read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'written', openingSeconds: 3 } });
+  assert.match(written, /<li class="is-done">[^]*Rewrote the opening in 3 s/);
+  assert.match(read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'kept' } }), /<li class="is-kept">[^]*Kept the checks’ opening/);
+  assert.doesNotMatch(read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'off' } }), /opening/);
+  // A rewrite keeps the old read on screen, marked stale, under the progress.
+  assert.match(read({ loading: true, run }), /ai-read-progress[^]*ai-read-body is-stale[^]*Gusts reach 32 mph/);
+});
+
+test('a written read says where the AI changed the report, each place one tap away', () => {
+  const chapters = { forecast: { text: 'Wind builds.', evidence: [] }, terrain: { text: 'Firm snow.', evidence: [] } };
+  const run = { startedAt: 0, opening: 'written', hero: null, openingSeconds: 3, seconds: 9 };
+  const html = read({ details: { ...details, chapters }, acrossReport: true, openingRewritten: true, run });
+  assert.match(html, /ai-read-changes[^]*Written in 9 s\. Rewrote the report’s opening and added notes to[^]*<button[^>]*>Weather<\/button>[^]*<button[^>]*>Terrain &amp; snow<\/button>/);
+  assert.match(read({ details: { ...details, chapters }, acrossReport: true }), /ai-read-changes[^]*Added notes to/);
+  assert.match(read({ acrossReport: true, openingRewritten: true }), /Rewrote the report’s opening\./);
+  assert.doesNotMatch(read({ details: { ...details, chapters }, openingRewritten: true }), /ai-read-changes/, 'not when the read sits apart from the report');
+  assert.doesNotMatch(read({ details: { ...details, validation: 'deterministic_fallback' }, acrossReport: true, openingRewritten: true }), /ai-read-changes/);
+  assert.doesNotMatch(read({ details: { ...details, chapters }, acrossReport: true, loading: true, run }), /ai-read-changes/, 'not while a rewrite is under way');
+});
+
+test('the opening a read in progress just wrote leads, beside a decision no stricter', () => {
+  const hero = { headline: 'Wind sets the pace today', reason: 'Gusts reach 8 mph on the ridge.', evidence: [], level: 'CAUTION' };
+  const fresh = { ...hero, headline: 'A fresh opening from the fast model' };
+  const run = { startedAt: 0, opening: 'written', hero: fresh, openingSeconds: 2, seconds: null };
+  assert.equal(shownAiHero(run, { ...details, hero }, 'CAUTION'), fresh);
+  assert.equal(shownAiHero({ ...run, hero: null }, { ...details, hero }, 'CAUTION'), hero);
+  assert.equal(shownAiHero(null, { ...details, hero }, 'CAUTION'), hero);
+  assert.equal(shownAiHero(run, null, 'NO-GO'), null);
 });
