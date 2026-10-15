@@ -1,3 +1,4 @@
+const { chatGPTCacheKey } = require('../auth/chatgpt');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { createCache } = require('../utils/cache');
 const { DISCUSSION_PROMPT_VERSION, buildDiscussionContext, summarizeDiscussion } = require('../utils/discussion-summary');
@@ -39,7 +40,7 @@ const registerForecastDiscussionRoute = ({
     const safeUnits = units && typeof units === 'object' && !Array.isArray(units)
       ? { temperature: units.temperature === 'c' ? 'c' : 'f', wind: units.wind === 'kph' ? 'kph' : 'mph', elevation: units.elevation === 'm' ? 'm' : 'ft' }
       : {};
-    const cacheKey = `${DISCUSSION_PROMPT_VERSION}|${JSON.stringify(safeUnits)}|${contextJson}`;
+    const cacheKey = chatGPTCacheKey(`${DISCUSSION_PROMPT_VERSION}|${JSON.stringify(safeUnits)}|${contextJson}`);
     try {
       const result = await summaryCache.getOrFetch(cacheKey, async () => {
         const started = Date.now();

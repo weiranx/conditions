@@ -139,6 +139,9 @@ const app = createApp({
   rateLimitWindowMs: RATE_LIMIT_WINDOW_MS,
   rateLimitMaxRequests: RATE_LIMIT_MAX_REQUESTS,
 });
+// Request-scoped credentials must be selected before safety and AI routes run.
+// The closure is evaluated only after accountService has been initialized below.
+app.use(require('./src/auth/chatgpt-access').createChatGPTMiddleware({ getAccountService: () => accountService }));
 
 const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
 const aiModelCatalog = createAIModelCatalog({ fetchWithTimeout, getAIStatus });
@@ -1003,6 +1006,14 @@ const accountService = registerAccountRoutes({
   reportUsageService: reportUsageLimitService,
   multiDayUsageService: multiDayUsageLimitService,
   emailService,
+});
+require('./src/routes/chatgpt').registerChatGPTRoutes({
+  app, accountService,
+  allowedOrigins: [...new Set([
+    ...CORS_ALLOWLIST,
+    ...(process.env.APP_BASE_URL ? [new URL(process.env.APP_BASE_URL).origin] : []),
+    ...(!IS_PRODUCTION ? ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3001', 'http://127.0.0.1:3001'] : []),
+  ])],
 });
 require('./src/routes/mcp-oauth').registerMcpOAuthRoutes({ app, database, accountService });
 registerAccountUsageRoute({

@@ -1,3 +1,4 @@
+const { chatGPTCacheKey } = require('../auth/chatgpt');
 const { validateBrief, validateOpening, deterministicBrief } = require('../utils/brief-validation');
 const { createCache } = require('../utils/cache');
 const { compactReportForAI, fitReportForAI } = require('../utils/ai-report-context');
@@ -89,7 +90,7 @@ const prepareBriefInput = ({ report, decisionLevel, units, satelliteAvailable = 
     && assessSnowTravel(sanitized).consequential
     ? location
     : null;
-  const cacheKey = `${AI_BRIEF_PROMPT_VERSION}|${effectiveDecision}|${satellite ? 'satellite' : 'text'}|${JSON.stringify(units || {})}|${JSON.stringify(featureSnapshot)}|${reportJson}`;
+  const cacheKey = chatGPTCacheKey(`${AI_BRIEF_PROMPT_VERSION}|${effectiveDecision}|${satellite ? 'satellite' : 'text'}|${JSON.stringify(units || {})}|${JSON.stringify(featureSnapshot)}|${reportJson}`);
   const featureInstruction = disabledDomains.length
     ? `Disabled product domains: ${disabledDomains.join(', ')}. Do not mention, infer, or recommend checks or gear for these domains.`
     : 'All scored product domains are enabled.';

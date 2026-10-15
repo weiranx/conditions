@@ -1,3 +1,4 @@
+const { chatGPTCacheKey } = require('../auth/chatgpt');
 'use strict';
 
 const crypto = require('node:crypto');
@@ -458,7 +459,7 @@ const createAvalancheAiExtraction = ({
     try {
       if (!source || base?.coverageStatus !== 'reported' || !needsExtraction(source) || !featureOn()) return base;
       const text = bulletinTextFromSource(source);
-      const key = bulletinCacheKey(base, text);
+      const key = chatGPTCacheKey(bulletinCacheKey(base, text));
       if (failureCache.has(key)) return base;
       const pending = run(key, base, text);
       let timer;

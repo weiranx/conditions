@@ -11,6 +11,8 @@ const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 const { getDefaultFeatureFlags } = require('../utils/feature-flags');
+const { currentChatGPT, ChatGPTError } = require('../auth/chatgpt');
+const { chatGPTInference } = require('../utils/chatgpt-inference');
 const {
   getDisabledScoreFeatureLabels,
   removeDisabledFeatureReferences,
@@ -373,6 +375,32 @@ const createReportChatStream = async ({
     Output,
     streamText,
   } = await import('ai');
+  const subscription = currentChatGPT();
+  if (subscription) {
+    return createUIMessageStream({
+      originalMessages: messages,
+      onError,
+      async execute({ writer }) {
+        const id = 'chatgpt-answer';
+        const startedAt = Date.now();
+        writer.write({ type: 'start' });
+        writer.write({ type: 'text-start', id });
+        const baseSystem = contextType === 'trip' ? TRIP_CHAT_SYSTEM_PROMPT
+          : contextType === 'itinerary' ? ITINERARY_CHAT_SYSTEM_PROMPT : REPORT_CHAT_SYSTEM_PROMPT;
+        const system = `${baseSystem}\n${describeActivityInstruction(activity) || ''}\nDisabled domains: ${disabledDomains.join(', ') || 'none'}. Do not infer or recommend checks for disabled domains.\n<${chatContext(contextType).tag}>${reportJson}</${chatContext(contextType).tag}>`;
+        const result = await chatGPTInference(subscription, messages.map((message) => ({
+          role: message.role, content: message.parts.map((part) => part.text || '').join('\n'),
+        })), {
+          system, maxTokens: REPORT_CHAT_MAX_OUTPUT_TOKENS, signal: abortSignal,
+          onDelta: (delta) => writer.write({ type: 'text-delta', id, delta }),
+        });
+        await persistAIUsage({ userId, provider: 'chatgpt', model: result.model,
+          feature: chatContext(contextType).feature, usage: result.usage, durationMs: Date.now() - startedAt });
+        writer.write({ type: 'text-end', id });
+        writer.write({ type: 'finish' });
+      },
+    });
+  }
   const modelMessages = await convertToModelMessages(messages);
   const { model, modelId, fastModel, fastModelId, provider } = await resolveStreamingModel();
   return createUIMessageStream({
@@ -518,6 +546,7 @@ const registerReportChatRoute = ({
         activity,
         abortSignal: abortController.signal,
         onError(error) {
+          if (error instanceof ChatGPTError) return error.message;
           logger.error({ err: error, requestId: req.requestId }, 'report-chat stream error');
           return 'The report assistant is unavailable right now. Please try again.';
         },
@@ -535,7 +564,7 @@ const registerReportChatRoute = ({
     } catch (error) {
       logger.error({ err: error, requestId: req.requestId }, 'report-chat setup error');
       if (!res.headersSent) {
-        return res.status(503).json({ error: 'Report assistant unavailable' });
+        return res.status(error instanceof ChatGPTError ? error.statusCode : 503).json({ error: error instanceof ChatGPTError ? error.message : 'Report assistant unavailable' });
       }
       return res.end();
     }
@@ -553,6 +582,7 @@ module.exports = {
   ITINERARY_CHAT_SYSTEM_PROMPT,
   createGeminiStreamingModel,
   createContextualFollowUps,
+  createReportChatStream,
   FOLLOW_UP_CONTEXT_MESSAGES,
   normalizeReport,
   streamingProviderOptions,

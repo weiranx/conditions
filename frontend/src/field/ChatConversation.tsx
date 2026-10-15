@@ -4,11 +4,19 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowDown, ArrowUp, RotateCcw, Sparkles, Square } from "lucide-react";
 import { buildApiUrl } from "../lib/api-client";
 import { useAiAccess } from "../hooks/useAiAccess";
+import { useAIBillingSource } from "../hooks/useAiAvailability";
 import type { PersistedReportChatMessage } from "../app/report-storage";
 import { Markdown } from "./Markdown";
 import { preloadMarkdown } from "./markdown-loader";
 
 type Message = UIMessage<never, { followUpSuggestions: { suggestions: string[] } }>;
+function chatGPTErrorMessage(error: Error): string {
+  try {
+    const value: unknown = JSON.parse(error.message);
+    if (value && typeof value === 'object' && 'error' in value && typeof value.error === 'string') return value.error;
+  } catch { /* Stream errors already contain a plain message. */ }
+  return error.message || 'ChatGPT could not complete this response. Check your plan usage and try again.';
+}
 export function ChatConversation({
   id,
   viewportRef,
@@ -33,6 +41,7 @@ export function ChatConversation({
   pendingQuestion?: { id: number; text: string } | null;
 }) {
   const { requestAiAccess } = useAiAccess();
+  const billingSource = useAIBillingSource();
   const [input, setInput] = useState("");
   // Follow a streaming answer only while the reader is already at the bottom.
   const following = useRef(true);
@@ -135,12 +144,13 @@ export function ChatConversation({
             following.current = true;
             setAwayFromLatest(false);
           }}><ArrowDown size={14} aria-hidden="true" />Latest message</button>}
-          {error && <div className="field-chat-error" role="alert"><p>The response was interrupted. You can retry your last question.</p>
+          {error && <div className="field-chat-error" role="alert"><p>{billingSource === 'chatgpt' ? chatGPTErrorMessage(error) : 'The response was interrupted. You can retry your last question.'}</p>
             {!readOnly && <button className="field-text-button" disabled={busy} onClick={() => {
               if (!busy && requestAiAccess()) void regenerate({ body: { report: reportPayload, contextType } });
             }}><RotateCcw size={14} aria-hidden="true" />Retry response</button>}
           </div>}
           {!readOnly && <>
+            {billingSource === 'chatgpt' && <p className="field-chat-composer-meta">Using ChatGPT plan · <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">Manage usage</a></p>}
             <form className="field-chat-form" onSubmit={e => { e.preventDefault(); ask(input); }}>
               <textarea aria-label={`Question about this ${contextType === "trip" ? "multi-day plan" : "report"}`} aria-describedby={`${id}-hint`} placeholder={`Ask anything about ${contextType === "trip" ? "these days" : contextType === "itinerary" ? "this trip" : "this plan"}…`} rows={2} maxLength={1000} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(input); }

@@ -3,6 +3,8 @@ const OpenAI = require('openai');
 const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('./logger');
 const { recordAIUsage } = require('./ai-usage');
+const { currentChatGPT } = require('../auth/chatgpt');
+const { chatGPTInference } = require('./chatgpt-inference');
 
 const PROVIDER_IDS = ['openai', 'anthropic', 'gemini'];
 const SUPPORTED_PROVIDERS = new Set(PROVIDER_IDS);
@@ -504,6 +506,7 @@ const runWithFailover = async (operation, tier, invoke) => {
 
 const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary', timeoutMs, feature = 'text-generation', userId } = {}) => {
   const options = { maxTokens, model, system, tier, timeoutMs, feature, userId };
+  if (currentChatGPT()) return askChatGPT(prompt, options);
   return runWithFailover('askAI', tier, (provider, allowExplicitModel) => (
     callTextProvider(provider, prompt, options, allowExplicitModel)
   ));
@@ -511,12 +514,43 @@ const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary'
 
 const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, system, mediaType = 'image/png', tier = 'primary', feature = 'vision-analysis', userId } = {}) => {
   const options = { maxTokens, model, system, mediaType, tier, feature, userId };
+  if (currentChatGPT()) return askChatGPT([{
+    role: 'user', content: [
+      { type: 'input_image', image_url: `data:${mediaType};base64,${imageBase64}`, detail: 'high' },
+      { type: 'input_text', text: prompt },
+    ],
+  }], options);
   return runWithFailover('askAIVision', tier, (provider, allowExplicitModel) => (
     callVisionProvider(provider, imageBase64, prompt, options, allowExplicitModel)
   ));
 };
 
+const askChatGPT = async (input, options) => {
+  assertAIEnabled();
+  const subscription = currentChatGPT();
+  const startedAt = Date.now();
+  const result = await chatGPTInference(subscription, input, options);
+  await recordAIUsage({ userId: subscription.userId, provider: 'chatgpt', model: result.model,
+    feature: options.feature, usage: result.usage, durationMs: Date.now() - startedAt });
+  return result.text;
+};
+
 const getAIStatus = () => {
+  const subscription = currentChatGPT();
+  if (subscription) {
+    const connection = subscription.service.status();
+    const available = aiEnabled && subscription.alive && connection.connected;
+    return {
+      enabled: aiEnabled, available, provider: 'openai', billingSource: 'chatgpt', accountUserId: subscription.userId,
+      failoverEnabled: false, configured: connection.connected,
+      primaryModel: connection.model, fastModel: connection.model,
+      providers: { openai: { configured: connection.connected, primary: connection.model, fast: connection.model } },
+      features: Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, {
+        enabled: aiFeatures[feature] && feature !== 'watchSummary',
+        available: available && aiFeatures[feature] && feature !== 'watchSummary',
+      }])),
+    };
+  }
   const fallbackProvider = fallbackProviderFor(activeProvider);
   const available = aiEnabled && (aiFailoverEnabled
     ? PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured)
@@ -679,7 +713,7 @@ const updateAISettings = ({ enabled, failoverEnabled, provider, features, models
   });
 };
 
-const isAIAvailable = () => aiEnabled && (aiFailoverEnabled
+const isAIAvailable = () => currentChatGPT() ? getAIStatus().available : aiEnabled && (aiFailoverEnabled
   ? PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured)
   : MODEL_CONFIG[activeProvider].configured);
 const isAIFeatureAvailable = (feature) => AI_FEATURE_KEY_SET.has(feature) && isAIAvailable() && aiFeatures[feature];

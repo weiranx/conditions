@@ -3,6 +3,7 @@ import { Check, Copy, LoaderCircle, LogOut, Mail, RefreshCw, Sparkles, UserRound
 import { useAccount } from "../hooks/useAccount";
 import type { Workspace } from "./model/useWorkspace";
 import { GoogleAuth } from "./GoogleAuth";
+import { ChatGPTPlan } from "./ChatGPTPlan";
 import { GUEST_REPORT_LIMIT } from "../app/guest-report-limit";
 import { dateLabel } from "./data";
 import { formatUsd } from "../app/core";
@@ -244,6 +245,8 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
               </p>
             </div>
           </section>
+
+          <ChatGPTPlan key={account.user.id} userId={account.user.id} />
 
           <section className="sky-account-section" aria-labelledby="chatgpt-setup-heading">
             <div className="sky-sh">

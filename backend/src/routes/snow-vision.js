@@ -1,3 +1,4 @@
+const { chatGPTCacheKey } = require('../auth/chatgpt');
 const { createCache } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
@@ -73,7 +74,7 @@ const registerSnowVisionRoute = ({
     // Keying by tile (not raw lat/lon) means nearby requests within the same ~5km tile
     // share one Sentinel Hub fetch. The snowpack payload and unit preference are appended
     // to the key so a changed ground-station reading or unit switch busts the cache.
-    const cacheKey = `${SNOW_VISION_PROMPT_VERSION}|${SNOW_VISION_ZOOM}/${x}/${y}|${metric ? 'm' : 'ft'}|${snowpackJson}`;
+    const cacheKey = chatGPTCacheKey(`${SNOW_VISION_PROMPT_VERSION}|${SNOW_VISION_ZOOM}/${x}/${y}|${metric ? 'm' : 'ft'}|${snowpackJson}`);
 
     try {
       const result = await snowVisionCache.getOrFetch(cacheKey, async () => {

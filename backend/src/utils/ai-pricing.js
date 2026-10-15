@@ -186,6 +186,8 @@ const normalizeBillableTokens = (usage = {}) => {
 };
 
 const estimateAIUsageCost = ({ provider, model, usage, timestamp } = {}) => {
+  // OAuth plan usage consumes the user's ChatGPT allowance, not billable Platform API spend.
+  if (provider === 'chatgpt') return { estimatedCostUsd: 0, pricingMatched: true, pricingVersion: PRICING_VERSION };
   const pricing = resolveAIModelPricing({ provider, model, timestamp });
   if (!pricing) {
     return { estimatedCostUsd: null, pricingMatched: false, pricingVersion: PRICING_VERSION };
