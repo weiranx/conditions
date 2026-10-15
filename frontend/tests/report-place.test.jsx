@@ -136,3 +136,24 @@ test('scrolling first ends the wait for the old spot', async t => {
   assert.equal(h.window.scrollY, 120, 'the reader is not pulled away from where they scrolled');
   assert.equal(store.current.scrollY, 120);
 });
+
+test('a spot the page grows too slowly to reach stays kept for next time', async t => {
+  const store = { current: { report: 'r', scrollY: 1400, sections: ['forecast'] } };
+  const none = new Set();
+  function Report() {
+    const [returning] = useState(() => placeToReturnTo(store.current, 'r'));
+    useKeepReportPlace(store, 'r', none, returning);
+    return null;
+  }
+  let now = 0;
+  const realNow = performance.now;
+  performance.now = () => now;
+  t.after(() => { performance.now = realNow; });
+  const h = await mount(t, 'http://localhost/planner', Report, {}, { height: 300 });
+  assert.equal(h.window.scrollY, 300);
+  now = 10_000;
+  await h.frames();
+  assert.equal(store.current.scrollY, 1400, 'the clipped offset does not replace the kept spot');
+  await act(async () => h.window.scrollTo({ top: 200 }));
+  assert.equal(store.current.scrollY, 200, 'once the wait is over, the reader\'s own scrolling is kept');
+});

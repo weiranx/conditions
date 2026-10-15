@@ -65,8 +65,12 @@ export function useKeepReportPlace(
     };
     const step = () => {
       window.scrollTo({ top: target, behavior: "instant" });
-      if (Math.abs(window.scrollY - target) < 2 || performance.now() > deadline) stop();
-      else frame = window.requestAnimationFrame(step);
+      if (Math.abs(window.scrollY - target) < 2) stop();
+      else if (performance.now() > deadline) {
+        // Too slow to reach: the spot stays kept for next time instead of the clipped offset.
+        cancel();
+        restoring.current = false;
+      } else frame = window.requestAnimationFrame(step);
     };
     READER_INPUT.forEach((type) => window.addEventListener(type, stop, { passive: true }));
     step();
