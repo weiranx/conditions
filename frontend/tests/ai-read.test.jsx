@@ -215,7 +215,7 @@ test('while the AI writes, the read says what it is doing and what it has done',
   assert.match(pending, /<li class="is-active">[^]*Rewriting the opening[^]*<li class="is-next">[^]*Then the full read/);
   const written = read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'written', openingSeconds: 3 } });
   assert.match(written, /<li class="is-done">[^]*Rewrote the opening in 3 s[^]*<li class="is-active">[^]*Writing the full read/);
-  assert.match(read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'kept' } }), /<li class="is-kept">[^]*Kept the checks’ opening/);
+  assert.match(read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'kept' } }), /<li class="is-kept">[^]*The quick opening didn’t pass its checks; the full read writes it/);
   assert.doesNotMatch(read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'off' } }), /opening/);
   // A rewrite keeps the old read on screen, marked stale, under the progress.
   assert.match(read({ loading: true, run }), /ai-read-progress[^]*ai-read-body is-stale[^]*Gusts reach 32 mph/);
