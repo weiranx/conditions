@@ -4,6 +4,8 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 import { runSmokeTest } from '../smoke-test.mjs';
 
+const TREE = 'f'.repeat(40);
+
 // One loopback server stands in for the API, MCP and frontend; each test
 // breaks one piece through `overrides`.
 async function fakeProduction(t, overrides = {}) {
@@ -13,6 +15,7 @@ async function fakeProduction(t, overrides = {}) {
     authServerStatus: 200,
     mcpStatus: 401,
     assetStatus: 200,
+    version: { commit: 'a'.repeat(40), frontendTree: TREE }, // null: no stamp, so the index fallback answers
     ...overrides,
   };
   const server = createServer((req, res) => {
@@ -31,6 +34,7 @@ async function fakeProduction(t, overrides = {}) {
     if (url.pathname === '/mcp') {
       return json(state.mcpStatus, { error: 'unauthorized' }, { 'www-authenticate': 'Bearer resource_metadata="https://api.example.test/.well-known/oauth-protected-resource"' });
     }
+    if (url.pathname === '/version.json' && state.version) return json(200, state.version);
     if (url.pathname === '/assets/index-abc.js') {
       res.writeHead(state.assetStatus);
       return res.end('console.log(1)');
@@ -95,3 +99,22 @@ test('retries the health check until the deadline', async (t) => {
   assert.equal(failures, 0, output);
   assert.equal(calls, 3);
 });
+
+test('passes when the live frontend is the released build', async (t) => {
+  const origin = await fakeProduction(t);
+  const { failures, output } = await smoke({ api: origin, frontend: origin, frontendTree: TREE });
+  assert.equal(failures, 0, output);
+  assert.match(output, /✓ Frontend is the released build — commit aaaaaaa/);
+});
+
+for (const [name, overrides, pattern] of [
+  ['an older frontend build', { version: { commit: 'b'.repeat(40), frontendTree: 'e'.repeat(40) } }, /✗ Frontend is the released build — the live frontend is commit b{40} .*did not reach production/],
+  ['a frontend without a build stamp', { version: null }, /✗ Frontend is the released build — GET \/version\.json returned 200 without JSON/],
+]) {
+  test(`fails on ${name}`, async (t) => {
+    const origin = await fakeProduction(t, overrides);
+    const { failures, output } = await smoke({ api: origin, frontend: origin, frontendTree: TREE });
+    assert.equal(failures, 1, output);
+    assert.match(output, pattern);
+  });
+}

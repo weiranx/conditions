@@ -89,3 +89,29 @@ test('the backend release skips unchanged images on the droplet', () => {
   const bootstrap = readFileSync(new URL('../ci-deploy.sh', import.meta.url), 'utf8');
   assert.match(bootstrap, /deploy\.sh" --no-pull --no-nginx --skip-unchanged\n/);
 });
+
+test('the frontend job names missing Cloudflare secrets before doing anything else', () => {
+  const steps = jobs().frontend.split(/\n(?= {6}- )/).slice(1);
+  const check = steps.findIndex((step) => /name: Require the Cloudflare credentials/.test(step));
+  const live = steps.findIndex((step) => /id: live\n/.test(step));
+  assert.ok(check > 0 && check < live, 'the credentials check runs after the checkout and before the live check');
+  assert.doesNotMatch(steps[check], /^ {8}if:/m, 'it runs even when the build would be skipped');
+  for (const secret of ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']) {
+    assert.match(steps[check], new RegExp(`${secret}: \\$\\{\\{ secrets\\.${secret} \\}\\}`));
+    assert.match(steps[check], new RegExp(`\\[ -n "\\$${secret}" \\] \\|\\| missing=`));
+  }
+  assert.match(steps[check], /::error title=Frontend not deployed::/);
+  assert.match(steps[check], /exit 1/);
+  // An unreadable Pages project still deploys, but says so.
+  assert.match(steps[live], /::warning title=Live frontend unknown::/);
+});
+
+test('the smoke test checks the live frontend was built from the released frontend/', () => {
+  const smokeTest = jobs()['smoke-test'];
+  assert.match(smokeTest, /tree="\$\(git rev-parse HEAD:frontend\)"\n\s+SMOKE_FRONTEND_TREE="\$tree" node scripts\/smoke-test\.mjs/);
+  const pkg = JSON.parse(readFileSync(new URL('../../frontend/package.json', import.meta.url), 'utf8'));
+  assert.match(pkg.scripts.build, /&& node scripts\/write-version\.mjs$/);
+  const stamp = readFileSync(new URL('../../frontend/scripts/write-version.mjs', import.meta.url), 'utf8');
+  assert.match(stamp, /frontendTree: git\('rev-parse', 'HEAD:\.\/'\)/);
+  assert.match(stamp, /'dist\/version\.json'/);
+});

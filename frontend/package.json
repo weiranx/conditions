@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc -b",
-    "build": "tsc -b && vite build && node scripts/create-worker.mjs",
+    "build": "tsc -b && vite build && node scripts/create-worker.mjs && node scripts/write-version.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "dev:mock": "VITE_MOCK_API=true vite --host 127.0.0.1",

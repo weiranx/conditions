@@ -56,7 +56,17 @@ off (Settings → Build → Branch control), or Cloudflare would ship untested
 commits. The job needs the `CLOUDFLARE_API_TOKEN` (Account → Cloudflare Pages →
 Edit) and `CLOUDFLARE_ACCOUNT_ID` repository secrets. The build uses
 `PRODUCTION_API_URL` as `VITE_API_BASE_URL`, and the repository variable
-`CLOUDFLARE_PAGES_PROJECT` overrides the project name.
+`CLOUDFLARE_PAGES_PROJECT` overrides the project name. Without either secret the
+job stops at its first step and names the missing one. Each build writes
+`/version.json` (its commit and the git tree of `frontend/`), and the smoke test
+fails unless the live file matches the released commit's `frontend/`, so an
+upload that failed or went to another project cannot leave an old build live
+behind a green run.
+
+**Deploy alerts:** `deploy-alert.yml` opens a `Production deploy is failing`
+issue (label `deploy-failure`, mentioning the repository owner) when a deploy
+run fails, comments on it for each further failure, and closes it once a deploy
+passes its smoke test. It needs issues enabled on the repository.
 
 The sections below document each step for manual setup and troubleshooting.
 
