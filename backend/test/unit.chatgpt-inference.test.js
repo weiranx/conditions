@@ -68,6 +68,29 @@ test('incomplete streams and account limits fail without retrying a paid API pro
   expect(create).toHaveBeenCalledTimes(2);
 });
 
+test('plan streams retain text deltas when the completed event omits output', async () => {
+  create.mockImplementation(async function* () {
+    yield { type: 'response.output_text.delta', delta: 'Hello, ' };
+    yield { type: 'response.output_text.delta', delta: 'world!' };
+    yield { type: 'response.completed', response: { output: [], usage: { input_tokens: 4, output_tokens: 3 } } };
+  });
+  const subscription = { service, userId: 'owner', alive: true };
+  expect(await runWithChatGPT(subscription, () => askAI('Hi'))).toBe('Hello, world!');
+  const { chatGPTInference } = require('../src/utils/chatgpt-inference');
+  const onDelta = jest.fn();
+  expect(await chatGPTInference(subscription, 'Hi', { onDelta })).toMatchObject({ text: 'Hello, world!', usage: { output_tokens: 3 } });
+  expect(onDelta.mock.calls).toEqual([['Hello, '], ['world!']]);
+});
+
+test.each(['response.failed', 'response.incomplete', 'error'])('partial text is rejected after %s', async (type) => {
+  create.mockImplementation(async function* () {
+    yield { type: 'response.output_text.delta', delta: 'Partial answer' };
+    yield { type };
+  });
+  await expect(runWithChatGPT({ service, userId: 'owner', alive: true }, () => askAI('Hi')))
+    .rejects.toThrow('did not complete');
+});
+
 test('plan requests lower reasoning effort by tier and keep the API time budget', async () => {
   create.mockImplementation(() => completed());
   service.reasoningEffortsFor.mockResolvedValue(['minimal', 'low', 'medium', 'high']);
