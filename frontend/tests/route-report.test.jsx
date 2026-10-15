@@ -114,7 +114,7 @@ function workspace() {
 }
 const brief = (route) => renderToStaticMarkup(
   <BriefSections w={workspace()} hours={hours} clock={(m) => `${m}`}
-    onOpen={() => {}} onReadAll={() => {}} route={route} gearEnabled />);
+    onOpen={() => {}} route={route} />);
 const routeCard = (html) => html.slice(html.indexOf("is-route"), html.indexOf("<span>Weather</span>"));
 
 test("the brief's checks lead with the planned route and the card says how it went", () => {
@@ -130,7 +130,7 @@ test("the brief's checks lead with the planned route and the card says how it we
   assert.match(card, /sky-status is-over[^>]*>.*1 of 3 over/);
   assert.match(card, /Col at @09:30: gusts 42 mph, over your 30 mph limit\. Back at the start around @15:00\./);
   assert.match(card, /Checkpoints along East Ridge: Trailhead at @06:00, within your limits; Col at @09:30, over your limits/);
-  assert.match(card, /Open Route/);
+  assert.match(card, /Along the route/, "the card says it leads to the route section");
   assert.doesNotMatch(html, /NaN|undefined/);
 });
 

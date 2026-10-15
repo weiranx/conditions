@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useContext, useSyncExternalStore } from 'react';
+import { AiAccessContext } from '../contexts/ai-access';
 import { fetchApi } from '../lib/api-client';
 
 export const AI_AVAILABILITY_EVENT = 'summitsafe:ai-availability-change';
@@ -91,9 +92,18 @@ export function publishAiAvailability(status: AiStatusPayload): void {
   window.dispatchEvent(new CustomEvent(AI_AVAILABILITY_EVENT, { detail: nextAvailability }));
 }
 
+const AI_OFF = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, false])) as AiFeatureAvailability;
+
+/** Whether the traveler wants AI in this plan and report; on outside the planner. */
+export function useAiEnabled(): boolean {
+  return useContext(AiAccessContext)?.aiEnabled !== false;
+}
+
 export function useAiAvailability(reportCapabilities?: ReportCapabilities): AiFeatureAvailability {
   const available = useSyncExternalStore(subscribe, getAvailability, getAvailability);
+  const enabled = useAiEnabled();
 
+  if (!enabled) return AI_OFF;
   if (available) return available;
   const fallback = reportCapabilities?.ai === true;
   return Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [

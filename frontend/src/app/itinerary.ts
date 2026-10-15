@@ -1,8 +1,9 @@
 import type { CampNightData, DecisionLevel, MultiDayTripForecastDay, SafetyData, UserPreferences } from './types';
 import { DATE_FMT, MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from './constants';
 import { addDaysToIsoDate, parseTimeInputMinutes } from './core';
-import { planSettingsParams } from './plan-evaluation';
+import { aiRequestFields, planSettingsParams } from './plan-evaluation';
 import { describeGpxStretch, estimateRouteDurationHours, type GpxStretch, type ParsedGpxRoute, type RouteTimingProfile } from '../lib/gpx';
+import type { ParsedPlan } from '../lib/plan-parse';
 
 /**
  * A multi-day trip: a trailhead, a camp for each night, and an exit. Day i
@@ -285,6 +286,7 @@ export function buildItineraryRequest(draft: ItineraryDraft, stages: ItinerarySt
     activity: preferences.defaultActivity,
     // The traveler's limits and units; the backend checks every day against them.
     plan: planSettingsParams(preferences),
+    ...aiRequestFields(preferences),
     bailPoints: draft.bailPoints.map(point),
     startDate: draft.startDate,
     stages: stages.map((stage) => ({
@@ -507,6 +509,104 @@ export function splitGpxIntoDays(route: ParsedGpxRoute, nights: number, timing: 
     camps,
     days,
   };
+}
+
+// ─── A described trip ─────────────────────────────────────────────────────
+
+/**
+ * Places a trip description named but the traveler has still to pick: each
+ * goes into that place's search box. Session-only, never stored with the draft.
+ */
+export interface ItineraryPlaceHints {
+  /** By night; null where the description named no camp. */
+  camps: Array<string | null>;
+  exit: string | null;
+  /** By day, in the order they are to be added. */
+  checkpoints: string[][];
+}
+
+export const EMPTY_PLACE_HINTS: ItineraryPlaceHints = { camps: [], exit: null, checkpoints: [] };
+
+/**
+ * The hints once a point is placed at `target`, by search or map tap: that
+ * camp's or the exit's hint is used up, and a day's next pass moves up.
+ */
+export function consumePlaceHint(hints: ItineraryPlaceHints, target: ItineraryPickTarget): ItineraryPlaceHints {
+  if (target.kind === 'camp' && hints.camps[target.index]) {
+    return { ...hints, camps: hints.camps.map((hint, index) => (index === target.index ? null : hint)) };
+  }
+  if (target.kind === 'exit' && hints.exit) return { ...hints, exit: null };
+  if (target.kind === 'checkpoint' && hints.checkpoints[target.day]?.length) {
+    return { ...hints, checkpoints: hints.checkpoints.map((queue, day) => (day === target.day ? queue.slice(1) : queue)) };
+  }
+  return hints;
+}
+
+export const hasPlaceHints = (hints: ItineraryPlaceHints) =>
+  Boolean(hints.exit) || hints.camps.some(Boolean) || hints.checkpoints.some((day) => day.length > 0);
+
+/**
+ * The draft with a described trip applied: its first day (within the forecast),
+ * nights (as many as the forecast reaches), each day's start and hours, and its
+ * name. A camp, exit or pass it names replaces what was there with a search to
+ * pick from (the hints); a layover is set straight away. What it does not name
+ * stays as it was. Returns what could not be applied as notes.
+ */
+export function applyDescribedTrip(
+  draft: ItineraryDraft,
+  plan: Pick<ParsedPlan, 'date' | 'startTime' | 'params' | 'trip'>,
+  { todayDate, maxForecastDate }: { todayDate: string; maxForecastDate: string },
+): { draft: ItineraryDraft; hints: ItineraryPlaceHints; notes: string[]; nightsCut: boolean } {
+  const notes: string[] = [];
+  let next: ItineraryDraft = { ...draft };
+  if (plan.date) {
+    if (plan.date >= todayDate && plan.date <= maxForecastDate) next.startDate = plan.date;
+    else notes.push(`${plan.date} is past the forecast days; pick the first day yourself.`);
+  }
+  const trip = plan.trip;
+  let nightsCut = false;
+  if (trip?.nights) {
+    const fits = maxNightsWithinForecast(next.startDate || todayDate, maxForecastDate);
+    if (trip.nights > fits) {
+      nightsCut = true;
+      notes.push(`The forecast reaches ${fits} night${fits === 1 ? '' : 's'} from the first day; the trip is cut to fit.`);
+    }
+    next = setItineraryNights(next, Math.min(trip.nights, fits));
+  }
+  const hours = plan.params.travel_window_hours;
+  if (plan.startTime || typeof hours === 'number') {
+    next.days = next.days.map((day) => ({
+      ...day,
+      ...(plan.startTime ? { start: plan.startTime } : {}),
+      ...(typeof hours === 'number' ? { travelHours: clampHours(hours) } : {}),
+    }));
+  }
+  if (trip?.name) next.name = trip.name;
+
+  const hints: ItineraryPlaceHints = { camps: [], exit: null, checkpoints: [] };
+  if (trip) {
+    next.camps = next.camps.map((camp, index) => {
+      const described = trip.camps[index];
+      if (!described) return camp;
+      if (described.layover && index > 0) return { point: null, layover: true };
+      if (!described.placeQuery) return camp;
+      hints.camps[index] = described.placeQuery;
+      return { point: null, layover: false };
+    });
+    if (trip.exit) {
+      next.exit = null;
+      hints.exit = trip.exit;
+    }
+    next.days = next.days.map((day, index) => {
+      const passes = (trip.passes[index] ?? []).slice(0, MAX_DAY_CHECKPOINTS);
+      if (!passes.length) return day;
+      hints.checkpoints[index] = passes;
+      return { ...day, checkpoints: [] };
+    });
+    const dropped = trip.passes.slice(next.days.length).flat();
+    if (dropped.length) notes.push(`${dropped.join(', ')}: past the trip's last day; add ${dropped.length === 1 ? 'it' : 'them'} yourself.`);
+  }
+  return { draft: next, hints, notes, nightsCut };
 }
 
 // ─── Opening a day in the brief ───────────────────────────────────────────

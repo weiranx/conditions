@@ -1013,6 +1013,8 @@ export interface UserPreferences {
   approachElevationAdjustment: boolean;
   /** Write the report's AI read as soon as a report opens, when AI is available. */
   autoAiRead: boolean;
+  /** Use AI in plans and reports. Off, the report is the checks' alone: no AI read, chat, imagery or route analysis. */
+  aiEnabled: boolean;
 }
 
 export type FreshnessState = 'fresh' | 'aging' | 'stale' | 'missing';

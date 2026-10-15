@@ -1281,8 +1281,8 @@ test('calculateSafetyScore penalizes persistent wind and precip hazards across t
   });
 
   expect(persistentResult.score).toBeLessThan(transientResult.score);
-  expect(persistentResult.explanations.join(' ')).toMatch(/trend hours are severe wind windows/i);
-  expect(persistentResult.explanations.join(' ')).toMatch(/high precip windows|precipitation chance/i);
+  expect(persistentResult.explanations.join(' ')).toMatch(/8 of 12 hours have wind of 30 mph or gusts of 45 mph or more/i);
+  expect(persistentResult.explanations.join(' ')).toMatch(/high chance of rain or snow/i);
 });
 
 test('calculateSafetyScore incorporates rainfall totals, expected precipitation, and heat risk synthesis', () => {
@@ -1348,8 +1348,8 @@ test('calculateSafetyScore incorporates rainfall totals, expected precipitation,
   });
 
   expect(wetHotResult.score).toBeLessThan(dryResult.score);
-  expect(wetHotResult.explanations.join(' ')).toMatch(/recent rainfall is heavy/i);
-  expect(wetHotResult.explanations.join(' ')).toMatch(/expected rain in selected travel window/i);
+  expect(wetHotResult.explanations.join(' ')).toMatch(/heavy rain recently/i);
+  expect(wetHotResult.explanations.join(' ')).toMatch(/in of rain is expected during your trip/i);
   expect(wetHotResult.explanations.join(' ')).toMatch(/heat risk is high/i);
 });
 
@@ -1492,7 +1492,7 @@ test('condition trajectory: deteriorating wind adds penalty', () => {
   const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
   expect(trajectoryFactor).toBeDefined();
   expect(trajectoryFactor.impact).toBe(4);
-  expect(trajectoryFactor.message).toMatch(/wind.*deteriorating/i);
+  expect(trajectoryFactor.message).toMatch(/wind gets stronger as the day goes on/i);
 });
 
 test('condition trajectory: both wind and precip deteriorating gives +7 (not additive)', () => {
@@ -1514,7 +1514,7 @@ test('condition trajectory: both wind and precip deteriorating gives +7 (not add
   const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
   expect(trajectoryFactor).toBeDefined();
   expect(trajectoryFactor.impact).toBe(7);
-  expect(trajectoryFactor.message).toMatch(/both wind and precipitation/i);
+  expect(trajectoryFactor.message).toMatch(/wind and rain or snow both get worse/i);
 });
 
 test('condition trajectory: stable/improving conditions get no trajectory penalty', () => {
@@ -1694,7 +1694,7 @@ test('condition trajectory: precip-only deterioration adds +4', () => {
   const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
   expect(trajectoryFactor).toBeDefined();
   expect(trajectoryFactor.impact).toBe(4);
-  expect(trajectoryFactor.message).toMatch(/precipitation.*increasing/i);
+  expect(trajectoryFactor.message).toMatch(/rain or snow gets more likely as the day goes on/i);
 });
 
 test('proportional cold duration: mixed extreme + cold hours sum correctly', () => {
@@ -1802,7 +1802,7 @@ test('combined hazard escalation: all 4 categories active shows count in message
   const combinedFactor = result.factors.find((f) => f.hazard === 'Combined Exposure');
   expect(combinedFactor).toBeDefined();
   expect(combinedFactor.impact).toBe(10);
-  expect(combinedFactor.message).toMatch(/4 weather hazard categories/);
+  expect(combinedFactor.message).toMatch(/4 kinds of weather hazard overlap/);
 });
 
 // --- parseWindMph ---
@@ -3535,6 +3535,22 @@ test('calculateSafetyScore applies visibility impact for fog in description when
   expect(result.factors.some((f) => f.hazard === 'Visibility')).toBe(true);
 });
 
+test('calculateSafetyScore counts a blizzard as winter weather, not a thunderstorm', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Blizzard',
+      windSpeed: 30, windGust: 45, precipChance: 90, humidity: 90, temp: 10, feelsLike: -8,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 6 }, () => ({ temp: 10, wind: 30, gust: 45, precipChance: 90, condition: 'Blizzard' })),
+    },
+  });
+  expect(result.factors.some((f) => /thunder/i.test(f.message))).toBe(false);
+  const blizzard = result.factors.find((f) => f.hazard === 'Winter Weather' && /blizzard/i.test(f.message));
+  expect(blizzard).toMatchObject({ impact: 18, message: 'Blizzard or whiteout conditions are forecast during your trip.' });
+  expect(result.groupImpacts.weather.floorReason).toBe('Blizzard or whiteout conditions');
+});
+
 test('calculateSafetyScore applies thunderstorm/convective penalty', () => {
   const result = calculateSafetyScore({
     ...safetyScoreBaseInput(),
@@ -3545,7 +3561,7 @@ test('calculateSafetyScore applies thunderstorm/convective penalty', () => {
       trend: Array.from({ length: 6 }, () => ({ temp: 72, wind: 18, gust: 35, precipChance: 80 })),
     },
   });
-  const stormFactor = result.factors.find((f) => f.hazard === 'Storm' && f.message.match(/convective|severe weather/i));
+  const stormFactor = result.factors.find((f) => f.hazard === 'Storm' && f.message.match(/thunderstorms or lightning in the forecast/i));
   expect(stormFactor).toBeDefined();
   expect(stormFactor.impact).toBe(18);
 });
@@ -3562,7 +3578,7 @@ const calmWeather = (overrides = {}) => ({
 
 test('calculateSafetyScore stamps the scoring model version', () => {
   const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
-  expect(result.scoreVersion).toBe('2.13.0');
+  expect(result.scoreVersion).toBe('2.14.0');
 });
 
 test('calculateSafetyScore gives benign conditions the full 100-point baseline', () => {
@@ -3585,7 +3601,7 @@ test('calculateSafetyScore adds a Snowpack factor when snowpack is above seasona
   const snowFactor = result.factors.find((f) => f.hazard === 'Snowpack');
   expect(snowFactor).toBeDefined();
   expect(snowFactor.group).toBe('weather');
-  expect(snowFactor.message).toMatch(/above seasonal average/i);
+  expect(snowFactor.message).toMatch(/150% of normal/i);
 });
 
 test('calculateSafetyScore leaves snowpack as a no-op when snowpack data is absent (backward compatible)', () => {
@@ -3689,7 +3705,7 @@ test('calculateSafetyScore detects convective risk from trend-hour conditions wi
       ],
     },
   });
-  const convective = result.factors.find((f) => f.hazard === 'Storm' && /convective signal across/i.test(f.message));
+  const convective = result.factors.find((f) => f.hazard === 'Storm' && /thunder or lightning is forecast in \d+ of \d+ hours/i.test(f.message));
   expect(convective).toBeDefined();
   expect(convective.impact).toBe(18);
 });

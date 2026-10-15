@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { publishAiAvailability, useAiAvailability } from '../src/hooks/useAiAvailability';
+import { AiAccessContext } from '../src/contexts/ai-access';
 
 const health = { ai: { available: true, features: { reportChat: { available: false } } } };
 
@@ -79,4 +80,34 @@ test('published AI settings reach mounted consumers, and polling stops with the 
   await h.unmount();
   await h.tick();
   assert.equal(h.requests.length, 1);
+});
+
+test('a plan with AI turned off sees every AI feature as unavailable', async (t) => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
+  const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  dom.window.setInterval = () => 0;
+  dom.window.clearInterval = () => {};
+  globalThis.fetch = async () => new Response(JSON.stringify({ ai: { available: true } }), { status: 200 });
+  let seen = null;
+  function Consumer() {
+    seen = useAiAvailability({ ai: true });
+    return null;
+  }
+  const root = createRoot(document.getElementById('root'));
+  await act(async () => root.render(
+    <AiAccessContext.Provider value={{ requestAiAccess: () => false, aiEnabled: false }}>
+      <Consumer />
+    </AiAccessContext.Provider>,
+  ));
+  t.after(async () => {
+    await act(async () => root.unmount());
+    dom.window.close();
+    Object.assign(globalThis, previous);
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+  assert.ok(Object.keys(seen).length > 0);
+  assert.ok(Object.values(seen).every((available) => available === false));
 });

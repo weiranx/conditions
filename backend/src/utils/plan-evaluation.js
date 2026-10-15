@@ -63,6 +63,7 @@ const comfortForPlan = (report, context) => {
     selectedTravelWindowHours: context.travelWindowHours,
     scoreFeatures: report.featureFlags || null,
     approach: context.resolvedApproach,
+    activity: context.activity,
   });
 };
 

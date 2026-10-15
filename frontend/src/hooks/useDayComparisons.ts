@@ -31,6 +31,7 @@ export function useDayComparisons({
 }: UseDayComparisonsParams): UseDayComparisonsReturn {
   const [result, setResult] = useState<{ key: string; source: SafetyData; comparison: DayOverDayComparison | null } | null>(null);
   const { temperatureUnit, windSpeedUnit, defaultActivity: activity } = preferences;
+  const aiOff = preferences.aiEnabled === false;
   const selectedDate = safetyData?.forecast?.selectedDate || forecastDate;
   const startTime = (safetyData && reportRequestedStartTime(safetyData)) || currentStartTime;
   const travelWindowHours = comparisonTravelHours(preferences.travelWindowHours);
@@ -39,7 +40,7 @@ export function useDayComparisons({
       && Number.isFinite(parseOptionalFiniteNumber(safetyData.safety?.score)),
   );
   const comparisonKey = comparisonEnabled
-    ? JSON.stringify([selectedDate, startTime, travelWindowHours, position.lat, position.lng, temperatureUnit, windSpeedUnit, activity])
+    ? JSON.stringify([selectedDate, startTime, travelWindowHours, position.lat, position.lng, temperatureUnit, windSpeedUnit, activity, aiOff])
     : null;
 
   useEffect(() => {
@@ -55,6 +56,8 @@ export function useDayComparisons({
       activity,
       temp_unit: temperatureUnit,
       wind_unit: windSpeedUnit,
+      // A report without AI is compared without it.
+      ...(aiOff ? { ai: 'off' } : {}),
     });
     (async () => {
       let comparison: DayOverDayComparison | null = null;
@@ -70,7 +73,7 @@ export function useDayComparisons({
       if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison });
     })();
     return () => controller.abort();
-  }, [comparisonKey, selectedDate, startTime, travelWindowHours, safetyData, position.lat, position.lng, temperatureUnit, windSpeedUnit, activity]);
+  }, [comparisonKey, selectedDate, startTime, travelWindowHours, safetyData, position.lat, position.lng, temperatureUnit, windSpeedUnit, activity, aiOff]);
 
   return { dayOverDay: result?.key === comparisonKey && result?.source === safetyData ? result.comparison : null };
 }

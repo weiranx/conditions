@@ -139,6 +139,8 @@ const registerItineraryRoutes = ({
     const bailPoints = (Array.isArray(req.body?.bailPoints) ? req.body.bailPoints : [])
       .slice(0, MAX_BAIL_POINTS).map(parsePoint).filter(Boolean);
     const activity = typeof req.body?.activity === 'string' ? req.body.activity.trim().slice(0, 40) : '';
+    // The traveler turned AI off: no day's report reads its avalanche bulletin with AI.
+    const aiOff = req.body?.ai === false;
     // 'summary' returns compact evidence per day instead of full reports (MCP clients).
     const summaryView = req.body?.view === 'summary';
     const idempotencyKey = String(req.headers['idempotency-key'] || '').trim();
@@ -182,6 +184,7 @@ const registerItineraryRoutes = ({
           travel_window_hours: String(stage.travelHours),
           activity: activity || undefined,
           ...approachQuery(stage),
+          ...(aiOff ? { ai: 'off' } : {}),
         };
         const lastStage = index === stages.length - 1;
         return [

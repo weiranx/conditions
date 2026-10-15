@@ -58,7 +58,7 @@ const registerTripDebriefRoute = ({
   ensureFeatureEnabled = () => assertAIFeatureEnabled('tripDebrief'),
 }) => {
   app.post('/api/trip-debrief', async (req, res) => {
-    const { report, track, notes } = req.body || {};
+    const { report, track, notes, ai } = req.body || {};
     if (!report || typeof report !== 'object' || Array.isArray(report)) {
       return res.status(400).json({ error: 'Missing required field: report' });
     }
@@ -89,11 +89,14 @@ const registerTripDebriefRoute = ({
     // Only the write-up is AI; the comparison stands without it.
     const userNotes = typeof notes === 'string' ? notes.trim().slice(0, MAX_NOTES_LENGTH) : '';
     let narrative = null;
-    let narrativeStatus = 'ok';
-    try {
-      ensureFeatureEnabled();
-    } catch {
-      narrativeStatus = 'unavailable';
+    // The traveler can turn AI off for the report; the comparison still comes back.
+    let narrativeStatus = ai === false ? 'unavailable' : 'ok';
+    if (narrativeStatus === 'ok') {
+      try {
+        ensureFeatureEnabled();
+      } catch {
+        narrativeStatus = 'unavailable';
+      }
     }
     if (narrativeStatus === 'ok') {
       try {

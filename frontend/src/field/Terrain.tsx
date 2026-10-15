@@ -5,7 +5,7 @@ import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "luc
 import type { Workspace } from "./model/useWorkspace";
 import type { AvalancheProblem } from "../app/types";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
-import { useAiAvailability } from "../hooks/useAiAvailability";
+import { useAiAvailability, useAiEnabled } from "../hooks/useAiAvailability";
 import { planFromReport } from "./data";
 import { WindCompass } from "./WindCompass";
 import { SourceLink } from "./Details";
@@ -177,6 +177,8 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
   const data = w.safetyData!;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const available = useAiAvailability(data.capabilities);
+  // Off on the plan form: no AI-read imagery or trip reports in this report.
+  const aiEnabled = useAiEnabled();
   // Hour of the travel window the elevation forecast shows; 0 is the planned start.
   const [forecastHour, setForecastHour] = useState(0);
   const hourIndex = forecastHour < hours.length ? forecastHour : 0;
@@ -402,7 +404,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
         )}
       </div>
 
-      <FieldObservations
+      {aiEnabled && <FieldObservations
         key={`${data.location.lat},${data.location.lon},${data.forecast?.selectedDate ?? ""}`}
         objective={{
           name: w.reportSnapshot?.plan.objectiveName || "Objective",
@@ -414,7 +416,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
         available={available.tripReports}
         readOnly={w.viewingHistoryReport}
         formatElevation={w.formatElevationDisplay}
-      />
+      />}
 
       {flags.terrainWindow && <TerrainWindow workspace={w} />}
 
@@ -604,7 +606,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
         </Fold>
       )}
 
-      {flags.satelliteImagery && flags.snowpackDetails && (
+      {aiEnabled && flags.satelliteImagery && flags.snowpackDetails && (
         <section
           className="sky-card sky-section ai-panel"
           aria-labelledby="sky-terrain-satellite"

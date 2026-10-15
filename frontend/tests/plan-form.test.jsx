@@ -177,6 +177,34 @@ test('every activity is one tap, and the chosen one says what it changes', async
   assert.deepEqual(patches, [{ defaultActivity: 'ski-touring', customActivityId: null }]);
 });
 
+test('Use AI is on by default and switching it off starts a report without AI', async (t) => {
+  const env = setup(t);
+  const patches = [];
+  const w = planWorkspace({ safetyData: {}, updatePreferences: (patch) => patches.push(patch), handleEditPlan: () => w.calls.push(['handleEditPlan']) });
+  await env.render(<WorkspacePlan workspace={w} />);
+  const toggle = document.querySelector('.sky-plan-ai input[type="checkbox"]');
+  assert.ok(toggle, 'the plan form has a Use AI switch');
+  assert.equal(toggle.checked, true);
+  assert.match(document.querySelector('.sky-plan-ai').textContent, /Use AI.*AI read and chat/);
+  await act(async () => toggle.click());
+  assert.deepEqual(patches, [{ aiEnabled: false }]);
+  assert.ok(w.calls.some(([name]) => name === 'handleEditPlan'), 'the loaded report gives way to a new one');
+});
+
+test('with AI off the plan says what the report leaves out and offers no AI route tools', async (t) => {
+  const env = setup(t);
+  const w = planWorkspace({
+    preferences: { ...getDefaultUserPreferences(), aiEnabled: false },
+    featureFlags: { routeAnalysis: true, gpxImport: true },
+  });
+  await env.render(<WorkspacePlan workspace={w} />);
+  assert.equal(document.querySelector('.sky-plan-ai input').checked, false);
+  assert.match(document.querySelector('.sky-plan-ai').textContent, /no AI read, chat, route analysis or imagery/);
+  assert.equal(document.querySelector('.sky-plan-route'), null, 'no named-route analysis');
+  assert.ok(![...document.querySelectorAll('button')].some((button) => button.textContent === 'Suggest routes'));
+  assert.ok([...document.querySelectorAll('button')].some((button) => button.textContent === 'Import a GPX track'), 'a GPX track still times the approach');
+});
+
 test('a place can be renamed in place; Enter saves without submitting the plan', async (t) => {
   const env = setup(t);
   const names = [];
@@ -268,7 +296,7 @@ test('a multi-day trip checks as soon as the typed trailhead reaches the trip', 
     mode: 'multi',
     draft: { name: '', trailhead, camps: [{ point: { name: 'Camp', lat: 36.57, lon: -118.28, elevationFt: null }, layover: false }], exit: null,
       days: [day, day], bailPoints: [], track: null, startDate: '2026-09-06' },
-    stages: [], gaps: [], loading: false, maxNights: 5, pickTarget: null, activeTarget: null, setPickTarget: () => {}, nameAt: () => {}, movePoint: () => {},
+    stages: [], gaps: [], loading: false, maxNights: 5, pickTarget: null, activeTarget: null, placeHints: { camps: [], exit: null, checkpoints: [] }, setPlaceHints: () => {}, setPickTarget: () => {}, nameAt: () => {}, movePoint: () => {},
     runCheck: async () => { checks.push(1); }, updateDraft: () => {},
   });
   const typed = planWorkspace({ hasObjective: false, searchQuery: 'Whitney', committedSearchQuery: '', itinerary: itinerary(null),

@@ -20,6 +20,7 @@ const FAILED_CHECK_LABELS = {
   'wind-gust': 'Wind gusts are above your limit',
   daylight: 'Plan leaves less than 30 minutes of daylight margin',
   'feels-like': 'Feels-like temperature is below your limit',
+  'heat-limit': 'Feels-like temperature is above your limit',
   'nws-alerts': 'An active NWS alert overlaps your travel window',
   'air-quality': 'Air quality is worse than AQI 100',
   'fire-risk': 'Fire risk is High or above',
@@ -47,16 +48,16 @@ const buildDecisionSummary = (decision) => {
     failedCount: failed.length,
     passedCount: passed.length,
     primaryReason: decision.level === 'NO-GO'
-      ? decision.blockers[0] || 'A no-go threshold is tripped. Change the objective, timing, or day before committing.'
+      ? decision.blockers[0] || 'Something in the forecast is past a no-go point. Change the day, the start time, or the objective.'
       : decision.level === 'CAUTION'
-        ? decision.cautions[0] || 'Adjust terrain, timing, or pace, and define a clear turnaround trigger before committing.'
-        : 'Conditions are within your limits. Check official sources and reassess at your planned checkpoints.',
+        ? decision.cautions[0] || 'Adjust your route, timing, or pace, and agree on a clear reason to turn back before you commit.'
+        : 'Everything checked is within your limits. Check the official forecasts before you leave and reassess at each checkpoint.',
     topRisks: limiting.slice(0, 3),
     actionLine: decision.level === 'NO-GO'
-      ? 'Do not commit to this objective window. Change the objective, timing, or day instead of trying to solve the hazard with gear alone.'
+      ? 'Change the day, the start time, or the objective. Extra gear does not make this hazard safe.'
       : decision.level === 'CAUTION'
-        ? 'Make the listed adjustments before leaving, then reassess at planned checkpoints and turn around when a trigger is met.'
-        : 'Keep normal backcountry precautions, verify current official sources, and reassess at planned checkpoints.',
+        ? 'Make the changes listed before you leave, check again at each checkpoint, and turn back when a trigger is met.'
+        : 'Take your usual precautions, check the official forecasts before you leave, and reassess at each checkpoint.',
     keyDrivers: limiting.length > 0 ? limiting.slice(0, 3) : passed.slice(0, 3).map((check) => check.label),
   };
 };
@@ -161,7 +162,7 @@ const buildVerdict = (report, decision, summary, fieldSignals) => {
     ? (limitingCount > 1 ? `${limitingCount} blocking checks` : 'a blocking check')
     : (limitingCount > 1 ? `${limitingCount} checks that need attention` : 'a check that needs attention');
   const bridge = scoreOutranksDecision
-    ? `The score of ${Number(score.toFixed(1))} rates conditions overall. The decision is set by ${limitingLabel}.`
+    ? `The score of ${Number(score.toFixed(1))} rates conditions overall, but the decision follows the most limiting check: here, ${limitingLabel}.`
     : '';
   const reason = decision.blockers[0]
     || (review ? `${review.title}. ${review.action}` : '')

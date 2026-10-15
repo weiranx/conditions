@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { JSDOM } from "jsdom";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { SkyHero } from "../src/field/sky/SkyHero";
 import { BriefSections } from "../src/field/sky/BriefSections";
-import { TilePopup } from "../src/field/sky/TilePopup";
+import { buildBrief, sectionChecks } from "../src/field/sky/brief-model";
+import { DeferredSection, ReportNav } from "../src/field/sky/ReportNav";
+import { landOn } from "../src/field/sky/report-scroll";
 import { plainHeadline } from "../src/field/sky/plain-headline";
-import { WeatherDetail, AlertsDetail, DaylightDetail } from "../src/field/sky/TileDetails";
 import { Timing } from "../src/field/Timing";
 import { formatClockForStyle } from "../src/app/core";
 import { getDefaultUserPreferences } from "../src/app/preferences";
@@ -141,10 +145,8 @@ function briefWorkspace(overrides = {}, dataOverrides = {}) {
     ...overrides,
   };
 }
-const SECTIONS = ["forecast", "timing", "terrain", "route", "sources", "gear"];
-const brief = (w, hours = buildSkyHours([row()], plan), activity = "backcountry", sections = SECTIONS) => renderToStaticMarkup(
-  <BriefSections w={w} hours={hours} clock={fmt.clock}
-    onOpen={() => {}} onReadAll={() => {}} gearEnabled activity={activity} />);
+const brief = (w, hours = buildSkyHours([row()], plan), activity = "backcountry") => renderToStaticMarkup(
+  <BriefSections w={w} hours={hours} clock={fmt.clock} onOpen={() => {}} activity={activity} />);
 const cardOrder = (html) => [...html.matchAll(/sky-check[^"]*"><span class="sky-card-head">(?:<svg.*?<\/svg>)?<span>([^<]+)</gs)].map((m) => m[1]);
 const checkOrder = cardOrder;
 const checkCard = (html, title) => html.slice(html.indexOf(`<span>${title}</span>`), html.indexOf("sky-open", html.indexOf(`<span>${title}</span>`)));
@@ -239,24 +241,99 @@ test("the overnight refreeze reads in the terrain check on a snow trip, never fi
   assert.doesNotMatch(hiking, /refreeze/, "only snow trips lead with the refreeze");
 });
 
-test("the brief links to the full report instead of repeating a section list", () => {
-  const w = briefWorkspace({ returnMinutes: 1200, nwsAlertCount: 2 });
-  const html = brief(w, undefined, "ski-touring");
-  assert.doesNotMatch(html, /sky-sections|sky-section-link|sky-nums/);
-  assert.match(html, /Read the full report/);
-  assert.match(html, /Ordered for ski touring/);
-  const full = renderToStaticMarkup(<BriefSections w={w} hours={buildSkyHours([row()], plan)} clock={fmt.clock}
-    onOpen={() => {}} onReadAll={() => {}} gearEnabled activity="hiking" showMore={false} />);
-  assert.doesNotMatch(full, /Read the full report/, "the full report already contains every section");
+test("each check card says which part of the report explains it, with no popup in between", () => {
+  const html = brief(briefWorkspace({}, NO_ALERTS));
+  assert.doesNotMatch(html, /<dialog|sky-popup/);
+  for (const [title, cue] of [["Weather", "Hour by hour"], ["Alerts", "Official alerts"], ["Daylight", "Your day outside"],
+    ["Terrain &amp; snow", "Surface and snow"], ["Avalanche", "Avalanche outlook"], ["Air &amp; fire", "Heat, fire and air"]]) {
+    const start = html.indexOf(`<span>${title}</span>`);
+    assert.match(html.slice(start, html.indexOf("</button>", start)), new RegExp(`sky-open">${cue}<svg`), `${title} names where it leads`);
+  }
+  const { checks, numbers } = buildBrief({ w: briefWorkspace({}, NO_ALERTS), hours: buildSkyHours([row()], plan), clock: fmt.clock, activity: "backcountry" });
+  assert.deepEqual(Object.fromEntries(checks.map((c) => [c.key, `${c.to}#${c.anchor}`])), {
+    weather: "forecast#sky-weather-hours", alerts: "sources#sky-sources-alerts", daylight: "timing#sky-timing-daylight",
+    terrain: "terrain#sky-terrain-surface", avalanche: "terrain#sky-terrain-avalanche", air: "forecast#sky-exposure-title",
+  });
+  assert.ok(numbers.every((n) => n.to && n.anchor), "every headline number leads somewhere too");
 });
 
-test("a tile's popup shows its value, its summary and a way into the section", () => {
-  const html = renderToStaticMarkup(<TilePopup detail={{ title: "Daylight", status: "over", value: "Back 1 h after sunset",
-    caption: "Back at 8:30 PM, sunset 7:30 PM.", to: "timing" }} onClose={() => {}} onOpen={() => {}} />);
-  assert.match(html, /<h2 id="sky-popup-title">Daylight<\/h2>/);
-  assert.match(html, /sky-popup-value is-over">Back 1 h after sunset/);
-  assert.match(html, /Summary[^]*Back at 8:30 PM, sunset 7:30 PM\./);
-  assert.match(html, /Open Timing/);
+test("the brief hands the reader on to the first section instead of a full-report link", () => {
+  const w = briefWorkspace({}, NO_ALERTS);
+  const html = renderToStaticMarkup(<BriefSections w={w} hours={buildSkyHours([row()], plan)} clock={fmt.clock} onOpen={() => {}} activity="hiking"
+    next={{ chapter: "forecast", label: "Weather", hint: "Hour by hour, rain and snow, heat, fire and air." }} />);
+  assert.match(html, /sky-continue[^]*Keep reading[^]*<strong>Weather<\/strong>[^]*Hour by hour, rain and snow/);
+  assert.doesNotMatch(html, /Read the full report|Pack for today/);
+  assert.doesNotMatch(brief(w), /Keep reading/);
+});
+
+test("a section takes the worst of the checks it explains", () => {
+  const model = buildBrief({ w: briefWorkspace({ returnMinutes: 1200 }), hours: buildSkyHours([row()], plan), clock: fmt.clock, activity: "hiking" });
+  assert.equal(sectionChecks(model, "timing").status, "over", "back after sunset");
+  assert.equal(sectionChecks(model, "sources").status, "missing", "alerts not confirmed");
+  assert.equal(sectionChecks(model, "forecast").status, "ok");
+  assert.deepEqual(sectionChecks(model, "forecast").checks.map((c) => c.title), ["Weather", "Air & fire"]);
+  assert.deepEqual(sectionChecks(model, "gear"), { checks: [], status: null }, "a section without checks shows no status");
+});
+
+test("the section bar marks where the reader is and which sections hold a problem", () => {
+  const html = renderToStaticMarkup(<ReportNav navRef={{ current: null }} active="terrain" onPick={() => {}} sections={[
+    { id: "forecast", label: "Weather", short: "Weather", status: "over" },
+    { id: "terrain", label: "Terrain & snow", short: "Terrain", status: "ok" },
+    { id: "sources", label: "Checks & sources", short: "Sources", status: "missing" },
+    { id: "gear", label: "Gear & actions", short: "Gear", status: null },
+  ]} />);
+  assert.match(html, /<nav[^>]*aria-label="Report sections"/);
+  assert.match(html, /<button type="button">Summary<\/button>/);
+  assert.match(html, /aria-current="location" title="Terrain &amp; snow">Terrain</);
+  assert.match(html, />Weather<span class="sky-nav-dot is-over"><span class="sr-only"> \(needs attention\)/);
+  assert.match(html, />Sources<span class="sky-nav-dot is-missing"><span class="sr-only"> \(incomplete data\)/);
+  assert.doesNotMatch(html, />Gear<span/);
+});
+
+test("a section waits as a placeholder until the reader nears it", () => {
+  const waiting = renderToStaticMarkup(<DeferredSection id="terrain" mounted={false} onNear={() => {}}><p>Terrain detail</p></DeferredSection>);
+  assert.match(waiting, /sky-section-placeholder/);
+  assert.doesNotMatch(waiting, /Terrain detail/);
+  assert.equal(renderToStaticMarkup(<DeferredSection id="terrain" mounted onNear={() => {}}><p>Terrain detail</p></DeferredSection>), "<p>Terrain detail</p>");
+});
+
+async function inDom(t, html = '<div id="root"></div>') {
+  const dom = new JSDOM(html);
+  const previous = { window: globalThis.window, document: globalThis.document };
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  t.after(() => {
+    dom.window.close();
+    Object.assign(globalThis, previous);
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+  return dom;
+}
+
+test("tapping a check card or a number goes straight to its part of the report", async (t) => {
+  await inDom(t);
+  const opened = [];
+  const root = createRoot(document.getElementById("root"));
+  await act(async () => root.render(<BriefSections w={briefWorkspace({}, NO_ALERTS)} hours={buildSkyHours([row()], plan)} clock={fmt.clock}
+    activity="hiking" onOpen={(chapter, anchor) => opened.push([chapter, anchor])} />));
+  const card = [...document.querySelectorAll(".sky-check")].find((node) => node.textContent.includes("Avalanche"));
+  await act(async () => card.click());
+  await act(async () => document.querySelector(".sky-number-tile").click());
+  assert.deepEqual(opened, [["terrain", "sky-terrain-avalanche"], ["forecast", "sky-weather-hours"]]);
+  assert.equal(document.querySelector("dialog"), null, "no popup opens");
+  await act(async () => root.unmount());
+});
+
+test("landing on a part of the report opens the fold it sits in and moves focus there", async (t) => {
+  await inDom(t, '<section id="sec"><details><summary>Daylight and your limits</summary><section aria-labelledby="day"><span id="day">Your day outside</span></section></details></section>');
+  const scrolled = [];
+  window.HTMLElement.prototype.scrollIntoView = function scrollIntoView(options) { scrolled.push([this.getAttribute("aria-labelledby") || this.id, options.behavior]); };
+  const stop = landOn(document.getElementById("day"), { smooth: true });
+  assert.equal(document.querySelector("details").open, true);
+  assert.deepEqual(scrolled, [["day", "smooth"]], "the card holding the anchor scrolls into view");
+  assert.equal(document.activeElement.getAttribute("aria-labelledby"), "day");
+  stop();
 });
 
 test("the headline names what crosses your limits and when", () => {
@@ -290,30 +367,6 @@ test("the weather tile shows the sky, the low and high, and how it feels", () =>
   assert.doesNotMatch(bare, /Comfort|L NaN|undefined/);
 });
 
-test("the weather popup charts the planned hours and reads the worst one first", () => {
-  const w = briefWorkspace();
-  const hours = buildSkyHours([row({ gust: 12 }), row({ time: "08:00", gust: 40, pass: false, failedRules: ["gust 40>25 mph"] })], plan);
-  const html = renderToStaticMarkup(<WeatherDetail w={w} hours={hours} />);
-  assert.match(html, /aria-pressed="true"[^>]*>Gusts</, "the gust measurement opens first");
-  assert.match(html, /Rain chance/);
-  assert.match(html, /sky-popup-readout"><strong>40 mph<\/strong>/, "the first hour over a limit is selected");
-  assert.match(html, /your limit 25 mph/);
-  assert.doesNotMatch(html, /NaN|undefined/);
-  assert.match(renderToStaticMarkup(<WeatherDetail w={w} hours={[]} />), /Hourly forecast unavailable/);
-});
-
-test("the alerts and daylight popups list what they are based on", () => {
-  const w = briefWorkspace({}, { alerts: { status: "ok", activeCount: 1, alerts: [{ event: "Wind Advisory", severity: "Moderate", headline: "Gusts to 45 mph" }] } });
-  const alerts = renderToStaticMarkup(<AlertsDetail w={w} />);
-  assert.match(alerts, /Wind Advisory/);
-  assert.match(alerts, /Gusts to 45 mph/);
-  const empty = renderToStaticMarkup(<AlertsDetail w={briefWorkspace({}, { alerts: null })} />);
-  assert.match(empty, /feed did not respond/);
-  const daylight = renderToStaticMarkup(<DaylightDetail w={briefWorkspace({ alpineStartTime: "07:00", travelWindowHours: 10 })} />);
-  assert.match(daylight, /Sunrise/);
-  assert.match(daylight, /Spare at return/);
-});
-
 test("sunrise and sunset read on the traveler's clock in the daylight chart and the timing chapter", () => {
   const timing = (timeStyle) => renderToStaticMarkup(<Timing hours={[]} workspace={briefWorkspace({
     preferences: { ...getDefaultUserPreferences(), timeStyle },
@@ -330,15 +383,6 @@ test("sunrise and sunset read on the traveler's clock in the daylight chart and 
   assert.match(twentyFour, /<dt>Sunset<\/dt><dd>19:30<\/dd>/);
   assert.match(twentyFour, /19:30 sunset/);
   assert.doesNotMatch(twentyFour.slice(twentyFour.indexOf("Your day outside")), /[AP]M/);
-});
-
-test("when an alert ends reads on the traveler's clock", () => {
-  const alert = { event: "Wind Advisory", severity: "Moderate", headline: "Gusts to 45 mph", ends: "2026-09-17T21:00:00Z" };
-  const until = (timeStyle) => renderToStaticMarkup(<AlertsDetail w={briefWorkspace({ preferences: { ...getDefaultUserPreferences(), timeStyle } },
-    { alerts: { status: "ok", activeCount: 1, alerts: [alert] } })} />).match(/Until [^<]*/)?.[0];
-  assert.match(until("ampm"), /\b[AP]M\b/);
-  assert.match(until("24h"), /Until \w+,? \d{2}:\d{2}/);
-  assert.doesNotMatch(until("24h"), /\b[AP]M\b/);
 });
 
 test("the activity's two headline numbers sit above the checks, each against your limit", () => {
@@ -368,14 +412,14 @@ test("feels-like numbers are checked against the matching limit", () => {
   assert.match(html, new RegExp(`floor ${minFeelsLikeF}°F`));
 });
 
-test("the pack list and extras wait under More", () => {
+test("extras wait under More; the pack list lives in Gear & actions, not the brief", () => {
   const w = briefWorkspace({ gearRecommendations: [{ title: "Headlamp", category: "Safety", reason: "Dark before you're back" }] });
-  const html = brief(w);
-  assert.match(html, /sky-fold[^]*<h2 id="sky-more">More<\/h2>[^]*Pack for today[^]*Headlamp/);
+  const html = renderToStaticMarkup(<BriefSections w={w} hours={buildSkyHours([row()], plan)} clock={fmt.clock} onOpen={() => {}}
+    activity="hiking" more={<p>Trip debrief</p>} />);
+  assert.match(html, /sky-fold[^]*<h2 id="sky-more">More<\/h2>[^]*Trip debrief/);
   assert.match(html, /<details>/, "closed until asked for");
-  assert.doesNotMatch(html, /<details open/);
-  const none = brief(briefWorkspace());
-  assert.doesNotMatch(none, /sky-more/, "nothing to show, no More");
+  assert.doesNotMatch(html, /<details open|Pack for today|Headlamp/);
+  assert.doesNotMatch(brief(w), /sky-more/, "nothing to show, no More");
 });
 
 test("a check never reads clear over data it cannot confirm", () => {
@@ -389,14 +433,6 @@ test("the freezing level is not compared with an unknown objective elevation", (
     terrainCondition: { code: "snow_ice", signals: { refreezeQuality: "weak", freezeThawMinTempF: 30 } } }), undefined, "snow-climbing"), "Terrain &amp; snow");
   assert.match(card(9000), /freezing level sits above the objective/);
   assert.doesNotMatch(card(null), /freezing level/);
-});
-
-test("every brief card names the section it opens", () => {
-  const html = brief(briefWorkspace({ returnMinutes: 1200 }));
-  const opens = (title) => (checkCard(html, title) + html.slice(html.indexOf("sky-open", html.indexOf(`<span>${title}</span>`))).slice(0, 400))
-    .match(/sky-open">Open ([^<]+)/)[1];
-  assert.equal(opens("Alerts"), "Checks &amp; sources");
-  assert.equal(opens("Daylight"), "Timing");
 });
 
 import { plainRule, plainReason, durationLabel } from "../src/field/sky/status";
