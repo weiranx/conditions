@@ -1,0 +1,62 @@
+name: Deploy alert
+
+# A failed production deploy is easy to miss in the Actions tab: the frontend
+# went undeployed for three weeks behind red runs. This keeps one open issue
+# while deploys fail (which notifies the owner) and closes it on recovery.
+on:
+  workflow_run:
+    workflows: [Deploy to DigitalOcean]
+    types: [completed]
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: deploy-alert
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    # Skipped deploys (CI failed, or not a push to main) are not outcomes.
+    if: >-
+      github.event.workflow_run.head_branch == 'main' &&
+      contains(fromJSON('["success", "failure", "timed_out"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Open, update or close the deploy-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          label=deploy-failure
+          open="$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')"
+          jobs="$(gh run view "$RUN_ID" --json jobs --jq '.jobs')"
+
+          if [ "$CONCLUSION" = success ]; then
+            # A superseded commit also ends in success but releases nothing;
+            # only a passing smoke test shows production is current again.
+            smoke="$(jq -r '.[] | select(.name == "smoke-test") | .conclusion' <<<"$jobs")"
+            if [ -n "$open" ] && [ "$smoke" = success ]; then
+              gh issue close "$open" --comment "Production deploy recovered: [run $RUN_ID]($RUN_URL) released \`${DEPLOY_SHA:0:7}\` and passed the smoke test."
+            fi
+            exit 0
+          fi
+
+          failed="$(jq -r '[.[] | select(.conclusion == "failure" or .conclusion == "timed_out") | .name] | join(", ")' <<<"$jobs")"
+          body="[Deploy run $RUN_ID]($RUN_URL) for \`${DEPLOY_SHA:0:7}\` ended in **$CONCLUSION**. Failed job(s): ${failed:-unknown}. Production keeps its previous release until a deploy succeeds."
+
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$body"
+          else
+            gh label create "$label" --color B60205 --description "Production deploy is failing" --force
+            gh issue create --title "Production deploy is failing" --label "$label" \
+              --body "$body"$'\n\n'"@$OWNER this issue closes itself when a deploy passes its smoke test."
+          fi

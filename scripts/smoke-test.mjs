@@ -8,6 +8,8 @@
 // Options (or the environment variables in brackets):
 //   --api URL        Public API origin [SMOKE_API_URL] (required)
 //   --frontend URL   Public frontend origin [SMOKE_FRONTEND_URL]; also used for the CORS check
+//   --frontend-tree H  Git tree of frontend/ the live build must come from [SMOKE_FRONTEND_TREE]
+//                    (`git rev-parse HEAD:frontend`); checked against the live /version.json
 //   --no-mcp         Skip the MCP checks [SMOKE_SKIP_MCP=1]
 //   --no-safety      Skip the end-to-end /api/safety report [SMOKE_SKIP_SAFETY=1]
 //   --health-wait S  Seconds to keep retrying the health check [SMOKE_HEALTH_WAIT_SECONDS] (default 60)
@@ -24,6 +26,7 @@ function readOptions(argv, env) {
     options: {
       api: { type: 'string' },
       frontend: { type: 'string' },
+      'frontend-tree': { type: 'string' },
       'no-mcp': { type: 'boolean' },
       'no-safety': { type: 'boolean' },
       'health-wait': { type: 'string' },
@@ -38,12 +41,17 @@ function readOptions(argv, env) {
     }
     return url.origin;
   };
+  const frontendTree = values['frontend-tree'] ?? env.SMOKE_FRONTEND_TREE ?? null;
+  if (frontendTree && !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u.test(frontendTree)) {
+    throw new Error('--frontend-tree must be a full git object ID.');
+  }
   const healthWait = Number(values['health-wait'] ?? env.SMOKE_HEALTH_WAIT_SECONDS ?? 60);
   if (!Number.isFinite(healthWait) || healthWait < 0) throw new Error('--health-wait must be a number of seconds.');
   return {
     help: Boolean(values.help),
     api: origin(values.api ?? env.SMOKE_API_URL, '--api'),
     frontend: origin(values.frontend ?? env.SMOKE_FRONTEND_URL, '--frontend'),
+    frontendTree: frontendTree || null,
     mcp: !(values['no-mcp'] || env.SMOKE_SKIP_MCP === '1'),
     safety: !(values['no-safety'] || env.SMOKE_SKIP_SAFETY === '1'),
     healthWaitMs: healthWait * 1000,
@@ -155,6 +163,20 @@ function buildChecks(options, sleep) {
       expect(res.status === 200, `GET ${script} returned ${res.status}; the index and its assets are out of sync`);
       return script;
     });
+    // A frontend upload that failed or went to the wrong place leaves the old
+    // build live and every check above passing, so ask the build what it is.
+    if (options.frontendTree) {
+      add('Frontend is the released build', async () => {
+        const res = await request(`${frontend}/version.json`);
+        const live = res.status === 200 ? res.json : null;
+        expect(live && typeof live === 'object',
+          `GET /version.json returned ${res.status}${res.json ? '' : ' without JSON'}; the live frontend was built before build stamps or did not deploy`);
+        const from = `commit ${live.commit ?? 'unknown'} (frontend/ tree ${live.frontendTree ?? 'unknown'})`;
+        expect(live.frontendTree === options.frontendTree,
+          `the live frontend is ${from}, expected frontend/ tree ${options.frontendTree}; the frontend release did not reach production`);
+        return `commit ${String(live.commit ?? 'unknown').slice(0, 7)}`;
+      });
+    }
   }
 
   return checks;
@@ -183,7 +205,7 @@ async function main() {
     process.exit(2);
   }
   if (options.help) {
-    console.log('Usage: node scripts/smoke-test.mjs --api URL [--frontend URL] [--no-mcp] [--no-safety] [--health-wait SECONDS]');
+    console.log('Usage: node scripts/smoke-test.mjs --api URL [--frontend URL [--frontend-tree TREE]] [--no-mcp] [--no-safety] [--health-wait SECONDS]');
     return;
   }
   if (!options.api) {
