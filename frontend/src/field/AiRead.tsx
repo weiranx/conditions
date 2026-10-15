@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { ArrowUp, Check, ChevronRight, Info, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import { AiBriefSection, AiExplanationSkeleton, SnowImageryDate } from "./AiExplanation";
-import { parseExplanation, parseSnowAnalysis, suggestedQuestions, type ExplanationSection } from "./ai-explanation";
+import { parseExplanation, suggestedQuestions, type ExplanationSection } from "./ai-explanation";
 import { imageryDateLabel } from "./data";
 import {
   evidenceLinks,
@@ -10,17 +10,19 @@ import {
   type EvidenceChapter,
 } from "../app/ai-evidence";
 import { chapterLabel } from "./sky/report-chapters";
-import type { AiBriefDetails, AiReadRun, SnowVisionImagery } from "../app/types";
+import type { AiBriefCitation, AiBriefDetails, AiReadRun } from "../app/types";
 import "./ai-explanation.css";
 import "./ai-read.css";
 
 /** The fields one section of the read cites, each a link to the chapter that shows it. */
-function Citations({ details, section, onOpen }: {
+function Citations({ details, section, evidence, onOpen }: {
   details: AiBriefDetails | null;
-  section: ExplanationSection;
+  section?: ExplanationSection;
+  /** Citations to show in place of a section's. */
+  evidence?: AiBriefCitation[];
   onOpen: (chapter: EvidenceChapter) => void;
 }) {
-  const links = evidenceLinks(sectionCitations(details, section.title));
+  const links = evidenceLinks(evidence ?? (section ? sectionCitations(details, section.title) : []));
   if (!links.length) return null;
   return (
     <p className="ai-read-cites">
@@ -59,60 +61,31 @@ function CheckDetails({ details }: { details: AiBriefDetails | null }) {
   );
 }
 
-/** The satellite snow analysis read alongside the AI read. */
-export interface AiReadSnow {
-  analysis: string | null;
-  image: string | null;
-  imagery: SnowVisionImagery | null;
-  loading: boolean;
-  error: string | null;
-  /** Opens the full satellite analysis in the Terrain chapter. */
-  onOpen: () => void;
-}
-
 /**
- * The satellite's part of the read: the imaged pass and its date, how much
- * snow it shows, and what that means for the route, with the full analysis a
- * tap away in Terrain.
+ * The satellite image the read looked at, when snow shapes the trip: when it was
+ * taken, and what the AI saw in it for this plan, with its citations.
  */
-function SatelliteSnow({ snow }: { snow: AiReadSnow }) {
-  if (snow.loading && !snow.analysis) {
-    return (
-      <aside className="ai-read-snow is-loading" aria-label="Satellite snow imagery">
-        <p className="ai-read-snow-title">
-          <Satellite size={15} aria-hidden="true" className="ai-read-pulse" />
-          Reading recent Sentinel-2 satellite imagery for snow cover…
-        </p>
-      </aside>
-    );
-  }
-  if (!snow.analysis) {
-    return snow.error ? (
-      <aside className="ai-read-snow" aria-label="Satellite snow imagery">
-        <p className="ai-read-snow-title"><Satellite size={15} aria-hidden="true" />Satellite snow imagery</p>
-        <p className="ai-read-snow-error" role="alert">{snow.error}</p>
-      </aside>
-    ) : null;
-  }
-  const sections = parseSnowAnalysis(snow.analysis);
-  const coverage = sections.find((s) => s.kind === "coverage") ?? sections.find((s) => s.kind === "note");
-  const takeaway = sections.find((s) => s.kind === "takeaway");
-  const date = imageryDateLabel(snow.imagery?.acquiredAt);
+function SatelliteSnow({ details, onOpen }: { details: AiBriefDetails; onOpen: (chapter: EvidenceChapter) => void }) {
+  const satellite = details.satellite;
+  if (!satellite) return null;
+  const date = imageryDateLabel(satellite.imagery?.acquiredAt);
   return (
-    <aside className={`ai-read-snow${snow.loading ? " is-stale" : ""}`} aria-label="Satellite snow imagery">
-      {snow.image && (
-        <img
-          className="ai-read-snow-image"
-          src={snow.image}
-          alt={`Sentinel-2 satellite image of the objective${date ? `, imaged ${date}` : ""}`}
-        />
-      )}
+    <aside className="ai-read-snow" aria-label="Satellite snow imagery">
+      <img
+        className="ai-read-snow-image"
+        src={satellite.image}
+        alt={`Sentinel-2 satellite image of snow around the objective${date ? `, taken ${date}` : ""}`}
+      />
       <div className="ai-read-snow-body">
-        <p className="ai-read-snow-title"><Satellite size={15} aria-hidden="true" />Satellite snow imagery</p>
-        <SnowImageryDate imagery={snow.imagery} />
-        {coverage && <p><strong>{coverage.title}.</strong> {coverage.text}</p>}
-        {takeaway && <p><strong>{takeaway.title}.</strong> {takeaway.text}</p>}
-        <button type="button" className="sky-link" onClick={snow.onOpen}>Full satellite analysis</button>
+        <p className="ai-read-snow-title"><Satellite size={15} aria-hidden="true" />Satellite snow cover</p>
+        <SnowImageryDate imagery={satellite.imagery} />
+        {satellite.text ? (
+          <p>{satellite.text}</p>
+        ) : (
+          <p className="ai-read-snow-note">The AI’s note on this image didn’t pass the report’s fact checks, so only the image is shown.</p>
+        )}
+        <Citations details={details} evidence={satellite.evidence} onOpen={onOpen} />
+        <p className="ai-read-snow-note">About 5 × 5 km around the objective. It can’t show cornices, ice or surface firmness.</p>
       </div>
     </aside>
   );
@@ -133,7 +106,7 @@ function useNow(active: boolean) {
  * What the AI is doing while it writes: the opening first, from a fast model,
  * then the full read, with the time so far, so a long wait is never a blank one.
  */
-function ReadProgress({ run, snow }: { run: AiReadRun | null; snow?: AiReadSnow | null }) {
+function ReadProgress({ run, satellite = false }: { run: AiReadRun | null; satellite?: boolean }) {
   const now = useNow(Boolean(run));
   const elapsed = run ? Math.max(0, Math.round((now - run.startedAt) / 1000)) : null;
   const steps: { state: "done" | "active" | "kept"; text: string }[] = [];
@@ -144,12 +117,7 @@ function ReadProgress({ run, snow }: { run: AiReadRun | null; snow?: AiReadSnow 
         ? { state: "done", text: `Rewrote the opening${run.openingSeconds != null ? ` in ${run.openingSeconds} s` : ""}` }
         : { state: "kept", text: "Kept the checks’ opening" });
   }
-  if (snow?.loading) {
-    steps.push({ state: "active", text: "Reading recent satellite imagery for snow cover" });
-  } else if (snow?.analysis) {
-    const date = imageryDateLabel(snow.imagery?.acquiredAt);
-    steps.push({ state: "done", text: date ? `Read satellite imagery from ${date.split(" · ")[0]}` : "Read recent satellite imagery" });
-  }
+  if (satellite) steps.push({ state: "active", text: "Looking at a recent satellite image of the snow around your objective" });
   steps.push({ state: "active", text: "Writing the full read: why, what to watch, the best move, and a note for each section" });
   return (
     <div className="ai-read-progress">
@@ -216,7 +184,7 @@ export function AiRead({
   chatAvailable,
   readOnly,
   fallbackQuestions,
-  snow = null,
+  readsSatellite = false,
   onRequest,
   onAsk,
   onOpen,
@@ -238,8 +206,8 @@ export function AiRead({
   /** A saved snapshot: show what was saved, write nothing new. */
   readOnly: boolean;
   fallbackQuestions: string[];
-  /** The satellite snow analysis read with this one; null when the report has none to read. */
-  snow?: AiReadSnow | null;
+  /** Snow shapes this trip, so the read also looks at a satellite image of it. */
+  readsSatellite?: boolean;
   onRequest: () => void;
   onAsk: (question: string) => void;
   onOpen: (chapter: EvidenceChapter) => void;
@@ -294,7 +262,7 @@ export function AiRead({
         )}
       </div>
       {error && <p className="field-warning" role="alert">{error}</p>}
-      {loading && narrative && <ReadProgress run={run} snow={snow} />}
+      {loading && narrative && <ReadProgress run={run} satellite={readsSatellite} />}
       {narrative ? (
         <div className={`ai-explanation ai-read-body${loading ? " is-stale" : ""}`}>
           {!loading && acrossReport && (
@@ -308,7 +276,7 @@ export function AiRead({
           <CheckDetails details={details} />
           {lead.map(render)}
           {action.map(render)}
-          {snow && <SatelliteSnow snow={snow} />}
+          {details && <SatelliteSnow details={details} onOpen={onOpen} />}
           {more.length > 0 && (
             <details className="ai-read-more">
               <summary>
@@ -323,7 +291,7 @@ export function AiRead({
         </div>
       ) : loading ? (
         <>
-          <ReadProgress run={run} snow={snow} />
+          <ReadProgress run={run} satellite={readsSatellite} />
           <AiExplanationSkeleton />
         </>
       ) : canWrite ? (

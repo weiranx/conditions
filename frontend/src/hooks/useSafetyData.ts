@@ -10,6 +10,7 @@ import {
 } from '../app/constants';
 import { parseTimeInputMinutes } from '../app/core';
 import { buildSafetyRequestKey } from '../app/url-state';
+import { parseAiBriefSatellite } from '../app/report-storage';
 
 export interface UseSafetyDataParams {
   todayDate: string;
@@ -451,6 +452,7 @@ export function useSafetyData({
         : result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
       const hero = openingHero ?? readHero;
       setAiBriefNarrative(result.narrative);
+      const satellite = parseAiBriefSatellite(result.satellite);
       setAiBriefDetails({
         narrative: result.narrative,
         evidence: Array.isArray(result.evidence) ? result.evidence : [],
@@ -464,6 +466,7 @@ export function useSafetyData({
           },
         } : {}),
         ...(hero === undefined ? {} : { hero }),
+        ...(satellite ? { satellite } : {}),
         validation: result.validation ?? null,
       });
       setAiReadRun((run) => run && {

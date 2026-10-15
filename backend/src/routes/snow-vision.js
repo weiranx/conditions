@@ -1,7 +1,7 @@
 const { createCache } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
-const { fetchSentinelTile } = require('../utils/sentinel-tiles');
+const { fetchSentinelTile, lonLatToTile } = require('../utils/sentinel-tiles');
 const { logger } = require('../utils/logger');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 
@@ -34,17 +34,6 @@ const SYSTEM_PROMPT = [
 
 const SNOW_VISION_PROMPT_VERSION = '3';
 const SNOW_VISION_MAX_TOKENS = 8192;
-
-const lonLatToTile = (lon, lat, zoom) => {
-  const latRad = (lat * Math.PI) / 180;
-  const n = 2 ** zoom;
-  const x = Math.floor(((lon + 180) / 360) * n);
-  const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
-  return {
-    x: Math.min(Math.max(x, 0), n - 1),
-    y: Math.min(Math.max(y, 0), n - 1),
-  };
-};
 
 // Bounds the raw snowpack JSON before it's interpolated into the vision prompt or used
 // as part of the cache key.
@@ -121,6 +110,7 @@ const registerSnowVisionRoute = ({
 
 module.exports = {
   SNOW_VISION_MAX_TOKENS,
+  SNOW_VISION_ZOOM,
   SYSTEM_PROMPT,
   registerSnowVisionRoute,
 };

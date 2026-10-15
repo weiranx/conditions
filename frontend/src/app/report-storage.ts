@@ -6,7 +6,7 @@ import {
 } from './constants';
 import { isValidLatLon, parseTimeInputMinutes } from './core';
 import { hasStoredUserPreferences, normalizeUserPreferences } from './preferences';
-import type { ActivityType, AiBriefCitation, AiBriefDetails, SafetyData, SnowVisionImagery, UserPreferences } from './types';
+import type { ActivityType, AiBriefCitation, AiBriefDetails, AiBriefSatellite, SafetyData, SnowVisionImagery, UserPreferences } from './types';
 import { buildSafetyRequestKey } from './url-state';
 import { reportActivity } from './activity-profiles';
 import type { RouteAnalysisResult, RouteOption, RouteShapeChoice } from '../hooks/useRouteAnalysis';
@@ -136,7 +136,19 @@ export function parseAiBriefDetails(value: unknown, narrative: unknown): AiBrief
       ...(Array.isArray(value.checks.seconds) ? { seconds: value.checks.seconds.filter((second): second is number => typeof second === 'number') } : {}),
     }
     : undefined;
-  return { narrative, evidence, questions, chapters, ...(hero === undefined ? {} : { hero }), ...(checks ? { checks } : {}), validation };
+  const satellite = parseAiBriefSatellite(value.satellite);
+  return { narrative, evidence, questions, chapters, ...(hero === undefined ? {} : { hero }), ...(checks ? { checks } : {}), ...(satellite ? { satellite } : {}), validation };
+}
+
+/** The satellite image a read looked at, or null when it has none or it is malformed. */
+export function parseAiBriefSatellite(value: unknown): AiBriefSatellite | null {
+  if (!isRecord(value) || typeof value.image !== 'string' || !value.image.startsWith('data:image/')) return null;
+  return {
+    text: typeof value.text === 'string' && value.text.trim() ? value.text : null,
+    evidence: Array.isArray(value.evidence) ? citations(value.evidence) : [],
+    image: value.image,
+    imagery: parseSnowVisionImagery(value.imagery),
+  };
 }
 
 function isSafetyData(value: unknown): value is SafetyData {

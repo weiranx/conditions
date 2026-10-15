@@ -48,6 +48,13 @@ const ROOT_LABEL: Record<string, string> = {
   localConditions: 'Local observation',
 };
 
+// The satellite image the read looked at is shown in the read itself, not in a chapter.
+const PATH_LABEL: Record<string, string> = {
+  'satelliteImage.acquiredDate': 'Satellite image date',
+  'satelliteImage.daysBeforeTrip': 'Satellite image age',
+  'satelliteImage.cloudCoverPercent': 'Satellite image cloud cover',
+};
+
 const words = (key: string) => key
   .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
   .replace(/[_-]+/g, ' ')
@@ -60,6 +67,7 @@ export function evidenceChapter(path: string): EvidenceChapter | null {
 
 /** A short, plain name for a cited field, e.g. `weather.windGust` → "Wind gust". */
 export function evidenceLabel(path: string): string {
+  if (PATH_LABEL[path]) return PATH_LABEL[path];
   const parts = path.split('.').filter((part) => part && !/^\d+$/.test(part));
   const root = parts[0] ?? '';
   const leaf = parts.length > 1 ? words(parts[parts.length - 1]) : words(root);

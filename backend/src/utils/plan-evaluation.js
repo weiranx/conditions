@@ -22,6 +22,7 @@ const { buildWindLoading, windLoadingOverlapCaution } = require('./wind-loading'
 const { buildDecisionSummary, buildFieldSignals, buildVerdict } = require('./verdict');
 const { buildReportInterpretation } = require('./report-interpretation');
 const { buildElevationByHour, buildTerrainView } = require('./terrain-window');
+const { assessSnowTravel } = require('./snow-travel');
 
 const EVALUATION_VERSION = 1;
 
@@ -170,6 +171,8 @@ const evaluatePlan = (report, context) => {
     // The elevation bands (from a known trailhead), and the plan's target
     // elevation, for each planned hour.
     elevation: buildElevationByHour(report, plannedRows, context.targetElevationFt, approach),
+    // Whether snow on the ground shapes this trip; the AI read looks at satellite snow imagery only then.
+    snowTravel: assessSnowTravel(report, context.activity),
   };
 };
 

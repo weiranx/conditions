@@ -317,7 +317,7 @@
     display: none;
   }
 }
-/* The satellite's part of the read: the pass, its date and what it shows. */
+/* The satellite image the read looked at, its date and what the AI saw in it. */
 .ai-read-snow {
   display: flex;
   gap: 14px;
@@ -330,13 +330,10 @@
   line-height: 1.5;
   color: var(--ai-label);
 }
-.ai-read-snow.is-stale {
-  opacity: 0.6;
-}
 .ai-read-snow-image {
   flex: none;
-  width: 104px;
-  height: 104px;
+  width: 132px;
+  height: 132px;
   border-radius: 10px;
   object-fit: cover;
 }
@@ -351,6 +348,9 @@
 .ai-read-snow .ai-snow-date {
   margin: 0;
 }
+.ai-read-snow .ai-read-cites {
+  margin: 0;
+}
 .ai-read-snow-title {
   display: flex;
   align-items: center;
@@ -361,23 +361,16 @@
   flex: none;
   color: var(--ai-accent);
 }
-.ai-read-snow.is-loading .ai-read-snow-title {
-  font-weight: 500;
+.ai-read-snow .ai-read-snow-note {
+  font-size: 12px;
   color: var(--ai-secondary);
-}
-.ai-read-snow-error {
-  font-size: 13px;
-  color: var(--ai-secondary);
-}
-.ai-read-snow .sky-link {
-  justify-self: start;
 }
 @media (max-width: 520px) {
   .ai-read-snow {
     gap: 10px;
   }
   .ai-read-snow-image {
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
   }
 }
