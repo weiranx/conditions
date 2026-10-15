@@ -176,7 +176,7 @@ private struct AdminUsers: View {
         LabeledContent("Sign-in", value: user["authMethods"].strings.joined(separator: ", "))
         LabeledContent("Email", value: user["emailVerified"].bool == true ? "Verified" : "Not verified")
         LabeledContent("Saved reports", value: "\(user["savedReports"].int ?? 0)")
-        LabeledContent("AI this month", value: "\(user["aiCalls"].int ?? 0) calls · \(user["aiTokens"].int ?? 0) tokens")
+        LabeledContent("AI this month", value: "\(user["aiCalls"].int ?? 0) calls · \((user["aiCostUsd"].double ?? 0).formatted(.currency(code: "USD").locale(Locale(identifier: "en_US"))))")
         LabeledContent("Sessions", value: "\(user["activeSessions"].int ?? 0)")
         if let last = DateText.stamp(user["lastActivityAt"].string) { LabeledContent("Last active", value: last) }
         if !owner {

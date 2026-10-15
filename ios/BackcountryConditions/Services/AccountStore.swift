@@ -23,7 +23,7 @@ struct AccountUser: Hashable, Sendable {
     var initial: String { displayName.first.map { String($0).uppercased() } ?? "?" }
 }
 
-/// One monthly allowance: reports, multi-day checks or AI tokens.
+/// One monthly allowance: reports, multi-day checks or AI spend (US dollars).
 struct Allowance: Sendable {
     var used: Double?
     var limit: Double?
@@ -170,7 +170,7 @@ final class AccountStore {
         reportCount = json["reportCount"].int
         reportUsage = Allowance(json: json["reportUsage"], used: "usedReports", limit: "limitReports", remaining: "remainingReports")
         multiDayUsage = Allowance(json: json["multiDayUsage"], used: "usedRuns", limit: "limitRuns", remaining: "remainingRuns")
-        aiUsage = Allowance(json: json["aiUsage"], used: "usedTokens", limit: "limitTokens", remaining: "remainingTokens")
+        aiUsage = Allowance(json: json["aiUsage"], used: "usedUsd", limit: "limitUsd", remaining: "remainingUsd")
         adoptPreferences()
     }
 
@@ -254,7 +254,7 @@ final class AccountStore {
         if let count = json["reportCount"].int { reportCount = count }
         if let usage = Allowance(json: json["reportUsage"], used: "usedReports", limit: "limitReports", remaining: "remainingReports") { reportUsage = usage }
         if let usage = Allowance(json: json["multiDayUsage"], used: "usedRuns", limit: "limitRuns", remaining: "remainingRuns") { multiDayUsage = usage }
-        if let usage = Allowance(json: json["aiUsage"], used: "usedTokens", limit: "limitTokens", remaining: "remainingTokens") { aiUsage = usage }
+        if let usage = Allowance(json: json["aiUsage"], used: "usedUsd", limit: "limitUsd", remaining: "remainingUsd") { aiUsage = usage }
     }
 
     // MARK: Allowances

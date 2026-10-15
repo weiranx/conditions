@@ -3,33 +3,58 @@
 const {
   getMonthlyWindow,
 } = require('./monthly-usage-limit');
+const { UNPRICED_MODEL_USD_PER_MILLION_TOKENS } = require('../utils/ai-pricing');
 
-const DEFAULT_FREE_MONTHLY_TOKEN_LIMIT = 250_000;
-const MAX_MONTHLY_TOKEN_LIMIT = 100_000_000;
+const DEFAULT_FREE_MONTHLY_COST_LIMIT_USD = 1;
+const MIN_MONTHLY_COST_LIMIT_USD = 0.01;
+const MAX_MONTHLY_COST_LIMIT_USD = 10_000;
 const AI_USAGE_SETTINGS_KEY = 'ai_usage_limits';
+const USD_MICROS = 1_000_000;
+const UNPRICED_MICROS_PER_TOKEN = UNPRICED_MODEL_USD_PER_MILLION_TOKENS;
 
-const parseMonthlyTokenLimit = (value, fallback = DEFAULT_FREE_MONTHLY_TOKEN_LIMIT) => {
+// The spend a call counts against the monthly limit: its estimated cost, or a
+// flat per-token charge when its model has no known price.
+const BILLED_COST_MICROS_SQL = `CASE
+  WHEN metadata ->> 'pricingMatched' = 'false' THEN total_tokens::bigint * ${UNPRICED_MICROS_PER_TOKEN}
+  ELSE cost_usd_micros
+END`;
+
+const roundCents = (value) => Math.round(value * 100) / 100;
+const microsToUsd = (micros) => Math.round(micros) / USD_MICROS;
+const usdToMicros = (usd) => Math.round(usd * USD_MICROS);
+
+const isValidCostLimit = (value) => (
+  Number.isFinite(value)
+  && roundCents(value) >= MIN_MONTHLY_COST_LIMIT_USD
+  && value <= MAX_MONTHLY_COST_LIMIT_USD
+);
+
+const parseMonthlyCostLimit = (value, fallback = DEFAULT_FREE_MONTHLY_COST_LIMIT_USD) => {
+  if (value === null || value === undefined || value === '') return fallback;
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 && parsed <= MAX_MONTHLY_TOKEN_LIMIT
-    ? Math.round(parsed)
-    : fallback;
+  return isValidCostLimit(parsed) ? roundCents(parsed) : fallback;
 };
 
-const validateMonthlyTokenLimit = (value) => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_MONTHLY_TOKEN_LIMIT) {
+const formatLimitUsd = (value) => `$${value.toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})}`;
+
+const validateMonthlyCostLimit = (value) => {
+  const parsed = value === null || value === '' ? NaN : Number(value);
+  if (!isValidCostLimit(parsed)) {
     const error = new TypeError(
-      `Monthly AI token limit must be between 1 and ${MAX_MONTHLY_TOKEN_LIMIT.toLocaleString()}.`,
+      `Monthly AI spend limit must be between ${formatLimitUsd(MIN_MONTHLY_COST_LIMIT_USD)} and ${formatLimitUsd(MAX_MONTHLY_COST_LIMIT_USD)}.`,
     );
     error.code = 'INVALID_AI_USAGE_LIMIT';
     throw error;
   }
-  return Math.round(parsed);
+  return roundCents(parsed);
 };
 
 class AIUsageLimitError extends Error {
   constructor(usage) {
-    super('Monthly AI token limit reached. Your allowance resets at the start of next month.');
+    super('Monthly AI spend limit reached. Your allowance resets at the start of next month.');
     this.name = 'AIUsageLimitError';
     this.code = 'AI_USAGE_LIMIT_REACHED';
     this.statusCode = 429;
@@ -48,44 +73,44 @@ class AIUsageUnavailableError extends Error {
 
 const createAIUsageLimitService = ({
   database,
-  freeMonthlyTokenLimit = process.env.AI_FREE_MONTHLY_TOKEN_LIMIT
-    || process.env.AI_USER_MONTHLY_TOKEN_LIMIT,
+  freeMonthlyCostLimitUsd = process.env.AI_FREE_MONTHLY_COST_LIMIT_USD,
   settingsStore = null,
   now = Date.now,
 } = {}) => {
-  const environmentFreeLimitTokens = parseMonthlyTokenLimit(freeMonthlyTokenLimit);
-  let freeLimitTokens = environmentFreeLimitTokens;
+  const environmentFreeLimitUsd = parseMonthlyCostLimit(freeMonthlyCostLimitUsd);
+  let freeLimitUsd = environmentFreeLimitUsd;
   const available = Boolean(database?.configured && typeof database.query === 'function');
 
-  const getLimitTokens = (tierKey = 'free', overrideTokens = null) => (
+  const getLimitUsd = (tierKey = 'free', overrideUsd = null) => (
     tierKey === 'premium'
       ? null
-      : parseMonthlyTokenLimit(overrideTokens, freeLimitTokens)
+      : parseMonthlyCostLimit(overrideUsd, freeLimitUsd)
   );
 
   const getSettings = () => ({
     persistent: Boolean(settingsStore?.configured),
-    freeMonthlyAITokenLimit: freeLimitTokens,
-    environmentFreeMonthlyAITokenLimit: environmentFreeLimitTokens,
-    maxMonthlyAITokenLimit: MAX_MONTHLY_TOKEN_LIMIT,
+    freeMonthlyAICostLimitUsd: freeLimitUsd,
+    environmentFreeMonthlyAICostLimitUsd: environmentFreeLimitUsd,
+    minMonthlyAICostLimitUsd: MIN_MONTHLY_COST_LIMIT_USD,
+    maxMonthlyAICostLimitUsd: MAX_MONTHLY_COST_LIMIT_USD,
   });
 
   const initializeSettings = async () => {
     if (typeof settingsStore?.getAdminSetting !== 'function') return getSettings();
     const persisted = await settingsStore.getAdminSetting(AI_USAGE_SETTINGS_KEY);
-    const persistedLimit = persisted?.freeMonthlyAITokenLimit ?? persisted?.freeMonthlyTokenLimit;
-    if (persistedLimit !== undefined) {
-      freeLimitTokens = parseMonthlyTokenLimit(
-        persistedLimit,
-        environmentFreeLimitTokens,
+    // Token limits saved before spend limits are ignored: tokens do not convert to dollars.
+    if (persisted?.freeMonthlyAICostLimitUsd !== undefined) {
+      freeLimitUsd = parseMonthlyCostLimit(
+        persisted.freeMonthlyAICostLimitUsd,
+        environmentFreeLimitUsd,
       );
     }
     return getSettings();
   };
 
-  const updateSettings = async ({ freeMonthlyAITokenLimit: nextLimit } = {}) => {
-    const validatedLimit = validateMonthlyTokenLimit(nextLimit);
-    const next = { freeMonthlyAITokenLimit: validatedLimit };
+  const updateSettings = async ({ freeMonthlyAICostLimitUsd: nextLimit } = {}) => {
+    const validatedLimit = validateMonthlyCostLimit(nextLimit);
+    const next = { freeMonthlyAICostLimitUsd: validatedLimit };
     try {
       if (typeof settingsStore?.setAdminSetting === 'function') {
         await settingsStore.setAdminSetting(AI_USAGE_SETTINGS_KEY, next);
@@ -96,7 +121,7 @@ const createAIUsageLimitService = ({
       persistenceError.cause = error;
       throw persistenceError;
     }
-    freeLimitTokens = validatedLimit;
+    freeLimitUsd = validatedLimit;
     return getSettings();
   };
 
@@ -110,7 +135,7 @@ const createAIUsageLimitService = ({
     let result;
     try {
       policy = await database.query(`
-        SELECT limits ->> 'monthlyTokenLimit' AS limit_override_tokens,
+        SELECT limits ->> 'monthlyCostLimitUsd' AS limit_override_usd,
                limits ->> 'resetAt' AS usage_reset_at
         FROM entitlements
         WHERE user_id = $1
@@ -126,7 +151,8 @@ const createAIUsageLimitService = ({
         : window.periodStart;
       result = await database.query(`
         SELECT COUNT(*) FILTER (WHERE status = 'success')::bigint AS used_requests,
-               COALESCE(SUM(total_tokens), 0)::bigint AS used_tokens
+               COALESCE(SUM(total_tokens), 0)::bigint AS used_tokens,
+               COALESCE(SUM(${BILLED_COST_MICROS_SQL}), 0)::bigint AS used_cost_micros
         FROM ai_usage_events
         WHERE user_id = $1
           AND created_at >= $2
@@ -137,28 +163,28 @@ const createAIUsageLimitService = ({
       throw new AIUsageUnavailableError();
     }
 
-    const usedRequests = Math.max(0, Math.round(Number(result?.rows?.[0]?.used_requests) || 0));
-    const usedTokens = Math.max(0, Math.round(Number(result?.rows?.[0]?.used_tokens) || 0));
-    const limitOverrideTokens = parseMonthlyTokenLimit(
-      policy?.rows?.[0]?.limit_override_tokens,
-      null,
-    );
+    const row = result?.rows?.[0];
+    const usedRequests = Math.max(0, Math.round(Number(row?.used_requests) || 0));
+    const usedTokens = Math.max(0, Math.round(Number(row?.used_tokens) || 0));
+    const usedMicros = Math.max(0, Math.round(Number(row?.used_cost_micros) || 0));
+    const limitOverrideUsd = parseMonthlyCostLimit(policy?.rows?.[0]?.limit_override_usd, null);
     const unlimited = resolvedTierKey === 'premium';
-    const limitTokens = getLimitTokens(resolvedTierKey, limitOverrideTokens);
-    const remainingTokens = unlimited ? null : Math.max(0, limitTokens - usedTokens);
+    const limitUsd = getLimitUsd(resolvedTierKey, limitOverrideUsd);
+    const limitMicros = unlimited ? null : usdToMicros(limitUsd);
     return {
       tierKey: resolvedTierKey,
       unlimited,
       usedRequests,
       usedTokens,
-      limitTokens,
-      limitSource: unlimited ? 'unlimited' : limitOverrideTokens ? 'custom' : 'default',
-      remainingTokens,
+      usedUsd: microsToUsd(usedMicros),
+      limitUsd,
+      limitSource: unlimited ? 'unlimited' : limitOverrideUsd ? 'custom' : 'default',
+      remainingUsd: unlimited ? null : microsToUsd(Math.max(0, limitMicros - usedMicros)),
       percentUsed: unlimited
         ? null
-        : Math.min(100, Math.round((usedTokens / limitTokens) * 1000) / 10),
+        : Math.min(100, Math.round((usedMicros / limitMicros) * 1000) / 10),
       ...window,
-      exhausted: unlimited ? false : usedTokens >= limitTokens,
+      exhausted: unlimited ? false : usedMicros >= limitMicros,
     };
   };
 
@@ -170,9 +196,8 @@ const createAIUsageLimitService = ({
 
   return {
     available,
-    get freeLimitTokens() { return freeLimitTokens; },
-    getLimitTokens,
-    get limitTokens() { return freeLimitTokens; },
+    get freeLimitUsd() { return freeLimitUsd; },
+    getLimitUsd,
     assertUserCanGenerate,
     getSettings,
     getUserUsage,
@@ -184,10 +209,13 @@ const createAIUsageLimitService = ({
 module.exports = {
   AIUsageLimitError,
   AIUsageUnavailableError,
-  DEFAULT_FREE_MONTHLY_TOKEN_LIMIT,
-  MAX_MONTHLY_TOKEN_LIMIT,
+  BILLED_COST_MICROS_SQL,
+  DEFAULT_FREE_MONTHLY_COST_LIMIT_USD,
+  MAX_MONTHLY_COST_LIMIT_USD,
+  MIN_MONTHLY_COST_LIMIT_USD,
   createAIUsageLimitService,
+  formatLimitUsd,
   getMonthlyWindow,
-  parseMonthlyTokenLimit,
-  validateMonthlyTokenLimit,
+  parseMonthlyCostLimit,
+  validateMonthlyCostLimit,
 };

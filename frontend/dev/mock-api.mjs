@@ -162,7 +162,7 @@ export function createMockApi({ databasePath } = {}) {
     reportCount: db.reports.length,
     reportUsage: usage("Reports"),
     multiDayUsage: usage("Runs"),
-    aiUsage: { ...usage("Tokens"), usedRequests: 0 },
+    aiUsage: { ...usage("Usd"), usedTokens: 0, usedRequests: 0 },
   });
   let cachesClearedAt = 0;
   // Older mock databases predate the seeded admin history and fixture accounts.
@@ -207,7 +207,8 @@ export function createMockApi({ databasePath } = {}) {
         savedReports: ownerMonthlyReports(),
         aiCalls: 0,
         aiTokens: 0,
-        aiTokenLimitOverride: null,
+        aiCostUsd: 0,
+        aiCostLimitOverrideUsd: null,
         reportUsageLimitOverride: null,
         isOwner: true,
       },
@@ -217,6 +218,9 @@ export function createMockApi({ databasePath } = {}) {
         email: account.email,
         authProvider: account.authProvider,
         authMethods: account.authMethods,
+        // Mock databases saved before spend limits have no cost fields.
+        aiCostUsd: 0,
+        aiCostLimitOverrideUsd: null,
         ...state[account.id],
         createdAt: new Date(time - account.createdDaysAgo * 86400000).toISOString(),
         updatedAt: new Date(time - account.activeMinutesAgo * 60000).toISOString(),
@@ -1097,7 +1101,7 @@ export function createMockApi({ databasePath } = {}) {
     }
     if (p === "/api/admin/users/reset-usage" && method === "POST") {
       for (const state of Object.values(accountState()))
-        Object.assign(state, { savedReports: 0, aiCalls: 0, aiTokens: 0 });
+        Object.assign(state, { savedReports: 0, aiCalls: 0, aiTokens: 0, aiCostUsd: 0 });
       db.ownerUsageResetAt = now();
       audit({
         action: "users.usage.reset-all",
@@ -1110,7 +1114,7 @@ export function createMockApi({ databasePath } = {}) {
     if (p === "/api/admin/users/reset-usage-limits" && method === "POST") {
       for (const state of Object.values(accountState()))
         Object.assign(state, {
-          aiTokenLimitOverride: null,
+          aiCostLimitOverrideUsd: null,
           reportUsageLimitOverride: null,
         });
       audit({
@@ -1145,11 +1149,17 @@ export function createMockApi({ databasePath } = {}) {
       const name = account.displayName;
       const limit = body.limit === null ? null : Number(body.limit);
       if (
-        action.endsWith("usage-limit") &&
+        action === "report-usage-limit" &&
         limit !== null &&
         !(Number.isInteger(limit) && limit > 0)
       )
         return fail(400, "Enter a whole number greater than zero.");
+      if (
+        action === "usage-limit" &&
+        limit !== null &&
+        !(Number.isFinite(limit) && Math.round(limit * 100) >= 1 && limit <= 10_000)
+      )
+        return fail(400, "Monthly AI spend limit must be between $0.01 and $10,000.00.");
       let summary;
       switch (action) {
         case "status":
@@ -1166,11 +1176,11 @@ export function createMockApi({ databasePath } = {}) {
           summary = `Moved ${name} to ${body.tier === "premium" ? "Premium" : "Free"}`;
           break;
         case "usage-limit":
-          state.aiTokenLimitOverride = limit;
+          state.aiCostLimitOverrideUsd = limit === null ? null : Math.round(limit * 100) / 100;
           summary =
             limit === null
-              ? `Restored ${name}'s default AI token limit`
-              : `Set ${name}'s monthly AI token limit to ${limit.toLocaleString("en-US")}`;
+              ? `Restored ${name}'s default AI spend limit`
+              : `Set ${name}'s monthly AI spend limit to $${state.aiCostLimitOverrideUsd.toFixed(2)}`;
           break;
         case "report-usage-limit":
           state.reportUsageLimitOverride = limit;
@@ -1180,7 +1190,7 @@ export function createMockApi({ databasePath } = {}) {
               : `Set ${name}'s monthly report limit to ${limit.toLocaleString("en-US")}`;
           break;
         case "reset-usage":
-          Object.assign(state, { savedReports: 0, aiCalls: 0, aiTokens: 0 });
+          Object.assign(state, { savedReports: 0, aiCalls: 0, aiTokens: 0, aiCostUsd: 0 });
           summary = `Reset ${name}'s monthly usage`;
           break;
         case "revoke-sessions":
@@ -1247,11 +1257,12 @@ export function createMockApi({ databasePath } = {}) {
       }
       return ok({
         persistent: true,
-        freeMonthlyAITokenLimit: 100000,
-        environmentFreeMonthlyAITokenLimit: 100000,
+        freeMonthlyAICostLimitUsd: 1,
+        environmentFreeMonthlyAICostLimitUsd: 1,
         freeMonthlyReportUsageLimit: 20,
         environmentFreeMonthlyReportUsageLimit: 20,
-        maxMonthlyAITokenLimit: 10000000,
+        minMonthlyAICostLimitUsd: 0.01,
+        maxMonthlyAICostLimitUsd: 10000,
         maxFreeMonthlyUsageLimit: 10000,
         ...db.usageSettings,
       });

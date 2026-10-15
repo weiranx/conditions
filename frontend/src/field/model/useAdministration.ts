@@ -200,7 +200,9 @@ export interface AdminUserRecord {
   savedReports: number;
   aiCalls: number;
   aiTokens: number;
-  aiTokenLimitOverride: number | null;
+  /** Estimated AI spend this month, in US dollars. */
+  aiCostUsd: number;
+  aiCostLimitOverrideUsd: number | null;
   reportUsageLimitOverride: number | null;
   isOwner: boolean;
 }
@@ -220,11 +222,12 @@ export interface AdminUserDirectory {
 }
 export interface AdminUsageSettings {
   persistent: boolean;
-  freeMonthlyAITokenLimit: number;
-  environmentFreeMonthlyAITokenLimit: number;
+  freeMonthlyAICostLimitUsd: number;
+  environmentFreeMonthlyAICostLimitUsd: number;
   freeMonthlyReportUsageLimit: number;
   environmentFreeMonthlyReportUsageLimit: number;
-  maxMonthlyAITokenLimit: number;
+  minMonthlyAICostLimitUsd: number;
+  maxMonthlyAICostLimitUsd: number;
   maxFreeMonthlyUsageLimit: number;
 }
 export interface RuntimeEnvironmentEntry {
@@ -1418,6 +1421,17 @@ export function formatEstimatedCost(value: number): string {
     maximumFractionDigits: 2,
   }).format(value);
 }
+const toCents = (value: number) => Math.round(value * 100) / 100;
+function aiCostLimitError(
+  limitUsd: number,
+  settings: AdminUsageSettings | null,
+): string | null {
+  const min = settings?.minMonthlyAICostLimitUsd ?? 0.01;
+  const max = settings?.maxMonthlyAICostLimitUsd ?? 10_000;
+  return Number.isFinite(limitUsd) && limitUsd >= min && limitUsd <= max
+    ? null
+    : `Enter a monthly AI spend limit between ${formatEstimatedCost(min)} and ${formatEstimatedCost(max)}.`;
+}
 function escapeCsv(value: string | number | boolean | null): string {
   const text = value == null ? "" : String(value);
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -1892,7 +1906,7 @@ export function useAdministration() {
     (settings: AdminUsageSettings, saved = false) => {
       setUsageSettings(settings);
       const next = {
-        ai: String(settings.freeMonthlyAITokenLimit),
+        ai: String(settings.freeMonthlyAICostLimitUsd),
         reports: String(settings.freeMonthlyReportUsageLimit),
       };
       const previous = saved ? null : savedUsageDraftsRef.current;
@@ -2403,19 +2417,12 @@ export function useAdministration() {
     rawAILimit: string | number = usageLimitDraft,
     rawReportLimit: string | number = reportLimitDraft,
   ) => {
-    const aiLimit = Number(rawAILimit);
+    const aiLimit = toCents(Number(rawAILimit));
     const reportLimit = Number(rawReportLimit);
-    const maxAITokenLimit =
-      usageSettings?.maxMonthlyAITokenLimit ?? 100_000_000;
+    const aiLimitError = aiCostLimitError(aiLimit, usageSettings);
     const maxReportLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
-    if (
-      !Number.isFinite(aiLimit) ||
-      aiLimit <= 0 ||
-      aiLimit > maxAITokenLimit
-    ) {
-      setUsageSettingsError(
-        `Enter an AI token limit between 1 and ${maxAITokenLimit.toLocaleString()}.`,
-      );
+    if (aiLimitError) {
+      setUsageSettingsError(aiLimitError);
       return;
     }
     if (
@@ -2435,7 +2442,7 @@ export function useAdministration() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          freeMonthlyAITokenLimit: Math.round(aiLimit),
+          freeMonthlyAICostLimitUsd: aiLimit,
           freeMonthlyReportUsageLimit: Math.round(reportLimit),
         }),
       });
@@ -2469,14 +2476,10 @@ export function useAdministration() {
     user: AdminUserRecord,
     limit: number | null,
   ) => {
-    const maxLimit = usageSettings?.maxMonthlyAITokenLimit ?? 100_000_000;
-    if (
-      limit !== null &&
-      (!Number.isFinite(limit) || limit <= 0 || limit > maxLimit)
-    ) {
-      setUsersError(
-        `Enter a monthly AI token limit between 1 and ${maxLimit.toLocaleString()}.`,
-      );
+    const limitUsd = limit === null ? null : toCents(limit);
+    const limitError = limitUsd === null ? null : aiCostLimitError(limitUsd, usageSettings);
+    if (limitError) {
+      setUsersError(limitError);
       return;
     }
     setUserActionPending(`${user.id}:usage-limit`);
@@ -2487,9 +2490,7 @@ export function useAdministration() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            limit: limit === null ? null : Math.round(limit),
-          }),
+          body: JSON.stringify({ limit: limitUsd }),
         },
       );
       if (!result.response.ok) {

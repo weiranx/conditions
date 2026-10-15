@@ -172,14 +172,15 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   };
   let usageSettings = {
     persistent: true,
-    freeMonthlyAITokenLimit: 250_000,
-    environmentFreeMonthlyAITokenLimit: 250_000,
-    maxMonthlyAITokenLimit: 100_000_000,
+    freeMonthlyAICostLimitUsd: 1,
+    environmentFreeMonthlyAICostLimitUsd: 1,
+    minMonthlyAICostLimitUsd: 0.01,
+    maxMonthlyAICostLimitUsd: 10_000,
   };
   const usageService = {
     getSettings: jest.fn(() => usageSettings),
-    updateSettings: jest.fn(async ({ freeMonthlyAITokenLimit }) => {
-      usageSettings = { ...usageSettings, freeMonthlyAITokenLimit };
+    updateSettings: jest.fn(async ({ freeMonthlyAICostLimitUsd }) => {
+      usageSettings = { ...usageSettings, freeMonthlyAICostLimitUsd };
       return usageSettings;
     }),
   };
@@ -225,7 +226,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     tier,
   }));
   const updateUserUsageLimit = jest.fn(async ({ limit }) => ({
-    user: { ...managedUser, aiTokenLimitOverride: limit },
+    user: { ...managedUser, aiCostLimitOverrideUsd: limit },
     limit,
   }));
   const updateUserReportUsageLimit = jest.fn(async ({ limit }) => ({
@@ -502,12 +503,12 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const updateUsageSettingsResponse = createResponse();
   await routes.patch.get('/api/admin/usage-settings')({
     headers,
-    body: { freeMonthlyAITokenLimit: 500_000, freeMonthlyReportUsageLimit: 60 },
+    body: { freeMonthlyAICostLimitUsd: '2.50', freeMonthlyReportUsageLimit: 60 },
   }, updateUsageSettingsResponse);
-  expect(usageService.updateSettings).toHaveBeenCalledWith({ freeMonthlyAITokenLimit: 500_000 });
+  expect(usageService.updateSettings).toHaveBeenCalledWith({ freeMonthlyAICostLimitUsd: 2.5 });
   expect(reportUsageService.updateSettings).toHaveBeenCalledWith({ freeMonthlyReportUsageLimit: 60 });
   expect(updateUsageSettingsResponse.payload).toMatchObject({
-    freeMonthlyAITokenLimit: 500_000,
+    freeMonthlyAICostLimitUsd: 2.5,
     freeMonthlyReportUsageLimit: 60,
   });
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
@@ -519,17 +520,18 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   await routes.patch.get('/api/admin/users/:userId/usage-limit')({
     headers,
     params: { userId: managedUser.id },
-    body: { limit: 500_000 },
+    body: { limit: 5 },
   }, updateUserUsageLimitResponse);
   expect(updateUserUsageLimit).toHaveBeenCalledWith({
     userId: managedUser.id,
-    limit: 500_000,
+    limit: 5,
     actorUserId: adminUser.id,
   });
-  expect(updateUserUsageLimitResponse.payload).toMatchObject({ limit: 500_000 });
+  expect(updateUserUsageLimitResponse.payload).toMatchObject({ limit: 5 });
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'account.usage-limit.updated',
     category: 'accounts',
+    summary: "Changed Avery Stone's monthly AI spend limit to $5.00",
   }));
 
   const updateUserReportUsageLimitResponse = createResponse();

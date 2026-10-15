@@ -205,7 +205,7 @@ struct AccountView: View {
         Section("Usage this month") {
             UsageRow(label: "Generated reports", allowance: account.reportUsage)
             UsageRow(label: "Multi-day checks", allowance: account.multiDayUsage)
-            UsageRow(label: "AI tokens", allowance: account.aiUsage)
+            UsageRow(label: "AI spend", allowance: account.aiUsage, currency: true)
             if let count = account.reportCount { LabeledContent("Saved reports", value: "\(count)") }
         }
         Section {
@@ -218,7 +218,7 @@ struct AccountView: View {
         } footer: {
             Text(account.isPremium
                  ? "Unlimited AI, report generation, and multi-day comparisons. Up to 10 watches with automatic checks, email alerts, and 90 days of history."
-                 : "Separate monthly allowances for reports, AI tokens, and comparisons. One watch with manual refresh and 14 days of check history.")
+                 : "Separate monthly allowances for reports, AI spend, and comparisons. One watch with manual refresh and 14 days of check history.")
         }
         Section {
             NavigationLink {
@@ -247,6 +247,8 @@ struct AccountView: View {
 struct UsageRow: View {
     var label: String
     var allowance: Allowance?
+    /// Amounts are US dollars to the cent rather than whole counts.
+    var currency = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -267,9 +269,15 @@ struct UsageRow: View {
     private var valueText: String {
         guard let allowance else { return "Unavailable" }
         if allowance.unlimited { return "Unlimited" }
-        let used = allowance.used.map { Int($0).formatted() } ?? "—"
-        let limit = allowance.limit.map { Int($0).formatted() } ?? "—"
+        let used = allowance.used.map(format) ?? "—"
+        let limit = allowance.limit.map(format) ?? "—"
         return "\(used) of \(limit)"
+    }
+
+    private func format(_ value: Double) -> String {
+        guard currency else { return Int(value).formatted() }
+        if value > 0 && value < 0.01 { return "<$0.01" }
+        return value.formatted(.currency(code: "USD").locale(Locale(identifier: "en_US")))
     }
 }
 

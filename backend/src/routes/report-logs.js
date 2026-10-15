@@ -9,7 +9,7 @@ const { runtimeEnvService: defaultRuntimeEnvService } = require('../utils/runtim
 const { backendRestartController: defaultBackendRestartController } = require('../server/backend-restart');
 const { readSessionToken } = require('./account');
 const { validateFreeMonthlyUsageLimit } = require('../auth/monthly-usage-limit');
-const { validateMonthlyTokenLimit } = require('../auth/ai-usage-limit');
+const { formatLimitUsd, validateMonthlyCostLimit } = require('../auth/ai-usage-limit');
 const { isAdminAccount, resolveAdminAccount } = require('../auth/admin-account');
 const {
   buildHealthHistorySummary,
@@ -407,7 +407,7 @@ const registerReportLogsRoute = (
 
   const updateUsageSettings = async (req, res) => {
     if (!await authorize(req, res)) return;
-    const updateAI = req.body?.freeMonthlyAITokenLimit !== undefined;
+    const updateAI = req.body?.freeMonthlyAICostLimitUsd !== undefined;
     const updateReports = req.body?.freeMonthlyReportUsageLimit !== undefined;
     if (!updateAI && !updateReports) {
       res.status(400).json({ error: 'Provide an AI usage limit or generated report limit.' });
@@ -422,13 +422,13 @@ const registerReportLogsRoute = (
     }
     try {
       const validatedAILimit = updateAI
-        ? validateMonthlyTokenLimit(req.body.freeMonthlyAITokenLimit)
+        ? validateMonthlyCostLimit(req.body.freeMonthlyAICostLimitUsd)
         : null;
       const validatedReportLimit = updateReports
         ? validateFreeMonthlyUsageLimit(req.body.freeMonthlyReportUsageLimit)
         : null;
       if (updateAI) {
-        await usageService.updateSettings({ freeMonthlyAITokenLimit: validatedAILimit });
+        await usageService.updateSettings({ freeMonthlyAICostLimitUsd: validatedAILimit });
       }
       if (updateReports) {
         await reportUsageService.updateSettings({ freeMonthlyReportUsageLimit: validatedReportLimit });
@@ -445,7 +445,7 @@ const registerReportLogsRoute = (
         category: 'configuration',
         summary: `Changed the default Free monthly ${[updateAI ? 'AI usage' : null, updateReports ? 'generated report' : null].filter(Boolean).join(' and ')} limit${updateAI && updateReports ? 's' : ''}`,
         details: {
-          freeMonthlyAITokenLimit: updated.freeMonthlyAITokenLimit,
+          freeMonthlyAICostLimitUsd: updated.freeMonthlyAICostLimitUsd,
           freeMonthlyReportUsageLimit: updated.freeMonthlyReportUsageLimit,
         },
       });
@@ -627,8 +627,8 @@ const registerReportLogsRoute = (
         action: 'account.usage-limit.updated',
         category: 'accounts',
         summary: result.limit === null
-          ? `Restored the default AI usage limit for ${targetName}`
-          : `Changed ${targetName}'s monthly AI usage limit to ${result.limit.toLocaleString()} tokens`,
+          ? `Restored the default AI spend limit for ${targetName}`
+          : `Changed ${targetName}'s monthly AI spend limit to ${formatLimitUsd(result.limit)}`,
         details: {
           targetUserId: result.user.id,
           targetEmail: result.user.email,
