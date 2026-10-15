@@ -7,7 +7,7 @@ const { registerChatGPTRoutes } = require('../src/routes/chatgpt');
 
 const owner = { id: '00000000-0000-4000-8000-000000000002', email: 'owner@example.com' };
 const other = { id: '00000000-0000-4000-8000-000000000003', email: 'other@example.com' };
-const onlyOwner = (service = {}) => ({ hasAccounts: () => true, serviceForUser: (id) => id === owner.id ? service : null });
+const onlyOwner = (service = { hasRegistration: () => true }) => ({ isEnabled: () => true, serviceForUser: (id) => id === owner.id ? service : null });
 const accountService = { available: true, getUserForSession: async (token) => token === 'owner' ? owner : token === 'other' ? other : null };
 
 test('only the owner foreground browser request receives a plan context; parallel callers remain isolated', async () => {
@@ -67,9 +67,9 @@ test('connection controls require the real owner session and explicit allowed Or
 });
 
 test('parallel personal accounts select their own service from the session, never a supplied user ID', async () => {
-  const first = { status: () => ({ email: 'first@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
-  const second = { status: () => ({ email: 'second@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
-  const accounts = { hasAccounts: () => true, serviceForUser: (id) => id === owner.id ? first : id === other.id ? second : null };
+  const first = { hasRegistration: () => true, status: () => ({ email: 'first@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
+  const second = { hasRegistration: () => true, status: () => ({ email: 'second@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
+  const accounts = { isEnabled: () => true, serviceForUser: (id) => id === owner.id ? first : id === other.id ? second : null };
   const app = express();
   app.use(express.json());
   app.use(createChatGPTMiddleware({ getAccountService: () => accountService, accounts }));
@@ -91,4 +91,29 @@ test('parallel personal accounts select their own service from the session, neve
     .set('Origin', 'https://conditions.example.com').send({ userId: owner.id });
   expect(second.disconnect).toHaveBeenCalledTimes(1);
   expect(first.disconnect).not.toHaveBeenCalled();
+});
+
+test('default-enabled accounts can connect without configuration while untouched accounts keep the server provider', async () => {
+  const fs = require('node:fs');
+  const directory = fs.mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'chatgpt-defaults-'));
+  try {
+    const { createChatGPTAccounts } = require('../src/auth/chatgpt-accounts');
+    const { ChatGPTStore } = require('../src/auth/chatgpt-store');
+    const accounts = createChatGPTAccounts({ env: {}, store: new ChatGPTStore(directory) });
+    const app = express();
+    app.use(createChatGPTMiddleware({ getAccountService: () => accountService, accounts }));
+    app.get('/api/safety', (_req, res) => res.json({ userId: currentChatGPT()?.userId || null }));
+    registerChatGPTRoutes({ app, accountService, accounts });
+    for (const token of ['owner', 'other']) {
+      expect((await request(app).get('/api/account/chatgpt').set('Cookie', `bc_session=${token}`)).body).toMatchObject({ enabled: true, connected: false });
+      expect((await request(app).get('/api/safety').set('Cookie', `bc_session=${token}`)).body.userId).toBeNull();
+    }
+    await accounts.serviceForUser(owner.id).store.update((value) => {
+      value.registrations.push({ client_id: 'oaiapp_connected' });
+      value.activeClientId = 'oaiapp_connected';
+    });
+    // A retained registration, including a disconnected one, never opts back into API billing.
+    expect((await request(app).get('/api/safety').set('Cookie', 'bc_session=owner')).body.userId).toBe(owner.id);
+    expect((await request(app).get('/api/safety').set('Cookie', 'bc_session=other')).body.userId).toBeNull();
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

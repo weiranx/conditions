@@ -116,7 +116,7 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
           <summary>{connection?.connected ? "Reconnect or switch ChatGPT accounts" : "Set up personal ChatGPT access"}</summary>
           <p>On the computer running your browser, open the Conditions backend folder and run <code>npm run chatgpt -- login --user {userId}</code>. Choose Continue with ChatGPT and approve plan usage. No API key is needed.</p>
           <p>For a remote server, export only this account’s connection with <code>npm run chatgpt -- export /private/path/credentials.json --user {userId}</code>. Transfer that file securely, then run <code>npm run chatgpt -- import /private/path/credentials.json --user {userId}</code> on the server.</p>
-          <p>Add <code>{userId}</code> to your server’s comma-separated <code>CHATGPT_ACCOUNT_USER_IDS</code> list. Each Conditions account has its own ChatGPT connection and selected model. Restart the backend, then refresh this connection.</p>
+          <p>ChatGPT connections are enabled by default for every Conditions account. After importing, refresh this connection. Your account’s AI requests use your own ChatGPT plan once connected; before connecting, the existing server provider applies.</p>
           <p>To add another ChatGPT registration for this Conditions account, run <code>npm run chatgpt -- login --new-account --user {userId}</code>. Select one with <code>npm run chatgpt -- use &lt;client-id&gt; --user {userId}</code>.</p>
           <p>This connection powers your foreground requests only. Automatic watch summaries use the separately configured server provider.</p>
         </details>

@@ -33,16 +33,22 @@ test('profile mutations preserve legacy credentials, share host identity, and ke
   expect(JSON.stringify(createChatGPTService({ store: first }).status())).not.toContain('second');
 });
 
-test('personal allowlist selects separate profiles and keeps legacy owner mapping compatible', async () => {
+test('connections are enabled for every account by default and preserve legacy owner mapping', async () => {
   await seed(new ChatGPTProfileStore(store), registration('legacy'));
   await seed(new ChatGPTProfileStore(store, secondId), registration('second'));
-  const env = { CHATGPT_OWNER_USER_ID: firstId, CHATGPT_ACCOUNT_USER_IDS: `${firstId}, ${secondId}, invalid` };
+  const env = { CHATGPT_OWNER_USER_ID: firstId };
   const accounts = createChatGPTAccounts({ env, store });
   expect(accounts.serviceForUser(firstId).status().email).toBe('legacy@example.com');
   expect(accounts.serviceForUser(secondId).status().email).toBe('second@example.com');
   expect(accounts.serviceForUser('../../escape')).toBeNull();
-  expect(accounts.serviceForUser('00000000-0000-4000-8000-000000000004')).toBeNull();
-  delete env.CHATGPT_ACCOUNT_USER_IDS;
+  expect(accounts.serviceForUser('00000000-0000-4000-8000-000000000004').status()).toMatchObject({ connected: false, accounts: [] });
+  const defaults = createChatGPTAccounts({ env: {}, store });
+  expect(defaults.serviceForUser(firstId).hasRegistration()).toBe(false);
+  expect(defaults.serviceForUser(secondId).status().email).toBe('second@example.com');
+  expect(defaults.serviceForUser(firstId).status().accounts).toEqual([]);
+  expect(accounts.isEnabled()).toBe(true);
+  env.CHATGPT_ENABLED = 'false';
+  expect(accounts.isEnabled()).toBe(false);
   expect(accounts.serviceForUser(secondId)).toBeNull();
 });
 

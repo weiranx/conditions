@@ -241,7 +241,7 @@ const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore
     });
     return { ...status(), revoked };
   };
-  return { store, status, begin, complete, accessToken, models, selectModel, modelForRequest, disconnect, apiError };
+  return { store, status, hasRegistration: () => Boolean(activeRecord(store.read())), begin, complete, accessToken, models, selectModel, modelForRequest, disconnect, apiError };
 };
 
 const chatGPTService = createChatGPTService();

@@ -12,7 +12,7 @@ const FOREGROUND_PATHS = new Set([
   '/api/forecast-discussion/summary', '/api/healthz', '/api/health',
 ]);
 const createChatGPTMiddleware = ({ getAccountService, accounts = chatGPTAccounts }) => async (req, res, next) => {
-  if (!accounts.hasAccounts() || !FOREGROUND_PATHS.has(req.path.replace(/\/+$/, '')) || req.headers.authorization) return next();
+  if (!accounts.isEnabled() || !FOREGROUND_PATHS.has(req.path.replace(/\/+$/, '')) || req.headers.authorization) return next();
   res.setHeader('Cache-Control', 'private, no-store');
   res.vary('Cookie');
   const session = readSessionToken(req);
@@ -22,7 +22,9 @@ const createChatGPTMiddleware = ({ getAccountService, accounts = chatGPTAccounts
     if (!accountService?.available) return next();
     const user = await accountService.getUserForSession(session);
     const service = user && accounts.serviceForUser(user.id);
-    if (!service) return next();
+    // Making connection setup available does not opt an account into subscription billing.
+    // Retained disconnected/expired registrations stay on this path; they never fall back to API billing.
+    if (!service || !service.hasRegistration()) return next();
     const subscription = { userId: user.id, service, alive: true };
     // Late continuations cannot start subscription requests after the browser disconnects.
     res.once('close', () => { subscription.alive = false; });
