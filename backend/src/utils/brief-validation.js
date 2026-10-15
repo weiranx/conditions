@@ -198,6 +198,21 @@ const validateHero = (value, report, decisionLevel, units, problems = []) => {
   }
   return hero;
 };
+const MAX_SATELLITE_LENGTH = 600;
+// What the AI read from the satellite image of snow cover, written only when the
+// report carries one. It must cite the image's date, so the reader knows how old
+// the picture is; one that fails is left out and never fails the brief.
+const validateSatellite = (value, report, decisionLevel, units, problems = []) => {
+  if (!report?.satelliteImage) return null;
+  const fail = (problem) => { problems.push(`SATELLITE: ${problem}`); return null; };
+  if (!value || typeof value !== 'object' || typeof value.text !== 'string') return fail('missing');
+  const text = value.text.replace(/\s+/g, ' ').trim();
+  if (text.length > MAX_SATELLITE_LENGTH) return fail(`longer than ${MAX_SATELLITE_LENGTH} characters`);
+  const { problem, evidence } = checkText(text, value.evidence, report, decisionLevel, units);
+  if (problem) return fail(problem);
+  if (!evidence.some((claim) => claim.path.startsWith('satelliteImage.'))) return fail('does not cite the satellite image (satelliteImage.acquiredDate)');
+  return { text, evidence };
+};
 const MAX_QUESTIONS = 3;
 // Follow-up questions the reader can ask the report assistant. They are prompts,
 // not claims, but a number in one would still read as a fact, so none may hold one.
@@ -259,6 +274,7 @@ const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}
     questions: validateQuestions(parsed.questions),
     chapters: validateChapters(parsed.chapters, report, decisionLevel, units, problems),
     hero: validateHero(parsed.hero, report, decisionLevel, units, problems),
+    satellite: validateSatellite(parsed.satellite, report, decisionLevel, units, problems),
   };
 };
 /**
@@ -297,4 +313,4 @@ const deterministicBrief = (report, decisionLevel) => {
     `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : concerns.slice(0, 2).map(item => item.action).join(' ') || 'Resolve failed checks and missing evidence before committing.'}`,
   ].join('\n');
 };
-module.exports = { validateBrief, validateOpening, validateQuestions, validateChapters, validateHero, deterministicBrief };
+module.exports = { validateBrief, validateOpening, validateQuestions, validateChapters, validateHero, validateSatellite, deterministicBrief };

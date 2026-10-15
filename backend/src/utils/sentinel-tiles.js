@@ -121,6 +121,18 @@ const findBestAcquisition = async ({ token, bbox3857, fetchWithTimeout }) => {
   return recent.sort((a, b) => (a.cloudCover ?? 100) - (b.cloudCover ?? 100))[0] || candidates[0];
 };
 
+// The slippy-map tile holding a point, matching Leaflet's tiling scheme.
+const lonLatToTile = (lon, lat, zoom) => {
+  const latRad = (lat * Math.PI) / 180;
+  const n = 2 ** zoom;
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
+  return {
+    x: Math.min(Math.max(x, 0), n - 1),
+    y: Math.min(Math.max(y, 0), n - 1),
+  };
+};
+
 const fetchSentinelTile = async ({ z, x, y, fetchWithTimeout }) => {
   const zoom = Number(z);
   const tileX = Number(x);
@@ -206,6 +218,7 @@ const fetchSentinelTile = async ({ z, x, y, fetchWithTimeout }) => {
 
 module.exports = {
   fetchSentinelTile,
+  lonLatToTile,
   tileToBbox3857,
   MIN_ZOOM,
   MAX_ZOOM,

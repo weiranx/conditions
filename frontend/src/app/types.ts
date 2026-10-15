@@ -980,8 +980,21 @@ export interface AiBriefDetails {
   hero?: AiBriefHero | null;
   /** What the backend's fact checks rejected in the AI answer, how many answers it asked for, and how many seconds each took. */
   checks?: { attempts: number; problems: string[]; seconds?: number[] };
+  /**
+   * The satellite image of snow cover the read looked at, when snow shapes the trip:
+   * the image, when it was taken, and the AI's fact-checked words on it (null when they failed).
+   */
+  satellite?: AiBriefSatellite | null;
   /** `deterministic_fallback` when the AI answer failed the backend's checks. */
   validation: 'evidence_checked' | 'deterministic_fallback' | null;
+}
+
+/** A satellite image the AI read looked at, and what it said of it. */
+export interface AiBriefSatellite {
+  text: string | null;
+  evidence: AiBriefCitation[];
+  image: string;
+  imagery: SnowVisionImagery | null;
 }
 
 export interface UserPreferences {
@@ -1224,6 +1237,8 @@ export interface PlanEvaluation {
     bandsByHour: ElevationForecastBand[][];
     target: { elevationFt: number; deltaFt: number; byHour: Array<ElevationEstimate | null> } | null;
   };
+  /** Whether snow on the ground shapes this trip; the AI read looks at satellite snow imagery only then. Older evaluations lack it. */
+  snowTravel?: { consequential: boolean; reasons: Array<'snow_travel_activity' | 'snow_surface' | 'avalanche_terrain'> };
 }
 
 export type RiskTone = 'go' | 'watch' | 'caution' | 'nogo';

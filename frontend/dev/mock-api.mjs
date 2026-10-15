@@ -27,6 +27,10 @@ import {
   seedAudit,
 } from "./admin-fixtures.mjs";
 
+// A drawn stand-in for a Sentinel-2 tile, so satellite layouts show an image.
+const MOCK_SATELLITE_IMAGE = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="#4a5a3c"/><path d="M0 200 L70 90 L120 140 L180 40 L256 150 L256 256 L0 256Z" fill="#7d7468"/><path d="M52 118 L70 90 L92 112 L80 120Z M150 90 L180 40 L215 96 L190 104 L170 92Z" fill="#f4f6f8"/></svg>')}`;
+const mockSatelliteImagery = () => ({ acquiredAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(), cloudCover: 4 });
+
 const now = () => new Date().toISOString();
 const featureKeys = [
   "tripPlanning",
@@ -875,6 +879,15 @@ export function createMockApi({ databasePath } = {}) {
         },
         hero: mockHero,
         questions: ["When does the wind start to build?", "What would make this a no-go?", "How early should I turn around?"],
+        // Where snow shapes the trip, the read looks at a satellite image of it.
+        ...(body.report?.evaluation?.snowTravel?.consequential ? {
+          satellite: {
+            text: "Synthetic analysis: the drawn stand-in image shows snow on the upper slopes and bare ground lower down. Check where the route meets the snow before relying on it.",
+            evidence: [{ path: "satelliteImage.acquiredDate", value: mockSatelliteImagery().acquiredAt.slice(0, 10) }],
+            image: MOCK_SATELLITE_IMAGE,
+            imagery: mockSatelliteImagery(),
+          },
+        } : {}),
         validation: "evidence_checked",
       }) };
     if (p === "/api/field-observations/extract") {
@@ -942,15 +955,9 @@ export function createMockApi({ databasePath } = {}) {
       return ok({
         analysis:
           "SNOW COVERAGE: Demo analysis. Sample snow coverage is concentrated on upper slopes and patchy lower down. TERRAIN PATTERN: This fixture does not inspect satellite imagery, so it makes no aspect or elevation claim. GROUND CHECK: No station data was compared; the values are synthetic. UNCERTAINTY: All of this text is mocked for layout testing. TRAVEL TAKEAWAY: Use a real report and field observations before relying on snow coverage.",
-        // A drawn stand-in for the Sentinel-2 tile, so the layout shows an image.
-        image: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="#4a5a3c"/><path d="M0 200 L70 90 L120 140 L180 40 L256 150 L256 256 L0 256Z" fill="#7d7468"/><path d="M52 118 L70 90 L92 112 L80 120Z M150 90 L180 40 L215 96 L190 104 L170 92Z" fill="#f4f6f8"/></svg>')}`,
+        image: MOCK_SATELLITE_IMAGE,
         zoom: 12,
-        imagery: {
-          acquiredAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-          cloudCover: 4,
-          selection: "recent_low_cloud_acquisition",
-          source: "Demo fixture",
-        },
+        imagery: { ...mockSatelliteImagery(), selection: "recent_low_cloud_acquisition", source: "Demo fixture" },
         generatedAt: now(),
       });
     if (p === "/api/report-chat")

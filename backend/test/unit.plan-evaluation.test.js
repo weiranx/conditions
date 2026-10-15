@@ -717,3 +717,14 @@ describe('decision and verdict edge cases', () => {
     expect(off.missing).toEqual([]);
   });
 });
+
+describe('snow travel', () => {
+  test('the evaluation says whether snow shapes the trip, for the plan\'s activity', () => {
+    const report = makeReport();
+    report.terrainCondition = { ...(report.terrainCondition || {}), code: 'dry_firm' };
+    report.avalanche = { ...(report.avalanche || {}), relevant: false };
+    expect(evaluatePlan(report, contextFor(report)).snowTravel).toEqual({ consequential: false, reasons: [] });
+    expect(evaluatePlan(report, contextFor(report, { activity: 'ski-touring' })).snowTravel)
+      .toEqual({ consequential: true, reasons: ['snow_travel_activity'] });
+  });
+});

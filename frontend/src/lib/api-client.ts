@@ -265,6 +265,7 @@ export interface AiBriefResponse {
   chapters?: AiBriefDetails['chapters'];
   hero?: AiBriefDetails['hero'];
   checks?: AiBriefDetails['checks'];
+  satellite?: AiBriefDetails['satellite'];
   validation?: AiBriefDetails['validation'];
 }
 

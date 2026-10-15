@@ -2282,14 +2282,10 @@ export function useWorkspace() {
   const fieldObservations = useStoredFieldObservations(
     safetyData ? fieldObservationKey(safetyData.location.lat, safetyData.location.lon, safetyData.forecast?.selectedDate) : null,
   );
-  /**
-   * Writes the AI read; with `opening`, a fast model also writes the report's opening ahead of it.
-   * With `snowVision`, the satellite snow analysis is read alongside it when the report has none yet.
-   */
-  const handleRequestAiBriefAction = async (options: { opening?: boolean; snowVision?: boolean } = {}) => {
+  /** Writes the AI read; with `opening`, a fast model also writes the report's opening ahead of it. */
+  const handleRequestAiBriefAction = async (options: { opening?: boolean } = {}) => {
     if (!safetyData || !decision || aiBriefLoading) return;
     if (!requestAiAccess()) return;
-    // The opening and the read go out first: the top of the report waits for them.
     void handleRequestAiBrief({
       safetyData,
       fieldObservations,
@@ -2297,9 +2293,6 @@ export function useWorkspace() {
       route: routeReportContext,
       opening: options.opening,
     });
-    if (options.snowVision && !snowVisionAnalysis && !snowVisionLoading && !viewingHistoryReport) {
-      void handleRequestSnowVision(safetyData.location.lat, safetyData.location.lon, safetyData.snowpack);
-    }
   };
 
   const { dayOverDay, startTimeScenarios } = useReportComparisons({
