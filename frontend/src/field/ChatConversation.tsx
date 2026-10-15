@@ -17,6 +17,7 @@ export function ChatConversation({
   initialMessages,
   onMessagesChange,
   readOnly,
+  starters: offered,
   pendingQuestion = null,
 }: {
   id: string;
@@ -26,6 +27,8 @@ export function ChatConversation({
   initialMessages: PersistedReportChatMessage[];
   onMessagesChange?: (messages: PersistedReportChatMessage[]) => void;
   readOnly: boolean;
+  /** The questions offered before the first message, in place of the defaults for the context. */
+  starters?: string[];
   /** A question asked from the report; each new id is sent once. */
   pendingQuestion?: { id: number; text: string } | null;
 }) {
@@ -72,7 +75,7 @@ export function ChatConversation({
       ? part.data.suggestions.filter((value): value is string => typeof value === "string" && !!value.trim()).map(value => value.trim())
       : [],
   ))].slice(0, 3) : [];
-  const starters = contextType === "trip" ? [
+  const starters = offered?.length ? offered : contextType === "trip" ? [
     "Which day has the best weather window?",
     "What are the tradeoffs between these days?",
     "What should I verify before committing?",
@@ -81,9 +84,9 @@ export function ChatConversation({
     "Is my sleep system warm enough for these nights?",
     "What would make this trip safer to run?",
   ] : [
-    "What is driving the risk score?",
-    "How does the timing affect my plan?",
-    "What should I verify before leaving?",
+    "What is driving this decision?",
+    "What would have to change to make this a go?",
+    "What should I check before I leave?",
   ];
   const sentQuestion = useRef<number | null>(null);
   useEffect(() => {
@@ -139,7 +142,7 @@ export function ChatConversation({
           </div>}
           {!readOnly && <>
             <form className="field-chat-form" onSubmit={e => { e.preventDefault(); ask(input); }}>
-              <textarea aria-label={`Question about this ${contextType === "trip" ? "multi-day plan" : "report"}`} aria-describedby={`${id}-hint`} placeholder="Ask about the conditions…" rows={2} maxLength={1000} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => {
+              <textarea aria-label={`Question about this ${contextType === "trip" ? "multi-day plan" : "report"}`} aria-describedby={`${id}-hint`} placeholder={`Ask anything about ${contextType === "trip" ? "these days" : contextType === "itinerary" ? "this trip" : "this plan"}…`} rows={2} maxLength={1000} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(input); }
               }} />
               {busy ? <button className="field-button" type="button" aria-label="Stop response" onClick={() => void stop()}><Square size={14} fill="currentColor" aria-hidden="true" /></button> :

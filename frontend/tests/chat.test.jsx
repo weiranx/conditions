@@ -213,3 +213,11 @@ test('a saved conversation never sends a question asked from the report', async 
   assert.equal(document.querySelector('textarea'), null);
   assert.ok(h);
 });
+
+test('the chat offers the questions the report passes and the same composer wording as the AI read', async t => {
+  await mount(t, { starters: ['When do the gusts build?', 'What would make this a go?'] });
+  await act(async () => document.querySelector('.field-chat-toggle').click());
+  const offered = [...document.querySelectorAll('.field-chat-suggestions button')].map(button => button.textContent);
+  assert.deepEqual(offered, ['When do the gusts build?', 'What would make this a go?']);
+  assert.equal(document.querySelector('textarea').placeholder, 'Ask anything about this plan…');
+});
