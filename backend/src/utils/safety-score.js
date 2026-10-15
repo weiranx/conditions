@@ -14,7 +14,7 @@ const { activityHazardWeight, normalizeActivity } = require('./activity-profiles
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.13.0',
+  scoreVersion: '2.14.0',
   maxScore: 100,
   scorePrecision: 1,
 
@@ -152,6 +152,9 @@ const SCORING_CONFIG = {
       // Convective signal can also come from trend hours, not just description.
       convectiveTrendHours: 1,
       winterImpact: 10,
+      // Blizzards keep the weight they had when the convective check caught
+      // them; they now count as winter weather, not as a thunderstorm.
+      blizzardImpact: 18,
       // Glaze ice makes trails, talus, and slabs dangerous regardless of
       // other weather, so it outweighs generic snow in the forecast.
       freezingRainImpact: 14,
@@ -256,8 +259,8 @@ const SCORING_CONFIG = {
   },
 
   messages: {
-    avalancheUnknown: "No official avalanche center forecast covers this objective. Avalanche terrain can still be dangerous. Treat conditions as unknown and use conservative terrain choices.",
-    stableConditions: 'Conditions appear stable for the selected plan window.',
+    avalancheUnknown: "No avalanche center forecast covers this objective, but avalanche terrain can still be dangerous. Treat conditions as unknown and choose conservative terrain.",
+    stableConditions: 'Nothing in the forecast stands out for your trip window.',
   },
 };
 
@@ -639,22 +642,22 @@ const calculateSafetyScore = ({
       if (snowpackStrongSignal) {
         unknownImpact += T.avalanche.unknownSnowpackBoost;
         unknownMessage += snowpackAboveAverage
-          ? ` Snowpack is running above seasonal average (${Math.round(snowpackPercentOfAverage)}%), so treat slopes with added caution.`
+          ? ` The snowpack is above its seasonal average (${Math.round(snowpackPercentOfAverage)}%), so treat slopes with extra caution.`
           : ' A deep snowpack is present despite no active forecast.';
       } else if (snowpackMinimalSignal) {
         unknownImpact = Math.max(0, unknownImpact - T.avalanche.unknownSnowpackReduce);
-        unknownMessage += ' Observed snowpack is minimal, but verify conditions directly.';
+        unknownMessage += ' Little snow is reported, but check conditions yourself.';
       }
       applyFactor('Avalanche Uncertainty', unknownImpact, unknownMessage, 'Avalanche center coverage');
     } else {
       if (avalancheDangerLevel >= 4 || normalizedRisk.includes('high') || normalizedRisk.includes('extreme')) {
-        applyFactor('Avalanche', T.avalanche.high, 'High avalanche danger reported. Avoid avalanche terrain and steep loaded slopes.', 'Avalanche center forecast');
+        applyFactor('Avalanche', T.avalanche.high, 'High avalanche danger. Stay out of avalanche terrain and away from steep, wind-loaded slopes.', 'Avalanche center forecast');
       } else if (avalancheDangerLevel === 3 || normalizedRisk.includes('considerable')) {
-        applyFactor('Avalanche', T.avalanche.considerable, 'Considerable avalanche danger. Conservative terrain selection and strict spacing are required.', 'Avalanche center forecast');
+        applyFactor('Avalanche', T.avalanche.considerable, 'Considerable avalanche danger. Choose conservative terrain and expose one person at a time.', 'Avalanche center forecast');
       } else if (avalancheDangerLevel === 2 || normalizedRisk.includes('moderate')) {
-        applyFactor('Avalanche', T.avalanche.moderate, 'Moderate avalanche danger. Evaluate snowpack and avoid connected terrain traps.', 'Avalanche center forecast');
+        applyFactor('Avalanche', T.avalanche.moderate, 'Moderate avalanche danger. Assess the snowpack and avoid terrain traps below connected slopes.', 'Avalanche center forecast');
       } else if (avalancheDangerLevel === 1) {
-        applyFactor('Avalanche', T.avalanche.low, 'Low avalanche danger still requires basic avalanche precautions in suspect terrain.', 'Avalanche center forecast');
+        applyFactor('Avalanche', T.avalanche.low, 'Low avalanche danger. Still carry rescue gear and watch for unstable snow on isolated slopes.', 'Avalanche center forecast');
       }
     }
 
@@ -662,7 +665,7 @@ const calculateSafetyScore = ({
       applyFactor(
         'Avalanche',
         T.avalanche.manyProblemsImpact,
-        `${avalancheProblemCount} avalanche problems are listed by the center, increasing snowpack complexity.`,
+        `The avalanche center lists ${avalancheProblemCount} avalanche problems, so the snowpack is more complex than usual.`,
         'Avalanche problem list',
       );
     }
@@ -675,7 +678,7 @@ const calculateSafetyScore = ({
       applyFactor(
         'Avalanche Problem Type',
         Math.min(avalancheProblemTypeImpact, T.avalanche.problemTypeCap),
-        `${dominantType || 'A persistent/slab'} problem is listed — these are harder to predict and can produce large, unsurvivable avalanches.`,
+        `${dominantType || 'A persistent slab'} problem is listed. These are hard to predict and can produce large, deadly avalanches.`,
         'Avalanche problem list',
       );
     }
@@ -685,7 +688,7 @@ const calculateSafetyScore = ({
       applyFactor(
         'Avalanche Elevation Spread',
         T.avalanche.elevationBandSpread,
-        'Avalanche danger varies by elevation band — match terrain choices to the elevations you will actually travel.',
+        'Avalanche danger changes with elevation, so match your terrain to the elevations you will actually travel.',
         'Avalanche center forecast',
       );
     }
@@ -710,22 +713,27 @@ const calculateSafetyScore = ({
     { value: T.wind.severeEffective, impact: T.wind.severeImpact },
   ]);
   const windImpact = Math.max(sustainedWindImpact, effectiveWindImpact);
+  const startWindNote = [
+    Number.isFinite(wind) ? `${Math.round(wind)} mph` : null,
+    Number.isFinite(gust) ? `gusting ${Math.round(gust)} mph` : null,
+  ].filter(Boolean).join(', ');
+  const atStart = startWindNote ? ` (${startWindNote} at the start)` : '';
   if (windImpact >= T.wind.severeImpact) {
     applyFactor(
       'Wind',
       windImpact,
-      `Severe wind exposure expected (start wind ${Number.isFinite(wind) ? `${Math.round(wind)} mph` : 'unavailable'}, gust ${Number.isFinite(gust) ? `${Math.round(gust)} mph` : 'unavailable'}, trend peak ${Math.round(effectiveWind)} mph).`,
+      `Severe wind, peaking near ${Math.round(effectiveWind)} mph${atStart}.`,
       `${weatherProvider(weatherData)} hourly forecast`,
     );
   } else if (windImpact >= T.wind.strongImpact) {
     applyFactor(
       'Wind',
       windImpact,
-      `Strong winds expected (start wind ${Number.isFinite(wind) ? `${Math.round(wind)} mph` : 'unavailable'}, gust ${Number.isFinite(gust) ? `${Math.round(gust)} mph` : 'unavailable'}, trend peak ${Math.round(effectiveWind)} mph).`,
+      `Strong wind, peaking near ${Math.round(effectiveWind)} mph${atStart}.`,
       `${weatherProvider(weatherData)} hourly forecast`,
     );
   } else if (windImpact > 0) {
-    applyFactor('Wind', windImpact, `Wind exposure (trend peak ${Math.round(effectiveWind)} mph) may affect exposed movement.`, `${weatherProvider(weatherData)} hourly forecast`);
+    applyFactor('Wind', windImpact, `Wind peaking near ${Math.round(effectiveWind)} mph can slow you on exposed ground.`, `${weatherProvider(weatherData)} hourly forecast`);
   }
 
   const severeWindDurationImpact = interpolateImpact(weightedSevereWindHours, [
@@ -741,8 +749,8 @@ const calculateSafetyScore = ({
   const windDurationImpact = Math.max(severeWindDurationImpact, strongWindDurationImpact);
   if (windDurationImpact > 0) {
     const durationMessage = severeWindDurationImpact >= strongWindDurationImpact
-      ? `${severeWindHours}/${effectiveTrendWindowHours} trend hours are severe wind windows.`
-      : `${strongWindHours}/${effectiveTrendWindowHours} trend hours are windy and may reduce margin on exposed terrain.`;
+      ? `${severeWindHours} of ${effectiveTrendWindowHours} hours have wind of 30 mph or gusts of 45 mph or more.`
+      : `${strongWindHours} of ${effectiveTrendWindowHours} hours have wind of 20 mph or gusts of 30 mph or more, which cuts your margin on exposed ground.`;
     applyFactor('Wind', windDurationImpact, durationMessage, `${weatherProvider(weatherData)} hourly trend`);
   }
 
@@ -753,7 +761,7 @@ const calculateSafetyScore = ({
     { value: T.storm.peakHigh, impact: T.storm.peakHighImpact },
   ]);
   if (peakPrecipImpact > 0) {
-    applyFactor('Storm', peakPrecipImpact, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, `${weatherProvider(weatherData)} hourly forecast`);
+    applyFactor('Storm', peakPrecipImpact, `The chance of rain or snow peaks at ${Math.round(trendPeakPrecip)}%.`, `${weatherProvider(weatherData)} hourly forecast`);
   }
 
   const highPrecipDurationImpact = interpolateImpact(weightedHighPrecipHours, [
@@ -768,38 +776,38 @@ const calculateSafetyScore = ({
   const precipDurationImpact = Math.max(highPrecipDurationImpact, moderatePrecipDurationImpact);
   if (precipDurationImpact > 0) {
     const durationMessage = highPrecipDurationImpact >= moderatePrecipDurationImpact
-      ? `${highPrecipHours}/${effectiveTrendWindowHours} trend hours are high precipitation windows.`
-      : `${moderatePrecipHours}/${effectiveTrendWindowHours} trend hours are moderate precipitation windows.`;
+      ? `${highPrecipHours} of ${effectiveTrendWindowHours} hours have a high chance of rain or snow.`
+      : `${moderatePrecipHours} of ${effectiveTrendWindowHours} hours have a moderate chance of rain or snow.`;
     applyFactor('Storm', precipDurationImpact, durationMessage, `${weatherProvider(weatherData)} hourly trend`);
   }
 
   // Convective signal: even one hour matters within the travel window. Use the
   // summary description and structured per-hour conditions.
-  const convectiveFromDescription = /thunder|lightning|t-storm|tstm|blizzard/.test(weatherDescription);
+  const convectiveFromDescription = /thunder|lightning|t-storm|tstm/.test(weatherDescription);
   const convectiveFromTrend = convectiveTrendHours >= T.storm.convectiveTrendHours;
   if (convectiveFromDescription || convectiveFromTrend) {
     const detail = convectiveFromDescription
-      ? `Convective or severe weather signal in forecast: "${weatherData.description}".`
-      : `Convective signal across ${convectiveTrendHours}/${effectiveTrendWindowHours} trend hours (thunder/lightning).`;
+      ? `Thunderstorms or lightning in the forecast: "${weatherData.description}".`
+      : `Thunder or lightning is forecast in ${convectiveTrendHours} of ${effectiveTrendWindowHours} hours.`;
     applyFactor('Storm', T.storm.convectiveImpact, detail, convectiveFromDescription ? `${weatherProvider(weatherData)} short forecast` : `${weatherProvider(weatherData)} hourly trend`);
   } else if (severeWinterFromDescription || severeWinterFromTrend) {
-    applyFactor('Winter Weather', T.storm.winterImpact, 'Blizzard or whiteout conditions occur within the travel window.',
+    applyFactor('Winter Weather', T.storm.blizzardImpact, 'Blizzard or whiteout conditions are forecast during your trip.',
       severeWinterFromDescription ? `${weatherProvider(weatherData)} short forecast` : `${weatherProvider(weatherData)} hourly trend`);
   } else if (freezingRainFromDescription || freezingRainTrendHours > 0) {
     applyFactor(
       'Winter Weather',
       T.storm.freezingRainImpact,
       freezingRainTrendHours > 0
-        ? `Freezing rain or drizzle across ${freezingRainTrendHours}/${effectiveTrendWindowHours} trend hours can glaze trails and rock with ice.`
-        : `Freezing rain or drizzle in forecast ("${weatherData.description}") can glaze trails and rock with ice.`,
+        ? `Freezing rain or drizzle in ${freezingRainTrendHours} of ${effectiveTrendWindowHours} hours can coat trails and rock with ice.`
+        : `Freezing rain or drizzle in the forecast ("${weatherData.description}") can coat trails and rock with ice.`,
       freezingRainTrendHours > 0 ? `${weatherProvider(weatherData)} hourly trend` : `${weatherProvider(weatherData)} short forecast`,
     );
   } else if (/snow|sleet|freezing rain|ice/.test(weatherDescription)) {
-    applyFactor('Winter Weather', T.storm.winterImpact, `Frozen precipitation in forecast ("${weatherData.description}") increases travel hazard.`, `${weatherProvider(weatherData)} short forecast`);
+    applyFactor('Winter Weather', T.storm.winterImpact, `Snow or ice in the forecast ("${weatherData.description}") makes travel harder.`, `${weatherProvider(weatherData)} short forecast`);
   }
 
   if (radarEchoDetected && (convectiveFromDescription || convectiveFromTrend)) {
-    applyFactor('Storm', 4, 'NOAA MRMS radar currently detects precipitation at the objective, confirming the forecast convective/storm signal.', localConditionsData?.radar?.source || 'NOAA MRMS radar');
+    applyFactor('Storm', 4, 'Radar shows rain or snow at the objective right now, backing up the storm forecast.', localConditionsData?.radar?.source || 'NOAA MRMS radar');
   }
 
   if (visibilityRiskScore !== null) {
@@ -810,17 +818,17 @@ const calculateSafetyScore = ({
     if (visibilityImpact > 0) {
       const activeHoursNote =
         visibilityActiveHours !== null && trend.length > 0
-          ? ` ${Math.round(visibilityActiveHours)}/${effectiveTrendWindowHours} trend hours show reduced-visibility signal.`
+          ? ` ${Math.round(visibilityActiveHours)} of ${effectiveTrendWindowHours} hours show low visibility.`
           : '';
       applyFactor(
         'Visibility',
         visibilityImpact,
-        `Whiteout/visibility risk is ${visibilityRiskLevel || 'elevated'} (${Math.round(visibilityRiskScore)}/100).${activeHoursNote}`,
+        `Whiteout or low-visibility risk is ${(visibilityRiskLevel || 'elevated').toLowerCase()} (${Math.round(visibilityRiskScore)}/100).${activeHoursNote}`,
         weatherData?.visibilityRisk?.source || 'Derived weather visibility model',
       );
     }
   } else if (weatherContextEnabled && /fog|smoke|haze/.test(weatherDescription)) {
-    applyFactor('Visibility', T.visibilityDescriptionImpact, `Reduced-visibility weather in forecast ("${weatherData.description}").`, `${weatherProvider(weatherData)} short forecast`);
+    applyFactor('Visibility', T.visibilityDescriptionImpact, `Low-visibility weather in the forecast ("${weatherData.description}").`, `${weatherProvider(weatherData)} short forecast`);
   }
 
   if (Number.isFinite(trendMinFeelsLike)) {
@@ -829,18 +837,18 @@ const calculateSafetyScore = ({
       : 0;
     if (coldImpact > 0) {
       const coldMessage = trendMinFeelsLike <= T.cold[0].max
-        ? `Minimum apparent temperature in the window is ${Math.round(trendMinFeelsLike)}F.`
+        ? `Dangerously cold: it feels like ${Math.round(trendMinFeelsLike)}°F at the coldest.`
         : trendMinFeelsLike <= T.cold[1].max
-          ? `Very cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`
+          ? `Very cold: it feels like ${Math.round(trendMinFeelsLike)}°F at the coldest.`
           : trendMinFeelsLike <= T.cold[2].max
-            ? `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`
-            : `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`;
+            ? `Cold: it feels like ${Math.round(trendMinFeelsLike)}°F at the coldest.`
+            : `Cool: it feels like ${Math.round(trendMinFeelsLike)}°F at the coldest, enough to numb hands and slow you down.`;
       applyFactor('Cold', coldImpact, coldMessage, `${weatherProvider(weatherData)} temp + windchill`);
     }
     if (trendMinFeelsLike <= T.frostbite.tenMinuteFeelsLike) {
-      applyFactor('Cold', T.frostbite.tenMinuteImpact, `Apparent temperature reaches ${Math.round(trendMinFeelsLike)}F; exposed skin can freeze in about 10 minutes.`, `${weatherProvider(weatherData)} temp + windchill`);
+      applyFactor('Cold', T.frostbite.tenMinuteImpact, `It feels like ${Math.round(trendMinFeelsLike)}°F: exposed skin can freeze in about 10 minutes.`, `${weatherProvider(weatherData)} temp + windchill`);
     } else if (trendMinFeelsLike <= T.frostbite.thirtyMinuteFeelsLike) {
-      applyFactor('Cold', T.frostbite.thirtyMinuteImpact, `Apparent temperature reaches ${Math.round(trendMinFeelsLike)}F; exposed skin can freeze in about 30 minutes.`, `${weatherProvider(weatherData)} temp + windchill`);
+      applyFactor('Cold', T.frostbite.thirtyMinuteImpact, `It feels like ${Math.round(trendMinFeelsLike)}°F: exposed skin can freeze in about 30 minutes.`, `${weatherProvider(weatherData)} temp + windchill`);
     }
   }
 
@@ -852,36 +860,36 @@ const calculateSafetyScore = ({
   );
   if (coldDurationImpact > 0) {
     const coldLabel = extremeColdHours > 0
-      ? `${extremeColdHours}/${effectiveTrendWindowHours} trend hours are at or below 0F and ${coldExposureHours - extremeColdHours} additional hours are below 15F apparent temperature.`
-      : `${coldExposureHours}/${effectiveTrendWindowHours} trend hours are at or below 15F apparent temperature.`;
+      ? `${extremeColdHours} of ${effectiveTrendWindowHours} hours feel like 0°F or colder, and ${coldExposureHours - extremeColdHours} more feel like 15°F or colder.`
+      : `${coldExposureHours} of ${effectiveTrendWindowHours} hours feel like 15°F or colder.`;
     applyFactor('Cold', coldDurationImpact, coldLabel, `${weatherProvider(weatherData)} hourly trend`);
   }
 
   const heatRiskLevel = heatRiskEnabled ? measurement(heatRiskData?.level) : Number.NaN;
   if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 4) {
-    applyFactor('Heat', T.heat.level4Impact, `Heat risk is ${heatRiskData?.label || 'Extreme'} with significant heat-stress potential in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
+    applyFactor('Heat', T.heat.level4Impact, `Heat risk is ${heatRiskData?.label || 'Extreme'}, with a real chance of heat illness during your trip.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 3) {
-    applyFactor('Heat', T.heat.level3Impact, `Heat risk is ${heatRiskData?.label || 'High'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
+    applyFactor('Heat', T.heat.level3Impact, `Heat risk is ${heatRiskData?.label || 'High'} during your trip.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 2) {
-    applyFactor('Heat', T.heat.level2Impact, `Heat risk is ${heatRiskData?.label || 'Elevated'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
+    applyFactor('Heat', T.heat.level2Impact, `Heat risk is ${heatRiskData?.label || 'Elevated'} during your trip.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 1) {
-    applyFactor('Heat', T.heat.level1Impact, `Heat risk is ${heatRiskData?.label || 'Caution'}; monitor pace and hydration.`, heatRiskData?.source || 'Heat risk synthesis');
+    applyFactor('Heat', T.heat.level1Impact, `Heat risk is ${heatRiskData?.label || 'Caution'}; keep an easy pace and drink often.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (heatRiskEnabled && Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.peakFeelsLike) {
-    applyFactor('Heat', T.heat.peakImpact, `Peak apparent temperature in the window reaches ${Math.round(trendMaxFeelsLike)}F.`, `${weatherProvider(weatherData)} temp + humidity`);
+    applyFactor('Heat', T.heat.peakImpact, `It feels like up to ${Math.round(trendMaxFeelsLike)}°F.`, `${weatherProvider(weatherData)} temp + humidity`);
   } else if (heatRiskEnabled && Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.warmFeelsLike && weightedHeatExposureHours >= T.heat.warmDurHours) {
-    applyFactor('Heat', T.heat.warmImpact, `${heatExposureHours}/${effectiveTrendWindowHours} trend hours are warm (>=85F apparent).`, `${weatherProvider(weatherData)} hourly trend`);
+    applyFactor('Heat', T.heat.warmImpact, `${heatExposureHours} of ${effectiveTrendWindowHours} hours feel like 85°F or warmer.`, `${weatherProvider(weatherData)} hourly trend`);
   }
 
   if (rainfallData?.fallbackMode === 'zeroed_totals') {
-    applyFactor('Surface Conditions', T.surface.dataUnavailableImpact, 'Precipitation data unavailable (upstream outage) — surface conditions are unknown; treat as potentially hazardous.', rainfallData?.source || 'Open-Meteo precipitation history');
+    applyFactor('Surface Conditions', T.surface.dataUnavailableImpact, 'Rain and snow history is unavailable, so trail conditions are unknown. Assume they could be slick.', rainfallData?.source || 'Open-Meteo precipitation history');
   } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= T.surface.rainHeavy) {
-    applyFactor('Surface Conditions', T.surface.rainHeavyImpact, `Recent rainfall is heavy (${rainPast24hIn.toFixed(2)} in in 24h), increasing slick/trail-softening risk.`, rainfallData?.source || 'Open-Meteo precipitation history');
+    applyFactor('Surface Conditions', T.surface.rainHeavyImpact, `Heavy rain recently (${rainPast24hIn.toFixed(2)} in of rain in 24 hours) can leave trails slick and soft.`, rainfallData?.source || 'Open-Meteo precipitation history');
   } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= T.surface.rainModerate) {
-    applyFactor('Surface Conditions', T.surface.rainModerateImpact, `Recent rainfall (${rainPast24hIn.toFixed(2)} in in 24h) can create slippery or muddy travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
+    applyFactor('Surface Conditions', T.surface.rainModerateImpact, `Recent rain (${rainPast24hIn.toFixed(2)} in of rain in 24 hours) can leave trails slippery or muddy.`, rainfallData?.source || 'Open-Meteo precipitation history');
   }
 
   if (Number.isFinite(observedRain24hIn) && observedRain24hIn >= T.surface.rainHeavy) {
-    applyFactor('Surface Conditions', 3, `NWS RFC radar/gauge analysis observed ${observedRain24hIn.toFixed(2)} in of rain in the last 24h.`, localConditionsData?.radar?.source || 'NWS RFC QPE');
+    applyFactor('Surface Conditions', 3, `Radar and rain gauges measured ${observedRain24hIn.toFixed(2)} in of rain in the last 24 hours.`, localConditionsData?.radar?.source || 'NWS RFC QPE');
   }
 
   if (
@@ -890,13 +898,13 @@ const calculateSafetyScore = ({
     && currentStreamflowCfs > 0
     && streamPeakFlowCfs >= currentStreamflowCfs * 1.5
   ) {
-    applyFactor('Stream Crossing', 4, `Nearby gauge flow is forecast to rise from about ${Math.round(currentStreamflowCfs)} to ${Math.round(streamPeakFlowCfs)} cfs. Verify that this gauge represents the route-crossed drainage.`, streamflowForecast?.source || 'NOAA NWPS');
+    applyFactor('Stream Crossing', 4, `A nearby stream gauge is forecast to rise from about ${Math.round(currentStreamflowCfs)} to ${Math.round(streamPeakFlowCfs)} cfs, so crossings may be harder. Check that this gauge is on a stream your route crosses.`, streamflowForecast?.source || 'NOAA NWPS');
   }
 
   if (Number.isFinite(snowPast24hIn) && snowPast24hIn >= T.surface.snowHeavy) {
-    applyFactor('Surface Conditions', T.surface.snowHeavyImpact, `Recent snowfall is substantial (${snowPast24hIn.toFixed(1)} in in 24h), increasing trail and route uncertainty.`, rainfallData?.source || 'Open-Meteo precipitation history');
+    applyFactor('Surface Conditions', T.surface.snowHeavyImpact, `Lots of new snow (${snowPast24hIn.toFixed(1)} in of snow in 24 hours) can hide the trail and slow travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
   } else if (Number.isFinite(snowPast24hIn) && snowPast24hIn >= T.surface.snowModerate) {
-    applyFactor('Surface Conditions', T.surface.snowModerateImpact, `Recent snowfall (${snowPast24hIn.toFixed(1)} in in 24h) can hide surface hazards and slow travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
+    applyFactor('Surface Conditions', T.surface.snowModerateImpact, `Recent snow (${snowPast24hIn.toFixed(1)} in of snow in 24 hours) can hide hazards underfoot and slow travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
   }
 
   // Terrain-condition synthesis (snow/wet/icy surface). Only fires when the
@@ -914,9 +922,9 @@ const calculateSafetyScore = ({
   const terrainConfidence = String(terrainConditionForScoring?.confidence || '').toLowerCase();
   if (terrainConditionForScoring && typeof terrainConditionForScoring === 'object' && terrainConfidence !== 'low') {
     if (terrainImpactLevel === 'high') {
-      applyFactor('Surface Conditions', T.surface.terrainHighImpact, `Trail surface is hazardous (${terrainConditionForScoring.label || 'high-impact surface'}). ${terrainConditionForScoring.recommendedTravel || ''}`.trim(), terrainConditionForScoring.source || 'Terrain condition synthesis');
+      applyFactor('Surface Conditions', T.surface.terrainHighImpact, `The trail surface is hazardous (${terrainConditionForScoring.label || 'high-impact surface'}). ${terrainConditionForScoring.recommendedTravel || ''}`.trim(), terrainConditionForScoring.source || 'Terrain condition synthesis');
     } else if (terrainImpactLevel === 'moderate') {
-      applyFactor('Surface Conditions', T.surface.terrainModerateImpact, `Trail surface is variable (${terrainConditionForScoring.label || 'moderate-impact surface'}).`, terrainConditionForScoring.source || 'Terrain condition synthesis');
+      applyFactor('Surface Conditions', T.surface.terrainModerateImpact, `The trail surface is mixed (${terrainConditionForScoring.label || 'moderate-impact surface'}).`, terrainConditionForScoring.source || 'Terrain condition synthesis');
     }
   }
 
@@ -924,30 +932,30 @@ const calculateSafetyScore = ({
   // postholing, lingering-snow, and creek-crossing uncertainty.
   if (snowpackHasData && snowpackStrongSignal) {
     if (snowpackAboveAverage) {
-      applyFactor('Snowpack', T.snowpack.aboveAverageImpact, `Snowpack is running above seasonal average (${Math.round(snowpackPercentOfAverage)}% of normal), increasing lingering-snow, postholing, and creek-crossing uncertainty.`, snowpackData?.source || 'Snowpack synthesis');
+      applyFactor('Snowpack', T.snowpack.aboveAverageImpact, `The snowpack is ${Math.round(snowpackPercentOfAverage)}% of normal, so expect lingering snow, postholing, and higher creeks.`, snowpackData?.source || 'Snowpack synthesis');
     } else if (snowpackDeep) {
       const depthNote = Number.isFinite(snowpackMaxDepthIn) ? `${Math.round(snowpackMaxDepthIn)} in depth` : `${Math.round(snowpackMaxSweIn)} in SWE`;
-      applyFactor('Snowpack', T.snowpack.deepImpact, `Deep snowpack present (${depthNote}), increasing route-finding and travel difficulty.`, snowpackData?.source || 'Snowpack synthesis');
+      applyFactor('Snowpack', T.snowpack.deepImpact, `Deep snowpack (${depthNote}) makes route-finding and travel harder.`, snowpackData?.source || 'Snowpack synthesis');
     }
   }
 
   if (Number.isFinite(expectedRainWindowIn) && expectedRainWindowIn >= T.storm.expectedRainHigh) {
-    applyFactor('Storm', T.storm.expectedRainHighImpact, `Expected rain in selected travel window is ${expectedRainWindowIn.toFixed(2)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
+    applyFactor('Storm', T.storm.expectedRainHighImpact, `About ${expectedRainWindowIn.toFixed(2)} in of rain is expected during your trip.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
   } else if (Number.isFinite(expectedRainWindowIn) && expectedRainWindowIn >= T.storm.expectedRainLow) {
-    applyFactor('Storm', T.storm.expectedRainLowImpact, `Expected rain in selected travel window is ${expectedRainWindowIn.toFixed(2)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
+    applyFactor('Storm', T.storm.expectedRainLowImpact, `About ${expectedRainWindowIn.toFixed(2)} in of rain is expected during your trip.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
   }
 
   if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= T.storm.expectedSnowHigh) {
-    applyFactor('Winter Weather', T.storm.expectedSnowHighImpact, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
+    applyFactor('Winter Weather', T.storm.expectedSnowHighImpact, `About ${expectedSnowWindowIn.toFixed(1)} in of snow is expected during your trip.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
   } else if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= T.storm.expectedSnowLow) {
-    applyFactor('Winter Weather', T.storm.expectedSnowLowImpact, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
+    applyFactor('Winter Weather', T.storm.expectedSnowLowImpact, `About ${expectedSnowWindowIn.toFixed(1)} in of snow is expected during your trip.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
   }
 
   if (daylightEnabled && startsAfterSunset) {
     applyFactor(
       'Darkness',
       T.darknessImpact,
-      'The planned start is after sunset, reducing navigation margin and terrain visibility.',
+      'You would start after sunset, which makes navigating and seeing the terrain harder.',
       solarTimesKnown ? 'Sunrise and sunset times' : `${weatherProvider(weatherData)} isDaytime flag`,
     );
   }
@@ -969,7 +977,7 @@ const calculateSafetyScore = ({
     applyFactor(
       'Delay Margin',
       impact,
-      `A late return would run into new hazards: ${described}. Keep a firm turnaround.`,
+      `If you run late, you would meet new hazards: ${described}. Stick to your turnaround time.`,
       `${weatherProvider(weatherData)} hourly forecast past the travel window`,
     );
   }
@@ -978,12 +986,12 @@ const calculateSafetyScore = ({
     applyFactor(
       'Weather Volatility',
       T.volatilityImpact,
-      `Large ${effectiveTrendWindowHours}-hour temperature swing (${Math.round(tempRange)}F) suggests unstable conditions.`,
+      `The temperature swings ${Math.round(tempRange)}°F over ${effectiveTrendWindowHours} hours, a sign of unsettled weather.`,
       `${weatherProvider(weatherData)} hourly trend`,
     );
   }
   if (Number.isFinite(trendPeakGust) && trendPeakGust >= T.wind.gustGuard && (!Number.isFinite(gust) || gust < T.wind.gustGuard)) {
-    applyFactor('Wind', T.wind.gustGuardImpact, `Peak gusts in the next ${effectiveTrendWindowHours} hours reach ${Math.round(trendPeakGust)} mph.`, `${weatherProvider(weatherData)} hourly trend`);
+    applyFactor('Wind', T.wind.gustGuardImpact, `Gusts reach ${Math.round(trendPeakGust)} mph during your ${effectiveTrendWindowHours}-hour trip.`, `${weatherProvider(weatherData)} hourly trend`);
   }
 
   // Combined hazard escalation: co-occurring weather hazards compound risk
@@ -999,9 +1007,9 @@ const calculateSafetyScore = ({
     (weatherCats.wind && weatherCats.precipStorm) ||
     (weatherCats.coldHeat && weatherCats.precipStorm);
   if (activeWeatherCategories >= 3) {
-    applyFactor('Combined Exposure', T.combinedExposure.tripleImpact, `${activeWeatherCategories} weather hazard categories are active simultaneously, compounding exposure risk.`, 'Safety score synthesis');
+    applyFactor('Combined Exposure', T.combinedExposure.tripleImpact, `${activeWeatherCategories} kinds of weather hazard overlap, which compounds the risk.`, 'Safety score synthesis');
   } else if (activeWeatherCategories >= 2 && hasDangerousWeatherPair) {
-    applyFactor('Combined Exposure', T.combinedExposure.pairImpact, 'Co-occurring weather hazards increase exposure risk.', 'Safety score synthesis');
+    applyFactor('Combined Exposure', T.combinedExposure.pairImpact, 'Two weather hazards overlap, which compounds the risk.', 'Safety score synthesis');
   }
 
   // Condition trajectory: deteriorating conditions are riskier than improving
@@ -1020,11 +1028,11 @@ const calculateSafetyScore = ({
     const windDeteriorating = secondAvgGust >= firstAvgGust + 8 && secondAvgGust >= 20;
     const precipDeteriorating = secondAvgPrecip >= firstAvgPrecip + 15 && secondAvgPrecip >= 40;
     if (windDeteriorating && precipDeteriorating) {
-      applyFactor('Condition Trajectory', T.trajectory.bothImpact, 'Both wind and precipitation are deteriorating through the travel window.', `${weatherProvider(weatherData)} hourly trend`);
+      applyFactor('Condition Trajectory', T.trajectory.bothImpact, 'Wind and rain or snow both get worse as the day goes on.', `${weatherProvider(weatherData)} hourly trend`);
     } else if (windDeteriorating) {
-      applyFactor('Condition Trajectory', T.trajectory.singleImpact, 'Wind conditions are deteriorating through the travel window.', `${weatherProvider(weatherData)} hourly trend`);
+      applyFactor('Condition Trajectory', T.trajectory.singleImpact, 'The wind gets stronger as the day goes on.', `${weatherProvider(weatherData)} hourly trend`);
     } else if (precipDeteriorating) {
-      applyFactor('Condition Trajectory', T.trajectory.singleImpact, 'Precipitation is increasing through the travel window.', `${weatherProvider(weatherData)} hourly trend`);
+      applyFactor('Condition Trajectory', T.trajectory.singleImpact, 'Rain or snow gets more likely as the day goes on.', `${weatherProvider(weatherData)} hourly trend`);
     }
   }
 
@@ -1034,11 +1042,11 @@ const calculateSafetyScore = ({
     const listedEvents = alertEvents.length ? ` (${alertEvents.join(', ')})` : '';
     const activeAlerts = alertsCount === 1 ? '1 active NWS alert' : `${alertsCount} active NWS alerts`;
     if (highestAlertSeverity === 'extreme') {
-      applyFactor('Official Alert', T.alerts.extreme, `${activeAlerts}${listedEvents} with EXTREME severity.`, 'NOAA/NWS Active Alerts');
+      applyFactor('Official Alert', T.alerts.extreme, `${activeAlerts}${listedEvents} at extreme severity.`, 'NOAA/NWS Active Alerts');
     } else if (highestAlertSeverity === 'severe') {
-      applyFactor('Official Alert', T.alerts.severe, `${activeAlerts}${listedEvents} with severe impacts possible.`, 'NOAA/NWS Active Alerts');
+      applyFactor('Official Alert', T.alerts.severe, `${activeAlerts}${listedEvents} at severe level: serious impacts are possible.`, 'NOAA/NWS Active Alerts');
     } else if (highestAlertSeverity === 'moderate') {
-      applyFactor('Official Alert', T.alerts.moderate, `${activeAlerts}${listedEvents} ${alertsCount === 1 ? 'indicates' : 'indicate'} moderate hazard.`, 'NOAA/NWS Active Alerts');
+      applyFactor('Official Alert', T.alerts.moderate, `${activeAlerts}${listedEvents} ${alertsCount === 1 ? 'signals' : 'signal'} a moderate hazard.`, 'NOAA/NWS Active Alerts');
     } else {
       applyFactor('Official Alert', T.alerts.minor, `${activeAlerts}${listedEvents} ${alertsCount === 1 ? 'is' : 'are'} in effect.`, 'NOAA/NWS Active Alerts');
     }
@@ -1058,7 +1066,7 @@ const calculateSafetyScore = ({
         aqiTier.min >= 201 ? `Air quality is hazardous (US AQI ${Math.round(usAqi)}).`
         : aqiTier.min >= 151 ? `Air quality is unhealthy (US AQI ${Math.round(usAqi)}).`
         : aqiTier.min >= 101 ? `Air quality is unhealthy for sensitive groups (US AQI ${Math.round(usAqi)}).`
-        : `Air quality is moderate (US AQI ${Math.round(usAqi)}). Consider reducing intensity for sustained exertion.`;
+        : `Air quality is moderate (US AQI ${Math.round(usAqi)}). Consider easing off on long, hard efforts.`;
       applyFactor('Air Quality', aqiImpact, aqiMessage, airQualityData?.source || 'Open-Meteo Air Quality');
     }
   }
@@ -1082,14 +1090,14 @@ const calculateSafetyScore = ({
     applyFactor(
       'Weather Unavailable',
       T.weather.unavailableImpact,
-      'All weather data is unavailable — wind, precipitation, and temperature conditions are unknown.',
+      'No weather data is available, so wind, rain or snow, and temperature are unknown.',
       'System',
     );
   }
 
   if (!weatherDataUnavailable && missingWeatherDimensions.length) {
     applyFactor('Weather Coverage', missingWeatherDimensions.length * T.weather.missingDimensionImpact,
-      `Forecast ${missingWeatherDimensions.join(', ')} data is missing across the travel window.`, 'System');
+      `The forecast is missing ${missingWeatherDimensions.join(', ')} data for your trip.`, 'System');
   }
 
   // --- Cross-group interaction penalties ---
@@ -1100,16 +1108,16 @@ const calculateSafetyScore = ({
   const avalancheModerate = avalancheRelevant && Number.isFinite(avalancheDangerLevel) && avalancheDangerLevel >= 2;
 
   if (windLoadingEnabled && avalancheConsiderable && hasWindFactor) {
-    applyFactor('Avalanche Wind Loading', T.crossGroup.avalancheWindLoading, 'Wind loading compounds avalanche hazard at considerable or higher danger.', 'Cross-group interaction');
+    applyFactor('Avalanche Wind Loading', T.crossGroup.avalancheWindLoading, 'Wind is loading slopes while avalanche danger is Considerable or higher.', 'Cross-group interaction');
   }
   if (avalancheModerate && hasStormOrWinterWeather) {
-    applyFactor('Avalanche Storm Loading', T.crossGroup.avalancheStormLoading, 'Active storm snow increases avalanche hazard at moderate or higher danger.', 'Cross-group interaction');
+    applyFactor('Avalanche Storm Loading', T.crossGroup.avalancheStormLoading, 'Storm snow adds weight to slopes while avalanche danger is Moderate or higher.', 'Cross-group interaction');
   }
   if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 2 && Number.isFinite(heatRiskLevel) && heatRiskLevel >= 2) {
-    applyFactor('Fire-Heat Compound', T.crossGroup.fireHeatCompound, 'Co-occurring fire danger and heat risk compound outdoor exposure hazard.', 'Cross-group interaction');
+    applyFactor('Fire-Heat Compound', T.crossGroup.fireHeatCompound, 'Fire danger and heat together add to the strain of being out.', 'Cross-group interaction');
   }
   if (avalancheConsiderable && hasVisibilityFactor) {
-    applyFactor('Avalanche Visibility', T.crossGroup.avalancheVisibility, 'Low visibility in avalanche terrain reduces ability to identify hazards.', 'Cross-group interaction');
+    applyFactor('Avalanche Visibility', T.crossGroup.avalancheVisibility, 'Low visibility makes avalanche terrain harder to judge while danger is Considerable or higher.', 'Cross-group interaction');
   }
 
   // --- Group impacts with diminishing returns and decisive-hazard floors ---

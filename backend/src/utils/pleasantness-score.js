@@ -2,13 +2,15 @@ const { computeFeelsLikeF } = require('./weather-normalizers');
 const { clampTravelWindowHours, parseIsoTimeToMs } = require('./time');
 const { adjustPointToElevation, highestElevationBetween } = require('./approach-elevation');
 const { toFiniteOrNull: finiteNumber } = require('./numbers');
+const { isSnowTravelActivity, normalizeActivity } = require('./activity-profiles');
 
 // Pleasantness is intentionally independent from the safety score. It describes
 // forecast comfort across the selected travel window; it must never be used as a
 // go/no-go signal or allowed to offset a hazard.
 const PLEASANTNESS_CONFIG = {
   // 1.5.0: approach hours can be scored at the party's elevation.
-  scoreVersion: '1.5.0',
+  // 1.6.0: the temperature curve follows the planned activity.
+  scoreVersion: '1.6.0',
   weights: {
     temperature: 30,
     wind: 25,
@@ -31,6 +33,26 @@ const TEMPERATURE_CURVE = [
   [-20, 0], [0, 10], [15, 25], [30, 50], [38, 75], [45, 95],
   [50, 100], [62, 100], [70, 88], [78, 65], [86, 38], [96, 10], [106, 0],
 ];
+
+// Snow travel is most comfortable cold: an uphill skin or a snow climb makes
+// the low 20s feel good, and warm afternoons bring wet, heavy snow.
+const SNOW_TRAVEL_TEMPERATURE_CURVE = [
+  [-25, 0], [-10, 15], [0, 35], [10, 65], [18, 90], [22, 100],
+  [35, 100], [42, 88], [50, 70], [60, 45], [70, 25], [80, 10], [90, 0],
+];
+
+// Running makes far more heat than hiking, so the ideal band is cooler and
+// warm air turns uncomfortable sooner.
+const RUNNING_TEMPERATURE_CURVE = [
+  [-20, 0], [0, 10], [15, 25], [28, 50], [36, 80], [42, 100],
+  [55, 100], [62, 88], [70, 68], [78, 42], [86, 20], [96, 5], [104, 0],
+];
+
+const temperatureCurveFor = (activity) => {
+  if (!activity) return TEMPERATURE_CURVE;
+  if (isSnowTravelActivity(activity)) return SNOW_TRAVEL_TEMPERATURE_CURVE;
+  return normalizeActivity(activity) === 'trail-running' ? RUNNING_TEMPERATURE_CURVE : TEMPERATURE_CURVE;
+};
 
 // Direct sun on exposed terrain feels several degrees warmer than the shaded
 // air temperature a forecast reports; the full load applies under clear skies
@@ -324,6 +346,8 @@ const formatRange = (values, suffix) => {
   return low === high ? `${low}${suffix}` : `${low}–${high}${suffix}`;
 };
 
+const capitalize = (text) => (text ? text[0].toUpperCase() + text.slice(1) : text);
+
 const joinNaturally = (items) => {
   if (items.length <= 1) return items[0] || '';
   if (items.length === 2) return `${items[0]} and ${items[1]}`;
@@ -338,7 +362,10 @@ const calculatePleasantnessScore = ({
   scoreFeatures = null,
   // { profile, sunriseMinutes, sunsetMinutes } from approach-elevation.js; null keeps both-ends scoring.
   approach = null,
+  // Sets the temperature curve; absent callers score with the hiking curve.
+  activity = null,
 }) => {
+  const temperatureCurve = temperatureCurveFor(activity);
   const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
   const airQualityEnabled = scoreFeatureEnabled('airQualityDetails');
   const daylightEnabled = scoreFeatureEnabled('daylightTimeline');
@@ -377,7 +404,7 @@ const calculatePleasantnessScore = ({
         dewPointF: variant.dewPoint,
         condition: variant.condition,
       });
-      const baseScore = scoreOnCurve(feelsLike + solarLoad, TEMPERATURE_CURVE);
+      const baseScore = scoreOnCurve(feelsLike + solarLoad, temperatureCurve);
       return { feelsLike, moisturePenalty, score: clamp(baseScore - moisturePenalty) };
     }).filter(Boolean);
     if (variants.length === 0) return null;
@@ -496,10 +523,10 @@ const calculatePleasantnessScore = ({
         const where = lowestPartyFt !== null
           ? ` along your route, from about ${(Math.round(lowestPartyFt / 100) * 100).toLocaleString('en-US')} ft on the approach to the objective`
           : partySamples
-            ? ' at the objective during the selected window'
+            ? ' at the objective during your trip'
             : spread && spread.elevationFt !== null
               ? ` between the objective and ${Math.round(spread.elevationFt).toLocaleString('en-US')} ft`
-              : ' during the selected window';
+              : ' during your trip';
         const details = [];
         if (peakSolarLoad >= 2) details.push(`direct sun adds up to ${peakSolarLoad}°F`);
         if (peakMoisturePenalty > 0) {
@@ -540,7 +567,7 @@ const calculatePleasantnessScore = ({
         const peakChance = chances.length ? Math.round(Math.max(...chances)) : null;
         return peakChance === null
           ? `Forecast conditions: ${conditionDescription || 'unavailable'}.`
-          : `Precipitation chance peaks at ${peakChance}% during the selected window.`;
+          : `The chance of rain or snow peaks at ${peakChance}% during your trip.`;
       })(),
     },
     {
@@ -634,9 +661,9 @@ const calculatePleasantnessScore = ({
   const hasExplicitConvectiveCondition = hasConvectiveCondition && windowConditions.some((condition) =>
     /thunder|lightning/.test(condition) && !/slight chance|chance|isolated|scattered/.test(condition));
   const hasSeverePrecipitation = windowConditions.some((condition) => /heavy rain|heavy snow|downpour/.test(condition));
-  if (hasHarshCondition) limitScore(39, 'Blizzard or icing conditions in the travel window limit comfort to Harsh.');
-  else if (hasExplicitConvectiveCondition || hasSeverePrecipitation) limitScore(59, 'Storms or heavy precipitation in the travel window limit comfort to Uncomfortable.');
-  else if (hasQualifiedConvectiveCondition) limitScore(74, 'Possible thunderstorms in the travel window limit comfort to Mixed.');
+  if (hasHarshCondition) limitScore(39, 'Blizzard or icing conditions during your trip limit comfort to Harsh.');
+  else if (hasExplicitConvectiveCondition || hasSeverePrecipitation) limitScore(59, 'Storms or heavy rain or snow during your trip limit comfort to Uncomfortable.');
+  else if (hasQualifiedConvectiveCondition) limitScore(74, 'Possible thunderstorms during your trip limit comfort to Mixed.');
   const factors = availableComponents
     .map((component) => ({
       factor: component.factor,
@@ -655,15 +682,16 @@ const calculatePleasantnessScore = ({
   const label = labelForScore(score);
   const limiters = factors.filter((factor) => factor.score < 85).slice(0, 2).map((factor) => factor.factor.toLowerCase());
   const outlook = limiters.length > 0
-    ? `${label} overall; ${joinNaturally(limiters)} ${limiters.length === 1 ? 'is' : 'are'} the main comfort ${limiters.length === 1 ? 'limiter' : 'limiters'}.`
-    : `${label} overall, with comfortable weather across the selected travel window.`;
+    ? `${label} overall. ${capitalize(joinNaturally(limiters))} ${limiters.length === 1 ? 'holds' : 'hold'} it back most.`
+    : `${label} overall, with comfortable weather for your whole trip.`;
   const bindingAdjustments = adjustments.filter((adjustment) => adjustment.maximumScore === score);
   const summary = completeHours < requestedHours
-    ? `Limited forecast coverage (${displayHours(completeHours)}/${requestedHours} complete hours). ${limiters.length ? outlook : `${label} rating based on available readings.`}`
+    ? `Limited forecast coverage: only ${displayHours(completeHours)} of ${requestedHours} hours have a full forecast. ${limiters.length ? outlook : `${label}, based on the hours that have data.`}`
     : bindingAdjustments.length > 0 ? `${outlook} ${bindingAdjustments[0].reason}` : outlook;
 
   return {
     scoreVersion: PLEASANTNESS_CONFIG.scoreVersion,
+    activity: activity ? normalizeActivity(activity) : null,
     score,
     confidence,
     confidenceReasons,

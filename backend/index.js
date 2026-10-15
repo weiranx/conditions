@@ -702,6 +702,7 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
       approach: resolveApproach({ approachRequest, weatherData, solarData }),
+      activity: requestedActivity,
     });
     const todayDate = new Date().toISOString().slice(0, 10);
     const responseGeneratedAt = new Date().toISOString();
@@ -835,6 +836,7 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
       approach: resolveApproach({ approachRequest, weatherData: safeWeatherData, solarData }),
+      activity: requestedActivity,
     });
     const safeGearSuggestions = buildLayeringGearSuggestions({
       weatherData: safeWeatherData,

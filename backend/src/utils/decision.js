@@ -33,6 +33,15 @@ const decisionLevelRank = (level) => DECISION_LEVEL_RANK[level] || 0;
 const DANGER_LABELS = ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'];
 const STORM_SIGNAL = /thunder|storm|lightning|hail|blizzard/i;
 
+// NWS wind chill chart: exposed skin freezes in about 30 minutes near -20 °F
+// feels-like and in about 10 minutes near -35 °F. A traveler's own limit can
+// push the cold no-go point lower, as with gusts, but only by a clear margin.
+const FROSTBITE_30_MIN_F = -20;
+const FROSTBITE_10_MIN_F = -35;
+const COLD_BLOCKER_MARGIN_F = 15;
+// Feels-like heat that blocks a plan unless the traveler's limit is higher.
+const HEAT_BLOCKER_F = 95;
+
 const normalizeDangerLevel = (level) => (Number.isFinite(level) ? Math.max(0, Math.min(5, Math.round(level || 0))) : 0);
 
 const alertSeverityRank = (severity) => {
@@ -146,7 +155,7 @@ const evaluateDecision = (report, context) => {
   let peakFeelsLike = feelsLike;
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   if (/weather data unavailable/i.test(description)) {
-    addBlocker('Weather data is unavailable — wind, precipitation, and temperature are unknown. Do not make go/no-go decisions from this report.');
+    addBlocker('Weather data is unavailable, so wind, rain or snow, and temperature are unknown. Do not use this report to decide whether to go.');
   }
   const startHasStormSignal = STORM_SIGNAL.test(description);
   let hasStormSignal = startHasStormSignal;
@@ -155,6 +164,7 @@ const evaluateDecision = (report, context) => {
   let peakGustHour = '';
   let peakPrecipHour = '';
   let coldestFeelsLikeHour = '';
+  let hottestFeelsLikeHour = '';
   // True when the coldest hour is cold because a valley inversion is likely on the approach.
   const hasInversion = (point) => Boolean(point?.inversionRisk);
   let coldestIsInversion = Boolean(approach) && hasInversion(startPoint);
@@ -172,7 +182,10 @@ const evaluateDecision = (report, context) => {
         coldestFeelsLikeHour = point.time || '';
         coldestIsInversion = hasInversion(point);
       }
-      if (peakFeelsLike === null || pointFeelsLike > peakFeelsLike) peakFeelsLike = pointFeelsLike;
+      if (peakFeelsLike === null || pointFeelsLike > peakFeelsLike) {
+        peakFeelsLike = pointFeelsLike;
+        hottestFeelsLikeHour = point.time || '';
+      }
     }
     if (!hasStormSignal && STORM_SIGNAL.test(String(point.condition || ''))) {
       hasStormSignal = true;
@@ -193,12 +206,19 @@ const evaluateDecision = (report, context) => {
   const maxGustThreshold = Math.max(10, limits.maxWindGustMph);
   const maxPrecipThreshold = Math.max(0, limits.maxPrecipChance);
   const minFeelsLikeThreshold = limits.minFeelsLikeF;
+  // Older callers send no heat limit; they keep the fixed heat no-go point.
+  const maxFeelsLikeThreshold = isFiniteNumber(limits.maxFeelsLikeF) ? limits.maxFeelsLikeF : HEAT_BLOCKER_F;
+  const heatBlockerThreshold = Math.max(HEAT_BLOCKER_F, maxFeelsLikeThreshold);
+  const coldBlockerThreshold = Math.min(FROSTBITE_30_MIN_F, minFeelsLikeThreshold - COLD_BLOCKER_MARGIN_F);
   const formatWindValue = (valueMph) => formatWind(valueMph, units.wind);
   const formatTempValue = (valueF) => formatTemperature(valueF, units.temperature);
   // Start, return and sunset read on the traveler's clock; sunset arrives as the provider wrote it ("7:30 PM").
   const formatClockValue = (value) => formatClockForStyle(value, units.timeStyle);
+  // " around 2:00 PM" for a reading inside the window; nothing for the start-time reading.
+  const around = (hour) => (hour ? ` around ${formatClockValue(hour)}` : '');
   const displayMaxGustThreshold = formatWindValue(maxGustThreshold);
   const displayMinFeelsLikeThreshold = formatTempValue(minFeelsLikeThreshold);
+  const displayMaxFeelsLikeThreshold = formatTempValue(maxFeelsLikeThreshold);
 
   const alerts = report?.alerts || {};
   const alertsStatus = String(alerts.status || '').toLowerCase();
@@ -287,85 +307,93 @@ const evaluateDecision = (report, context) => {
   ].filter(Boolean);
 
   if (unknownSnowpackMode) {
-    addCaution('No current avalanche bulletin covers this zone. Use low-angle, low-consequence terrain, avoid terrain traps, increase spacing, and open the Avalanche card before committing.');
+    addCaution('No current avalanche forecast covers this area. Stick to low-angle slopes with nothing steep above you, avoid gullies and other terrain traps, cross slopes one at a time, and read the Avalanche card before you commit.');
   }
   if (avalancheExpired) {
-    addCaution('The avalanche bulletin expires before this start time. Open the latest center product before leaving; if no update is available, treat the terrain as unrated and conditions as potentially worse.');
+    addCaution('The avalanche forecast expires before your start. Check the avalanche center for a newer one before you leave; if there is none, treat the terrain as unrated and assume conditions could be worse.');
   }
   if (avalancheGateRequired && !avalancheUnknown && danger >= 4) {
-    addBlocker('Avalanche danger is High or Extreme. Choose non-avalanche terrain or another day; do not enter avalanche terrain.');
+    addBlocker('Avalanche danger is High or Extreme: very dangerous conditions. Stay off and out from under slopes steeper than about 30°, or pick another day.');
   } else if (avalancheGateRequired && !avalancheUnknown && danger === 3) {
-    addBlocker('Avalanche danger is Considerable. Choose non-avalanche terrain or another day unless your team can reliably identify and avoid the day’s avalanche problems.');
+    addBlocker('Avalanche danger is Considerable: human-triggered avalanches are likely. Stay off and out from under slopes steeper than about 30°, or pick another day, unless your team can recognize and avoid today’s avalanche problems.');
   }
   if (hasStormSignal) {
-    addCaution('A storm or thunder signal appears in the travel window. Stay off exposed ridges, identify a fast descent route, and turn around at the first thunder, lightning, or rapid cloud growth.');
+    const stormWhen = stormSignalHour ? ` from about ${formatClockValue(stormSignalHour)}` : ' during your trip';
+    addCaution(`Storms or thunder are forecast${stormWhen}. Plan to be off ridges and summits before then, know your fastest way down, and turn back at the first thunder, lightning, or fast-growing clouds.`);
   }
+  // Each limit check that fails sets at least a caution, so a plan never
+  // reads GO with a limit it does not meet. Well past a limit, it blocks.
   if (precip !== null && precip >= Math.max(85, maxPrecipThreshold + 25)) {
-    addBlocker(`Precipitation chance reaches ${precip}%. Delay or choose a lower-consequence route where slick surfaces, poor visibility, and slower travel do not create a trap.`);
-  } else if (precip !== null && precip >= Math.max(55, maxPrecipThreshold)) {
-    addCaution(`Precipitation chance reaches ${precip}%. Allow extra travel time, carry traction and weather protection, and turn around if footing or visibility deteriorates.`);
+    addBlocker(`Rain or snow is very likely (${precip}% chance${around(peakPrecipHour)}). Expect slick footing, poor visibility, and slow travel: pick another day, or a route that is easy to turn back from.`);
+  } else if (precip !== null && precip > maxPrecipThreshold) {
+    addCaution(`Rain or snow chance reaches ${precip}%${around(peakPrecipHour)}, above your ${maxPrecipThreshold}% limit. Allow extra time, bring rain gear and traction, and turn back if footing or visibility gets bad.`);
   }
   if (gust !== null && gust >= Math.max(35, maxGustThreshold + 10)) {
-    addBlocker(`Wind gusts reach about ${formatWindValue(gust)}. Choose a sheltered, lower objective or delay; avoid exposed ridges and terrain where a stumble would be consequential.`);
-  } else if (gust !== null && gust >= maxGustThreshold) {
-    addCaution(`Wind gusts reach about ${formatWindValue(gust)}. Shorten ridge exposure, secure loose gear, and use a firm turnaround if balance or communication becomes difficult.`);
+    addBlocker(`Gusts reach about ${formatWindValue(gust)}${around(peakGustHour)}, well above your ${displayMaxGustThreshold} limit. Pick a sheltered, lower route or another day, and stay off exposed ridges where a stumble would be serious.`);
+  } else if (gust !== null && gust > maxGustThreshold) {
+    addCaution(`Gusts reach about ${formatWindValue(gust)}${around(peakGustHour)}, above your ${displayMaxGustThreshold} limit. Keep ridge time short, secure loose gear, and turn back if it gets hard to keep your balance or hear each other.`);
   }
-  if (peakFeelsLike !== null && peakFeelsLike >= 95) {
-    addBlocker(`Apparent temperature reaches about ${formatTempValue(peakFeelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
+  if (peakFeelsLike !== null && peakFeelsLike >= heatBlockerThreshold) {
+    addBlocker(`It feels like about ${formatTempValue(peakFeelsLike)}${around(hottestFeelsLikeHour)}, hot enough for heat illness. Go in the cool early hours or pick a shadier, higher objective, and do not commit without plenty of water and an early way out.`);
+  } else if (peakFeelsLike !== null && peakFeelsLike > maxFeelsLikeThreshold) {
+    addCaution(`It feels like about ${formatTempValue(peakFeelsLike)}${around(hottestFeelsLikeHour)}, above your ${displayMaxFeelsLikeThreshold} limit. Start earlier, rest in the shade, drink often, and turn back if anyone feels dizzy, sick, or stops sweating.`);
   }
-  if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
+  if (feelsLike !== null && feelsLike <= coldBlockerThreshold) {
+    const freezeMinutes = feelsLike <= FROSTBITE_10_MIN_F ? 10 : 30;
+    addBlocker(`It feels like about ${formatTempValue(feelsLike)}${around(coldestFeelsLikeHour)}: exposed skin can get frostbite in about ${freezeMinutes} minutes. Pick a warmer day or a lower, sheltered route.`);
+  } else if (feelsLike !== null && feelsLike < minFeelsLikeThreshold) {
     const inversionNote = coldestIsInversion
-      ? `${coldestFeelsLikeHour ? ` at ${formatClockValue(coldestFeelsLikeHour)}` : ''} low on the approach: clear, calm conditions can pool colder air in the valley than higher up`
+      ? ' The coldest spot is low on the approach, where clear, calm nights pool cold air in the valley.'
       : '';
-    addCaution(`Apparent temperature falls near ${formatTempValue(feelsLike)}${inversionNote}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
+    addCaution(`It feels like about ${formatTempValue(feelsLike)}${around(coldestFeelsLikeHour)}, below your ${displayMinFeelsLikeThreshold} limit.${inversionNote} Bring extra layers and warm gloves, limit time in the open, and pick a point to warm up or turn back.`);
   }
 
   if (alertsRelevantForSelectedStart && hasActiveAlertCount && activeAlertCount > 0) {
     const alertNoun = activeAlertCount === 1 ? 'alert' : 'alerts';
     if (highestAlertSeverityRank >= 4) {
-      addBlocker(`${activeAlertCount} active NWS ${alertNoun} ${activeAlertCount === 1 ? 'includes' : 'include'} ${highestAlertSeverity.toLowerCase()}-severity products. Open the alert details and move the plan outside the affected area and time.`);
+      addBlocker(`${activeAlertCount} active NWS ${alertNoun} ${activeAlertCount === 1 ? 'is' : 'are'} ${highestAlertSeverity.toLowerCase()} severity. Read the alert and move your plan out of its area and time.`);
     } else {
-      addCaution(`${activeAlertCount} active NWS ${alertNoun} ${activeAlertCount === 1 ? 'overlaps' : 'overlap'} the selected start. Read each alert’s area, timing, and instructions before choosing the route.`);
+      addCaution(`${activeAlertCount} active NWS ${alertNoun} ${activeAlertCount === 1 ? 'overlaps' : 'overlap'} your start. Read each one’s area, timing, and advice before you pick a route.`);
     }
   }
 
   if (hasAqi) {
     if (aqi >= 151) {
-      addBlocker(`Air quality is unhealthy or worse (AQI ${Math.round(aqi)}). Choose a cleaner-air objective or postpone strenuous travel.`);
+      addBlocker(`Air quality is unhealthy (AQI ${Math.round(aqi)}): everyone can feel it, especially during hard effort. Pick a cleaner-air area or postpone.`);
     } else if (aqi >= 101) {
-      addCaution(`Air quality is unhealthy for sensitive groups (AQI ${Math.round(aqi)}). Reduce exertion, shorten the plan, and use a cleaner-air alternative if anyone develops symptoms.`);
+      addCaution(`Air quality is unhealthy for sensitive groups (AQI ${Math.round(aqi)}). Ease the pace, shorten the plan, and switch to a cleaner-air option if anyone has symptoms.`);
     } else if (aqi >= 51) {
-      addAdvisory(`Air quality is moderate (AQI ${Math.round(aqi)}). Sensitive group members should reduce sustained exertion and monitor symptoms.`);
+      addAdvisory(`Air quality is moderate (AQI ${Math.round(aqi)}). Anyone sensitive to smoke or pollution should ease off on long, hard efforts.`);
     }
   }
 
   if (hasFireRisk) {
     if (fireRiskLevel >= 4) {
-      addBlocker(`${fireRiskStatement('extreme')} Choose another area or time, verify closures, and do not enter fire-affected terrain.`);
+      addBlocker(`${fireRiskStatement('extreme')} Pick another area or time, check for closures, and stay out of fire-affected terrain.`);
     } else if (fireRiskLevel >= 3) {
-      addCaution(`${fireRiskStatement('high')} Use a short objective with multiple exits, avoid ignition sources, and turn around for increasing smoke or wind.`);
+      addCaution(`${fireRiskStatement('high')} Pick a short route with more than one way out, avoid anything that could spark a fire, and leave if smoke or wind picks up.`);
     } else if (fireRiskLevel >= 2) {
-      addAdvisory(`${fireRiskStatement('elevated')} Check closures and incident updates, avoid ignition sources, and keep a clear exit route.`);
+      addAdvisory(`${fireRiskStatement('elevated')} Check closures and fire updates, avoid sparks and open flames, and know your way out.`);
     }
   }
 
   if (hasHeatRisk) {
     if (heatRiskLevel >= 4) {
-      addBlocker(`Heat risk is extreme (${heatRiskLabel}). Choose a cooler time or objective and avoid long exposed travel.`);
+      addBlocker(`Heat risk is extreme (${heatRiskLabel}). Pick a cooler time or place and avoid long stretches in the sun.`);
     } else if (heatRiskLevel >= 3) {
-      addCaution(`Heat risk is high (${heatRiskLabel}). Move in cooler hours, shorten exposed segments, and set a firm turnaround if water or cooling becomes limited.`);
+      addCaution(`Heat risk is high (${heatRiskLabel}). Travel in the cooler hours, keep sunny stretches short, and turn back if water runs low or anyone overheats.`);
     } else if (heatRiskLevel >= 2) {
-      addAdvisory(`Heat risk is elevated (${heatRiskLabel}). Schedule shade and hydration breaks, ease the pace, and watch the group for early symptoms.`);
+      addAdvisory(`Heat risk is elevated (${heatRiskLabel}). Plan shade and water breaks, ease the pace, and watch each other for early signs of heat illness.`);
     }
   }
 
   if (terrainNeedsAttention) {
     const terrainAction = String(terrainCondition.recommendedTravel || '').trim();
-    (terrainHazardous ? addCaution : addAdvisory)(`Terrain and trail surfaces need attention (${terrainLabel}).${terrainAction ? ` ${terrainAction}` : ' Test footing at low-consequence transitions before exposed travel.'}`);
+    (terrainHazardous ? addCaution : addAdvisory)(`The trail surface needs care (${terrainLabel}).${terrainAction ? ` ${terrainAction}` : ' Test your footing somewhere safe before exposed sections.'}`);
   }
 
   if (freshnessIssues.length > 0) {
-    addCaution(`Some sources are out of date or missing timestamps (${freshnessIssues.join(', ')}). Refresh the report and check those official sources before committing.`);
+    addCaution(`Some data is out of date or undated (${freshnessIssues.join(', ')}). Refresh the report and check those sources before you commit.`);
   }
 
   const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
@@ -380,19 +408,20 @@ const evaluateDecision = (report, context) => {
   const daylightMarginMinutes = hasDaylightInputs && effectiveReturnMinutes !== null
     ? sunsetMinutes - effectiveReturnMinutes
     : null;
+  const sunsetLabel = report?.solar?.sunset ? formatClockValue(report.solar.sunset) : 'an unknown time';
   if (daylightEnabled && !hasDaylightInputs) {
-    addCaution('Daylight timing is unavailable. Confirm sunset from an official source, set a return time with at least 30 minutes of margin, and carry a headlamp.');
+    addCaution('Sunset time is unavailable. Look it up, plan to be back at least 30 minutes before it, and carry a headlamp.');
   } else if (daylightEnabled && !daylightOkay && turnaroundMinutes === null) {
     // With a turnaround time, the block below reports the same thin margin
     // with exact minutes — keep only the more specific message.
-    addCaution(`Daylight margin is too thin. Start earlier or shorten the route to finish at least ${daylightBuffer} minutes before sunset, and carry a headlamp.`);
+    addCaution(`Your ${formatClockValue(cutoffTime)} start leaves less than ${daylightBuffer} minutes of daylight before sunset at ${sunsetLabel}. Start earlier, or plan to travel in the dark with headlamps.`);
   }
   if (daylightEnabled && turnaroundMinutes !== null && sunsetMinutes !== null) {
     const margin = sunsetMinutes - turnaroundMinutes;
     if (margin < 0) {
-      addCaution(`Turnaround time is ${Math.abs(margin)} minutes after sunset (${report?.solar?.sunset ? formatClockValue(report.solar.sunset) : 'time unavailable'}). Move the start earlier or shorten the route; do not make darkness the default plan.`);
+      addCaution(`You would turn around ${Math.abs(margin)} minutes after sunset (${sunsetLabel}). Start earlier or shorten the route so the plan does not depend on travel in the dark.`);
     } else if (margin < 30) {
-      addCaution(`Turnaround margin is only ${margin} minutes before sunset. Move the turnaround earlier and preserve at least 30 minutes for delays.`);
+      addCaution(`You would turn around only ${margin} minutes before sunset (${sunsetLabel}). Turn around earlier to keep at least 30 minutes spare for delays.`);
     }
   }
 
@@ -464,14 +493,25 @@ const evaluateDecision = (report, context) => {
     }] : []),
     {
       key: 'feels-like',
-      label: `Apparent temperature is at or above ${displayMinFeelsLikeThreshold}`,
+      label: `Feels-like temperature is at or above ${displayMinFeelsLikeThreshold}`,
       ok: feelsLike !== null && feelsLike >= minFeelsLikeThreshold,
       detail: feelsLike === null
         ? 'Feels-like data unavailable.'
         : coldestFeelsLikeHour
           ? `Coldest ${formatTempValue(feelsLike)} at ${formatClockValue(coldestFeelsLikeHour)} in window (limit ${displayMinFeelsLikeThreshold}).`
           : `Now ${formatTempValue(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
-      action: feelsLike !== null && feelsLike < minFeelsLikeThreshold ? 'Add insulation and hand protection, reduce exposed time, and set a warming checkpoint.' : undefined,
+      action: feelsLike !== null && feelsLike < minFeelsLikeThreshold ? 'Bring extra layers and warm gloves, limit time in the open, and pick a point to warm up.' : undefined,
+    },
+    {
+      key: 'heat-limit',
+      label: `Feels-like temperature is at or below ${displayMaxFeelsLikeThreshold}`,
+      ok: peakFeelsLike !== null && peakFeelsLike <= maxFeelsLikeThreshold,
+      detail: peakFeelsLike === null
+        ? 'Feels-like data unavailable.'
+        : hottestFeelsLikeHour
+          ? `Hottest ${formatTempValue(peakFeelsLike)} at ${formatClockValue(hottestFeelsLikeHour)} in window (limit ${displayMaxFeelsLikeThreshold}).`
+          : `Now ${formatTempValue(peakFeelsLike)} (limit ${displayMaxFeelsLikeThreshold}).`,
+      action: peakFeelsLike !== null && peakFeelsLike > maxFeelsLikeThreshold ? 'Start earlier, rest in the shade, and carry more water than usual.' : undefined,
     },
   ];
 
@@ -554,19 +594,19 @@ const evaluateDecision = (report, context) => {
   }
 
   let level = 'GO';
-  let headline = 'Conditions are within your limits — travel with normal precautions.';
+  let headline = 'Everything checked is within your limits. Go with normal precautions and keep checking as you travel.';
   if (blockers.length > 0) {
     level = 'NO-GO';
-    headline = 'Do not commit to this plan — change the objective, timing, or day.';
+    headline = 'Not this plan. Change the day, the start time, or the objective.';
   } else if (insufficientEvidence) {
     level = 'CAUTION';
-    headline = 'Not enough data to assess this trip — fill the gaps before committing.';
+    headline = 'Too much data is missing to judge this trip. Fill the gaps before you commit.';
   } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
     level = 'CAUTION';
-    headline = 'No current avalanche bulletin — travel as you would in unrated terrain.';
+    headline = 'No avalanche forecast covers this trip. Treat every slope as unrated.';
   } else if (cautions.length > 0) {
     level = 'CAUTION';
-    headline = 'Adjust terrain, timing, or pace before committing.';
+    headline = 'Possible with changes. Adjust your route, timing, or pace before you commit.';
   }
 
   // JSON drops undefined actions; drop them here too so in-process callers see the wire shape.
