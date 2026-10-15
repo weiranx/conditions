@@ -166,6 +166,22 @@ describe('day over day', () => {
     expect(res.body.comparison.changes).toContain('Wind gust changed -24 km/h.');
   });
 
+  test('a report without AI is compared without it, by day and by departure', async () => {
+    const days = fakeSafetyHandler();
+    await request(makeApp(days)).get('/api/day-over-day').query({ ...PLAN, ai: 'off' });
+    expect(days).toHaveBeenCalledTimes(2);
+    expect(days.mock.calls.every(([query]) => query.ai === 'off')).toBe(true);
+
+    const starts = fakeSafetyHandler();
+    await request(makeApp(starts)).get('/api/start-time-scenarios').query({ ...PLAN, ai: 'off' });
+    expect(starts.mock.calls.length).toBeGreaterThan(1);
+    expect(starts.mock.calls.every(([query]) => query.ai === 'off')).toBe(true);
+
+    const withAi = fakeSafetyHandler();
+    await request(makeApp(withAi)).get('/api/day-over-day').query(PLAN);
+    expect(withAi.mock.calls.every(([query]) => query.ai === undefined)).toBe(true);
+  });
+
   test('no comparison without a scored prior day', async () => {
     const invoke = fakeSafetyHandler((report, query) => {
       if (query.date !== DATE) report.safety.score = null;

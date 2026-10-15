@@ -29,17 +29,19 @@ const readComparisonRequest = (query) => {
   if (lat === null || lat < -90 || lat > 90 || lon === null || lon < -180 || lon > 180) return null;
   // A date that does not exist ("2026-99-99") is invalid, not a server error.
   if (!isCalendarDate(params.date) || !TIME_PATTERN.test(params.start || '')) return null;
-  return { lat, lon, params };
+  // The traveler turned AI off for the report, so its comparisons use none either.
+  const aiOff = ['off', '0', 'false'].includes(String(query?.ai ?? '').trim().toLowerCase());
+  return { lat, lon, params, aiOff };
 };
 
 /**
  * Reports for the same objective and plan at other dates or departures. Each
  * comes back evaluated for the plan's limits, units and approach.
  */
-const createPlanReportLoader = (invokeSafetyHandler) => async ({ lat, lon, params }, overrides) => {
+const createPlanReportLoader = (invokeSafetyHandler) => async ({ lat, lon, params, aiOff = false }, overrides) => {
   try {
     const result = await invokeSafetyHandler(
-      { ...params, ...overrides, lat: String(lat), lon: String(lon) },
+      { ...params, ...overrides, lat: String(lat), lon: String(lon), ...(aiOff ? { ai: 'off' } : {}) },
       { suppressReportLog: true },
     );
     const report = result.statusCode >= 200 && result.statusCode < 300 && result.payload && typeof result.payload === 'object'

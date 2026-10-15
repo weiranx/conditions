@@ -1506,10 +1506,11 @@ export function useWorkspace() {
     () => planParamsQuery({ ...planSettingsParams(preferences), ...approachParams }),
     [preferences, approachParams],
   );
+  // A report without AI, and its comparisons, ask the server not to read the avalanche bulletin with AI either.
+  const reportQuery = preferences.aiEnabled ? planSettingsQuery : `${planSettingsQuery}&ai=off`;
   useEffect(() => {
-    // A report without AI asks the server not to read its avalanche bulletin with AI either.
-    planQueryRef.current = preferences.aiEnabled ? planSettingsQuery : `${planSettingsQuery}&ai=off`;
-  }, [planSettingsQuery, preferences.aiEnabled]);
+    planQueryRef.current = reportQuery;
+  }, [reportQuery]);
   const { handleRetryFetch, handleGenerateReport, pendingAutoGenerate, setPendingAutoGenerate } = useReportGeneration({
     autoGenerateInitially: initialLinkState.hasObjective && !initialRestoredReport,
     hasObjective, forecastDate, alpineStartTime, objectiveTimezone,
@@ -2290,7 +2291,7 @@ export function useWorkspace() {
 
   const { dayOverDay, startTimeScenarios } = useReportComparisons({
     hasObjective, view, safetyData, forecastDate, currentStartTime: alpineStartTime,
-    position: { lat: position.lat, lng: position.lng }, preferences, planSettingsQuery,
+    position: { lat: position.lat, lng: position.lng }, preferences, planSettingsQuery: reportQuery,
     viewingHistoryReport, loading: loading || reportGenerationPending,
     startTimeComparisonsEnabled: featureFlags.startTimeComparisons,
   });
