@@ -71,4 +71,57 @@ class ChatGPTStore {
   }
 }
 
-module.exports = { ChatGPTStore };
+const normalizeAccountId = (value) => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+  ? value.toLowerCase() : null;
+
+// All profiles share the host ID and mutation lock, but callers can read/change only one profile.
+// A null account ID preserves the original single-owner store without exposing named profiles.
+class ChatGPTProfileStore {
+  constructor(store, accountId = null) {
+    if (accountId !== null && !normalizeAccountId(accountId)) throw new Error('Invalid Conditions account ID.');
+    this.store = store;
+    this.accountId = accountId === null ? null : normalizeAccountId(accountId);
+    this.directory = store.directory;
+    this.file = store.file;
+  }
+
+  belongs(record) { return (record.conditionsUserId || null) === this.accountId; }
+
+  scope(value) {
+    return {
+      hostId: value.hostId,
+      activeClientId: this.accountId === null ? value.activeClientId : value.activeByUser?.[this.accountId] || null,
+      registrations: value.registrations.filter((record) => this.belongs(record)),
+    };
+  }
+
+  read() { return this.scope(this.store.read()); }
+
+  update(change) {
+    return this.store.update(async (value) => {
+      const scoped = this.scope(value);
+      const result = await change(scoped);
+      // One renewable session must never be copied between Conditions profiles.
+      const others = value.registrations.filter((record) => !this.belongs(record));
+      if (scoped.registrations.some((record) => record.refresh_token
+        && others.some((other) => other.refresh_token === record.refresh_token))) {
+        throw new Error('This ChatGPT session belongs to another Conditions account. Complete a separate login.');
+      }
+      value.registrations = [...others, ...scoped.registrations.map((record) => {
+        const copy = { ...record };
+        if (this.accountId === null) delete copy.conditionsUserId;
+        else copy.conditionsUserId = this.accountId;
+        return copy;
+      })];
+      if (this.accountId === null) value.activeClientId = scoped.activeClientId;
+      else {
+        value.activeByUser ||= {};
+        value.activeByUser[this.accountId] = scoped.activeClientId;
+      }
+      return result;
+    });
+  }
+}
+
+module.exports = { ChatGPTStore, ChatGPTProfileStore, normalizeAccountId };

@@ -541,7 +541,7 @@ const getAIStatus = () => {
     const connection = subscription.service.status();
     const available = aiEnabled && subscription.alive && connection.connected;
     return {
-      enabled: aiEnabled, available, provider: 'openai', billingSource: 'chatgpt',
+      enabled: aiEnabled, available, provider: 'openai', billingSource: 'chatgpt', accountUserId: subscription.userId,
       failoverEnabled: false, configured: connection.connected,
       primaryModel: connection.model, fastModel: connection.model,
       providers: { openai: { configured: connection.connected, primary: connection.model, fast: connection.model } },

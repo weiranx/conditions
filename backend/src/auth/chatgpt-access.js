@@ -1,7 +1,8 @@
 'use strict';
 
 const { readSessionToken } = require('./account-access');
-const { chatGPTService, runWithChatGPT } = require('./chatgpt');
+const { runWithChatGPT } = require('./chatgpt');
+const { chatGPTAccounts } = require('./chatgpt-accounts');
 
 // Background watches, MCP, admin actions and anonymous requests never inherit the owner's plan.
 const FOREGROUND_PATHS = new Set([
@@ -10,13 +11,8 @@ const FOREGROUND_PATHS = new Set([
   '/api/route-analysis', '/api/snow-vision', '/api/plan-parse', '/api/trip-debrief',
   '/api/forecast-discussion/summary', '/api/healthz', '/api/health',
 ]);
-const ownerId = () => {
-  const id = process.env.CHATGPT_OWNER_USER_ID || '';
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
-};
-
-const createChatGPTMiddleware = ({ getAccountService, service = chatGPTService, getOwnerId = ownerId }) => async (req, res, next) => {
-  if (!getOwnerId() || !FOREGROUND_PATHS.has(req.path.replace(/\/+$/, '')) || req.headers.authorization) return next();
+const createChatGPTMiddleware = ({ getAccountService, accounts = chatGPTAccounts }) => async (req, res, next) => {
+  if (!accounts.hasAccounts() || !FOREGROUND_PATHS.has(req.path.replace(/\/+$/, '')) || req.headers.authorization) return next();
   res.setHeader('Cache-Control', 'private, no-store');
   res.vary('Cookie');
   const session = readSessionToken(req);
@@ -25,7 +21,8 @@ const createChatGPTMiddleware = ({ getAccountService, service = chatGPTService, 
     const accountService = getAccountService();
     if (!accountService?.available) return next();
     const user = await accountService.getUserForSession(session);
-    if (user?.id !== getOwnerId()) return next();
+    const service = user && accounts.serviceForUser(user.id);
+    if (!service) return next();
     const subscription = { userId: user.id, service, alive: true };
     // Late continuations cannot start subscription requests after the browser disconnects.
     res.once('close', () => { subscription.alive = false; });
@@ -37,4 +34,4 @@ const createChatGPTMiddleware = ({ getAccountService, service = chatGPTService, 
   }
 };
 
-module.exports = { ownerId, createChatGPTMiddleware };
+module.exports = { createChatGPTMiddleware };

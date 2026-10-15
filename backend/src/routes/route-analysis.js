@@ -1,3 +1,4 @@
+const { chatGPTCacheKey } = require('../auth/chatgpt');
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { compactReportForAI } = require('../utils/ai-report-context');
@@ -495,7 +496,7 @@ const registerRouteAnalysisRoutes = ({
     }
 
     try {
-      const suggestCacheKey = `${normalizeTextKey(safePeak)}|${normalizeCoordKey(safeLat, safeLon)}`;
+      const suggestCacheKey = chatGPTCacheKey(`${normalizeTextKey(safePeak)}|${normalizeCoordKey(safeLat, safeLon)}`);
       // A lookup that outlasts this request keeps running and fills the cache, so trying again finds it.
       const routes = await withTimeout(routeSuggestionsCache.getOrFetch(suggestCacheKey, async () => {
         const text = await askAI(
@@ -659,7 +660,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const generateLandmarks = () => {
         // Version the cache key so older generic "checkpoint 2" results are not
         // reused after tightening the waypoint-name contract.
-        const wpCacheKey = `named-v3|${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
+        const wpCacheKey = chatGPTCacheKey(`named-v3|${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`);
         return waypointCache.getOrFetch(wpCacheKey, async () => {
           let lastError;
           for (let attempt = 0; attempt < 2; attempt += 1) {

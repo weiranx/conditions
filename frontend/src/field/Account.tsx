@@ -246,7 +246,7 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
             </div>
           </section>
 
-          <ChatGPTPlan userId={account.user.id} />
+          <ChatGPTPlan key={account.user.id} userId={account.user.id} />
 
           <section className="sky-account-section" aria-labelledby="chatgpt-setup-heading">
             <div className="sky-sh">

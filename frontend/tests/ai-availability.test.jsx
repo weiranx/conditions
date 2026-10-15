@@ -3,12 +3,13 @@ import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { publishAiAvailability, useAiAvailability } from '../src/hooks/useAiAvailability';
+import { publishAiAvailability, useAiAvailability, useAIBillingSource } from '../src/hooks/useAiAvailability';
 import { AiAccessContext } from '../src/contexts/ai-access';
+import { AccountContext } from '../src/contexts/account';
 
 const health = { ai: { available: true, features: { reportChat: { available: false } } } };
 
-async function mount(t, consumers) {
+async function mount(t, consumers, accountUser = null) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch, CustomEvent: globalThis.CustomEvent };
   globalThis.window = dom.window;
@@ -26,12 +27,15 @@ async function mount(t, consumers) {
     return new Response(JSON.stringify(health), { status: 200 });
   };
   const seen = [];
+  const seenSources = [];
   function Consumer({ index }) {
     seen[index] = useAiAvailability({ ai: false });
+    seenSources[index] = useAIBillingSource();
     return null;
   }
   const root = createRoot(document.getElementById('root'));
-  await act(async () => root.render(Array.from({ length: consumers }, (_, index) => <Consumer key={index} index={index} />)));
+  const render = () => root.render(<AccountContext.Provider value={{ user: accountUser }}>{Array.from({ length: consumers }, (_, index) => <Consumer key={index} index={index} />)}</AccountContext.Provider>);
+  await act(async () => render());
   let mounted = true;
   const unmount = async () => {
     if (!mounted) return;
@@ -47,6 +51,8 @@ async function mount(t, consumers) {
   return {
     requests,
     seen,
+    seenSources,
+    setUser: async (user) => act(async () => { accountUser = user; render(); }),
     unmount,
     tick: async () => act(async () => polls.forEach((poll) => poll())),
     show: async (state) => act(async () => {
@@ -62,6 +68,22 @@ test('report sections share one AI availability poll', async (t) => {
   assert.deepEqual(h.seen, Array(3).fill({ aiBrief: true, reportChat: false, routeAnalysis: true, snowVision: true, watchSummary: true, planParse: true, avalancheExtraction: true, avalancheRelevance: true, tripDebrief: true, aiReport: true }));
   await h.tick();
   assert.equal(h.requests.length, 2);
+});
+
+test('switching personal accounts hides the previous account’s subscription availability and billing label', async (t) => {
+  health.ai.billingSource = 'chatgpt';
+  health.ai.accountUserId = 'first-account';
+  t.after(() => { delete health.ai.billingSource; delete health.ai.accountUserId; });
+  const h = await mount(t, 1, { id: 'first-account' });
+  assert.equal(h.seenSources[0], 'chatgpt');
+  assert.equal(h.seen[0].aiBrief, true);
+  await h.setUser({ id: 'second-account' });
+  assert.equal(h.seenSources[0], 'api');
+  assert.equal(h.seen[0].aiBrief, false);
+  health.ai.accountUserId = 'second-account';
+  await h.tick();
+  assert.equal(h.seenSources[0], 'chatgpt');
+  assert.equal(h.seen[0].aiBrief, true);
 });
 
 test('a hidden tab skips availability polls and refreshes when shown', async (t) => {

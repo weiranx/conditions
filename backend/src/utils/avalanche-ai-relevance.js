@@ -1,3 +1,4 @@
+const { chatGPTCacheKey } = require('../auth/chatgpt');
 'use strict';
 
 const { parseJsonFromAI } = require('./ai-json');
@@ -202,7 +203,7 @@ const createAvalancheAiRelevance = ({
       if (aiOff || !rules || !featureOn()) return rules;
       // Locked plans keep the rules' answer (always a check): the model may not uncheck them.
       if (relevanceLock(inputs)) return rules;
-      const key = relevanceCacheKey({ ...inputs, rules });
+      const key = chatGPTCacheKey(relevanceCacheKey({ ...inputs, rules }));
       if (failureCache.has(key)) return rules;
       const pending = run(key, { ...inputs, rules });
       let timer;

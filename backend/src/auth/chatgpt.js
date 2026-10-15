@@ -2,7 +2,7 @@
 
 const { randomBytes, createHash, timingSafeEqual } = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
-const { ChatGPTStore } = require('./chatgpt-store');
+const { ChatGPTStore, ChatGPTProfileStore } = require('./chatgpt-store');
 
 const ISSUER = 'https://auth.openai.com';
 const AUTHORIZE = `${ISSUER}/api/accounts/authorize`;
@@ -13,6 +13,13 @@ const SCOPES = `openid profile email offline_access resource.invoke ${DIRECT_SCO
 const context = new AsyncLocalStorage();
 const currentChatGPT = () => context.getStore() || null;
 const runWithChatGPT = (value, callback) => context.run(value, callback);
+const chatGPTCacheKey = (key) => {
+  const subscription = currentChatGPT();
+  if (!subscription) return key;
+  const connection = subscription.service.status();
+  return JSON.stringify(['chatgpt', subscription.userId,
+    connection.accounts?.find((account) => account.active)?.clientId || null, connection.model || null, key]);
+};
 
 class ChatGPTError extends Error {
   constructor(message, code = 'CHATGPT_UNAVAILABLE', statusCode = 503) {
@@ -29,7 +36,7 @@ const activeRecord = (value) => value.registrations.find((record) => record.clie
 const sameSecret = (a, b) => typeof a === 'string' && typeof b === 'string'
   && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-const createChatGPTService = ({ store = new ChatGPTStore(), fetcher = globalThis.fetch, verifyIdentity, identityKeySet } = {}) => {
+const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore()), fetcher = globalThis.fetch, verifyIdentity, identityKeySet } = {}) => {
   let jwks = identityKeySet;
   const verify = verifyIdentity || (async (token, clientId, nonce) => {
     const { createRemoteJWKSet, jwtVerify } = await import('jose');
@@ -238,4 +245,4 @@ const createChatGPTService = ({ store = new ChatGPTStore(), fetcher = globalThis
 };
 
 const chatGPTService = createChatGPTService();
-module.exports = { createChatGPTService, chatGPTService, ChatGPTError, currentChatGPT, runWithChatGPT, RESOURCE };
+module.exports = { createChatGPTService, chatGPTService, ChatGPTError, currentChatGPT, runWithChatGPT, chatGPTCacheKey, RESOURCE };

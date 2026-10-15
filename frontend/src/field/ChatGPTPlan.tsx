@@ -24,6 +24,8 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
     setConnection(null);
     setModels([]);
     setError("");
+    setMessage("");
+    setWelcome(false);
     void fetchApi("/api/account/chatgpt", { signal: controller.signal }, { retries: 0 }).then(({ response, payload }) => {
       if (controller.signal.aborted) return;
       if (!response.ok) throw new Error(readApiErrorMessage(payload, "Could not load your ChatGPT connection."));
@@ -103,7 +105,7 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
                 setConnection(payload as Connection);
                 setModels([]);
                 setMessage((payload as { message: string }).message);
-                publishAiAvailability({ available: false, billingSource: "chatgpt" });
+                publishAiAvailability({ available: false, billingSource: "chatgpt", accountUserId: userId });
               }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not disconnect ChatGPT."));
             }}>Disconnect ChatGPT</button>}
           </div>
@@ -112,10 +114,10 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
         <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">Manage ChatGPT usage and app access</a>
         <details className="sky-details">
           <summary>{connection?.connected ? "Reconnect or switch ChatGPT accounts" : "Set up personal ChatGPT access"}</summary>
-          <p>On the computer running your browser, open the Conditions backend folder and run <code>npm run chatgpt -- login</code>. Choose Continue with ChatGPT and approve plan usage. No API key is needed.</p>
-          <p>For a remote server, securely transfer the protected credential file and import it there using <code>npm run chatgpt -- import /private/path/credentials.json</code>. The server then owns token refresh.</p>
-          <p>Enable the connection for this Conditions account by setting <code>CHATGPT_OWNER_USER_ID</code> on your server to <code>{userId}</code>. Restart the backend, then refresh this connection.</p>
-          <p>To add another ChatGPT account, run <code>npm run chatgpt -- login --new-account</code>. Select a saved account with <code>npm run chatgpt -- use &lt;client-id&gt;</code>.</p>
+          <p>On the computer running your browser, open the Conditions backend folder and run <code>npm run chatgpt -- login --user {userId}</code>. Choose Continue with ChatGPT and approve plan usage. No API key is needed.</p>
+          <p>For a remote server, export only this account’s connection with <code>npm run chatgpt -- export /private/path/credentials.json --user {userId}</code>. Transfer that file securely, then run <code>npm run chatgpt -- import /private/path/credentials.json --user {userId}</code> on the server.</p>
+          <p>Add <code>{userId}</code> to your server’s comma-separated <code>CHATGPT_ACCOUNT_USER_IDS</code> list. Each Conditions account has its own ChatGPT connection and selected model. Restart the backend, then refresh this connection.</p>
+          <p>To add another ChatGPT registration for this Conditions account, run <code>npm run chatgpt -- login --new-account --user {userId}</code>. Select one with <code>npm run chatgpt -- use &lt;client-id&gt; --user {userId}</code>.</p>
           <p>This connection powers your foreground requests only. Automatic watch summaries use the separately configured server provider.</p>
         </details>
         {error && <p className="sky-notice is-caution" role="alert">{error}</p>}

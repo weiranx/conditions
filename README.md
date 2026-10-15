@@ -125,7 +125,7 @@ The backend runs against free public data sources out of the box. A couple of fe
 Set at least two AI provider keys to enable automatic failover. All API keys are optional to omit — features that do not depend on a missing key continue to work.
 When no AI provider key is configured, AI-powered controls are hidden in the web planner.
 
-For personal, self-hosted use, you can connect an eligible **ChatGPT plan** instead of configuring an API key. Sign in locally with `cd backend && npm run chatgpt -- login`, import the protected credentials onto your server, and set `CHATGPT_OWNER_USER_ID` to your Conditions account UUID. See [personal ChatGPT setup](docs/chatgpt-self-hosted.md) for the full procedure and Account controls.
+For personal, self-hosted use, you can connect an eligible **ChatGPT plan** instead of configuring an API key. Each Conditions account you own can connect separately: sign in locally with `cd backend && npm run chatgpt -- login --user YOUR_CONDITIONS_UUID`, export/import only that account's connection onto your server, and list your account UUIDs in `CHATGPT_ACCOUNT_USER_IDS`. Existing `CHATGPT_OWNER_USER_ID` setups remain supported. See [personal ChatGPT setup](docs/chatgpt-self-hosted.md) for the full procedure and Account controls.
 
 ## API Endpoints
 

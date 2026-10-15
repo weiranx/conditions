@@ -7,7 +7,7 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 require('dotenv').config({ quiet: true });
 const { createChatGPTService } = require('../src/auth/chatgpt');
-const { ChatGPTStore } = require('../src/auth/chatgpt-store');
+const { ChatGPTStore, ChatGPTProfileStore, normalizeAccountId } = require('../src/auth/chatgpt-store');
 
 async function login(service, { newAccount = false, port = 1455, openBrowser = true } = {}) {
   const server = http.createServer();
@@ -63,14 +63,33 @@ async function login(service, { newAccount = false, port = 1455, openBrowser = t
 }
 
 async function main(args = process.argv.slice(2)) {
-  const service = createChatGPTService();
-  const [command, argument] = args;
+  const userFlag = args.indexOf('--user');
+  const userId = userFlag === -1 ? null : normalizeAccountId(args[userFlag + 1]);
+  if (userFlag !== -1 && !userId) throw new Error('Provide a valid Conditions account UUID after --user.');
+  const profileId = userId === normalizeAccountId(process.env.CHATGPT_OWNER_USER_ID) ? null : userId;
+  const service = createChatGPTService({ store: new ChatGPTProfileStore(new ChatGPTStore(), profileId) });
+  const positional = args.filter((_value, index) => userFlag === -1 || (index !== userFlag && index !== userFlag + 1));
+  const [command, argument] = positional;
   if (command === 'login') {
     return login(service, { newAccount: args.includes('--new-account'), openBrowser: !args.includes('--no-browser') });
   }
   if (command === 'init') {
     await service.store.update(() => {});
     console.log(`Initialized this host: ${service.store.file}`);
+  } else if (command === 'export') {
+    if (!argument || path.basename(argument) !== 'credentials.json') throw new Error('Provide a private transfer path ending in credentials.json.');
+    const selected = service.store.read().registrations.find((record) => record.client_id === service.store.read().activeClientId);
+    if (!selected?.refresh_token) throw new Error('Complete login for the selected Conditions account first.');
+    const destination = new ChatGPTStore(path.dirname(path.resolve(argument)));
+    if (destination.file === service.store.file) throw new Error('Export to a separate private transfer directory.');
+    await destination.update((value) => {
+      // Export a single selected connection, never other Conditions accounts' credentials.
+      value.hostId = service.store.read().hostId;
+      value.activeClientId = selected.client_id;
+      value.registrations = [{ ...selected, ...(userId ? { conditionsUserId: userId } : {}) }];
+      delete value.activeByUser;
+    });
+    console.log(`Exported only this account's connection to ${destination.file}. Transfer it securely, then delete the transfer file.`);
   } else if (command === 'import') {
     if (!argument) throw new Error('Provide the path to a transferred Conditions credentials.json file.');
     const source = new ChatGPTStore(path.dirname(path.resolve(argument)));
@@ -82,6 +101,7 @@ async function main(args = process.argv.slice(2)) {
       || !Array.isArray(selected.scopes) || !Number.isFinite(selected.expiresAt)) {
       throw new Error('No complete Conditions ChatGPT connection found. Complete local login first.');
     }
+    if (selected.conditionsUserId && selected.conditionsUserId !== userId) throw new Error('This export belongs to a different Conditions account. Use the matching --user UUID.');
     await service.store.update((destination) => {
       // Import only the selected account. Never copy the laptop's host ID onto a VM.
       const existing = destination.registrations.findIndex((record) => record.client_id === selected.client_id);
@@ -103,7 +123,7 @@ async function main(args = process.argv.slice(2)) {
     const result = await service.disconnect();
     console.log(result.revoked ? 'Disconnected ChatGPT.' : 'Disconnected locally. Remote revocation was not confirmed. Disconnect Conditions in ChatGPT settings.');
   } else {
-    console.log('Usage: npm run chatgpt -- login [--new-account] [--no-browser] | init | import <credentials.json> | status | use <client-id> | logout');
+    console.log('Usage: npm run chatgpt -- <command> [--user <Conditions-UUID>]\nCommands: login [--new-account] [--no-browser], init, export <private/credentials.json>, import <credentials.json>, status, use <client-id>, logout');
   }
 }
 
