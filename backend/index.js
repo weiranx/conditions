@@ -76,6 +76,7 @@ const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { registerFieldObservationRoutes } = require('./src/routes/field-observations');
 const { registerPlanParseRoute } = require('./src/routes/plan-parse');
 const { registerTripDebriefRoute } = require('./src/routes/trip-debrief');
+const { registerForecastDiscussionRoute } = require('./src/routes/forecast-discussion');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable, isAIFeatureAvailable } = require('./src/utils/ai-client');
 const { getFeatureFlags, initializeFeatureFlags } = require('./src/utils/feature-flags');
 const { sanitizeReportForFeatureFlags } = require('./src/utils/report-feature-filter');
@@ -1093,6 +1094,7 @@ registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision, ensureAccountAcces
 registerFieldObservationRoutes({ app, askAI, ensureAccountAccess });
 registerPlanParseRoute({ app, askAI, ensureAccountAccess });
 registerTripDebriefRoute({ app, askAI, ensureAccountAccess });
+registerForecastDiscussionRoute({ app, askAI, ensureAccountAccess });
 
 const startServer = async () => {
   await database.connect();

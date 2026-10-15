@@ -313,4 +313,4 @@ const deterministicBrief = (report, decisionLevel) => {
     `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : concerns.slice(0, 2).map(item => item.action).join(' ') || 'Resolve failed checks and missing evidence before committing.'}`,
   ].join('\n');
 };
-module.exports = { validateBrief, validateOpening, validateQuestions, validateChapters, validateHero, validateSatellite, deterministicBrief };
+module.exports = { validateBrief, validateOpening, validateQuestions, validateChapters, validateHero, validateSatellite, deterministicBrief, numbers, citedNumbers, forms, kindOfPath };
