@@ -10,12 +10,14 @@ globalThis.document = bootstrap.window.document;
 Object.defineProperty(globalThis, 'navigator', { configurable: true, value: bootstrap.window.navigator });
 const { createRoot } = await import('react-dom/client');
 const { WorkspacePlan } = await import('../src/field/WorkspacePlan');
+const { PlanSentence } = await import('../src/field/PlanSentence');
 bootstrap.window.close();
 delete globalThis.window;
 delete globalThis.document;
 if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
 else delete globalThis.navigator;
 import { getDefaultUserPreferences } from '../src/app/preferences';
+import { createItineraryDraft } from '../src/app/itinerary';
 
 const json = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
 
@@ -103,11 +105,12 @@ function planWorkspace(overrides = {}) {
   };
 }
 
-const sentenceInput = () => document.querySelector('.sky-plan-sentence input');
+const sentenceInput = () => document.querySelector('.sky-plan-sentence input, .sky-plan-sentence textarea');
 
 async function describe(text) {
   const input = sentenceInput();
-  const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  const field = input.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement : window.HTMLInputElement;
+  const setValue = Object.getOwnPropertyDescriptor(field.prototype, 'value').set;
   await act(async () => {
     setValue.call(input, text);
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -117,7 +120,7 @@ async function describe(text) {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 }
 
-test('the sentence box shows only while plan parsing is available, and only for a day trip', async (t) => {
+test('the sentence box shows only while plan parsing is available, and not in Compare', async (t) => {
   const env = setup(t, { planParse: false });
   await env.render(<WorkspacePlan workspace={planWorkspace()} />);
   assert.equal(sentenceInput(), null);
@@ -193,4 +196,59 @@ test('a refused sentence shows why and changes nothing', async (t) => {
   await describe('asdf');
   assert.equal(document.querySelector('.sky-plan-sentence-error').textContent, 'Could not read that plan. Try rephrasing it.');
   assert.deepEqual(w.calls.filter(([name]) => name !== 'handleEditPlan'), []);
+});
+
+test('a multi-day description fills the trip and leaves its camps, exit and passes to pick', async (t) => {
+  const env = setup(t, {
+    parse: () => json({
+      placeQuery: 'Onion Valley',
+      date: '2026-09-11',
+      startTime: '08:00',
+      activity: 'backpacking',
+      params: { travel_window_hours: 6, max_gust_mph: 35 },
+      trip: {
+        name: 'Rae Lakes Loop',
+        nights: 3,
+        camps: [{ placeQuery: 'Kearsarge Lakes', layover: false }, { placeQuery: 'Rae Lakes', layover: false }, { placeQuery: null, layover: true }],
+        exit: 'Cottonwood Lakes',
+        passes: [['Kearsarge Pass'], ['Glen Pass'], [], []],
+      },
+      notes: ['permit: Kearsarge Pass'],
+    }),
+  });
+  let draft = createItineraryDraft({ startDate: '2026-09-06', start: '07:00', travelHours: 8, nights: 1 });
+  let hints = null;
+  const w = planWorkspace({
+    itinerary: {
+      mode: 'multi',
+      draft,
+      updateDraft: (update) => { draft = update(draft); },
+      setPlaceHints: (next) => { hints = next; },
+    },
+  });
+  const placeQueries = [];
+  await env.render(
+    <PlanSentence workspace={w} multiDay placeKey="here" onDate={() => {}} onStart={() => {}} onDuration={() => {}} onPlaceQuery={(query) => placeQueries.push(query)} />,
+  );
+  assert.equal(document.querySelector('.sky-plan-sentence label').textContent, 'Describe your trip');
+  assert.equal(sentenceInput().tagName, 'TEXTAREA');
+
+  await describe('Rae Lakes Loop from Onion Valley Friday, 3 nights: Kearsarge Lakes, Rae Lakes, layover, out at Cottonwood Lakes');
+  assert.equal(env.requests[0].mode, 'multi');
+  assert.deepEqual(placeQueries, ['Onion Valley'], 'the trailhead goes through the plan search');
+  assert.equal(draft.name, 'Rae Lakes Loop');
+  assert.equal(draft.startDate, '2026-09-11');
+  assert.equal(draft.camps.length, 2, 'cut to the nights the forecast reaches');
+  assert.equal(draft.camps[1].layover, false);
+  assert.ok(draft.days.every((day) => day.start === '08:00' && day.travelHours === 6));
+  assert.deepEqual(hints, { camps: ['Kearsarge Lakes', 'Rae Lakes'], exit: 'Cottonwood Lakes', checkpoints: [['Kearsarge Pass'], ['Glen Pass']] });
+  const named = (name) => w.calls.filter(([call]) => call === name).map(([, ...args]) => args);
+  assert.deepEqual(named('updatePreferences'), [[{ defaultActivity: 'backpacking', customActivityId: null }], [{ maxWindGustMph: 35 }]]);
+  assert.equal(named('handleEditPlan').length, 0, 'a trip is checked again as a whole');
+
+  const status = document.querySelector('.sky-plan-sentence [role="status"]').textContent;
+  assert.match(status, /Filled in: Onion Valley \(pick it from the results\) · “Rae Lakes Loop” · from Fri, Sep 11 · 2 nights · leave camp 8:00 AM · 6 h a day · camps: Kearsarge Lakes, Rae Lakes · out at Cottonwood Lakes · over Kearsarge Pass, Glen Pass · Backpacking · gusts ≤ 35 mph/);
+  assert.match(status, /Pick each camp, exit and pass from its results under Camps/);
+  assert.match(status, /The forecast reaches 2 nights/);
+  assert.match(status, /permit: Kearsarge Pass/);
 });

@@ -1,11 +1,12 @@
-import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { LoaderCircle, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { ACTIVITY_PROFILES } from "../app/activity-profiles";
 import { activeActivityKey } from "../app/activity-limits";
 import { convertElevationFeetToDisplayValue, formatClockForStyle } from "../app/core";
 import type { UserPreferences } from "../app/types";
-import { PLAN_SENTENCE_MAX_LENGTH, parsePlanSentence, type ParsedPlan } from "../lib/plan-parse";
+import { PLAN_SENTENCE_MAX_LENGTH, TRIP_DESCRIPTION_MAX_LENGTH, parsePlanSentence, type ParsedPlan } from "../lib/plan-parse";
+import { applyDescribedTrip, hasPlaceHints } from "../app/itinerary";
 import "./plan-sentence.css";
 
 const LIMIT_PREFERENCES = [
@@ -22,13 +23,23 @@ function dayLabel(date: string) {
     : date;
 }
 
+/** "Kearsarge Lakes, Rae Lakes, layover": the camps a description named, in order. */
+function campsLabel(camps: NonNullable<ParsedPlan["trip"]>["camps"]) {
+  return camps.map((camp, index) => (camp.layover ? "layover" : camp.placeQuery ?? `night ${index + 1} open`)).join(", ");
+}
+
 /**
  * "Describe your plan": one sentence read into the plan form. The place goes
  * into the search box for the traveler to pick; the day, start, duration,
  * activity and limits go through the form's own setters. Nothing is run.
+ *
+ * For a multi-day trip (`multiDay`) the description also names the nights,
+ * camps, exit and passes: the trailhead goes into the search like a day's
+ * place, and each camp, exit and pass waits in its own search under Camps.
  */
 export function PlanSentence({
   workspace: w,
+  multiDay = false,
   placeKey,
   onDate,
   onStart,
@@ -36,6 +47,7 @@ export function PlanSentence({
   onPlaceQuery,
 }: {
   workspace: Workspace;
+  multiDay?: boolean;
   /** Changes whenever a different place is chosen. */
   placeKey: string;
   onDate: (date: string) => void;
@@ -47,7 +59,7 @@ export function PlanSentence({
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [summary, setSummary] = useState<{ filled: string[]; notes: string[] } | null>(null);
+  const [summary, setSummary] = useState<{ filled: string[]; notes: string[]; placesToPick: boolean } | null>(null);
   // A new place clears the target elevation, so one read with a place waits for it.
   const [pendingElevation, setPendingElevation] = useState<{ feet: number; placeKey: string } | null>(null);
   const request = useRef<AbortController | null>(null);
@@ -65,9 +77,32 @@ export function PlanSentence({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingElevation, placeKey, w.hasObjective, w.objectiveDraftDirty]);
 
-  function apply(plan: ParsedPlan) {
-    const filled: string[] = [];
-    const notes = [...plan.notes];
+  function applyTrip(plan: ParsedPlan, filled: string[], notes: string[]) {
+    const it = w.itinerary;
+    const applied = applyDescribedTrip(it.draft, plan, { todayDate: w.todayDate, maxForecastDate: w.maxForecastDate });
+    notes.push(...applied.notes.map((note) => (plan.date ? note.replace(plan.date, dayLabel(plan.date)) : note)));
+    // One change, so the trip is stale once and its searches wait for the picked trailhead.
+    it.updateDraft(() => applied.draft);
+    it.setPlaceHints(applied.hints);
+    const trip = plan.trip;
+    if (trip?.name) filled.push(`“${trip.name}”`);
+    if (plan.date && applied.draft.startDate === plan.date) filled.push(`from ${dayLabel(plan.date)}`);
+    if (trip?.nights) {
+      const nights = applied.draft.camps.length;
+      filled.push(`${nights} night${nights === 1 ? "" : "s"}`);
+    }
+    if (plan.startTime) filled.push(`leave camp ${formatClockForStyle(plan.startTime, w.preferences.timeStyle)}`);
+    const hours = plan.params.travel_window_hours;
+    if (typeof hours === "number") filled.push(`${Math.round(hours)} h a day`);
+    const keptCamps = trip?.camps.slice(0, applied.draft.camps.length) ?? [];
+    if (keptCamps.some((camp) => camp.placeQuery || camp.layover)) filled.push(`camps: ${campsLabel(keptCamps)}`);
+    if (trip?.exit) filled.push(`out at ${trip.exit}`);
+    const passes = applied.hints.checkpoints.flat();
+    if (passes.length) filled.push(`over ${passes.join(", ")}`);
+    return hasPlaceHints(applied.hints);
+  }
+
+  function applyDay(plan: ParsedPlan, filled: string[], notes: string[]) {
     if (plan.date) {
       if (plan.date >= w.todayDate && plan.date <= w.maxForecastDate) {
         onDate(plan.date);
@@ -85,9 +120,22 @@ export function PlanSentence({
       onDuration(hours);
       filled.push(`out ${Math.round(hours)} h`);
     }
+  }
+
+  function apply(plan: ParsedPlan) {
+    const filled: string[] = [];
+    const notes = [...plan.notes];
+    // A trip's searches for camps, an exit or passes wait under Camps.
+    let placesToPick = false;
+    if (multiDay) placesToPick = applyTrip(plan, filled, notes);
+    else applyDay(plan, filled, notes);
+    // A trip is checked again as a whole, so only a day's brief is put back into editing.
+    const editPlan = () => {
+      if (!multiDay && w.safetyData) w.handleEditPlan();
+    };
     if (plan.activity && ACTIVITY_PROFILES[plan.activity]) {
       if (activeActivityKey(w.preferences) !== plan.activity) {
-        if (w.safetyData) w.handleEditPlan();
+        editPlan();
         // Picking the activity first loads its own saved limits; the sentence's go on top.
         w.updatePreferences({ defaultActivity: plan.activity, customActivityId: null });
       }
@@ -99,14 +147,14 @@ export function PlanSentence({
       if (typeof value === "number" && Number.isFinite(value)) limits[preference] = value;
     }
     if (Object.keys(limits).length) {
-      if (w.safetyData) w.handleEditPlan();
+      editPlan();
       w.updatePreferences(limits);
       if (limits.maxWindGustMph !== undefined) filled.push(`gusts ≤ ${w.formatWindDisplay(limits.maxWindGustMph)}`);
       if (limits.maxPrecipChance !== undefined) filled.push(`rain or snow ≤ ${limits.maxPrecipChance}%`);
       if (limits.minFeelsLikeF !== undefined) filled.push(`feels ≥ ${w.formatTempDisplay(limits.minFeelsLikeF)}`);
       if (limits.maxFeelsLikeF !== undefined) filled.push(`feels ≤ ${w.formatTempDisplay(limits.maxFeelsLikeF)}`);
     }
-    const target = plan.params.target_elevation_ft;
+    const target = multiDay ? undefined : plan.params.target_elevation_ft;
     if (typeof target === "number") {
       if (plan.placeQuery) setPendingElevation({ feet: target, placeKey });
       else applyElevation(target);
@@ -116,7 +164,7 @@ export function PlanSentence({
       onPlaceQuery(plan.placeQuery);
       filled.unshift(`${plan.placeQuery} (pick it from the results)`);
     }
-    setSummary({ filled, notes });
+    setSummary({ filled, notes, placesToPick });
   }
 
   async function submit() {
@@ -138,12 +186,13 @@ export function PlanSentence({
           elevation: w.preferences.elevationUnit,
         },
         controller.signal,
+        multiDay ? "multi" : "day",
       );
       if (controller.signal.aborted) return;
       apply(plan);
     } catch (caught) {
       if (controller.signal.aborted) return;
-      setError(caught instanceof Error ? caught.message : "Could not read that plan.");
+      setError(caught instanceof Error ? caught.message : multiDay ? "Could not read that trip." : "Could not read that plan.");
     } finally {
       if (request.current === controller) {
         request.current = null;
@@ -152,27 +201,40 @@ export function PlanSentence({
     }
   }
 
+  const fieldProps = {
+    id: `${id}-sentence`,
+    value: text,
+    autoComplete: "off",
+    enterKeyHint: "go" as const,
+    "aria-describedby": `${id}-sentence-status`,
+    onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      // Enter fills the form; it must not submit the plan. Shift+Enter starts a new line in a trip.
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        void submit();
+      }
+    },
+  };
   return (
     <div className="sky-plan-sentence">
-      <label htmlFor={`${id}-sentence`}>Describe your plan</label>
+      <label htmlFor={`${id}-sentence`}>{multiDay ? "Describe your trip" : "Describe your plan"}</label>
       <div className="sky-plan-sentence-row">
-        <input
-          id={`${id}-sentence`}
-          value={text}
-          maxLength={PLAN_SENTENCE_MAX_LENGTH}
-          placeholder="Split Mountain Saturday, ski the north couloir, 3am start, bail over 30 mph"
-          autoComplete="off"
-          enterKeyHint="go"
-          aria-describedby={`${id}-sentence-status`}
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            // Enter fills the form; it must not submit the plan.
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-        />
+        {multiDay ? (
+          <textarea
+            {...fieldProps}
+            rows={3}
+            maxLength={TRIP_DESCRIPTION_MAX_LENGTH}
+            placeholder="Onion Valley Friday, 3 nights: Kearsarge Lakes, Rae Lakes, layover, out at Cottonwood Lakes. Over Glen Pass day 2, leave camp 8am, 6 h a day"
+            onChange={(event) => setText(event.target.value)}
+          />
+        ) : (
+          <input
+            {...fieldProps}
+            maxLength={PLAN_SENTENCE_MAX_LENGTH}
+            placeholder="Split Mountain Saturday, ski the north couloir, 3am start, bail over 30 mph"
+            onChange={(event) => setText(event.target.value)}
+          />
+        )}
         <button type="button" className="field-button" disabled={loading || !text.trim()} onClick={() => void submit()}>
           {loading ? <LoaderCircle size={15} className="field-spin" aria-hidden="true" /> : <Sparkles size={15} aria-hidden="true" />}
           {loading ? "Reading…" : "Fill in"}
@@ -185,8 +247,12 @@ export function PlanSentence({
           <>
             <p className="sky-plan-sentence-summary">
               {summary.filled.length
-                ? <>Filled in: {summary.filled.join(" · ")}. Review it, then create the brief.</>
-                : "Nothing in that sentence matched the plan; fill it in below."}
+                ? <>Filled in: {summary.filled.join(" · ")}. {summary.placesToPick
+                  ? "Pick each camp, exit and pass from its results under Camps, then check the trip."
+                  : multiDay ? "Review it, then check the trip." : "Review it, then create the brief."}</>
+                : multiDay
+                  ? "Nothing in that description matched the trip; fill it in below."
+                  : "Nothing in that sentence matched the plan; fill it in below."}
             </p>
             {summary.notes.length > 0 && (
               <p className="sky-plan-sentence-notes">Not set: {summary.notes.join("; ")}</p>

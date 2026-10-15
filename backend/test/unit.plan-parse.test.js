@@ -4,10 +4,13 @@ const request = require('supertest');
 const { registerPlanParseRoute } = require('../src/routes/plan-parse');
 const {
   PLAN_PARSE_SYSTEM_PROMPT,
+  TRIP_PARSE_SYSTEM_PROMPT,
   buildPlanParsePrompt,
   findDatesInText,
   resolvePlanDate,
+  resolveTripDates,
   validatePlanParse,
+  validateTripParse,
 } = require('../src/utils/plan-parse');
 
 // 2026-10-13 is a Tuesday.
@@ -164,6 +167,118 @@ test('the prompt treats the sentence as data and lists the app activities', () =
   expect(PLAN_PARSE_SYSTEM_PROMPT).toContain('ski-touring');
 });
 
+describe('multi-day trip dates', () => {
+  test('one date is the first day; a span sets the nights', () => {
+    expect(resolveTripDates({ text: 'leave Friday for 3 nights', today: TODAY, modelNights: 3 })).toEqual({ startDate: '2026-10-16', nights: 3, notes: [] });
+    expect(resolveTripDates({ text: 'Friday to Monday', today: TODAY, modelNights: 2 })).toEqual({ startDate: '2026-10-16', nights: 3, notes: [] });
+    expect(resolveTripDates({ text: 'Oct 16 through Oct 18', today: TODAY })).toMatchObject({ startDate: '2026-10-16', nights: 2 });
+  });
+
+  test('a weekday range keeps its order when its first day has passed this week', () => {
+    // 2026-10-17 is a Saturday: this Friday has gone, so the trip is next Friday to the Monday after.
+    expect(resolveTripDates({ text: 'Friday to Monday', today: '2026-10-17' })).toEqual({ startDate: '2026-10-23', nights: 3, notes: [] });
+    expect(resolveTripDates({ text: 'leave Sunday, out Tuesday', today: '2026-10-17' })).toMatchObject({ startDate: '2026-10-18', nights: 2 });
+    expect(resolveTripDates({ text: 'out Oct 18, in on Oct 16', today: TODAY })).toMatchObject({ startDate: '2026-10-16', nights: 2 });
+  });
+
+  test('the model start date is used only when the text names none', () => {
+    expect(resolveTripDates({ text: 'sometime soon', today: TODAY, modelDate: '2026-10-20' }).startDate).toBe('2026-10-20');
+    expect(resolveTripDates({ text: 'Saturday', today: TODAY, modelDate: '2026-10-20' }).startDate).toBe('2026-10-17');
+  });
+
+  test('a start out of range or too many nights is a note', () => {
+    const past = resolveTripDates({ text: 'x', today: TODAY, modelDate: '2026-10-01', modelNights: 2 });
+    expect(past.startDate).toBeNull();
+    expect(past.notes[0]).toMatch(/already passed/);
+    const long = resolveTripDates({ text: 'a ten night trip', today: TODAY, modelNights: 10 });
+    expect(long.nights).toBeNull();
+    expect(long.notes[0]).toMatch(/1 to 6 nights/);
+  });
+});
+
+describe('validating a multi-day answer', () => {
+  const text = 'Onion Valley Friday, 3 nights: Kearsarge Lakes, Rae Lakes, layover, out at Cottonwood Lakes';
+  const validate = (raw, options = {}) => validateTripParse(raw, { text, today: TODAY, ...options });
+
+  test('keeps the trailhead, nights, camps, layovers, exit and passes', () => {
+    const result = validate({
+      tripName: 'Rae Lakes Loop',
+      place: 'Onion Valley trailhead',
+      date: null,
+      nights: 3,
+      camps: [{ place: 'Kearsarge Lakes', layover: false }, { place: 'Rae Lakes', layover: false }, { place: null, layover: true }],
+      exit: 'Cottonwood Lakes trailhead',
+      passes: [{ day: 1, place: 'Kearsarge Pass' }, { day: 2, place: 'Glen Pass' }],
+      start: '08:00',
+      activity: 'backpacking',
+      maxGust: { value: 35, unit: 'mph' },
+      hours: 6,
+      targetElevation: { value: 14000, unit: 'ft' },
+      notes: ['permit: Kearsarge Pass'],
+    });
+    expect(result).toEqual({
+      placeQuery: 'Onion Valley trailhead',
+      date: '2026-10-16',
+      startTime: '08:00',
+      activity: 'backpacking',
+      params: { max_gust_mph: 35, travel_window_hours: 6 },
+      trip: {
+        name: 'Rae Lakes Loop',
+        nights: 3,
+        camps: [
+          { placeQuery: 'Kearsarge Lakes', layover: false },
+          { placeQuery: 'Rae Lakes', layover: false },
+          { placeQuery: null, layover: true },
+        ],
+        exit: 'Cottonwood Lakes trailhead',
+        passes: [['Kearsarge Pass'], ['Glen Pass'], [], []],
+      },
+      notes: ['permit: Kearsarge Pass'],
+    });
+  });
+
+  test('camps set the nights when none are stated; extra camps are dropped with a note', () => {
+    expect(validateTripParse({ camps: ['A Lake', 'B Lake'] }, { text: 'two camps', today: TODAY }).trip.nights).toBe(2);
+    const extra = validateTripParse({ nights: 1, camps: ['A Lake', 'B Lake'] }, { text: 'one night', today: TODAY });
+    expect(extra.trip.camps).toEqual([{ placeQuery: 'A Lake', layover: false }]);
+    expect(extra.notes[0]).toMatch(/More camps were named/);
+  });
+
+  test('a first-night layover, a loop exit and passes without a day are not kept', () => {
+    const result = validate({
+      place: 'Onion Valley',
+      nights: 2,
+      camps: [{ place: null, layover: true }, { place: '<script>', layover: false }],
+      exit: 'onion valley',
+      passes: [{ day: 9, place: 'Glen Pass' }, { day: 1, place: 'A' }, { day: 1, place: 'B' }, { day: 1, place: 'C' }],
+    });
+    expect(result.trip.camps[0]).toEqual({ placeQuery: null, layover: false });
+    expect(result.trip.exit).toBeNull();
+    expect(result.trip.passes[0]).toEqual(['A', 'B']);
+    const notes = result.notes.join(' ');
+    expect(notes).toMatch(/layover on the first night/);
+    expect(notes).toMatch(/Glen Pass: the day it is crossed/);
+    expect(notes).toMatch(/Day 1 has more than 2 passes/);
+  });
+
+  test('invented coordinates are never a camp or exit', () => {
+    const result = validate({ nights: 1, camps: [{ place: '36.77, -118.37' }], exit: '36.45, -118.17' });
+    expect(result.trip.camps).toEqual([{ placeQuery: null, layover: false }]);
+    expect(result.trip.exit).toBeNull();
+  });
+
+  test('a non-object answer is an empty trip', () => {
+    expect(validate('nope')).toMatchObject({ placeQuery: null, trip: { name: null, nights: null, camps: [], exit: null, passes: [] } });
+  });
+
+  test('the trip prompt treats the text as data and explains nights and layovers', () => {
+    expect(TRIP_PARSE_SYSTEM_PROMPT).toMatch(/untrusted data/);
+    expect(TRIP_PARSE_SYSTEM_PROMPT).toMatch(/"4-day trip".*3 nights/);
+    expect(TRIP_PARSE_SYSTEM_PROMPT).toContain('layover');
+    expect(TRIP_PARSE_SYSTEM_PROMPT).toContain('backpacking');
+  });
+});
+
 describe('POST /api/plan-parse', () => {
   test('parses with the fast tier and returns the validated plan', async () => {
     const askAI = jest.fn().mockResolvedValue('```json\n{"place":"Split Mountain","start":"03:00","activity":"ski-touring","maxGust":{"value":30,"unit":"mph"},"notes":[]}\n```');
@@ -183,6 +298,26 @@ describe('POST /api/plan-parse', () => {
     const [prompt, options] = askAI.mock.calls[0];
     expect(prompt).toContain('<plan_text>\nSplit Mountain Saturday');
     expect(options).toMatchObject({ tier: 'fast', feature: 'plan-parse', userId: USER_ID });
+  });
+
+  test('mode multi reads a trip with the trip prompt and a longer text', async () => {
+    const askAI = jest.fn().mockResolvedValue('{"place":"Onion Valley","nights":2,"camps":[{"place":"Kearsarge Lakes","layover":false}],"exit":null,"passes":[],"notes":[]}');
+    const text = `Onion Valley Saturday, 2 nights, camp at Kearsarge Lakes. ${'x'.repeat(600)}`;
+    const response = await request(buildApp({ askAI }))
+      .post('/api/plan-parse')
+      .send({ text, today: TODAY, mode: 'multi' });
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      placeQuery: 'Onion Valley',
+      date: '2026-10-17',
+      trip: { nights: 2, camps: [{ placeQuery: 'Kearsarge Lakes', layover: false }], exit: null },
+    });
+    expect(askAI.mock.calls[0][1]).toMatchObject({ system: TRIP_PARSE_SYSTEM_PROMPT, feature: 'plan-parse', tier: 'fast' });
+
+    const app = buildApp({ askAI });
+    expect((await request(app).post('/api/plan-parse').send({ text: 'x'.repeat(1001), today: TODAY, mode: 'multi' })).status).toBe(413);
+    expect((await request(app).post('/api/plan-parse').send({ text: 'Rainier', today: TODAY, mode: 'week' })).status).toBe(400);
+    expect(askAI).toHaveBeenCalledTimes(1);
   });
 
   test('rejects missing or oversized text before asking the model', async () => {

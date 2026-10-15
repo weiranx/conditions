@@ -9,6 +9,7 @@ import {
   buildItineraryRequest,
   buildItineraryStages,
   createItineraryDraft,
+  EMPTY_PLACE_HINTS,
   firstEmptyCamp,
   itineraryEndDate,
   itineraryGaps,
@@ -22,6 +23,7 @@ import {
   type ItineraryCheckResult,
   type ItineraryDraft,
   type ItineraryPickTarget,
+  type ItineraryPlaceHints,
   type ItineraryPoint,
   type ItineraryPointRef,
   type PlanMode,
@@ -90,6 +92,8 @@ export function useItinerary({
   const activeRequest = useRef<AbortController | null>(null);
   const alternativeRequest = useRef<AbortController | null>(null);
   const [alternatives, setAlternatives] = useState<ItineraryAlternative[]>([]);
+  // Places a trip description named, waiting in their search boxes to be picked.
+  const [placeHints, setPlaceHints] = useState<ItineraryPlaceHints>(EMPTY_PLACE_HINTS);
 
   // Multi-day planning is off when the flag is, whatever was stored.
   const activeMode: PlanMode = enabled ? mode : "day";
@@ -310,6 +314,7 @@ export function useItinerary({
     setAlternatives([]);
     setModeState("multi");
     setDraftState(savedDraft);
+    setPlaceHints(EMPTY_PLACE_HINTS);
     setResult(savedResult);
     setFromSaved(savedResult !== null);
     setError(null);
@@ -341,6 +346,8 @@ export function useItinerary({
     setOpenDayIndex,
     pickTarget,
     activeTarget,
+    placeHints,
+    setPlaceHints,
     setPickTarget,
     movePoint,
     maxNights: maxNightsWithinForecast(draft.startDate || todayDate, maxForecastDate),
