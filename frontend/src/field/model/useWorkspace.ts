@@ -425,6 +425,7 @@ export function useWorkspace() {
     initialAiBriefDetails: initialRestoredReport?.ai.aiBriefDetails ?? null,
     initialSnowVisionAnalysis: initialRestoredReport?.ai.snowVisionAnalysis,
     initialSnowVisionImage: initialRestoredReport?.ai.snowVisionImage,
+    initialSnowVisionImagery: initialRestoredReport?.ai.snowVisionImagery ?? null,
   });
   const {
     safetyData,
@@ -443,10 +444,12 @@ export function useWorkspace() {
     setAiBriefError,
     snowVisionAnalysis,
     snowVisionImage,
+    snowVisionImagery,
     snowVisionLoading,
     snowVisionError,
     setSnowVisionAnalysis,
     setSnowVisionImage,
+    setSnowVisionImagery,
     setSnowVisionLoading,
     setSnowVisionError,
     handleRequestSnowVision,
@@ -1130,6 +1133,7 @@ export function useWorkspace() {
               aiBriefDetails,
               snowVisionAnalysis,
               snowVisionImage,
+              snowVisionImagery,
               reportChatMessages,
             },
             {
@@ -1153,6 +1157,7 @@ export function useWorkspace() {
       aiBriefDetails,
       snowVisionAnalysis,
       snowVisionImage,
+      snowVisionImagery,
       reportChatMessages,
       preferences,
       routeSuggestions,
@@ -1609,6 +1614,7 @@ export function useWorkspace() {
       setAiBriefError(null);
       setSnowVisionAnalysis(report.ai.snowVisionAnalysis);
       setSnowVisionImage(report.ai.snowVisionImage);
+      setSnowVisionImagery({ analysis: report.ai.snowVisionAnalysis, imagery: report.ai.snowVisionImagery ?? null });
       setSnowVisionLoading(false);
       setSnowVisionError(null);
       setReportChatMessages(report.ai.reportChatMessages);
@@ -1634,6 +1640,7 @@ export function useWorkspace() {
       setSnowVisionAnalysis,
       setSnowVisionError,
       setSnowVisionImage,
+      setSnowVisionImagery,
       setSnowVisionLoading,
       navigateToView,
     ],
@@ -2271,10 +2278,16 @@ export function useWorkspace() {
   const fieldObservations = useStoredFieldObservations(
     safetyData ? fieldObservationKey(safetyData.location.lat, safetyData.location.lon, safetyData.forecast?.selectedDate) : null,
   );
-  /** Writes the AI read; with `opening`, a fast model also writes the report's opening ahead of it. */
-  const handleRequestAiBriefAction = async (options: { opening?: boolean } = {}) => {
+  /**
+   * Writes the AI read; with `opening`, a fast model also writes the report's opening ahead of it.
+   * With `snowVision`, the satellite snow analysis is read alongside it when the report has none yet.
+   */
+  const handleRequestAiBriefAction = async (options: { opening?: boolean; snowVision?: boolean } = {}) => {
     if (!safetyData || !decision || aiBriefLoading) return;
     if (!requestAiAccess()) return;
+    if (options.snowVision && !snowVisionAnalysis && !snowVisionLoading && !viewingHistoryReport) {
+      void handleRequestSnowVision(safetyData.location.lat, safetyData.location.lon, safetyData.snowpack);
+    }
     void handleRequestAiBrief({
       safetyData,
       fieldObservations,
@@ -2673,6 +2686,7 @@ export function useWorkspace() {
     setAiBriefError,
     snowVisionAnalysis,
     snowVisionImage,
+    snowVisionImagery,
     snowVisionLoading,
     snowVisionError,
     setSnowVisionAnalysis,

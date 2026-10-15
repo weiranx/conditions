@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { fetchApi, readApiErrorMessage, fetchAiBrief, fetchAiOpening, fetchSnowVisionAnalysis } from '../lib/api-client';
-import type { AiBriefDetails, AiBriefHero, AiReadRun, SafetyData, UserPreferences, DecisionLevel } from '../app/types';
+import type { AiBriefDetails, AiBriefHero, AiReadRun, SafetyData, SnowVisionImagery, UserPreferences, DecisionLevel } from '../app/types';
 import {
   DATE_FMT,
   BACKEND_WAKE_RETRY_DELAY_MS,
@@ -24,6 +24,7 @@ export interface UseSafetyDataParams {
   initialAiBriefDetails?: AiBriefDetails | null;
   initialSnowVisionAnalysis?: string | null;
   initialSnowVisionImage?: string | null;
+  initialSnowVisionImagery?: SnowVisionImagery | null;
 }
 
 export interface SafetyFetchOptions {
@@ -53,7 +54,11 @@ export interface UseSafetyDataReturn {
   setSnowVisionAnalysis: React.Dispatch<React.SetStateAction<string | null>>;
   snowVisionImage: string | null;
   setSnowVisionImage: React.Dispatch<React.SetStateAction<string | null>>;
+  /** The pass the current analysis read, or null when it has none. */
+  snowVisionImagery: SnowVisionImagery | null;
+  setSnowVisionImagery: (value: { analysis: string | null; imagery: SnowVisionImagery | null }) => void;
   snowVisionLoading: boolean;
+  /** Setting it to false also drops any analysis still being written, so its answer can't land on another report. */
   setSnowVisionLoading: React.Dispatch<React.SetStateAction<boolean>>;
   snowVisionError: string | null;
   setSnowVisionError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -90,6 +95,7 @@ export function useSafetyData({
   initialAiBriefDetails = null,
   initialSnowVisionAnalysis = null,
   initialSnowVisionImage = null,
+  initialSnowVisionImagery = null,
 }: UseSafetyDataParams): UseSafetyDataReturn {
   const [safetyData, setSafetyData] = useState<SafetyData | null>(initialSafetyData);
   const [loading, setLoading] = useState(false);
@@ -114,8 +120,19 @@ export function useSafetyData({
   }, []);
   const [snowVisionAnalysis, setSnowVisionAnalysis] = useState<string | null>(initialSnowVisionAnalysis);
   const [snowVisionImage, setSnowVisionImage] = useState<string | null>(initialSnowVisionImage);
-  const [snowVisionLoading, setSnowVisionLoading] = useState(false);
+  // Like the read's details, the imagery carries the analysis it belongs to, so
+  // clearing or replacing the analysis anywhere can never leave another pass's date showing.
+  const [snowVisionImageryState, setSnowVisionImagery] = useState<{ analysis: string | null; imagery: SnowVisionImagery | null }>(
+    { analysis: initialSnowVisionAnalysis, imagery: initialSnowVisionImagery },
+  );
+  const snowVisionImagery = snowVisionAnalysis && snowVisionImageryState.analysis === snowVisionAnalysis ? snowVisionImageryState.imagery : null;
+  const [snowVisionLoading, setSnowVisionLoadingState] = useState(false);
   const [snowVisionError, setSnowVisionError] = useState<string | null>(null);
+  const snowVisionIdRef = useRef(0);
+  const setSnowVisionLoading = useCallback<React.Dispatch<React.SetStateAction<boolean>>>((value) => {
+    if (value === false) snowVisionIdRef.current += 1;
+    setSnowVisionLoadingState(value);
+  }, []);
 
   const lastLoadedSafetyKeyRef = useRef<string | null>(null);
   const inFlightSafetyKeyRef = useRef<string | null>(null);
@@ -360,7 +377,7 @@ export function useSafetyData({
         }
       }
     },
-    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, preferences.defaultActivity, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, extraQueryRef, onNewReportGenerated, setAiBriefLoading],
+    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, preferences.defaultActivity, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, extraQueryRef, onNewReportGenerated, setAiBriefLoading, setSnowVisionLoading],
   );
 
   useEffect(() => {
@@ -468,16 +485,25 @@ export function useSafetyData({
 
   const handleRequestSnowVision = useCallback(async (lat: number, lon: number, snowpack?: SafetyData['snowpack']) => {
     if (snowVisionLoading) return;
-    setSnowVisionLoading(true);
+    const id = snowVisionIdRef.current + 1;
+    snowVisionIdRef.current = id;
+    const current = () => snowVisionIdRef.current === id;
+    setSnowVisionLoadingState(true);
     setSnowVisionError(null);
     try {
       const result = await fetchSnowVisionAnalysis(lat, lon, snowpack, { elevation: preferences.elevationUnit });
+      if (!current()) return;
       setSnowVisionAnalysis(result.analysis);
       setSnowVisionImage(result.image ?? null);
+      setSnowVisionImagery({
+        analysis: result.analysis,
+        imagery: result.imagery ? { acquiredAt: result.imagery.acquiredAt ?? null, cloudCover: result.imagery.cloudCover ?? null } : null,
+      });
     } catch (err) {
+      if (!current()) return;
       setSnowVisionError(err instanceof Error ? err.message : 'Satellite snow analysis unavailable');
     } finally {
-      setSnowVisionLoading(false);
+      if (current()) setSnowVisionLoadingState(false);
     }
   }, [snowVisionLoading, preferences.elevationUnit]);
 
@@ -500,6 +526,8 @@ export function useSafetyData({
     setSnowVisionAnalysis,
     snowVisionImage,
     setSnowVisionImage,
+    snowVisionImagery,
+    setSnowVisionImagery,
     snowVisionLoading,
     setSnowVisionLoading,
     snowVisionError,

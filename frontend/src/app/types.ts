@@ -942,6 +942,13 @@ export interface AiBriefHero {
   note?: { text: string; evidence: AiBriefCitation[] };
 }
 
+/** The Sentinel-2 pass a satellite snow analysis looked at. */
+export interface SnowVisionImagery {
+  /** When the pass was imaged; null when no single pass was found and a 30-day mosaic was read instead. */
+  acquiredAt: string | null;
+  cloudCover?: number | null;
+}
+
 /**
  * An AI read being written, or just written, for the report on screen: when it
  * started, how its opening went, and how long each part took.

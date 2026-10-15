@@ -87,6 +87,16 @@ export function ageLabel(date: string | null | undefined) {
       ? count(Math.floor(hours), "hour")
       : count(Math.floor(hours / 24), "day");
 }
+/** When a satellite pass was imaged, with its age ("Oct 3, 2026 · 11 days ago"), or null when unknown. */
+export function imageryDateLabel(acquiredAt: string | null | undefined) {
+  if (!acquiredAt || !Number.isFinite(Date.parse(acquiredAt))) return null;
+  const date = new Date(acquiredAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${date} · ${ageLabel(acquiredAt)}`;
+}
 export function sentenceCase(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

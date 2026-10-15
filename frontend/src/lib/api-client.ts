@@ -1,4 +1,4 @@
-import type { AiBriefDetails } from '../app/types';
+import type { AiBriefDetails, SnowVisionImagery } from '../app/types';
 const API_BASE = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? '' : (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
 
 function normalizeApiBase(rawBase: string): string | null {
@@ -302,6 +302,8 @@ export interface SnowVisionResponse {
   analysis: string;
   zoom: number;
   image: string | null;
+  /** The pass that was analyzed; absent from older servers. */
+  imagery?: SnowVisionImagery | null;
   generatedAt: string;
 }
 
