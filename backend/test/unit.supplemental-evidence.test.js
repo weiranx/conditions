@@ -208,6 +208,30 @@ test('forecast discussion sections are dated from their headings against the tri
   // Without a readable trip date nothing is claimed to match.
   expect(parseDiscussionSections(afd).sections.find((s) => s.title === 'LONG TERM').matchesTrip).toBeNull();
 });
+test('forecast discussion headings stamped with their issue time are still read', () => {
+  const stamped = `Area Forecast Discussion
+National Weather Service Salt Lake City UT
+1038 PM MDT Wed Oct 14 2026
+
+.KEY MESSAGES, Issued 1017 PM MDT Wed Oct 14 2026...
+- Dry Thursday through the weekend.
+
+&&
+
+.DISCUSSION, Issued 1017 PM MDT Wed Oct 14 2026...
+The low moves into Colorado tonight.
+
+&&
+
+.FIRE WEATHER, Updated 1249 PM MDT Wed Oct 14 2026...
+Humidity recovers.
+$$`;
+  expect(parseDiscussionSections(stamped).sections.map(({ title, kind, text }) => [title, kind, text])).toEqual([
+    ['KEY MESSAGES', 'key_messages', '- Dry Thursday through the weekend.'],
+    ['DISCUSSION', 'overview', 'The low moves into Colorado tonight.'],
+    ['FIRE WEATHER', 'fire_weather', 'Humidity recovers.'],
+  ]);
+});
 test('period headings that cannot be read are left undated', () => {
   const wednesday = Date.UTC(2026, 8, 23);
   expect(periodDayRange('Tonight through Thursday', wednesday)).toEqual([0, 1]);

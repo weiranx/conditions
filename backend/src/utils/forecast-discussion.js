@@ -70,7 +70,8 @@ const parseDiscussionSections = (text, { selectedDate } = {}) => {
     current = null;
   };
   for (const line of String(text || '').split(/\r?\n/)) {
-    const header = /^\.([A-Z][A-Z0-9 /&,'-]*?)(?:\s*[/(]([^/)\n]*)[/)])?\s*\.{3}(.*)$/.exec(line);
+    // Some offices stamp a heading with its own time: ".DISCUSSION, Issued 1017 PM MDT Wed Oct 14 2026...".
+    const header = /^\.([A-Z][A-Z0-9 /&,'-]*?)(?:\s*[/(]([^/)\n]*)[/)])?(?:,?\s*(?:Issued|ISSUED|Updated|UPDATED)\b[^\n]*?)?\s*\.{3}(.*)$/.exec(line);
     if (header) {
       close();
       const title = header[1].trim();
