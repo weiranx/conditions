@@ -78,6 +78,19 @@ test('runs seven internal forecasts and counts one successful guest comparison',
   expect(usageService.finish).toHaveBeenCalledWith(expect.objectContaining({ succeeded: true }));
 });
 
+test('days compared without AI are each checked without it', async () => {
+  const invokeSafetyHandler = jest.fn(async (query) => ({
+    statusCode: 200,
+    payload: { forecast: { selectedDate: query.date } },
+  }));
+  await request(makeApp({ invokeSafetyHandler }))
+    .post('/api/trip-forecasts')
+    .set('Idempotency-Key', 'multi-day-request-ai-off')
+    .send({ lat: 47.4, lon: -121.4, startDate: '2026-07-14', startTime: '07:00', durationDays: 2, travelWindowHours: 12, ai: false });
+  expect(invokeSafetyHandler).toHaveBeenCalledTimes(2);
+  expect(invokeSafetyHandler.mock.calls.every(([query]) => query.ai === 'off')).toBe(true);
+});
+
 test('returns the quota contract when the multi-day limit is reached', async () => {
   const limitError = Object.assign(new Error('Guest multi-day forecast limit reached.'), {
     code: 'MULTI_DAY_USAGE_LIMIT_REACHED',
@@ -230,7 +243,7 @@ test('each day is checked against the plan and the days come back ranked', async
   // Days are compared at the objective: an approach belongs to one route.
   expect(invokeSafetyHandler.mock.calls[0][0]).toMatchObject({ max_gust_mph: '30', wind_unit: 'kph', approach: 'off', lat: '47.4' });
   expect(response.body.days.map((day) => [day.date, day.decisionLevel])).toEqual([[first, 'GO'], [second, 'NO-GO']]);
-  expect(response.body.days[1].concerns).toContain('Wind gusts reach about 87 km/h');
+  expect(response.body.days[1].concerns).toContain('Gusts reach about 87 km/h around 9:00 AM, well above your 48 km/h limit');
   expect(response.body.days[0].safetyData.evaluation.travelWindow.planned.rows).toHaveLength(12);
   expect(response.body.ranking).toEqual({ order: [first, second], bestDate: first, tiedWithBest: [] });
   expect(response.body.note).toBe('Only 2 days are available inside the current forecast range.');

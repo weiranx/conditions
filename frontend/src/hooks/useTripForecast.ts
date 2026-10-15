@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { fetchApi } from '../lib/api-client';
 import type { MultiDayTripForecastDay, TripHighlight, TripRanking, UserPreferences } from '../app/types';
-import { planSettingsParams, readTripDays } from '../app/plan-evaluation';
+import { aiRequestFields, planSettingsParams, readTripDays } from '../app/plan-evaluation';
 export type { MultiDayTripForecastDay } from '../app/types';
 import { DATE_FMT, MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS } from '../app/constants';
 import { addDaysToIsoDate, normalizeForecastDate } from '../app/core';
@@ -159,6 +159,7 @@ export function useTripForecast({
           activity: preferences.defaultActivity,
           objectiveName,
           plan: planSettingsParams(preferences),
+          ...aiRequestFields(preferences),
         }),
       });
       if (activeRequestRef.current !== controller) return;

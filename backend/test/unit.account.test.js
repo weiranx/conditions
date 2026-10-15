@@ -130,6 +130,9 @@ describe('password accounts', () => {
     expect(validateAccountPreferences(PREFERENCES)).not.toHaveProperty('autoAiRead');
     expect(validateAccountPreferences({ ...PREFERENCES, autoAiRead: false })).toEqual({ ...PREFERENCES, autoAiRead: false });
     expect(() => validateAccountPreferences({ ...PREFERENCES, autoAiRead: 'yes' })).toThrow();
+    expect(validateAccountPreferences(PREFERENCES)).not.toHaveProperty('aiEnabled');
+    expect(validateAccountPreferences({ ...PREFERENCES, aiEnabled: false })).toEqual({ ...PREFERENCES, aiEnabled: false });
+    expect(() => validateAccountPreferences({ ...PREFERENCES, aiEnabled: 'no' })).toThrow();
   });
 
   test('accepts optional per-activity route timing', () => {

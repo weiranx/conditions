@@ -1,7 +1,7 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { flushSync } from "react-dom";
 import {
   ArrowDown,
-  ArrowLeft,
   ArrowUpRight,
   Bell,
   BellRing,
@@ -25,13 +25,15 @@ import { AiChapterNote, AiRead } from "./AiRead";
 import { starterQuestions } from "./ai-explanation";
 import { isOutdatedRead, shownAiHero } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
-import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
 import { RouteNote } from "./sky/RouteNote";
 import { summarizePlannedRoute } from "./route-planning";
 import { closeDetailsOnOutsidePress } from "./touch";
-import { placeToReturnTo, reportPlaceKey, useKeepReportPlace, type ReportPlace } from "./report-place";
-import { BriefSections } from "./sky/BriefSections";
+import { BriefSections, StatusTag } from "./sky/BriefSections";
+import { buildBrief, sectionChecks } from "./sky/brief-model";
+import { DeferredSection, ReportNav, type ReportPlace } from "./sky/ReportNav";
+import { landOn, sectionsReady } from "./sky/report-scroll";
+import { placeToReturnTo, reportPlaceKey, useKeepReportPlace, type ReadingPlace } from "./report-place";
 import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
 import { plainHeadline } from "./sky/plain-headline";
@@ -44,7 +46,7 @@ import "./sky/skin.css";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
-import { useAiAvailability } from "../hooks/useAiAvailability";
+import { useAiAvailability, useAiEnabled } from "../hooks/useAiAvailability";
 import { useOpeningHold } from "../hooks/useOpeningHold";
 import { getPastPlannedStart } from "../app/planned-start";
 import {
@@ -69,22 +71,10 @@ const Chat = lazy(() => import("./Chat").then((m) => ({ default: m.Chat })));
 const TripDebrief = lazy(() => import("./TripDebrief").then((m) => ({ default: m.TripDebrief })));
 const chapters = REPORT_CHAPTERS;
 type Chapter = ReportChapter;
-type View = Chapter | "brief" | "all";
-function viewFromHash(fallback: View = "brief"): View {
+/** The section a report link names, if any; the whole-report link names none. */
+function chapterFromHash(): Chapter | null {
   const hash = parseReportSectionHash(window.location.hash) || "";
-  if (!hash) return fallback;
-  if (hash === "planner-section-all") return "all";
-  return chapterFromHash(hash);
-}
-function writeSectionHash(view: View) {
-  const hash = view === "brief" ? "" : buildReportSectionHash(`planner-section-${view}`);
-  window.history.replaceState(
-    window.history.state,
-    "",
-    `${window.location.pathname}${window.location.search}${hash}`,
-  );
-}
-function chapterFromHash(hash: string): Chapter {
+  if (!hash || hash === "planner-section-all") return null;
   if (/route/.test(hash)) return "route";
   if (/terrain|snow|avalanche|wind-loading|elevation/.test(hash))
     return "terrain";
@@ -108,7 +98,7 @@ export function Report({
   actionBusy,
   feedback,
   feedbackAction,
-  place,
+  kept,
 }: {
   report: PersistedReport;
   workspace: Workspace;
@@ -124,17 +114,22 @@ export function Report({
   feedback: string;
   feedbackAction?: { label: string; onClick: () => void };
   /** Where the reader was in a report, kept while the report is closed for another page. */
-  place?: MutableRefObject<ReportPlace | null>;
+  kept?: MutableRefObject<ReadingPlace | null>;
 }) {
   const placeKey = reportPlaceKey(report);
-  // Back from another page, the report opens where it was left; a section in the address still wins.
-  const [returning] = useState(() => placeToReturnTo(place?.current, placeKey));
-  const [view, setView] = useState<View>(() => viewFromHash((returning?.view as View | undefined) ?? "brief"));
+  // Back from another page, the report opens where it was left.
+  const [returning] = useState(() => placeToReturnTo(kept?.current, placeKey));
   const topRef = useRef<HTMLDivElement>(null);
-  const tabsRef = useRef<HTMLElement>(null);
-  const briefScroll = useRef(returning?.briefScrollY ?? 0);
-  // An anchor asks to land on a specific part of a (possibly lazy) chapter.
-  const focusRequest = useRef<"chapter" | "brief" | { anchor: string } | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+  // The report is one page: the summary, then every section. The bar marks where the reader is.
+  const [place, setPlace] = useState<ReportPlace>("summary");
+  // Sections render as the reader nears them, or when they jump to one.
+  // Back at an old spot, the sections above it render at once so the page is as tall as it was.
+  const [mounted, setMounted] = useState<ReadonlySet<Chapter>>(() => new Set(
+    chapters.map((c) => c.id).filter((id) => returning?.sections.includes(id)),
+  ));
+  // A jump lands on a part of a section once it, and every section above it, has rendered.
+  const landing = useRef<{ chapter: Chapter; anchor?: string; smooth: boolean; needed: Chapter[] } | null>(null);
   const [navigation, setNavigation] = useState(0);
   // A question asked from the AI read, handed to the report assistant.
   // It belongs to one conversation: a new report's assistant never receives it.
@@ -142,6 +137,8 @@ export function Report({
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
+  // Turned off on the plan form, the report is the checks' alone: no AI read, chat or route analysis.
+  const aiEnabled = useAiEnabled();
   // The app shows a report only once the backend has evaluated it for the plan.
   const evaluation = w.evaluation!;
   const decision = evaluation.decision;
@@ -157,27 +154,11 @@ export function Report({
     const index = activity.report.chapters.indexOf(id as ActivityChapter);
     return index < 0 ? chapters.findIndex((c) => c.id === id) + activity.report.chapters.length : index;
   };
+  const routeChapter = Boolean(flags.routeAnalysis) && aiEnabled;
   const visibleChapters = chapters
-    .filter((c) => c.id !== "route" || flags.routeAnalysis)
+    .filter((c) => c.id !== "route" || routeChapter)
     .filter((c) => c.id !== "gear" || flags.gearRecommendations)
     .sort((a, b) => chapterRank(a.id) - chapterRank(b.id));
-  const activeView: View = view === "brief" || view === "all" || visibleChapters.some((c) => c.id === view)
-    ? view
-    : "forecast";
-  const chapterIndex = visibleChapters.findIndex((c) => c.id === activeView);
-  const activeChapter = chapterIndex >= 0 ? visibleChapters[chapterIndex] : null;
-  const fullReport = activeView === "all";
-  useKeepReportPlace(place, placeKey, activeView, briefScroll, returning);
-  useEffect(() => {
-    if (!returning || returning.view === "brief") return;
-    // The address names the chapter again once the page's own address is written.
-    const frame = window.requestAnimationFrame(() => {
-      if (!window.location.hash) writeSectionHash(activeView);
-    });
-    return () => window.cancelAnimationFrame(frame);
-    // Only as the report reopens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // The planned day, as the sky and day strip draw it.
   const plannedApproach = evaluation.travelWindow.planned.approachSummary;
@@ -192,7 +173,7 @@ export function Report({
   // Say what crosses your limits and when, in plain words; the decision's own headline covers the rest.
   const headline = plainHeadline(skyHours, clock) ?? decision.headline;
   // The route chosen in the plan, once the report has a Route chapter to show it.
-  const route = flags.routeAnalysis
+  const route = routeChapter
     ? summarizePlannedRoute({
       name: w.plannedRouteName,
       analysis: w.routeAnalysis,
@@ -210,60 +191,75 @@ export function Report({
   // A route can cross boundaries, so the areas come from everywhere it goes.
   const routePoints = w.routeAnalysis?.routeGeometry ?? w.routeAnalysis?.waypoints;
   const { lat: objectiveLat, lon: objectiveLon } = data.location;
-  const hasRoute = Boolean(flags.routeAnalysis);
+  const hasRoute = routeChapter;
   const wherePoints = useMemo(
     () => [{ lat: objectiveLat, lon: objectiveLon }, ...(hasRoute && routePoints ? routePoints : [])],
     [objectiveLat, objectiveLon, hasRoute, routePoints],
   );
   const where = useWhere(report.plan.objectiveName, wherePoints);
   const eta = (time: string) => w.formatClockForStyle(time, w.preferences.timeStyle);
+  // The brief's checks also say which sections hold a problem.
+  const brief = buildBrief({ w, hours: skyHours, clock, route, activity: reportActivity(report) });
 
-  useEffect(() => {
-    const listener = () => setView(viewFromHash());
-    window.addEventListener("hashchange", listener);
-    return () => window.removeEventListener("hashchange", listener);
+  useKeepReportPlace(kept, placeKey, mounted, returning);
+  const mount = useCallback((id: Chapter) => {
+    setMounted((previous) => (previous.has(id) ? previous : new Set(previous).add(id)));
   }, []);
   useEffect(() => {
-    // On a narrow screen the tab row scrolls; keep the open chapter's tab in view.
-    const tabs = tabsRef.current;
-    const current = tabs?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!tabs || !current || tabs.scrollWidth <= tabs.clientWidth) return;
-    tabs.scrollLeft = current.offsetLeft - (tabs.clientWidth - current.offsetWidth) / 2;
-  }, [activeView]);
-  useEffect(() => {
     // Only an explicit navigation moves focus; loading a report must not.
-    const request = focusRequest.current;
-    focusRequest.current = null;
-    if (!request) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (request === "brief") {
-      window.scrollTo({ top: briefScroll.current, behavior: "instant" });
-      topRef.current?.querySelector<HTMLElement>("#field-verdict-title")?.focus({ preventScroll: true });
-      return;
-    }
-    if (typeof request === "object") {
-      const root = topRef.current;
-      if (!root) return;
-      const land = () => {
-        const target = root.querySelector<HTMLElement>(`#${request.anchor}`);
-        if (!target) return false;
-        target.scrollIntoView({ block: "start", behavior: reduced ? "instant" : "smooth" });
-        const section = target.closest("section") ?? target;
-        (section.querySelector<HTMLElement>("input:not(:disabled)") ?? target).focus({ preventScroll: true });
-        return true;
-      };
-      if (land()) return;
-      // The chapter may still be loading; land as soon as it renders.
-      const observer = new MutationObserver(() => { if (land()) stop(); });
-      const timer = window.setTimeout(() => stop(), 5000);
-      const stop = () => { observer.disconnect(); window.clearTimeout(timer); };
-      observer.observe(root, { childList: true, subtree: true });
-      return stop;
-    }
-    topRef.current?.scrollIntoView({ block: "start", behavior: reduced ? "instant" : "smooth" });
-    const heading = topRef.current?.querySelector<HTMLElement>(".sky-chapter-head h1");
-    heading?.focus({ preventScroll: true });
+    const request = landing.current;
+    landing.current = null;
+    const root = topRef.current;
+    if (!request || !root) return;
+    let stopFollowing: (() => void) | null = null;
+    const attempt = (force = false) => {
+      if (!force && !sectionsReady(root, request.needed)) return false;
+      const target = (request.anchor ? root.querySelector<HTMLElement>(`#${request.anchor}`) : null)
+        ?? root.querySelector<HTMLElement>(`#sky-chapter-${request.chapter}`);
+      if (!target) return false;
+      stopFollowing = landOn(target, { smooth: request.smooth });
+      return true;
+    };
+    if (attempt()) return () => stopFollowing?.();
+    // The sections may still be loading; land as soon as they render.
+    const observer = new MutationObserver(() => { if (attempt()) stopWaiting(); });
+    const timer = window.setTimeout(() => { stopWaiting(); attempt(true); }, 5000);
+    const stopWaiting = () => { observer.disconnect(); window.clearTimeout(timer); };
+    observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-mounted"] });
+    return () => { stopWaiting(); stopFollowing?.(); };
   }, [navigation]);
+  useEffect(() => {
+    // The bar follows the reading: the section whose heading has passed under it.
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const root = topRef.current;
+      const nav = navRef.current;
+      if (!root || !nav) return;
+      const line = nav.getBoundingClientRect().bottom + 24;
+      const blocks = [...root.querySelectorAll<HTMLElement>("[data-chapter]")];
+      const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      let current: ReportPlace = "summary";
+      for (const block of blocks) if (block.getBoundingClientRect().top <= line) current = block.dataset.chapter as Chapter;
+      if (atEnd && blocks.length && blocks[0].getBoundingClientRect().top <= line) current = blocks[blocks.length - 1].dataset.chapter as Chapter;
+      setPlace(current);
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update); };
+    update();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, []);
+  useEffect(() => {
+    // A printed report holds every section.
+    const all = () => flushSync(() => setMounted(new Set(chapters.map((c) => c.id))));
+    window.addEventListener("beforeprint", all);
+    return () => window.removeEventListener("beforeprint", all);
+  }, []);
   // The actions menu closes when focus leaves it, which never happens on iOS Safari: a tap elsewhere closes it instead.
   useEffect(() => closeDetailsOnOutsidePress(".report-actions-menu"), []);
   // The AI read is part of the report, so it is written as the report opens,
@@ -334,13 +330,56 @@ export function Report({
     autoReadKey.current = key;
     void w.handleRequestAiBriefAction({ opening: true });
   }, [autoRead, readKey, outdatedRead, w.aiBriefNarrative, w.aiBriefLoading, w.aiBriefError, w]);
-  function go(next: View, anchor?: string) {
-    if (activeView === "brief") briefScroll.current = window.scrollY;
-    focusRequest.current = next === "brief" ? "brief" : anchor ? { anchor } : "chapter";
-    setView(next);
+  function go(next: ReportPlace, anchor?: string, smooth = true) {
+    const hash = next === "summary" ? "" : buildReportSectionHash(`planner-section-${next}`);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}${hash}`,
+    );
+    if (next === "summary") {
+      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
+      topRef.current?.querySelector<HTMLElement>("#field-verdict-title")?.focus({ preventScroll: true });
+      return;
+    }
+    const index = visibleChapters.findIndex((c) => c.id === next);
+    if (index < 0) return;
+    const needed = visibleChapters.slice(0, index + 1).map((c) => c.id);
+    setMounted((previous) => (needed.every((id) => previous.has(id)) ? previous : new Set([...previous, ...needed])));
+    landing.current = { chapter: next, anchor, smooth, needed };
     setNavigation((n) => n + 1);
-    writeSectionHash(next);
   }
+  function toAiRead() {
+    const read = document.getElementById("ai-read");
+    if (read) landOn(read, { smooth: true });
+  }
+  function printReport() {
+    // Every section renders before the page prints.
+    setMounted(new Set(chapters.map((c) => c.id)));
+    const root = topRef.current;
+    const ids = visibleChapters.map((c) => c.id);
+    const started = Date.now();
+    const wait = () => {
+      if (!root || sectionsReady(root, ids) || Date.now() - started > 4000) window.print();
+      else window.setTimeout(wait, 100);
+    };
+    window.setTimeout(wait, 0);
+  }
+  // A link to a section opens the report there.
+  const goRef = useRef<typeof go | null>(null);
+  useEffect(() => { goRef.current = go; });
+  useEffect(() => {
+    const open = (smooth: boolean) => {
+      const chapter = chapterFromHash();
+      if (chapter) goRef.current?.(chapter, undefined, smooth);
+    };
+    // Back from another page, the spot the reader left beats the section last jumped to.
+    if (!returning) open(false);
+    const listener = () => open(true);
+    window.addEventListener("hashchange", listener);
+    return () => window.removeEventListener("hashchange", listener);
+  }, [returning]);
   function download() {
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }),
@@ -416,9 +455,9 @@ export function Report({
             <ArrowDown size={16} />
             Export report data
           </button>
-          <button onClick={() => window.print()}>
+          <button onClick={printReport}>
             <Printer size={16} />
-            Print current view
+            Print report
           </button>
         </div>
       </details>
@@ -480,23 +519,6 @@ export function Report({
             {copy.missing.length > 0 && <p>{copy.missing.map((signal) => signal.title).join(" · ")}. Missing data does not mean conditions are clear.</p>}
           </div>
           {dataWarning && <button type="button" className="sky-link" onClick={() => go("sources")}>Checks &amp; sources</button>}
-        </div>
-      )}
-      {passed && activeView !== "brief" && (
-        <div className="sky-notice is-caution">
-          <TriangleAlert size={20} aria-hidden="true" />
-          <div>
-            <strong>This report’s planned start has passed.</strong>{" "}
-            The forecast below is kept for reference. Pick a new start to get current conditions.
-            <div className="field-action-row">
-              <button className="field-button" onClick={w.handleUseNowAfterPastStart}>
-                Start now
-              </button>
-              <button className="field-button" onClick={w.handleUseTomorrowAfterPastStart}>
-                Start tomorrow
-              </button>
-            </div>
-          </div>
         </div>
       )}
       {w.tripForecastRows.length > 0 && (
@@ -566,11 +588,23 @@ export function Report({
     if (id === "timing") return <Timing key="timing" workspace={w} hours={skyHours} />;
     if (id === "terrain") return <Terrain key="terrain" workspace={w} hours={skyHours} />;
     if (id === "sources") return <Sources key="sources" workspace={w} />;
-    if (id === "route" && flags.routeAnalysis) return <Route key="route" workspace={w} />;
+    if (id === "route" && routeChapter) return <Route key="route" workspace={w} />;
+    if (id === "gear" && flags.gearRecommendations) return (
+      <GearActions
+        key={JSON.stringify([report.plan, data.generatedAt, data.gear])}
+        hidden={false}
+        recommendations={w.gearRecommendations}
+        decision={decision}
+        actionLine={w.decisionActionLine}
+        onSources={() => go("sources")}
+        activityLabel={data.forecast?.activity ? activity.label : null}
+        localize={w.localizeUnitText}
+      />
+    );
     return null;
   };
-  const showChat = ai.reportChat || w.reportChatMessages.length > 0;
-  const aiRead = (
+  const showChat = aiEnabled && (ai.reportChat || w.reportChatMessages.length > 0);
+  const aiRead = aiEnabled && (
     <AiRead
       narrative={w.aiBriefNarrative}
       details={w.aiBriefDetails}
@@ -616,178 +650,95 @@ export function Report({
       <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
     </>
   );
+  const firstChapter = visibleChapters[0];
   return (
-    <div className={`field-report sky-report is-${activeView === "brief" ? "brief" : "chapter"}`} ref={topRef}>
-      {activeView === "brief" ? (
-        <SkyHero
-          hours={skyHours}
-          sunrise={w.sunriseMinutesForPlan}
-          sunset={w.sunsetMinutesForPlan}
-          kicker={`${w.restoredReportSource === "itinerary" ? "Trip day report" : w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"} · ${activity.label}`}
-          title={report.plan.objectiveName}
-          subtitle={subtitle}
-          status={passedStatus}
-          level={decision.level}
-          headline={heroHeadline}
-          reason={heroReason}
-          writing={opening.holding}
-          limitingChecks={copy.limitingChecks}
-          note={<>{heroByline}{approachNote}{routeNote}</>}
-          actions={actions}
-          photo={data.objectiveImage}
-          format={{
-            temp: (f) => w.formatTempDisplay(f),
-            wind: (mph) => w.formatWindDisplay(mph),
-            elevation: (ft) => w.formatElevationDisplay(ft),
-            clock,
-            timeStyle: w.preferences.timeStyle,
-          }}
-        />
-      ) : (
-        <header className="sky-chapter-head">
-          <div className="sky-chapter-bar">
-            <button type="button" className="sky-back" onClick={() => go("brief")}>
-              <ArrowLeft size={18} aria-hidden="true" />
-              Brief
-            </button>
-            {actions}
-          </div>
-          <div className="sky-chapter-title">
-            <div>
-              <span className="sky-kicker">{report.plan.objectiveName} · {dateLabel(report.plan.forecastDate)}</span>
-              <h1 tabIndex={-1}>{fullReport ? "Full report" : activeChapter?.label}</h1>
-            </div>
-            <DayStrip hours={skyHours} approach={plannedApproach} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
-          </div>
-          {!fullReport && (
-            <nav className="sky-chapter-tabs" aria-label="Report sections" ref={tabsRef}>
-              {visibleChapters.map((c) => (
-                <button key={c.id} type="button" aria-current={activeView === c.id ? "page" : undefined} onClick={() => go(c.id)}>
-                  {c.label}
-                </button>
-              ))}
-              <button type="button" onClick={() => go("all")}>All sections</button>
-            </nav>
-          )}
-        </header>
-      )}
+    <div className="field-report sky-report is-brief" ref={topRef}>
+      <SkyHero
+        hours={skyHours}
+        sunrise={w.sunriseMinutesForPlan}
+        sunset={w.sunsetMinutesForPlan}
+        kicker={`${w.restoredReportSource === "itinerary" ? "Trip day report" : w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"} · ${activity.label}`}
+        title={report.plan.objectiveName}
+        subtitle={subtitle}
+        status={passedStatus}
+        level={decision.level}
+        headline={heroHeadline}
+        reason={heroReason}
+        writing={opening.holding}
+        limitingChecks={copy.limitingChecks}
+        note={<>{heroByline}{approachNote}{routeNote}</>}
+        actions={actions}
+        photo={data.objectiveImage}
+        format={{
+          temp: (f) => w.formatTempDisplay(f),
+          wind: (mph) => w.formatWindDisplay(mph),
+          elevation: (ft) => w.formatElevationDisplay(ft),
+          clock,
+          timeStyle: w.preferences.timeStyle,
+        }}
+      />
       <div className="sky-body">
+        <ReportNav
+          navRef={navRef}
+          active={place}
+          onPick={(next) => go(next)}
+          sections={visibleChapters.map((c) => ({ id: c.id, label: c.label, short: c.short, status: sectionChecks(brief, c.id).status }))}
+        />
         {notices}
-        {activeView === "brief" && aiFirst && (
+        {aiFirst && (
           <>
             {aiRead}
             {chat}
           </>
         )}
-        {aiFirst && activeChapter && (
-          <AiChapterNote
-            narrative={w.aiBriefNarrative}
-            details={w.aiBriefDetails}
-            chapter={activeChapter.id}
-            onReadAll={() => go("brief")}
-            onOpen={(chapter) => go(chapter)}
-          />
-        )}
-        {activeView === "brief" && (
-          <BriefSections
-            w={w}
-            hours={skyHours}
-            clock={clock}
-            onOpen={(next) => go(next)}
-            onReadAll={() => go("all")}
-            route={route}
-            gearEnabled={flags.gearRecommendations}
-            activity={reportActivity(report)}
-            more={briefMore}
-          />
-        )}
-        {fullReport && (
-          <div className="report-overview sky-full-summary">
-            <section className={`sky-verdict-card is-${copy.tone}`} aria-labelledby="sky-full-verdict">
-              <span className={`sky-pill is-${copy.tone}`}>
-                {copy.tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
-                <span><span className="sr-only">Trip decision: </span>{decision.level === "GO" ? "Go" : decision.level === "NO-GO" ? "No-go" : "Caution"}</span>
-              </span>
-              <h2 id="sky-full-verdict">{heroHeadline}</h2>
-              <p className="sky-verdict-reason">{heroReason}</p>
-              {copy.limitingChecks.length > 0 && (
-                <ul className="sky-limiting" aria-label="Checks setting the decision">
-                  {copy.limitingChecks.map((check) => <li key={check}>{check}</li>)}
-                </ul>
-              )}
-              {heroByline}
-              {approachNote}
-              {routeNote}
-              <p className="sky-cap">{subtitle}</p>
-            </section>
-            {aiFirst && aiRead}
-            <BriefSections
-              w={w}
-              hours={skyHours}
-              clock={clock}
-              onOpen={(next) => go(next)}
-              onReadAll={() => go("all")}
-              route={route}
-              gearEnabled={flags.gearRecommendations}
-              activity={reportActivity(report)}
-              showMore={false}
-            />
-          </div>
-        )}
+        <BriefSections
+          brief={brief}
+          w={w}
+          hours={skyHours}
+          clock={clock}
+          route={route}
+          activity={reportActivity(report)}
+          onOpen={(chapter, anchor) => go(chapter, anchor)}
+          next={firstChapter ? { chapter: firstChapter.id, label: firstChapter.label, hint: firstChapter.hint } : null}
+          more={briefMore}
+        />
         <div className="field-chapter-content" id="field-report-detail">
-          <Suspense
-            fallback={
-              <p className="field-loading" role="status">
-                Loading section…
-              </p>
-            }
-          >
-            {fullReport
-              ? visibleChapters.filter((c) => c.id !== "gear").map((c) => (
-                <section key={c.id} className="sky-chapter-block" aria-labelledby={`sky-chapter-${c.id}`}>
-                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`}>{c.label}</h2>
-                  {chapterContent(c.id)}
-                </section>
-              ))
-              : activeChapter && chapterContent(activeChapter.id)}
-            {fullReport && flags.gearRecommendations && (
-              <h2 className="sky-chapter-name sky-chapter-block">Gear &amp; actions</h2>
-            )}
-            {flags.gearRecommendations && (
-              <GearActions
-                key={JSON.stringify([report.plan, data.generatedAt, data.gear])}
-                hidden={!fullReport && activeView !== "gear"}
-                recommendations={w.gearRecommendations}
-                decision={decision}
-                actionLine={w.decisionActionLine}
-                onSources={() => go("sources")}
-                activityLabel={data.forecast?.activity ? activity.label : null}
-                localize={w.localizeUnitText}
-              />
-            )}
-          </Suspense>
+          {visibleChapters.map((c) => {
+            const { checks } = sectionChecks(brief, c.id);
+            const ready = mounted.has(c.id);
+            return (
+              <section key={c.id} className="sky-chapter-block" data-chapter={c.id} data-mounted={ready ? "true" : "false"} aria-labelledby={`sky-chapter-${c.id}`}>
+                <header className="sky-chapter-top">
+                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`} tabIndex={-1}>{c.label}</h2>
+                  {checks.length > 0 && (
+                    <ul className="sky-chapter-checks" aria-label={`${c.label} checks`}>
+                      {checks.map((check) => (
+                        <li key={check.key}>
+                          <span>{check.title}</span>
+                          <StatusTag status={check.status}>{check.statusText}</StatusTag>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </header>
+                {aiFirst && (
+                  <AiChapterNote
+                    narrative={w.aiBriefNarrative}
+                    details={w.aiBriefDetails}
+                    chapter={c.id}
+                    onReadAll={toAiRead}
+                    onOpen={(chapter) => go(chapter)}
+                  />
+                )}
+                <DeferredSection id={c.id} mounted={ready} onNear={mount}>
+                  <Suspense fallback={<p className="field-loading sky-section-loading" role="status">Loading {c.label.toLowerCase()}…</p>}>
+                    {chapterContent(c.id)}
+                  </Suspense>
+                </DeferredSection>
+              </section>
+            );
+          })}
         </div>
-        {activeChapter && (
-          <nav className="sky-pager" aria-label="Chapters">
-            {chapterIndex > 0 ? (
-              <button type="button" onClick={() => go(visibleChapters[chapterIndex - 1].id)}>
-                <span>Previous</span><strong>‹ {visibleChapters[chapterIndex - 1].label}</strong>
-              </button>
-            ) : (
-              <button type="button" onClick={() => go("brief")}><span>Back to</span><strong>‹ Brief</strong></button>
-            )}
-            {chapterIndex < visibleChapters.length - 1 ? (
-              <button type="button" className="is-next" onClick={() => go(visibleChapters[chapterIndex + 1].id)}>
-                <span>Next</span><strong>{visibleChapters[chapterIndex + 1].label} ›</strong>
-              </button>
-            ) : (
-              <button type="button" className="is-next" onClick={() => go("brief")}><span>Done</span><strong>Brief ›</strong></button>
-            )}
-          </nav>
-        )}
-        {fullReport && (
-          <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
-        )}
         <p className="field-muted">
           Backcountry Conditions is a planning aid, not a guarantee of safety. Check
           official forecasts, and make the final call from what you see in the field

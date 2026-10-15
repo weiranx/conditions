@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
-import { act, useRef, useState } from 'react';
+import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useWorkspace } from '../src/field/model/useWorkspace';
 import { placeToReturnTo, reportPlaceKey, useKeepReportPlace } from '../src/field/report-place';
@@ -86,27 +86,26 @@ test('a report opens where the reader left it', async t => {
   const store = { current: null };
   function Report({ id }) {
     const [returning] = useState(() => placeToReturnTo(store.current, id));
-    const [view, setView] = useState(returning?.view ?? 'brief');
-    const briefScroll = useRef(returning?.briefScrollY ?? 0);
-    opened = { returning, setView };
-    useKeepReportPlace(store, id, view, briefScroll, returning);
+    const [sections, setSections] = useState(() => new Set(returning?.sections ?? []));
+    opened = { returning, setSections };
+    useKeepReportPlace(store, id, sections, returning);
     return null;
   }
   const h = await mount(t, 'http://localhost/planner', Reading, { id: key, show: true });
   assert.equal(opened.returning, null, 'a report read for the first time opens at its top');
-  await act(async () => opened.setView('terrain'));
+  await act(async () => opened.setSections(new Set(['forecast', 'timing'])));
   await act(async () => h.window.scrollTo({ top: 1400 }));
-  assert.deepEqual(store.current, { report: key, view: 'terrain', scrollY: 1400, briefScrollY: 0 });
+  assert.deepEqual(store.current, { report: key, scrollY: 1400, sections: ['forecast', 'timing'] });
 
   // Another page opens at its top; the report keeps the place it was left at.
   await h.render({ id: key, show: false });
   await act(async () => h.window.scrollTo({ top: 0 }));
   assert.equal(store.current.scrollY, 1400);
 
-  // Back on the brief, the chapter and the spot return, waiting for the page to grow tall enough.
+  // Back on the brief, the rendered sections and the spot return, waiting for the page to grow tall enough.
   h.setPageHeight(600);
   await h.render({ id: key, show: true });
-  assert.equal(opened.returning.view, 'terrain');
+  assert.deepEqual(opened.returning.sections, ['forecast', 'timing']);
   assert.equal(h.window.scrollY, 600, 'the page is not yet tall enough');
   assert.equal(store.current.scrollY, 1400, 'a short page does not overwrite the place');
   h.setPageHeight(5000);
@@ -120,11 +119,11 @@ test('a report opens where the reader left it', async t => {
 });
 
 test('scrolling first ends the wait for the old spot', async t => {
-  const store = { current: { report: 'r', view: 'brief', scrollY: 1400, briefScrollY: 0 } };
+  const store = { current: { report: 'r', scrollY: 1400, sections: [] } };
+  const none = new Set();
   function Report() {
     const [returning] = useState(() => placeToReturnTo(store.current, 'r'));
-    const briefScroll = useRef(0);
-    useKeepReportPlace(store, 'r', 'brief', briefScroll, returning);
+    useKeepReportPlace(store, 'r', none, returning);
     return null;
   }
   const h = await mount(t, 'http://localhost/planner', Report, {}, { height: 300 });

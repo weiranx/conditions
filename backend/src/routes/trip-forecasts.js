@@ -62,6 +62,8 @@ const registerTripForecastRoutes = ({
     const planSettings = {
       ...pickPlanParams(req.body?.plan && typeof req.body.plan === 'object' ? req.body.plan : {}),
       approach: 'off',
+      // The traveler turned AI off: no report reads its avalanche bulletin with AI.
+      ...(req.body?.ai === false ? { ai: 'off' } : {}),
     };
     // Compare days is a weather comparison; Compare objectives keeps avalanche danger in the decision.
     const includeAvalanche = req.body?.includeAvalanche === true;

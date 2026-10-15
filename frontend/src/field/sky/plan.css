@@ -231,6 +231,8 @@
 .sky-plan-route[open] > summary::after { transform: rotate(-135deg); }
 .sky-plan-route > summary:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; border-radius: 8px; }
 .sky-plan-route-gpx { margin-top: 10px; }
+/* Without AI the route row only imports a GPX track, which still times the approach. */
+.sky-plan-gpx-only { display: flex; align-items: center; min-height: 48px; padding: 0 12px; border-top: 1px solid var(--sky-separator, var(--f-line)); }
 .sky-plan-route > .field-route-import { margin-top: 4px; }
 .sky-plan-route-name { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; }
 .sky-plan-route-name label { flex: 1 1 220px; display: grid; gap: 6px; font-size: 13px; font-weight: 550; }
@@ -307,3 +309,15 @@
     height: clamp(480px, calc(100dvh - var(--field-sticky-top, 0px) - 32px), 860px);
   }
 }
+
+/* Use AI: the switch that makes the report with or without AI. */
+.sky-plan-ai {
+  margin: 14px 0 0; padding: 4px 14px 12px; border-radius: 14px;
+  background: var(--sky-fill, var(--f-wash));
+}
+.field-plan-form.sky-plan .sky-plan-ai label.sky-switch {
+  display: inline-flex; font-size: 15px; font-weight: 600; color: var(--sky-label, var(--f-ink));
+}
+.field-plan-form.sky-plan .sky-plan-ai input { width: 1px; height: 1px; min-height: 0; padding: 0; }
+.sky-plan-ai strong { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; }
+.sky-plan-ai p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sky-secondary, var(--f-muted)); }

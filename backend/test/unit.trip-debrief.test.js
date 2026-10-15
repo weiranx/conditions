@@ -267,6 +267,16 @@ describe('POST /api/trip-debrief', () => {
     expect(askAI).not.toHaveBeenCalled();
   });
 
+  test('returns the comparison without a narrative when the traveler turned AI off for the report', async () => {
+    const askAI = jest.fn();
+    const response = await request(makeApp({ askAI, ensureFeatureEnabled: () => {} })).post('/api/trip-debrief').send({ ...body(), ai: false });
+    expect(response.status).toBe(200);
+    expect(response.body.narrative).toBeNull();
+    expect(response.body.narrativeStatus).toBe('unavailable');
+    expect(response.body.comparison.differences.paceRatio).toBe(0.5);
+    expect(askAI).not.toHaveBeenCalled();
+  });
+
   test('returns the comparison without a narrative when the AI fails or answers badly', async () => {
     for (const askAI of [jest.fn().mockRejectedValue(new Error('timeout')), jest.fn().mockResolvedValue('not json')]) {
       const response = await request(makeApp({ askAI, ensureFeatureEnabled: () => {} })).post('/api/trip-debrief').send(body());

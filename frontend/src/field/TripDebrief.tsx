@@ -9,6 +9,7 @@ import {
   type TripDebriefHour,
   type TripDebriefResult,
 } from "../lib/trip-debrief";
+import { useAiEnabled } from "../hooks/useAiAvailability";
 import { Markdown } from "./Markdown";
 import { AiExplanationSkeleton } from "./AiExplanation";
 import "./ai-explanation.css";
@@ -181,6 +182,8 @@ export function TripDebrief({
   formatClock: (hhmm: string) => string;
 }) {
   const id = useId();
+  // With AI off for this report, the debrief is the comparison alone.
+  const aiEnabled = useAiEnabled();
   const fileInput = useRef<HTMLInputElement>(null);
   const [track, setTrack] = useState<{ name: string; fileName: string; points: RecordedTrackPoint[] } | null>(null);
   const [notes, setNotes] = useState("");
@@ -215,7 +218,7 @@ export function TripDebrief({
     setLoading(true);
     setError(null);
     try {
-      const next = await requestTripDebrief(report, track.points, notes, controller.signal);
+      const next = await requestTripDebrief(report, track.points, aiEnabled ? notes : "", controller.signal, aiEnabled);
       if (!controller.signal.aborted) setResult(next);
     } catch (reason) {
       if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Could not compare this track.");
@@ -269,7 +272,7 @@ export function TripDebrief({
             {timed === 0 ? " · no timestamps, so only distance and climb can be compared" : ""}
           </p>
         )}
-        <label className="trip-debrief-notes" htmlFor={`${id}-notes`}>
+        {aiEnabled && <label className="trip-debrief-notes" htmlFor={`${id}-notes`}>
           <span>How did it go? <small>Optional, used for the written debrief</small></span>
           <textarea
             id={`${id}-notes`}
@@ -279,7 +282,7 @@ export function TripDebrief({
             placeholder="e.g. gusts much stronger than forecast on the ridge"
             onChange={(event) => setNotes(event.target.value)}
           />
-        </label>
+        </label>}
         <button
           type="button"
           className="field-button field-button-primary"

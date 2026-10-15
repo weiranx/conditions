@@ -2,14 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, type MutableRefObject 
 import type { PersistedReport } from "../app/report-storage";
 
 // Where the reader was in a report, kept while they visit another page, so the
-// brief they come back to opens at the chapter and the spot they left.
+// brief they come back to opens at the spot they left.
 
-/** The open chapter (or the brief) and how far down the page it was read. */
-export type ReportPlace = {
+/** How far down the report was read, and the sections rendered by then. */
+export type ReadingPlace = {
   report: string;
-  view: string;
   scrollY: number;
-  briefScrollY: number;
+  sections: string[];
 };
 
 /** One report: the same forecast for the same plan, however it was opened. */
@@ -19,31 +18,30 @@ export function reportPlaceKey(report: Pick<PersistedReport, "plan" | "safetyDat
 }
 
 /** The place to return to when this report opens again, or null for a report not read before. */
-export function placeToReturnTo(place: ReportPlace | null | undefined, report: string): ReportPlace | null {
+export function placeToReturnTo(place: ReadingPlace | null | undefined, report: string): ReadingPlace | null {
   return place && place.report === report ? place : null;
 }
 
-// Chapters load lazily, so the page may be too short to reach the old spot at first.
+// The sections above the old spot render as the report reopens, but their charts and maps may still be loading.
 const RESTORE_LIMIT_MS = 2500;
 const READER_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
 
 /**
- * Remembers the reader's place in `store` as they scroll and change chapters,
- * and scrolls back to `returning` once the report is tall enough to reach it.
- * The reader scrolling first ends the wait.
+ * Remembers the reader's place in `store` as they scroll, and scrolls back to
+ * `returning` once the report is tall enough to reach it. The reader scrolling
+ * first ends the wait.
  */
 export function useKeepReportPlace(
-  store: MutableRefObject<ReportPlace | null> | undefined,
+  store: MutableRefObject<ReadingPlace | null> | undefined,
   report: string,
-  view: string,
-  briefScroll: MutableRefObject<number>,
-  returning: ReportPlace | null,
+  sections: ReadonlySet<string>,
+  returning: ReadingPlace | null,
 ) {
   const restoring = useRef(Boolean(returning && returning.scrollY > 0));
   const save = useCallback(() => {
     if (!store || restoring.current) return;
-    store.current = { report, view, scrollY: window.scrollY, briefScrollY: briefScroll.current };
-  }, [store, report, view, briefScroll]);
+    store.current = { report, scrollY: window.scrollY, sections: [...sections] };
+  }, [store, report, sections]);
   // A layout effect stops listening as the report leaves, before the next page scrolls to its top.
   useLayoutEffect(() => {
     save();
