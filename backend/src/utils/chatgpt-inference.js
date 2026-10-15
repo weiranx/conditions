@@ -23,18 +23,29 @@ const planRequestInput = (input, system) => {
   return { input: messages.filter((message) => !isInstruction(message)), instructions: instructions || DEFAULT_INSTRUCTIONS };
 };
 
-const chatGPTInference = async (subscription, input, { system, timeoutMs = 45000, onDelta, signal } = {}) => {
+// Plan models default to more thinking than a report can wait for; the API path lowers effort the same way.
+const EFFORT_PREFERENCE = { fast: ['none', 'minimal', 'low'], primary: ['low', 'minimal', 'none'] };
+const reasoningFor = (efforts, tier) => {
+  const effort = (EFFORT_PREFERENCE[tier] || EFFORT_PREFERENCE.primary).find((level) => efforts.includes(level));
+  return effort ? { reasoning: { effort } } : {};
+};
+
+// The default stays under the proxy's 30s read timeout, so a slow answer fails as JSON, not a dropped connection.
+const chatGPTInference = async (subscription, input, { system, tier = 'primary', timeoutMs = 28000, onDelta, signal } = {}) => {
   assertLive(subscription);
   const { service } = subscription;
   const model = await service.modelForRequest();
+  const efforts = await service.reasoningEffortsFor(model);
   const token = await service.accessToken();
   assertLive(subscription);
   const client = new OpenAI({ apiKey: token, baseURL: 'https://api.openai.com/v1', maxRetries: 0 });
+  // The client timeout ends at the response headers; this one also bounds the streamed body.
+  const deadline = AbortSignal.timeout(timeoutMs);
   let completed;
   try {
     const stream = await client.responses.create({
-      model, ...planRequestInput(input, system), store: false, stream: true,
-    }, { timeout: timeoutMs, maxRetries: 0, ...(signal ? { signal } : {}) });
+      model, ...planRequestInput(input, system), ...reasoningFor(efforts, tier), store: false, stream: true,
+    }, { timeout: timeoutMs, maxRetries: 0, signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
     try {
       for await (const event of stream) {
         assertLive(subscription);
@@ -47,6 +58,7 @@ const chatGPTInference = async (subscription, input, { system, timeoutMs = 45000
     } finally { stream.controller?.abort(); }
   } catch (error) {
     if (error instanceof ChatGPTError) throw error;
+    if (deadline.aborted) throw new ChatGPTError('ChatGPT took too long to answer. Try again, or choose a faster model in Account.', 'CHATGPT_TIMEOUT', 504);
     if (error.status) throw service.apiError({ status: error.status });
     throw new ChatGPTError('ChatGPT could not complete the request. Try again.');
   }

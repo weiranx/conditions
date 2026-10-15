@@ -9,7 +9,7 @@ const { estimateAIUsageCost } = require('../src/utils/ai-pricing');
 
 const create = jest.fn();
 const service = {
-  modelForRequest: jest.fn(async () => 'account-model'), accessToken: jest.fn(async () => 'test-oauth-access'),
+  modelForRequest: jest.fn(async () => 'account-model'), reasoningEffortsFor: jest.fn(async () => []), accessToken: jest.fn(async () => 'test-oauth-access'),
   status: () => ({ connected: true, model: 'account-model' }),
   apiError: () => new ChatGPTError('ChatGPT usage limit reached.', 'CHATGPT_LIMIT_REACHED', 429),
 };
@@ -66,6 +66,35 @@ test('incomplete streams and account limits fail without retrying a paid API pro
   create.mockRejectedValueOnce(Object.assign(new Error('sensitive provider payload'), { status: 429 }));
   await expect(runWithChatGPT({ service, userId: 'owner', alive: true }, () => askAI('Hi'))).rejects.toMatchObject({ code: 'CHATGPT_LIMIT_REACHED' });
   expect(create).toHaveBeenCalledTimes(2);
+});
+
+test('plan requests lower reasoning effort by tier and keep the API time budget', async () => {
+  create.mockImplementation(() => completed());
+  service.reasoningEffortsFor.mockResolvedValue(['minimal', 'low', 'medium', 'high']);
+  const subscription = { service, userId: 'owner', alive: true };
+  await runWithChatGPT(subscription, async () => {
+    await askAI('Hi', { tier: 'fast' });
+    await askAI('Hi');
+    await askAI('Hi', { tier: 'fast', timeoutMs: 15000 });
+  });
+  expect(create.mock.calls[0][0].reasoning).toEqual({ effort: 'minimal' });
+  expect(create.mock.calls[1][0].reasoning).toEqual({ effort: 'low' });
+  expect(create.mock.calls[0][1].timeout).toBe(8000);
+  expect(create.mock.calls[1][1].timeout).toBe(28000);
+  expect(create.mock.calls[2][1].timeout).toBe(15000);
+  service.reasoningEffortsFor.mockResolvedValue([]);
+  await runWithChatGPT(subscription, () => askAI('Hi'));
+  expect(create.mock.calls[3][0]).not.toHaveProperty('reasoning');
+});
+
+test('a request past its deadline fails as a ChatGPT timeout', async () => {
+  create.mockImplementation((_params, { signal }) => (async function* () {
+    await new Promise((resolve) => { signal.addEventListener('abort', resolve, { once: true }); });
+    throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+  })());
+  const { chatGPTInference } = require('../src/utils/chatgpt-inference');
+  await expect(chatGPTInference({ service, userId: 'owner', alive: true }, 'Hi', { timeoutMs: 20 }))
+    .rejects.toMatchObject({ code: 'CHATGPT_TIMEOUT' });
 });
 
 test('late tasks after the browser request ends cannot use credentials', async () => {

@@ -391,7 +391,9 @@ const createReportChatStream = async ({
         const result = await chatGPTInference(subscription, messages.map((message) => ({
           role: message.role, content: message.parts.map((part) => part.text || '').join('\n'),
         })), {
-          system, maxTokens: REPORT_CHAT_MAX_OUTPUT_TOKENS, signal: abortSignal,
+          system, signal: abortSignal,
+          // Streamed deltas keep the proxy connection alive, so a chat answer may run past 30s.
+          timeoutMs: 45000,
           onDelta: (delta) => writer.write({ type: 'text-delta', id, delta }),
         });
         await persistAIUsage({ userId, provider: 'chatgpt', model: result.model,

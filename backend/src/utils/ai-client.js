@@ -529,7 +529,9 @@ const askChatGPT = async (input, options) => {
   assertAIEnabled();
   const subscription = currentChatGPT();
   const startedAt = Date.now();
-  const result = await chatGPTInference(subscription, input, options);
+  const result = await chatGPTInference(subscription, input, {
+    ...options, timeoutMs: requestOptions(options.tier, options.timeoutMs).timeout,
+  });
   await recordAIUsage({ userId: subscription.userId, provider: 'chatgpt', model: result.model,
     feature: options.feature, usage: result.usage, durationMs: Date.now() - startedAt });
   return result.text;

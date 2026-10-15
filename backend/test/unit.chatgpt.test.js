@@ -134,9 +134,9 @@ describe('personal ChatGPT OAuth and protected credentials', () => {
   test('catalog uses this account token, preserves model ordering, and rejects unavailable models', async () => {
     await connect();
     const catalog = { models: [
-      { slug: 'model-first', display_name: 'First', visibility: 'list' },
+      { slug: 'model-first', display_name: 'First', visibility: 'list', supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }] },
       { slug: 'hidden', visibility: 'hidden' },
-      { slug: 'model-second', display_name: 'Second', visibility: 'list' },
+      { slug: 'model-second', display_name: 'Second', visibility: 'list', supported_reasoning_levels: ['minimal', 'medium'] },
     ] };
     fetcher.mockResolvedValue(response(catalog));
     expect(await service.models()).toEqual([{ id: 'model-first', name: 'First' }, { id: 'model-second', name: 'Second' }]);
@@ -145,6 +145,9 @@ describe('personal ChatGPT OAuth and protected credentials', () => {
     await expect(service.selectModel('invented-model')).rejects.toMatchObject({ code: 'CHATGPT_INVALID_MODEL' });
     expect(await service.modelForRequest()).toBe('model-first');
     expect((await service.selectModel('model-second')).model).toBe('model-second');
+    expect(await service.reasoningEffortsFor('model-first')).toEqual(['low', 'high']);
+    expect(await service.reasoningEffortsFor('model-second')).toEqual(['minimal', 'medium']);
+    expect(await service.reasoningEffortsFor('hidden')).toEqual([]);
   });
 
   test('refuses world-readable credentials and symlinks', async () => {
