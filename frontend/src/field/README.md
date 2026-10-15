@@ -4,7 +4,9 @@
 
 `model/useReportGeneration.ts` owns generation and startup checks; `useSavedReportSync.ts` owns browser/account persistence and report identity; `useReportComparisons.ts` enables comparisons only for the current completed plan. `useWorkspace.ts` composes these controllers.
 
-The controllers in `model/` retain the established planning, account, persistence, sharing, feature-flag, and administrative behavior. Domain hooks and score calculations continue to come from the existing application modules. GPX duration is applied through an explicit action, and report chapter changes preserve page position.
+The controllers in `model/` retain the established planning, account, persistence, sharing, feature-flag, and administrative behavior. Domain hooks and score calculations continue to come from the existing application modules. GPX duration is applied through an explicit action.
+
+The report is one scrolling page: the hero and brief, then every section (Weather, Timing, Terrain & snow, Route, Checks & sources, Gear & actions) in the activity's order. A section bar (`sky/ReportNav.tsx`) stays pinned, marks the section in view and dots the sections whose checks are over a limit or missing evidence. Each brief card and headline number scrolls straight to the part of a section that explains it (`sky/brief-model.tsx` names the section and anchor; `sky/report-scroll.ts` opens any fold around it). Sections render as the reader nears them, and a jump renders every section above its target before landing; printing renders them all. Older `#planner-section-*` links scroll to their section.
 
 ## Feature coverage
 

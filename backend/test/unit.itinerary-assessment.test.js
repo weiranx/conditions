@@ -72,7 +72,14 @@ test('the worst day sets the verdict and is named, not averaged away', () => {
 });
 
 test('among days over a limit, the one with more wrong leads and the others are named too', () => {
-  const assessment = check(['clear', 'cloudy', 'rain']);
+  // Day 2's gusts sit just over the 25 mph limit; day 3 is over on rain and wind.
+  const assessment = check(['clear', 'cloudy', 'rain'], {
+    edit: (report, index) => {
+      if (index !== 1) return;
+      report.weather.windGust = 27;
+      report.weather.trend.forEach((row) => { row.gust = 27; });
+    },
+  });
   expect(assessment.level).toBe('CAUTION');
   expect(assessment.weakLink.index).toBe(2);
   expect(assessment.alsoLimiting.map((link) => link.index)).toEqual([1]);

@@ -233,7 +233,7 @@ describe('alerts through the feature filter', () => {
     report.alerts = { source: 'NOAA/NWS Active Alerts', ...beyondTheSix, alerts: listedSix('Avalanche Warning') };
     const filtered = sanitizeReportForFeatureFlags(report, { avalancheDetails: false });
     const evaluation = evaluatePlan(filtered, buildPlanContext({ start: '07:00', travel_window_hours: '10', approach: 'off' }, filtered));
-    expect(evaluation.decision.cautions.join(' ')).toMatch(/2 active NWS alerts overlap the selected start/);
+    expect(evaluation.decision.cautions.join(' ')).toMatch(/2 active NWS alerts overlap your start/);
     const row = evaluation.interpretation.sourceFreshness.rows.find((entry) => entry.label === 'Alerts');
     expect(row.displayValue).not.toBe('No active');
     expect(row.state).not.toBe('fresh');

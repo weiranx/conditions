@@ -370,7 +370,7 @@ test('partial periods contribute only the hours actually covered', () => {
   expect(result.coverage.completeHours).toBe(1.5);
   expect(result.confidence).toBe(76);
   expect(result.label).toBe('Pleasant');
-  expect(result.summary).toMatch(/1.5\/2 complete hours/);
+  expect(result.summary).toMatch(/only 1.5 of 2 hours have a full forecast/);
 });
 
 test('duplicates and out-of-window readings cannot fill a missing hour', () => {
@@ -467,4 +467,26 @@ test('pre-dawn alpine-start hours cost less than finishing after dark', () => {
   expect(alpineStart).toBeGreaterThan(lateFinish);
   expect(alpineStart).toBeGreaterThanOrEqual(90);
   expect(views(trend({ isDaytime: false }))).toBeLessThan(lateFinish);
+});
+
+test('the temperature curve follows the planned activity', () => {
+  const cold = idealInput({ temp: 24, feelsLike: 24, cloudCover: 90, trend: trend({ temp: 24, cloudCover: 90 }) });
+  const hiking = calculatePleasantnessScore(cold);
+  const skiing = calculatePleasantnessScore({ ...cold, activity: 'ski-touring' });
+  expect(skiing.activity).toBe('ski-touring');
+  expect(skiing.factors.find((f) => f.factor === 'Temperature').score)
+    .toBeGreaterThan(hiking.factors.find((f) => f.factor === 'Temperature').score + 30);
+
+  const warm = idealInput({ temp: 72, feelsLike: 72, cloudCover: 90, trend: trend({ temp: 72, cloudCover: 90 }) });
+  const running = calculatePleasantnessScore({ ...warm, activity: 'trail-running' });
+  expect(running.factors.find((f) => f.factor === 'Temperature').score)
+    .toBeLessThan(calculatePleasantnessScore(warm).factors.find((f) => f.factor === 'Temperature').score);
+
+  // Activities without their own curve score like a plan with no activity.
+  expect(calculatePleasantnessScore({ ...warm, activity: 'backpacking' }).score).toBe(calculatePleasantnessScore(warm).score);
+});
+
+test('the summary names what holds comfort back in plain words', () => {
+  const windy = calculatePleasantnessScore(idealInput({ windSpeed: 22, windGust: 34, trend: trend({ wind: 22, gust: 34 }) }));
+  expect(windy.summary).toMatch(/^\w+ overall\. Wind holds it back most\./);
 });

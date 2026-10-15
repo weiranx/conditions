@@ -65,11 +65,11 @@ test('each day keeps the checks behind a Caution or No-go and none for Go', () =
   expect(clear.limitingChecks).toEqual([]);
   const mixed = dayFor(report(2, 'mixed'));
   expect(mixed.decisionLevel).toBe('CAUTION');
-  expect(mixed.concerns).toEqual(['Precipitation chance reaches 80%', 'Wind gusts reach about 31 mph']);
-  expect(mixed.limitingChecks[0]).toMatch(/Allow extra travel time/);
+  expect(mixed.concerns).toEqual(['Rain or snow chance reaches 80% around 12:00 PM, above your 60% limit', 'Gusts reach about 31 mph around 12:00 PM, above your 25 mph limit']);
+  expect(mixed.limitingChecks[0]).toMatch(/Allow extra time/);
   const storm = dayFor(report(3, 'storm'));
   expect(storm.decisionLevel).toBe('NO-GO');
-  expect(storm.concerns).toEqual(['Precipitation chance reaches 95%', 'Wind gusts reach about 54 mph']);
+  expect(storm.concerns).toEqual(['Rain or snow is very likely (95% chance)', 'Gusts reach about 54 mph around 9:00 AM, well above your 25 mph limit']);
 });
 
 test('a day with no hour inside the limits names the limits, including ones the decision does not raise', () => {
