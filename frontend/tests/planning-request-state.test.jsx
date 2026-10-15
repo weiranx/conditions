@@ -182,3 +182,58 @@ test('the active healthy wake check still regenerates its report', async t => {
   assert.equal(h.current.error, null);
   assert.equal(h.current.loading, false);
 });
+
+// An AI read asked for with its opening: the opening request comes first, the full read second.
+async function startAiRead(t) {
+  const h = await mountHook(t, useSafetyData, {
+    todayDate: plan.date, preferences, isProductionBuild: true,
+    objectiveNameRef: { current: 'Mount Rainier' },
+  });
+  await act(async () => {
+    void h.current.handleRequestAiBrief({ safetyData: makeReport(plan, 'clear'), decisionLevel: 'CAUTION', opening: true });
+  });
+  assert.deepEqual(h.requests.map((r) => r.url.pathname), ['/api/ai-brief/opening', '/api/ai-brief']);
+  return h;
+}
+const aiHeroFor = (headline) => ({ headline, reason: 'Gusts build after noon.', evidence: [{ path: 'weather.windGust', value: 20 }], level: 'CAUTION' });
+const aiRead = (hero) => ({ narrative: 'BIG PICTURE: Wind.\nBEST MOVE: Go early.', evidence: [], questions: [], chapters: {}, hero, validation: 'evidence_checked', checks: { attempts: 1, problems: [], seconds: [9] } });
+
+test('the AI opening shows as soon as it is written, and the full read keeps it', async t => {
+  const h = await startAiRead(t);
+  assert.equal(h.current.aiReadRun.opening, 'pending');
+  await act(async () => h.requests[0].respond({ hero: aiHeroFor('Opening from the fast model'), checks: { problems: [], seconds: [2] } }));
+  assert.equal(h.current.aiReadRun.opening, 'written');
+  assert.equal(h.current.aiReadRun.hero.headline, 'Opening from the fast model');
+  assert.equal(h.current.aiBriefLoading, true, 'the full read is still being written');
+  await act(async () => h.requests[1].respond(aiRead(aiHeroFor('A different opening from the read'))));
+  assert.equal(h.current.aiBriefLoading, false);
+  assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the fast model', 'the top of the report changes once, not twice');
+  assert.equal(typeof h.current.aiReadRun.seconds, 'number');
+});
+
+test('a failed opening keeps the checks\' wording until the read brings its own', async t => {
+  const h = await startAiRead(t);
+  await act(async () => h.requests[0].respond({ hero: null, checks: { problems: ['OPENING: states 99'], seconds: [2] } }));
+  assert.equal(h.current.aiReadRun.opening, 'kept');
+  assert.equal(h.current.aiReadRun.hero, null);
+  await act(async () => h.requests[1].respond(aiRead(aiHeroFor('Opening from the read'))));
+  assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the read');
+});
+
+test('an opening that arrives after the read is ignored', async t => {
+  const h = await startAiRead(t);
+  await act(async () => h.requests[1].respond(aiRead(aiHeroFor('Opening from the read'))));
+  await act(async () => h.requests[0].respond({ hero: aiHeroFor('Late opening'), checks: { problems: [], seconds: [30] } }));
+  assert.equal(h.current.aiReadRun.hero.headline, 'Opening from the read');
+  assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the read');
+});
+
+test('a read dropped for another report cannot land on it', async t => {
+  const h = await startAiRead(t);
+  await act(async () => h.current.setAiBriefLoading(false));
+  assert.equal(h.current.aiReadRun, null);
+  await act(async () => h.requests[0].respond({ hero: aiHeroFor('Stale opening') }));
+  await act(async () => h.requests[1].respond(aiRead(aiHeroFor('Stale read'))));
+  assert.equal(h.current.aiReadRun, null);
+  assert.equal(h.current.aiBriefNarrative, null);
+});

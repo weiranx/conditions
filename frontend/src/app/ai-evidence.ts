@@ -1,4 +1,4 @@
-import type { AiBriefCitation, AiBriefDetails } from './types';
+import type { AiBriefCitation, AiBriefDetails, AiBriefHero, AiReadRun } from './types';
 
 /** The report chapters an AI citation can point the reader to. */
 export type EvidenceChapter = 'forecast' | 'timing' | 'terrain' | 'route' | 'sources' | 'gear';
@@ -105,8 +105,20 @@ const LEVEL_RANK: Record<string, number> = { GO: 0, CAUTION: 1, 'NO-GO': 2 };
  * The AI's headline and reason for the top of the report, when it passed its
  * checks and was written against a decision at least as strict as the one shown.
  */
-export function aiHero(details: AiBriefDetails | null, level: string): NonNullable<AiBriefDetails['hero']> | null {
-  const hero = details?.validation === 'evidence_checked' ? details.hero : null;
+export function aiHero(details: AiBriefDetails | null, level: string): AiBriefHero | null {
+  return heroBeside(details?.validation === 'evidence_checked' ? details.hero : null, level);
+}
+
+/**
+ * The opening to show beside the decision badge: the one the read in progress
+ * just wrote, else the written read's. Either is shown only beside a level no
+ * stricter than the one it was written against.
+ */
+export function shownAiHero(run: AiReadRun | null, details: AiBriefDetails | null, level: string): AiBriefHero | null {
+  return heroBeside(run?.hero ?? null, level) ?? aiHero(details, level);
+}
+
+function heroBeside(hero: AiBriefHero | null | undefined, level: string): AiBriefHero | null {
   if (!hero?.headline.trim() || !hero.reason.trim()) return null;
   const written = hero.level === undefined ? undefined : LEVEL_RANK[hero.level];
   const shown = LEVEL_RANK[level];

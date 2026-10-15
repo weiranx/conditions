@@ -840,8 +840,18 @@ export function createMockApi({ databasePath } = {}) {
       persist();
       return ok({ watch, policy });
     }
+    const mockHero = {
+      headline: "A sample day shaped by afternoon wind",
+      reason: "Synthetic hero: in this fixture the wind builds through the window, so the early hours carry the least exposure.",
+      evidence: [{ path: "weather.windGust", value: 0 }],
+      level: body.decisionLevel || "CAUTION",
+      note: { text: "Synthetic note: the first hours are judged on the way up, below the objective, where clear and calm air can sit colder.", evidence: [{ path: "weather.windGust", value: 0 }] },
+    };
+    // The dev server waits like the real AI (a fast opening, a slower read); `handle` callers don't.
+    if (p === "/api/ai-brief/opening")
+      return { ...ok({ hero: mockHero, checks: { problems: [], seconds: [1.6] } }), delayMs: 1600 };
     if (p === "/api/ai-brief")
-      return ok({
+      return { delayMs: 7000, ...ok({
         narrative:
           "BIG PICTURE: This is a synthetic local briefing for testing the report layout. The selected fixture supplies the weather and field observations. WHY IT MATTERS: Large values and hourly charts show how this sample changes through the outing. These are demonstration values, not live observations. WATCH CLOSELY: Review the selected hour and any highlighted field signals in the sample report. DATA CONFIDENCE: All data in this briefing is mocked. No live forecast or AI provider was contacted. COMFORT CHECK: The comfort card is separate from the safety decision. BEST MOVE: Use the scenario selector to test clear skies, storms, snow, and missing data. Use a real report before making an outing decision.",
         cached: false,
@@ -859,16 +869,10 @@ export function createMockApi({ databasePath } = {}) {
           terrain: { text: "Synthetic analysis: the sample's snow and avalanche values are mocked; read them as layout, not conditions.", evidence: [{ path: "avalanche.dangerLevel", value: 0 }] },
           sources: { text: "Synthetic analysis: every source here is simulated, so the checks describe the fixture rather than the mountain.", evidence: [{ path: "safety.confidence", value: 0 }] },
         },
-        hero: {
-          headline: "A sample day shaped by afternoon wind",
-          reason: "Synthetic hero: in this fixture the wind builds through the window, so the early hours carry the least exposure.",
-          evidence: [{ path: "weather.windGust", value: 0 }],
-          level: body.decisionLevel || "CAUTION",
-          note: { text: "Synthetic note: the first hours are judged on the way up, below the objective, where clear and calm air can sit colder.", evidence: [{ path: "weather.windGust", value: 0 }] },
-        },
+        hero: mockHero,
         questions: ["When does the wind start to build?", "What would make this a no-go?", "How early should I turn around?"],
         validation: "evidence_checked",
-      });
+      }) };
     if (p === "/api/field-observations/extract") {
       const text = typeof body.text === "string" ? body.text : "";
       if (!text.trim()) return { status: 400, payload: { error: "Paste a trip report or what you saw." } };
@@ -1506,6 +1510,7 @@ export function mockApiPlugin({ databasePath }) {
           }
           const body = raw ? JSON.parse(raw) : {};
           const result = await api.handle(req.url, req.method || "GET", body);
+          if (result.delayMs) await new Promise((resolve) => setTimeout(resolve, result.delayMs));
           res.statusCode = result.status;
           res.setHeader("Cache-Control", "no-store");
           res.setHeader("x-conditions-mock", "true");

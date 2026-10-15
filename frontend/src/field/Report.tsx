@@ -23,7 +23,7 @@ import "./report-reading.css";
 import "./report-navigation.css";
 import { AiChapterNote, AiRead } from "./AiRead";
 import { starterQuestions } from "./ai-explanation";
-import { aiHero, isOutdatedRead } from "../app/ai-evidence";
+import { isOutdatedRead, shownAiHero } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
@@ -247,15 +247,39 @@ export function Report({
   const aiFirst = ai.aiReport;
   // Under AI-first the AI writes the report's opening; the badge and the checks
   // beside it still come from the evaluation.
-  const hero = aiFirst ? aiHero(w.aiBriefDetails, decision.level) : null;
+  // The opening a read in progress just wrote leads, so AI text reaches the top
+  // in seconds rather than when the whole read is done.
+  const hero = aiFirst ? shownAiHero(w.aiReadRun, w.aiBriefDetails, decision.level) : null;
   const heroHeadline = hero?.headline ?? headline;
   const heroReason = hero?.reason ?? copy.reason;
-  const heroByline = hero && (
-    <p className="sky-ai-byline">
-      <Sparkles size={13} aria-hidden="true" />
-      Written by AI from this report’s data. The call comes from the checks.
-    </p>
-  );
+  const [checksWording, setChecksWording] = useState(false);
+  const openingPending = aiFirst && !hero && w.aiBriefLoading && w.aiReadRun?.opening === "pending";
+  // Says which text is the AI's and keeps the checks' own wording one tap away,
+  // so the reader can see what the AI changed.
+  const heroByline = hero ? (
+    <div className="sky-ai-byline">
+      <p>
+        <Sparkles size={13} aria-hidden="true" />
+        <span>Rewritten by AI from this report’s data. The call comes from the checks.</span>
+        <button type="button" aria-expanded={checksWording} onClick={() => setChecksWording((open) => !open)}>
+          {checksWording ? "Hide the checks’ wording" : "Show the checks’ wording"}
+        </button>
+      </p>
+      {checksWording && (
+        <p className="sky-checks-wording">
+          <span className="sky-checks-wording-label">The checks wrote</span>
+          <strong>{headline}.</strong> {copy.reason}
+        </p>
+      )}
+    </div>
+  ) : openingPending ? (
+    <div className="sky-ai-byline is-pending" role="status">
+      <p>
+        <Sparkles size={13} aria-hidden="true" />
+        <span>AI is reading the report to rewrite this opening…</span>
+      </p>
+    </div>
+  ) : null;
   const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
   // A read written before the AI also wrote the report's opening (no hero in its
   // details) is outdated under AI-first, so it is written again once.
@@ -265,7 +289,7 @@ export function Report({
     const key = outdatedRead ? `${readKey}|outdated` : readKey;
     if (autoReadKey.current === key) return;
     autoReadKey.current = key;
-    void w.handleRequestAiBriefAction();
+    void w.handleRequestAiBriefAction({ opening: true });
   }, [autoRead, readKey, outdatedRead, w.aiBriefNarrative, w.aiBriefLoading, w.aiBriefError, w]);
   function go(next: View, anchor?: string) {
     if (activeView === "brief") briefScroll.current = window.scrollY;
@@ -518,7 +542,10 @@ export function Report({
       chatAvailable={ai.reportChat}
       readOnly={w.viewingHistoryReport}
       fallbackQuestions={starterQuestions(decision.level)}
-      onRequest={w.handleRequestAiBriefAction}
+      run={w.aiReadRun}
+      acrossReport={aiFirst}
+      openingRewritten={Boolean(hero)}
+      onRequest={() => void w.handleRequestAiBriefAction({ opening: aiFirst })}
       onAsk={(text) => {
         if (!w.requestAiAccess()) return;
         setChatAsk((previous) => ({ id: (previous?.id ?? 0) + 1, text, session: w.reportChatSessionKey }));

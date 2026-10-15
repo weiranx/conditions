@@ -184,6 +184,74 @@ test('AI brief falls back to the checks summary when the retry request fails', a
   expect(response.body.checks.problems).toEqual(expect.arrayContaining(['retry: the retry request failed: timeout']));
 });
 
+test('AI opening is written by the fast model alone and fact-checked like the read', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn().mockResolvedValueOnce(JSON.stringify({
+    hero: { headline: 'Wind builds through the afternoon', reason: 'Gusts reach 38 mph on the ridge.', evidence: [{ path: 'weather.windGust', value: 38 }] },
+  }));
+  registerAiBriefRoute({ app, askAI });
+  const report = { weather: { description: 'Opening fixture', windGust: 38 }, safety: { explanations: ['Gusty ridge.'] } };
+
+  const response = await request(app).post('/api/ai-brief/opening').send({ decisionLevel: 'CAUTION', report });
+
+  expect(response.status).toBe(200);
+  expect(response.body.hero).toMatchObject({ headline: 'Wind builds through the afternoon', level: 'CAUTION' });
+  expect(response.body.checks).toEqual({ problems: [], seconds: [expect.any(Number)] });
+  expect(askAI).toHaveBeenCalledTimes(1);
+  expect(askAI.mock.calls[0][1]).toMatchObject({ tier: 'fast', feature: 'report-opening' });
+  expect(askAI.mock.calls[0][1].system).toMatch(/"hero"/);
+  expect(askAI.mock.calls[0][1].system).not.toMatch(/"sections"/);
+});
+
+test('AI opening that fails its checks is left out, with the reason', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn().mockResolvedValueOnce(JSON.stringify({
+    hero: { headline: 'Gusts top out near 90 mph today', reason: 'Gusts reach 90 mph.', evidence: [{ path: 'weather.windGust', value: 41 }] },
+  }));
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief/opening')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { description: 'Failing opening fixture', windGust: 41 }, safety: { explanations: ['Gusty.'] } } });
+
+  expect(response.status).toBe(200);
+  expect(response.body.hero).toBeNull();
+  expect(response.body.checks.problems).toEqual([expect.stringMatching(/^OPENING: /)]);
+});
+
+test('AI opening reuses a full read already written for the same report', async () => {
+  const app = express();
+  app.use(express.json());
+  const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
+  const askAI = jest.fn().mockResolvedValueOnce(JSON.stringify({
+    sections: headings.map((heading) => ({ heading, text: 'Gusts reach 44 mph.', evidence: [{ path: 'weather.windGust', value: 44 }] })),
+    hero: { headline: 'Wind sets the pace of the day', reason: 'Gusts reach 44 mph.', evidence: [{ path: 'weather.windGust', value: 44 }] },
+  }));
+  registerAiBriefRoute({ app, askAI });
+  const body = { decisionLevel: 'CAUTION', report: { weather: { description: 'Cached opening fixture', windGust: 44 }, safety: { explanations: ['Gusty.'] } } };
+
+  await request(app).post('/api/ai-brief').send(body);
+  const response = await request(app).post('/api/ai-brief/opening').send(body);
+
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({ cached: true, hero: { headline: 'Wind sets the pace of the day' } });
+  expect(askAI).toHaveBeenCalledTimes(1);
+});
+
+test('AI opening rejects a request without a report and answers 503 when AI is off', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn();
+  registerAiBriefRoute({ app, askAI, ensureFeatureEnabled: rejectDisabledFeature });
+
+  expect((await request(app).post('/api/ai-brief/opening').send({ decisionLevel: 'GO' })).status).toBe(400);
+  const disabled = await request(app).post('/api/ai-brief/opening').send({ decisionLevel: 'GO', report: { safety: { score: 80 } } });
+  expect(disabled.status).toBe(503);
+  expect(askAI).not.toHaveBeenCalled();
+});
+
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {
   const app = express();
   app.use(express.json());

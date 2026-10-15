@@ -280,6 +280,24 @@ export async function fetchAiBrief(data: AiBriefRequest): Promise<AiBriefRespons
   return payload as AiBriefResponse;
 }
 
+export interface AiOpeningResponse {
+  /** The report's opening, fact-checked; null when it failed its checks. */
+  hero: AiBriefDetails['hero'];
+  checks?: { problems: string[]; seconds?: number[] };
+  cached?: boolean;
+}
+
+/** The report's AI opening alone, written by a fast model while the full read is still being written. */
+export async function fetchAiOpening(data: AiBriefRequest): Promise<AiOpeningResponse> {
+  const { response, payload } = await fetchApi('/api/ai-brief/opening', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'AI opening unavailable'));
+  return payload as AiOpeningResponse;
+}
+
 export interface SnowVisionResponse {
   analysis: string;
   zoom: number;
