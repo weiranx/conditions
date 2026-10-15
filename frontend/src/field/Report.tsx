@@ -44,6 +44,7 @@ import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { useAiAvailability, useAiEnabled } from "../hooks/useAiAvailability";
+import { useOpeningHold } from "../hooks/useOpeningHold";
 import { getPastPlannedStart } from "../app/planned-start";
 import {
   parseReportSectionHash,
@@ -255,8 +256,22 @@ export function Report({
   const hero = aiFirst ? shownAiHero(w.aiReadRun, w.aiBriefDetails, decision.level) : null;
   const heroHeadline = hero?.headline ?? headline;
   const heroReason = hero?.reason ?? copy.reason;
+  const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
+  // A read written before the AI also wrote the report's opening (no hero in its
+  // details) is outdated under AI-first, so it is written again once.
+  const outdatedRead = isOutdatedRead(w.aiBriefNarrative, w.aiBriefDetails);
   const [checksWording, setChecksWording] = useState(false);
   const openingPending = aiFirst && !hero && w.aiBriefLoading && w.aiReadRun?.opening === "pending";
+  // When an AI read is about to write this report's first opening, the top waits
+  // for it rather than showing the checks' wording and swapping it seconds later;
+  // the badge, timeline and checks show meanwhile. A read that can't start, fails
+  // or runs slow lets the checks' wording through (useOpeningHold's time limit).
+  const firstRead = !w.aiBriefNarrative || outdatedRead;
+  const opening = useOpeningHold({
+    expected: aiFirst && !hero && firstRead && !w.aiBriefError
+      && (openingPending || (autoRead && !w.aiBriefLoading)),
+    key: readKey,
+  });
   // Says which text is the AI's and keeps the checks' own wording one tap away,
   // so the reader can see what the AI changed.
   const heroByline = hero ? (
@@ -275,18 +290,20 @@ export function Report({
         </p>
       )}
     </div>
-  ) : openingPending ? (
+  ) : opening.holding || openingPending ? (
     <div className="sky-ai-byline is-pending" role="status">
       <p>
         <Sparkles size={13} aria-hidden="true" />
-        <span>AI is reading the report to rewrite this opening…</span>
+        <span>
+          {opening.holding
+            ? "AI is writing this opening from the report’s data…"
+            : opening.expired
+              ? "AI is still writing. This opening is from the checks for now."
+              : "AI is reading the report to rewrite this opening…"}
+        </span>
       </p>
     </div>
   ) : null;
-  const autoRead = aiFirst && w.preferences.autoAiRead && ai.aiBrief && Boolean(w.accountUser) && !w.viewingHistoryReport;
-  // A read written before the AI also wrote the report's opening (no hero in its
-  // details) is outdated under AI-first, so it is written again once.
-  const outdatedRead = isOutdatedRead(w.aiBriefNarrative, w.aiBriefDetails);
   useEffect(() => {
     if (!autoRead || (w.aiBriefNarrative && !outdatedRead) || w.aiBriefLoading || w.aiBriefError) return;
     const key = outdatedRead ? `${readKey}|outdated` : readKey;
@@ -595,6 +612,7 @@ export function Report({
           level={decision.level}
           headline={heroHeadline}
           reason={heroReason}
+          writing={opening.holding}
           limitingChecks={copy.limitingChecks}
           note={<>{heroByline}{approachNote}{routeNote}</>}
           actions={actions}
