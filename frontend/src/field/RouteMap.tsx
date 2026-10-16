@@ -7,6 +7,7 @@ import type { Workspace } from "./model/useWorkspace";
 import type { CheckpointTone } from "./route-planning";
 import { checkpointPin, groupCheckpointsByPlace, worstTone } from "./route-map-pins";
 import { hasCoarsePointer } from "./touch";
+import MapImageryDate from "./MapImageryDate";
 
 export type RouteMapStop = { name: string; lat: number; lon: number; tone: CheckpointTone; eta: string; estimated?: boolean };
 
@@ -67,6 +68,7 @@ export default function RouteMap({ workspace: w, stops, line, lineEstimated, sel
         aria-label="Route map"
       >
         <TileLayer key={source.url} attribution={source.attribution} url={source.url} maxNativeZoom={source.maxNativeZoom} />
+        {style === "satellite" && <MapImageryDate />}
         <ScaleControl position="bottomleft" metric={w.preferences.elevationUnit !== "ft"} imperial={w.preferences.elevationUnit !== "m"} />
         <Framing bounds={bounds} focus={focus} />
         {line.length >= 2 && (

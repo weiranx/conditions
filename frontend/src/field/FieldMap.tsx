@@ -11,6 +11,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import { LocateFixed } from "lucide-react";
+import MapImageryDate from "./MapImageryDate";
 import "leaflet/dist/leaflet.css";
 import type { Plan } from "./data";
 import type { Workspace } from "./model/useWorkspace";
@@ -194,6 +195,7 @@ export default function FieldMap({
         aria-label="Objective map"
       >
         {touch && <TwoFingerHint />}
+        {style === "satellite" && flags.satelliteImagery && <MapImageryDate />}
         <TileLayer
           key={source.url}
           attribution={source.attribution}

@@ -61,3 +61,20 @@ test('disabled satellite imagery is rejected before cache or provider access', a
   expect(tileCache.getOrFetch).not.toHaveBeenCalled();
   expect(fetchWithTimeout).not.toHaveBeenCalled();
 });
+
+test.each([
+  [{ acquiredAt: '2026-10-10T18:00:00Z' }, '2026-10-10T18:00:00Z'],
+  [{ acquiredAt: null, selection: 'least_cloudy_mosaic_fallback' }, null],
+  [undefined, null],
+])('satellite date metadata uses the cached image acquisition without returning image bytes', async (metadata, acquiredAt) => {
+  const app = express();
+  const tileCache = { getOrFetch: jest.fn().mockResolvedValue({ buffer: Buffer.from('png'), metadata }) };
+  registerSatelliteTileRoute({ app, tileCache, ensureFeatureEnabled: () => {} });
+
+  const response = await request(app).get('/api/satellite-tile/13/1326/2889.png?metadata=1');
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ acquiredAt });
+  expect(response.headers['content-type']).toMatch(/application\/json/);
+  expect(tileCache.getOrFetch.mock.calls[0][0]).toBe('13/1326/2889');
+});

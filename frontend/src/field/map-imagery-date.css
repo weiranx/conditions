@@ -1,0 +1,19 @@
+.field-map-imagery-date {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 800;
+  max-width: calc(100% - 70px);
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #fffef2ed;
+  color: #233c30;
+  box-shadow: 0 1px 4px #14241b26;
+  font: 500 12px/1.4 system-ui, sans-serif;
+  pointer-events: none;
+}
+.field-map-imagery-date span {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+}

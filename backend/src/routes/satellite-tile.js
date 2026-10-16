@@ -15,6 +15,10 @@ const registerSatelliteTileRoute = ({
     try {
       ensureFeatureEnabled();
       const tile = await tileCache.getOrFetch(cacheKey, () => fetchSentinelTile({ z, x, y, fetchWithTimeout }));
+      if (req.query.metadata === '1') {
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.status(200).json({ acquiredAt: tile?.metadata?.acquiredAt || null });
+      }
       const png = tile?.buffer || tile;
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=3600');
