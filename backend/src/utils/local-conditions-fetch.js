@@ -16,6 +16,13 @@ const {
 const { createUsgsWaterService } = require('./usgs-water');
 const { createEnvironmentalObservationService } = require('./environmental-observations');
 
+// A report waits this long for local conditions. Whatever has not answered by
+// then shows as unavailable while the fetch carries on and fills the cache, so
+// one dead upstream no longer holds the report to that upstream's own timeout.
+const DEFAULT_WAIT_MS = 4000;
+const PENDING_NOTE = 'This source had not answered in time; it is loaded for the next report.';
+const DEADLINE = Symbol('deadline');
+
 const yyyymmdd = (dateLike) => {
   const d = dateLike ? new Date(dateLike) : new Date();
   if (!Number.isFinite(d.getTime())) return null;
@@ -282,17 +289,39 @@ const createLocalConditionsService = ({
     };
   };
 
-  const fetchLocalConditionsUncached = async ({ lat, lon, selectedDate, fetchOptions }) => {
-    const [streamflow, smoke, tides, closures, weatherObservation, radar, access, wildfire] = await Promise.allSettled([
-      fetchStreamflow({ lat, lon, fetchOptions }),
-      fetchSmokeOutlook({ lat, lon, fetchOptions }),
-      fetchTides({ lat, lon, selectedDate, fetchOptions }),
-      fetchClosures({ lat, lon, fetchOptions }),
-      environmentalObservations.fetchWeatherObservation({ lat, lon, fetchOptions }),
-      environmentalObservations.fetchRadarNowcast({ lat, lon, fetchOptions }),
-      environmentalObservations.fetchAccessStatus({ lat, lon, fetchOptions }),
-      environmentalObservations.fetchWildfireActivity({ lat, lon, fetchOptions }),
-    ]);
+  // Each source with the label its failures are logged under; closure lookups
+  // have always failed quietly.
+  const sources = [
+    ['streamflow', 'Streamflow', (args) => fetchStreamflow(args)],
+    ['smoke', 'Smoke outlook', (args) => fetchSmokeOutlook(args)],
+    ['tides', 'Tides', (args) => fetchTides(args)],
+    ['closures', null, (args) => fetchClosures(args)],
+    ['weatherObservation', 'Weather observation', (args) => environmentalObservations.fetchWeatherObservation(args)],
+    ['radar', 'Radar nowcast', (args) => environmentalObservations.fetchRadarNowcast(args)],
+    ['access', 'Access status', (args) => environmentalObservations.fetchAccessStatus(args)],
+    ['wildfire', 'Wildfire activity', (args) => environmentalObservations.fetchWildfireActivity(args)],
+  ];
+
+  // The sources that have answered so far for each fetch still running, so a
+  // report past its wait can show those while the rest finish for the cache.
+  const settledSoFar = new Map();
+
+  const buildFromSettled = (settled) => buildLocalConditions(Object.fromEntries(sources.map(([name]) => [
+    name,
+    settled[name] || { available: false, status: 'unavailable', pending: true, note: PENDING_NOTE },
+  ])));
+
+  const fetchLocalConditionsUncached = async ({ lat, lon, selectedDate, fetchOptions, settled = {} }) => {
+    const args = { lat, lon, selectedDate, fetchOptions };
+    await Promise.all(sources.map(([name, label, fetchSource]) => Promise.resolve()
+      .then(() => fetchSource(args))
+      .then(
+        (value) => { settled[name] = value; },
+        (error) => {
+          if (label) logger.warn({ err: error }, `${label} fetch failed`);
+          settled[name] = { available: false };
+        },
+      )));
 
     // Do not turn a superseded report's aborted provider results into a fresh
     // all-unavailable cache entry for the next request.
@@ -300,29 +329,43 @@ const createLocalConditionsService = ({
       throw fetchOptions.signal.reason || new Error('Local conditions request aborted');
     }
 
-    const unwrap = (result, label) => {
-      if (result.status === 'fulfilled') return result.value;
-      logger.warn({ err: result.reason }, `${label} fetch failed`);
-      return { available: false };
-    };
-
-    return buildLocalConditions({
-      streamflow: unwrap(streamflow, 'Streamflow'),
-      smoke: unwrap(smoke, 'Smoke outlook'),
-      tides: unwrap(tides, 'Tides'),
-      closures: closures.status === 'fulfilled' ? closures.value : { available: false },
-      weatherObservation: unwrap(weatherObservation, 'Weather observation'),
-      radar: unwrap(radar, 'Radar nowcast'),
-      access: unwrap(access, 'Access status'),
-      wildfire: unwrap(wildfire, 'Wildfire activity'),
-    });
+    return buildFromSettled(settled);
   };
 
-  const fetchLocalConditions = ({ lat, lon, selectedDate, fetchOptions }) => {
+  const fetchLocalConditions = async ({ lat, lon, selectedDate, fetchOptions, waitMs = DEFAULT_WAIT_MS }) => {
     const cacheDate = selectedDate || new Date().toISOString().slice(0, 10);
     const cacheKey = normalizeCoordDateKey(lat, lon, cacheDate);
-    return localConditionsCache.getOrFetch(cacheKey, () =>
-      fetchLocalConditionsUncached({ lat, lon, selectedDate: cacheDate, fetchOptions }));
+    const startedAt = Date.now();
+    const full = localConditionsCache.getOrFetch(cacheKey, () => {
+      const settled = {};
+      settledSoFar.set(cacheKey, settled);
+      return fetchLocalConditionsUncached({ lat, lon, selectedDate: cacheDate, fetchOptions, settled })
+        .finally(() => {
+          if (settledSoFar.get(cacheKey) === settled) settledSoFar.delete(cacheKey);
+        });
+    });
+    if (!Number.isFinite(waitMs)) return full;
+
+    let timer;
+    const deadline = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(DEADLINE), Math.max(0, waitMs));
+      if (typeof timer.unref === 'function') timer.unref();
+    });
+    try {
+      const first = await Promise.race([full, deadline]);
+      if (first !== DEADLINE) return first;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const settled = settledSoFar.get(cacheKey) || {};
+    const pending = sources.map(([name]) => name).filter((name) => !settled[name]);
+    logger.info({ key: cacheKey, waitMs, pending }, 'Local conditions answered with the sources that had answered');
+    full.then(
+      () => logger.info({ key: cacheKey, pending, seconds: Math.round((Date.now() - startedAt) / 100) / 10 }, 'Local conditions finished for the next report'),
+      () => {},
+    );
+    return buildFromSettled(settled);
   };
 
   return { fetchLocalConditions, fetchStreamflow, fetchSmokeOutlook, fetchTides, fetchClosures };

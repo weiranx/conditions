@@ -1,4 +1,5 @@
 const { createCache, normalizeCoordKey } = require('./cache');
+const { logger } = require('./logger');
 const { haversineKm } = require('./geo');
 const { toFiniteOrNull } = require('./numbers');
 const { createEvidenceFetcher } = require('./evidence-fetch');
@@ -6,6 +7,13 @@ const { createNbmService } = require('./nbm-guidance');
 const { createHrrrSmokeService } = require('./hrrr-smoke');
 const { parseDiscussionSections } = require('./forecast-discussion');
 const HOUR = 3600000;
+// A report waits this long for the supplemental sources and shows the rest as
+// not answered in time. Those fetches keep running to their own 25 s ceiling so
+// their caches are filled for the next report.
+const DEFAULT_WAIT_MS = 5000;
+const FETCH_CEILING_MS = 25000;
+const PENDING_NOTE = 'This source had not answered in time; it is loaded for the next report.';
+const DEADLINE = Symbol('deadline');
 const SOURCES = {
   synoptic: { source: 'Synoptic Weather', kind: 'observation', sourceLink: 'https://synopticdata.com/data-viewer/' },
   nbm: { source: 'NOAA National Blend of Models', kind: 'probabilistic_forecast', sourceLink: 'https://vlab.noaa.gov/web/mdl/nbm-text-products' },
@@ -102,14 +110,17 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
     const matches = selectSynopticStations(parseSynoptic(data, { ...args, now: now() }), args.elevationFt);
     return { available: matches.length > 0, status: matches.length ? 'ok' : 'no_data', stations: matches, note: 'Quality-controlled readings from the last 2 hours. Distance and elevation do not establish equivalent terrain or exposure; these are current observations, not conditions on a future trip.' };
   };
-  const service = async (args) => {
+  const service = async ({ waitMs = DEFAULT_WAIT_MS, ...args }) => {
     const flags = args.featureFlags || {};
+    // The controller is the fetches' own ceiling and follows the report's signal,
+    // so a report that stops waiting at its deadline does not cancel them.
     const controller = new AbortController();
     const upstream = args.fetchOptions?.signal;
     const abort = () => controller.abort();
     upstream?.addEventListener('abort', abort, { once: true });
     if (upstream?.aborted) abort();
-    const timer = setTimeout(abort, 25000);
+    const ceiling = setTimeout(abort, FETCH_CEILING_MS);
+    if (typeof ceiling.unref === 'function') ceiling.unref();
     args = { ...args, fetchOptions: { ...args.fetchOptions, signal: controller.signal } };
     const definitions = {
       synoptic: [flags.fieldObservations !== false, () => synoptic(args)],
@@ -117,16 +128,36 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
       discussion: [flags.weatherContextDetails !== false, () => discussion(args)],
       hrrrSmoke: [flags.airQualityDetails !== false, () => smoke(args)],
     };
-    const entries = await Promise.all(Object.entries(definitions).filter(([, [enabled]]) => enabled).map(async ([key, [, run]]) => {
+    const stamp = (key, value) => ({ ...SOURCES[key], ...value, checkedTime: new Date(now()).toISOString(), ...(args.targetTimeIso ? { targetTime: args.targetTimeIso } : {}) });
+    const enabled = Object.entries(definitions).filter(([, [on]]) => on);
+    const settled = {};
+    const all = Promise.all(enabled.map(async ([key, [, run]]) => {
       let value;
       try { value = await run(); }
       catch { value = { available: false, status: 'unavailable', note: 'This source could not be loaded. No absence of hazard is implied.' }; }
-      return [key, { ...SOURCES[key], ...value, checkedTime: new Date(now()).toISOString(), ...(args.targetTimeIso ? { targetTime: args.targetTimeIso } : {}) }];
-    }));
+      settled[key] = stamp(key, value);
+    })).finally(() => {
+      clearTimeout(ceiling);
+      upstream?.removeEventListener('abort', abort);
+    });
+
+    let timer;
+    const deadline = Number.isFinite(waitMs)
+      ? new Promise((resolve) => {
+        timer = setTimeout(() => resolve(DEADLINE), Math.max(0, waitMs));
+        if (typeof timer.unref === 'function') timer.unref();
+      })
+      : null;
+    const first = await (deadline ? Promise.race([all, deadline]) : all);
     clearTimeout(timer);
-    upstream?.removeEventListener('abort', abort);
     upstream?.throwIfAborted();
-    return Object.fromEntries(entries);
+    if (first === DEADLINE) {
+      logger.info({ waitMs, pending: enabled.map(([key]) => key).filter((key) => !settled[key]) }, 'Supplemental evidence answered with the sources that had answered');
+    }
+    return Object.fromEntries(enabled.map(([key]) => [
+      key,
+      settled[key] || stamp(key, { available: false, status: 'unavailable', pending: true, note: PENDING_NOTE }),
+    ]));
   };
   // Loads the large shared datasets before the first report asks for them.
   service.prewarm = (options) => nbm.prewarm(options);

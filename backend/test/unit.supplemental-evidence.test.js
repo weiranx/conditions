@@ -284,3 +284,62 @@ test('period headings that cannot be read are left undated', () => {
   expect(periodDayRange('Issued at 300 PM', wednesday)).toBeNull();
   expect(periodDayRange('Friday', null)).toBeNull();
 });
+
+describe('supplemental evidence request-path wait', () => {
+  const productUrl = '/products/12345678-1234-1234-1234-123456789012';
+  const stalledDiscussion = () => {
+    let release;
+    const stalled = new Promise((resolve) => { release = resolve; });
+    const fetchWithTimeout = jest.fn(async (url, options) => {
+      if (url.includes(productUrl)) {
+        await stalled;
+        options?.signal?.throwIfAborted();
+      }
+      return new Response(JSON.stringify(
+        url.includes('/points/') ? { properties: { gridId: 'SGX' } }
+          : url.includes('/types/') ? { '@graph': [{ id: '12345678-1234-1234-1234-123456789012', issuanceTime: fresh }] }
+            : { productCode: 'AFD', issuanceTime: fresh, productText: 'Regional winds increase tomorrow.' },
+      ));
+    });
+    return { fetchWithTimeout, release: () => release() };
+  };
+  const args = { ...location, featureFlags: { airQualityDetails: false } };
+
+  test('a slow source is marked and the others are returned at the deadline', async () => {
+    const { fetchWithTimeout, release } = stalledDiscussion();
+    const service = createSupplementalEvidenceService({ fetchWithTimeout, now: () => now });
+
+    const startedAt = Date.now();
+    const result = await service({ ...args, waitMs: 50 });
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(Object.keys(result).sort()).toEqual(['discussion', 'nbm', 'synoptic']);
+    expect(result.synoptic).toMatchObject({ available: false, status: 'not_configured' });
+    expect(result.nbm).toMatchObject({ available: false, status: 'unavailable' });
+    expect(result.nbm.pending).toBeUndefined();
+    expect(result.discussion).toMatchObject({
+      source: 'NWS Area Forecast Discussion',
+      available: false,
+      status: 'unavailable',
+      pending: true,
+      note: 'This source had not answered in time; it is loaded for the next report.',
+    });
+
+    // The slow fetch was not cancelled: it finishes and the next report reads it from the cache.
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const productCalls = () => fetchWithTimeout.mock.calls.filter(([url]) => url.includes(productUrl)).length;
+    expect(productCalls()).toBe(1);
+    const next = await service({ ...args, waitMs: 50 });
+    expect(next.discussion).toMatchObject({ available: true, text: 'Regional winds increase tomorrow.' });
+    expect(next.discussion.pending).toBeUndefined();
+    expect(productCalls()).toBe(1);
+  });
+
+  test('sources that answer in time are returned whole with nothing marked pending', async () => {
+    const { fetchWithTimeout, release } = stalledDiscussion();
+    release();
+    const result = await createSupplementalEvidenceService({ fetchWithTimeout, now: () => now })(args);
+    expect(result.discussion).toMatchObject({ available: true, office: 'SGX' });
+    expect(Object.values(result).every((source) => source.pending === undefined)).toBe(true);
+  });
+});
