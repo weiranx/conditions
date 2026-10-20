@@ -44,7 +44,8 @@ function CheckDetails({ details }: { details: AiBriefDetails | null }) {
   const problems = details?.checks?.problems ?? [];
   const seconds = details?.checks?.seconds ?? [];
   if (!problems.length && !seconds.length) return null;
-  const took = seconds.length ? ` · took ${seconds.map((second) => `${Math.round(second)} s`).join(" + ")}` : "";
+  // The read's answers are written side by side, so their times overlap rather than add up.
+  const took = seconds.length ? ` · took ${seconds.map((second) => `${Math.round(second)} s`).join(", ")}` : "";
   return (
     <details className="ai-read-checks">
       <summary>
@@ -103,15 +104,14 @@ function useNow(active: boolean) {
 }
 
 /**
- * What the AI is doing while it writes: the opening first, from a fast model,
- * then the full read, with the time so far, so a long wait is never a blank one.
+ * What the AI is doing while it writes: the opening, from a fast model, and the
+ * full read, written at the same time, with the time so far, so a long wait is
+ * never a blank one.
  */
 function ReadProgress({ run, satellite = false }: { run: AiReadRun | null; satellite?: boolean }) {
   const now = useNow(Boolean(run));
   const elapsed = run ? Math.max(0, Math.round((now - run.startedAt) / 1000)) : null;
-  const steps: { state: "done" | "active" | "kept" | "next"; text: string }[] = [];
-  // The full read starts once the opening has answered, so until then it waits its turn.
-  const waiting = run?.opening === "pending";
+  const steps: { state: "done" | "active" | "kept"; text: string }[] = [];
   if (run && run.opening !== "off") {
     steps.push(run.opening === "pending"
       ? { state: "active", text: "Rewriting the opening at the top of the report" }
@@ -119,11 +119,8 @@ function ReadProgress({ run, satellite = false }: { run: AiReadRun | null; satel
         ? { state: "done", text: `Rewrote the opening${run.openingSeconds != null ? ` in ${run.openingSeconds} s` : ""}` }
         : { state: "kept", text: "The quick opening didn’t pass its checks; the full read writes it" });
   }
-  const next = waiting ? "next" : "active";
-  if (satellite) steps.push({ state: next, text: "Looking at a recent satellite image of the snow around your objective" });
-  steps.push({ state: next, text: waiting
-    ? "Then the full read: why, what to watch, the best move, and a note for each section"
-    : "Writing the full read: why, what to watch, the best move, and a note for each section" });
+  if (satellite) steps.push({ state: "active", text: "Looking at a recent satellite image of the snow around your objective" });
+  steps.push({ state: "active", text: "Writing the full read: why, what to watch, the best move, and a note for each section" });
   return (
     <div className="ai-read-progress">
       <p className="ai-read-status">

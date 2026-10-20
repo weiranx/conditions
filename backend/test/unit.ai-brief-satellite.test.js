@@ -26,6 +26,14 @@ const answer = (gust, satellite) => JSON.stringify({
   sections: HEADINGS.map((heading) => ({ heading, text: `Gusts reach ${gust} mph on the ridge.`, evidence: [{ path: 'weather.windGust', value: gust }] })),
   ...(satellite ? { satellite } : {}),
 });
+// The chapters answer, written alongside the briefing; with an image it also says what the image shows.
+const chaptersAnswer = (gust, satellite) => JSON.stringify({
+  chapters: { forecast: { text: `Gusts reach ${gust} mph on the ridge.`, evidence: [{ path: 'weather.windGust', value: gust }] } },
+  ...(satellite ? { satellite } : {}),
+});
+// The read is two answers; the text-only model answers each from its own part.
+const isChaptersCall = (options) => /^Return JSON only: \{"chapters"/m.test(options?.system || '');
+const answerByPart = (gust) => async (_prompt, options) => (isChaptersCall(options) ? chaptersAnswer(gust) : answer(gust));
 const satelliteAnswer = {
   text: 'The image from October 8, six days before the trip, shows continuous snow above treeline and bare slopes lower down. Expect to carry skis at first.',
   evidence: [{ path: 'satelliteImage.acquiredDate', value: '2026-10-08' }],
@@ -79,18 +87,29 @@ describe('satellite text checks', () => {
 describe('AI read with satellite imagery', () => {
   test('a trip where snow matters is read with the satellite image, and the read returns it with its date', async () => {
     const { app, askAI, askAIVision, tileCache } = setup();
-    askAIVision.mockResolvedValue(answer(31, satelliteAnswer));
+    askAI.mockResolvedValue(answer(31));
+    askAIVision.mockResolvedValue(chaptersAnswer(31, satelliteAnswer));
     const response = await request(app).post('/api/ai-brief').send({ decisionLevel: 'CAUTION', report: snowReport(31) });
 
     expect(response.status).toBe(200);
-    expect(askAI).not.toHaveBeenCalled();
     expect(tileCache.getOrFetch).toHaveBeenCalledWith(expect.stringMatching(/^13\/\d+\/\d+$/), expect.any(Function));
+    // Only the chapters answer is shown the image; both read the report with its date.
+    expect(askAIVision).toHaveBeenCalledTimes(1);
     const [image, prompt, options] = askAIVision.mock.calls[0];
     expect(image).toBe(PNG.toString('base64'));
-    expect(prompt).toContain('"satelliteImage":{"source":"Copernicus Sentinel-2 true colour, about 5 by 5 km centred on the objective","acquiredDate":"2026-10-08","daysBeforeTrip":6,"cloudCoverPercent":4}');
+    const imageFields = '"satelliteImage":{"source":"Copernicus Sentinel-2 true colour, about 5 by 5 km centred on the objective","acquiredDate":"2026-10-08","daysBeforeTrip":6,"cloudCoverPercent":4}';
+    expect(prompt).toContain(imageFields);
+    expect(isChaptersCall(options)).toBe(true);
     expect(options.system).toMatch(/A Sentinel-2 true-colour satellite image is attached/);
     expect(options.feature).toBe('report-brief');
+    expect(askAI).toHaveBeenCalledTimes(1);
+    const [briefingPrompt, briefingOptions] = askAI.mock.calls[0];
+    expect(briefingPrompt).toBe(prompt);
+    expect(isChaptersCall(briefingOptions)).toBe(false);
+    expect(briefingOptions.system).not.toMatch(/satellite image is attached/);
+    expect(briefingOptions.system).toMatch(/You have not seen it/);
     expect(response.body.validation).toBe('evidence_checked');
+    expect(response.body.chapters.forecast.text).toBe('Gusts reach 31 mph on the ridge.');
     expect(response.body.satellite).toEqual({
       text: satelliteAnswer.text,
       evidence: [{ path: 'satelliteImage.acquiredDate', value: '2026-10-08' }],
@@ -101,15 +120,15 @@ describe('AI read with satellite imagery', () => {
 
   test('a trip where snow does not matter is read without imagery', async () => {
     const { app, askAI, askAIVision, tileCache } = setup();
-    askAI.mockResolvedValue(answer(32));
+    askAI.mockImplementation(answerByPart(32));
     const report = snowReport(32, { forecast: { selectedDate: '2026-10-14', activity: 'hiking' }, terrainCondition: { code: 'dry_firm' } });
     const response = await request(app).post('/api/ai-brief').send({ decisionLevel: 'GO', report });
 
     expect(response.status).toBe(200);
-    expect(askAI).toHaveBeenCalledTimes(1);
+    expect(askAI).toHaveBeenCalledTimes(2);
     expect(askAIVision).not.toHaveBeenCalled();
     expect(tileCache.getOrFetch).not.toHaveBeenCalled();
-    expect(askAI.mock.calls[0][1].system).not.toMatch(/satellite image is attached/);
+    for (const [, options] of askAI.mock.calls) expect(options.system).not.toMatch(/satellite image/);
     expect(response.body.satellite).toBeUndefined();
   });
 
@@ -128,23 +147,26 @@ describe('AI read with satellite imagery', () => {
 
   test('when the image cannot be had, the read is written without it', async () => {
     const { app, askAI, askAIVision } = setup({ tile: new Error('Sentinel Hub is not configured') });
-    askAI.mockResolvedValue(answer(35));
+    askAI.mockImplementation(answerByPart(35));
     const response = await request(app).post('/api/ai-brief').send({ decisionLevel: 'CAUTION', report: snowReport(35) });
 
     expect(response.status).toBe(200);
     expect(askAIVision).not.toHaveBeenCalled();
-    expect(askAI).toHaveBeenCalledTimes(1);
-    expect(askAI.mock.calls[0][0]).not.toContain('"satelliteImage":');
+    expect(askAI).toHaveBeenCalledTimes(2);
+    for (const [prompt] of askAI.mock.calls) expect(prompt).not.toContain('"satelliteImage":');
     expect(response.body.satellite).toBeUndefined();
   });
 
   test('satellite text that fails its checks is left out; the image and its date stay', async () => {
-    const { app, askAIVision } = setup();
-    askAIVision.mockResolvedValue(answer(36, { text: 'Snow covers about 80 percent of the area.', evidence: satelliteAnswer.evidence }));
+    const { app, askAI, askAIVision } = setup();
+    askAI.mockResolvedValue(answer(36));
+    askAIVision.mockResolvedValue(chaptersAnswer(36, { text: 'Snow covers about 80 percent of the area.', evidence: satelliteAnswer.evidence }));
     const response = await request(app).post('/api/ai-brief').send({ decisionLevel: 'CAUTION', report: snowReport(36) });
 
     expect(response.body.validation).toBe('evidence_checked');
     expect(response.body.satellite).toMatchObject({ text: null, evidence: [], imagery: { acquiredAt: '2026-10-08T18:40:12Z' } });
     expect(response.body.checks.problems).toEqual(expect.arrayContaining([expect.stringMatching(/^SATELLITE: states 80/)]));
+    // Chapters that pass keep the part from being asked again for the image's text alone.
+    expect(askAIVision).toHaveBeenCalledTimes(1);
   });
 });

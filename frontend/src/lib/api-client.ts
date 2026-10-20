@@ -249,6 +249,52 @@ export async function fetchApiStream(path: string, init: RequestInit, onEvent: (
   return { ok: false, status: Number(final?.status) || 502, payload: { error: final?.error || 'The route analysis stopped before it finished.' } };
 }
 
+export interface JsonBody {
+  body: string | ArrayBuffer;
+  headers: Record<string, string>;
+}
+
+// The local mock API reads request bodies as plain text.
+const SENDS_PLAIN_JSON = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true';
+
+/**
+ * A JSON request body, gzipped when the browser can (CompressionStream), and
+ * otherwise plain. A whole report runs to 100 kB and more of JSON, which a phone
+ * on a weak signal takes seconds to upload; gzipped it is a fraction of that. The
+ * server inflates it (express.json) and applies its size limit to the inflated body.
+ */
+export async function encodeJsonText(json: string): Promise<JsonBody> {
+  const plain = { body: json, headers: { 'Content-Type': 'application/json' } };
+  if (SENDS_PLAIN_JSON || typeof CompressionStream === 'undefined') return plain;
+  try {
+    const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+    const body = await new Response(stream).arrayBuffer();
+    return { body, headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } };
+  } catch {
+    return plain;
+  }
+}
+
+// The opening and the full read send the same report: it is encoded once.
+const encodedBodies = new WeakMap<object, Promise<JsonBody>>();
+export function encodeJsonBody(data: object): Promise<JsonBody> {
+  let encoded = encodedBodies.get(data);
+  if (!encoded) {
+    encoded = encodeJsonText(JSON.stringify(data));
+    encodedBodies.set(data, encoded);
+  }
+  return encoded;
+}
+
+/** fetch, with a JSON string body gzipped as encodeJsonText does; for clients that send the report themselves. */
+export const fetchWithEncodedBody: typeof fetch = async (input, init) => {
+  if (typeof init?.body !== 'string') return fetch(input, init);
+  const { body, headers } = await encodeJsonText(init.body);
+  const merged = new Headers(init.headers);
+  Object.entries(headers).forEach(([name, value]) => merged.set(name, value));
+  return fetch(input, { ...init, body, headers: merged });
+};
+
 export interface AiBriefRequest {
   decisionLevel: string;
   report: unknown;
@@ -270,11 +316,7 @@ export interface AiBriefResponse {
 }
 
 export async function fetchAiBrief(data: AiBriefRequest): Promise<AiBriefResponse> {
-  const { response, payload } = await fetchApi('/api/ai-brief', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  const { response, payload } = await fetchApi('/api/ai-brief', { method: 'POST', ...await encodeJsonBody(data) });
   if (!response.ok) {
     const msg = readApiErrorMessage(payload, 'AI brief unavailable');
     throw new Error(msg);
@@ -289,15 +331,11 @@ export interface AiOpeningResponse {
   cached?: boolean;
 }
 
-/** The report's AI opening alone, written by a fast model while the full read is still being written. */
+/** The report's AI opening alone, written by a fast model while the full read is written beside it. */
 export async function fetchAiOpening(data: AiBriefRequest): Promise<AiOpeningResponse> {
   // Never retried: the top of the report waits for this answer, and a failed
   // opening is better replaced by the checks' wording at once than asked again.
-  const { response, payload } = await fetchApi('/api/ai-brief/opening', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  }, { retries: 0 });
+  const { response, payload } = await fetchApi('/api/ai-brief/opening', { method: 'POST', ...await encodeJsonBody(data) }, { retries: 0 });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'AI opening unavailable'));
   return payload as AiOpeningResponse;
 }
