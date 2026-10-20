@@ -102,6 +102,21 @@ const reasoningEffortFor = (provider, model, tier = 'primary') => {
   return supported.includes(REASONING_EFFORT) ? REASONING_EFFORT : 'low';
 };
 
+// Claude Haiku 5 models think by default, and that thinking counts against
+// max_tokens: a short fast-tier answer could spend its whole budget thinking and
+// stop with no text, or with its JSON cut off. Like the other providers' fast
+// tiers, it gets the least thinking the model allows, which here is none.
+const anthropicThinkingFor = (model, tier = 'primary') => {
+  if (!REASONING_EFFORT || tier !== 'fast') return null;
+  return /^claude-haiku-5(?:[.-]|$)/.test(String(model || '').toLowerCase()) ? { type: 'disabled' } : null;
+};
+
+const withAnthropicThinking = (params, tier) => {
+  const thinking = anthropicThinkingFor(params.model, tier);
+  if (thinking) params.thinking = thinking;
+  return params;
+};
+
 let openAIClient;
 let anthropicClient;
 let geminiClient;
@@ -320,6 +335,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
         messages: [{ role: 'user', content: prompt }],
       };
       if (system) params.system = system;
+      withAnthropicThinking(params, tier);
       response = await getAnthropicClient().messages.create(params, requestOptions(tier, timeoutMs));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
@@ -391,6 +407,7 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
         }],
       };
       if (system) params.system = system;
+      withAnthropicThinking(params, tier);
       response = await getAnthropicClient().messages.create(params, requestOptions(tier));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
       await finish('success');
@@ -733,6 +750,7 @@ module.exports = {
   initializeAISettings,
   isAIAvailable,
   isAIFeatureAvailable,
+  anthropicThinkingFor,
   reasoningEffortFor,
   updateAISettings,
 };

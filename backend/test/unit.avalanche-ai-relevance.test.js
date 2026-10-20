@@ -1,12 +1,14 @@
 const {
+  SYSTEM_PROMPT,
   buildUserPrompt,
   createAvalancheAiRelevance,
   relevanceLock,
+  salvageRelevanceAnswer,
   validateRelevanceAnswer,
 } = require('../src/utils/avalanche-ai-relevance');
 const { createCache } = require('../src/utils/cache');
 
-const silentLog = { warn: () => {} };
+const silentLog = { warn: () => {}, info: () => {} };
 
 const RULES_ON = { relevant: true, reason: 'Mid-elevation objective in winter window at snow-prone latitude.' };
 const RULES_OFF = { relevant: false, reason: 'Objective appears typically low-snow for the selected season and forecast.' };
@@ -119,7 +121,58 @@ describe('avalanche AI relevance', () => {
 
   test('validateRelevanceAnswer clips long reasons', () => {
     const result = validateRelevanceAnswer({ relevant: true, reason: 'word '.repeat(200) });
-    expect(result.reason.length).toBeLessThanOrEqual(320);
+    expect(result.reason.length).toBeLessThanOrEqual(240);
     expect(result.reason.endsWith('…')).toBe(true);
+  });
+
+  test('the prompt asks for one short sentence, relevant first', () => {
+    expect(SYSTEM_PROMPT).toMatch(/one plain sentence of at most 200 characters/);
+    expect(SYSTEM_PROMPT).toMatch(/with "relevant" first/);
+    expect(SYSTEM_PROMPT).toMatch(/°F, inches and feet/);
+  });
+
+  test('asks the fast tier with room for a whole answer and logs how it went', async () => {
+    const askAI = jest.fn(answer(false, 'Ensign Peak is a low foothill walk with no avalanche terrain.'));
+    const info = jest.fn();
+    await service(askAI, { log: { warn: () => {}, info } }).decide(inputs());
+    expect(askAI).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ maxTokens: 600, tier: 'fast' }));
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ seconds: expect.any(Number), validated: true, relevant: false }),
+      'avalanche-relevance: model answered',
+    );
+  });
+
+  const CUT_OFF = '{"relevant": true, "reason": "The objective sits near 14,393 ft on Mount Rainier\'s upper slopes, where permanent snow and steep glaciated terrain are expected. Fresh snow at 0.5 in and 22 \\u00b0F keep slabs possible on the upper mountain, and the bulletin';
+
+  test('a cut-off answer keeps its decision and its reason up to the last full sentence', async () => {
+    const salvaged = salvageRelevanceAnswer(CUT_OFF);
+    expect(salvaged.relevant).toBe(true);
+    expect(salvaged.reason).toBe('The objective sits near 14,393 ft on Mount Rainier\'s upper slopes, where permanent snow and steep glaciated terrain are expected.');
+
+    const info = jest.fn();
+    const result = await service(async () => CUT_OFF, { log: { warn: () => {}, info } }).decide(inputs({ rules: RULES_OFF }));
+    expect(result).toEqual(expect.objectContaining({ relevant: true, reason: salvaged.reason, check: expect.objectContaining({ method: 'ai' }) }));
+    expect(info).toHaveBeenCalledWith(expect.objectContaining({ validated: true, truncated: true, relevant: true }), 'avalanche-relevance: model answered');
+  });
+
+  test('a cut-off reason with no full sentence is clipped at its last clause', () => {
+    const salvaged = salvageRelevanceAnswer('{"relevant": false, "reason": "The snowpack reading shows 0.0 inches of depth and no snow-water content, and the forecast calls for 0 inches of snow with 0% p');
+    expect(salvaged).toEqual({ relevant: false, reason: 'The snowpack reading shows 0.0 inches of depth and no snow-water content…' });
+  });
+
+  test('a cut-off answer without a decision or a usable reason is still rejected', async () => {
+    expect(salvageRelevanceAnswer('{"reason": "The snowpack reading shows 0.0 inches of depth. And more')).toBeNull();
+    expect(salvageRelevanceAnswer('{"relevant": false, "reason": "No snow')).toBeNull();
+    expect(salvageRelevanceAnswer('{"relevant": false')).toBeNull();
+
+    // No decision at all is a failed call and is not asked again right away.
+    const noDecision = jest.fn(async () => '{"reason": "The snowpack reading shows 0.0 inches of depth. And more');
+    const svc = service(noDecision);
+    expect(await svc.decide(inputs())).toBe(RULES_ON);
+    expect(await svc.decide(inputs())).toBe(RULES_ON);
+    expect(noDecision).toHaveBeenCalledTimes(1);
+
+    // A decision whose reason is too short to use keeps the rules.
+    expect(await service(async () => '{"relevant": false, "reason": "No snow').decide(inputs())).toBe(RULES_ON);
   });
 });

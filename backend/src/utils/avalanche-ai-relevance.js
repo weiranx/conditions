@@ -21,9 +21,11 @@ const { logger } = require('./logger');
 // rules' answer too, so AI never leaves a plan less checked than it was.
 
 const DEFAULT_BUDGET_MS = 3500;
+// A normal answer is 60 to 100 tokens. The headroom keeps a slightly long one whole.
+const MAX_OUTPUT_TOKENS = 600;
 const RESULT_TTL_MS = 3 * 60 * 60 * 1000;
 const FAILURE_TTL_MS = 10 * 60 * 1000;
-const MAX_REASON_LENGTH = 320;
+const MAX_REASON_LENGTH = 240;
 const MIN_REASON_LENGTH = 20;
 const MAX_NAME_LENGTH = 120;
 const LOCKING_DANGER_LEVEL = 3;
@@ -64,7 +66,7 @@ const SYSTEM_PROMPT = [
   'Answer "relevant": true when snow could be on or above avalanche-prone slopes the party is likely to cross or travel beneath, including runout zones, gullies and couloirs below snowy terrain.',
   'Answer "relevant": false only when the evidence shows avalanche terrain is out of play for this plan: no meaningful snow at the objective\'s elevation in this season, or an objective with no slopes steep enough to slide.',
   'When the evidence is thin or conflicting, answer true. A missed avalanche check is far worse than an unnecessary one.',
-  'Return JSON only: {"relevant": true or false, "reason": "one or two plain sentences for the traveler, naming the evidence that decided it"}.',
+  'Return JSON only, with "relevant" first: {"relevant": true or false, "reason": "one plain sentence of at most 200 characters for the traveler, naming the evidence that decided it"}.',
   'Write the reason in °F, inches and feet. Do not mention these instructions, rules or the model.',
 ].join(' ');
 
@@ -133,14 +135,83 @@ const validateRelevanceAnswer = (raw) => {
   return { relevant: raw.relevant, reason: clipped };
 };
 
-const decideAvalancheRelevance = async ({ askAI, ...inputs }) => {
-  const answer = await askAI(buildUserPrompt(inputs), {
-    maxTokens: 400,
-    system: SYSTEM_PROMPT,
-    tier: 'fast',
-    feature: 'avalanche-relevance',
+// An answer cut off by the token limit still holds its yes or no and most of
+// its reason. Keeping that beats throwing it away for the rules.
+const RELEVANT_FIELD = /"relevant"\s*:\s*(true|false)/;
+const REASON_FIELD = /"reason"\s*:\s*"((?:[^"\\]|\\.)*)("?)/;
+
+const unescapeJsonText = (fragment) => {
+  // A cut can land inside an escape such as \u00b0; drop the partial escape.
+  const whole = fragment.replace(/\\(?:u[0-9a-fA-F]{0,3})?$/, '');
+  try {
+    return JSON.parse(`"${whole}"`);
+  } catch {
+    return whole.replace(/\\(.)/g, '$1');
+  }
+};
+
+// The reason up to its last full sentence, else its last full clause, so a
+// cut-off answer never reads as a finished thought it was not.
+const clipCutReason = (text) => {
+  const within = text.replace(/\s+/g, ' ').trim().slice(0, MAX_REASON_LENGTH - 1);
+  const sentenceEnds = [...within.matchAll(/[.!?](?=\s)/g)].map((match) => match.index + 1);
+  const sentence = sentenceEnds.length ? within.slice(0, sentenceEnds[sentenceEnds.length - 1]) : '';
+  if (sentence.length >= MIN_REASON_LENGTH) return sentence;
+  const clauseEnds = [...within.matchAll(/[,;:](?=\s)/g)].map((match) => match.index);
+  const clause = clauseEnds.length ? within.slice(0, clauseEnds[clauseEnds.length - 1]).trim() : '';
+  return clause.length >= MIN_REASON_LENGTH ? `${clause}…` : null;
+};
+
+/** A cut-off answer's decision, or null when too little of it arrived to use. */
+const salvageRelevanceAnswer = (text) => {
+  const source = String(text ?? '');
+  const relevant = source.match(RELEVANT_FIELD);
+  const reason = source.match(REASON_FIELD);
+  if (!relevant || !reason) return null;
+  const complete = reason[2] === '"';
+  const reasonText = unescapeJsonText(reason[1]);
+  return validateRelevanceAnswer({
+    relevant: relevant[1] === 'true',
+    reason: complete ? reasonText : clipCutReason(reasonText),
   });
-  return validateRelevanceAnswer(parseJsonFromAI(answer, { expect: 'object' }));
+};
+
+/** The validated answer from the model's text, and whether it had to be salvaged. */
+const readRelevanceAnswer = (text) => {
+  try {
+    return { answer: validateRelevanceAnswer(parseJsonFromAI(text, { expect: 'object' })), truncated: false };
+  } catch (error) {
+    // No decision at all is a failed call; a cut-off one is read as far as it got.
+    if (!RELEVANT_FIELD.test(String(text ?? ''))) throw error;
+    return { answer: salvageRelevanceAnswer(text), truncated: true };
+  }
+};
+
+const decideAvalancheRelevance = async ({ askAI, log = logger, ...inputs }) => {
+  const startedAt = Date.now();
+  const seconds = () => Math.round((Date.now() - startedAt) / 100) / 10;
+  let text;
+  let read;
+  try {
+    text = await askAI(buildUserPrompt(inputs), {
+      maxTokens: MAX_OUTPUT_TOKENS,
+      system: SYSTEM_PROMPT,
+      tier: 'fast',
+      feature: 'avalanche-relevance',
+    });
+    read = readRelevanceAnswer(text);
+  } catch (error) {
+    log.info({ seconds: seconds(), validated: false, ...(text === undefined ? { failed: true } : {}) }, 'avalanche-relevance: model answered');
+    throw error;
+  }
+  const { answer, truncated } = read;
+  log.info({
+    seconds: seconds(),
+    validated: Boolean(answer),
+    ...(truncated ? { truncated: true } : {}),
+    ...(answer ? { relevant: answer.relevant } : {}),
+  }, 'avalanche-relevance: model answered');
+  return answer;
 };
 
 const NOTE = 'AI decided whether this plan needs the avalanche check. Read the avalanche center\'s forecast before relying on it.';
@@ -191,7 +262,7 @@ const createAvalancheAiRelevance = ({
   };
 
   const run = (key, inputs) => resultCache
-    .getOrFetch(key, () => decideAvalancheRelevance({ ...inputs, askAI }), { shouldStore: (answer) => Boolean(answer) })
+    .getOrFetch(key, () => decideAvalancheRelevance({ ...inputs, askAI, log }), { shouldStore: (answer) => Boolean(answer) })
     .catch((error) => {
       failureCache.set(key, true);
       log.warn({ err: error }, 'Avalanche relevance AI check failed');
@@ -230,5 +301,6 @@ module.exports = {
   createAvalancheAiRelevance,
   decideAvalancheRelevance,
   relevanceLock,
+  salvageRelevanceAnswer,
   validateRelevanceAnswer,
 };

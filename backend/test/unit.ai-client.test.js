@@ -231,6 +231,26 @@ describe('AI provider client wrapper', () => {
     );
   });
 
+  test('turns thinking off for a Claude Haiku 5 fast-tier request only', async () => {
+    process.env.ANTHROPIC_FAST_MODEL = 'claude-haiku-5-5';
+    mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{}' }] });
+    const { askAI, anthropicThinkingFor } = loadClient('anthropic');
+
+    await askAI('relevance', { tier: 'fast', maxTokens: 600 });
+    expect(mockAnthropicCreate.mock.calls[0][0]).toEqual(expect.objectContaining({
+      model: 'claude-haiku-5-5',
+      max_tokens: 600,
+      thinking: { type: 'disabled' },
+    }));
+    await askAI('brief');
+    expect(mockAnthropicCreate.mock.calls[1][0]).not.toHaveProperty('thinking');
+
+    expect(anthropicThinkingFor('claude-haiku-5', 'fast')).toEqual({ type: 'disabled' });
+    expect(anthropicThinkingFor('claude-haiku-5-5', 'primary')).toBeNull();
+    expect(anthropicThinkingFor('claude-haiku-4-5-20251001', 'fast')).toBeNull();
+    expect(anthropicThinkingFor('claude-sonnet-5-5', 'fast')).toBeNull();
+  });
+
   test('sends base64 images through Anthropic vision input', async () => {
     mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'snow coverage' }] });
     const { askAIVision } = loadClient('anthropic');
