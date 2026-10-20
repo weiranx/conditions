@@ -23,8 +23,8 @@ const createChatGPTMiddleware = ({ getAccountService, accounts = chatGPTAccounts
     const user = await accountService.getUserForSession(session);
     const service = user && accounts.serviceForUser(user.id);
     // Making connection setup available does not opt an account into subscription billing.
-    // Retained disconnected/expired registrations stay on this path; they never fall back to API billing.
-    if (!service || !service.hasRegistration()) return next();
+    // Expired sessions stay on this path and never fall back to API billing; a disconnected one uses the app's providers.
+    if (!service || !service.routesRequests()) return next();
     const subscription = { userId: user.id, service, alive: true };
     // Late continuations cannot start subscription requests after the browser disconnects.
     res.once('close', () => { subscription.alive = false; });

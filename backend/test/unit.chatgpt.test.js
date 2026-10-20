@@ -107,6 +107,8 @@ describe('personal ChatGPT OAuth and protected credentials', () => {
     await expect(service.accessToken()).rejects.toMatchObject({ code: 'CHATGPT_REAUTHENTICATION_REQUIRED' });
     expect(store.read().registrations[0].refresh_token).toBeUndefined();
     expect(service.status().state).toBe('reauthentication_required');
+    // An expired session must not silently move the account's requests to API billing.
+    expect(service.routesRequests()).toBe(true);
   });
 
   test('persists rotated credentials even when the returned grant removes plan permission', async () => {
@@ -119,10 +121,13 @@ describe('personal ChatGPT OAuth and protected credentials', () => {
 
   test('disconnect clears tokens even if revocation is unavailable and retains the client and host', async () => {
     await connect();
+    expect(service.routesRequests()).toBe(true);
     const host = store.read().hostId;
     fetcher.mockRejectedValueOnce(new Error('offline'));
     const result = await service.disconnect();
     expect(result).toMatchObject({ connected: false, revoked: false });
+    // Disconnecting hands AI requests back to the app's configured providers.
+    expect(service.routesRequests()).toBe(false);
     const value = store.read();
     expect(value.hostId).toBe(host);
     expect(value.registrations[0]).toMatchObject({ client_id: 'oaiapp_test', subject: 'test-subject' });

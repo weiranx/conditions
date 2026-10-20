@@ -29,6 +29,18 @@ function readSignIn(value: unknown): SignIn | null {
 
 const jsonPost = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
+type AiStatus = Parameters<typeof publishAiAvailability>[0];
+
+// Best effort: the change it follows has already happened, so a failed check never reports that change as failed.
+// A fallback is published first so nothing waits on the check with the previous state.
+async function publishServerAiAvailability(fallback?: AiStatus) {
+  if (fallback) publishAiAvailability(fallback);
+  try {
+    const health = await fetchApi("/api/healthz", undefined, { retries: 0 });
+    if (health.response.ok) publishAiAvailability((health.payload as { ai: AiStatus }).ai);
+  } catch { /* The shared availability poll retries. */ }
+}
+
 export function ChatGPTPlan({ userId }: { userId: string }) {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [models, setModels] = useState<Model[]>([]);
@@ -80,8 +92,7 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
       if (next.connected) {
         try { setWelcome(localStorage.getItem(`conditions:chatgpt-welcome:${userId}`) !== "seen"); } catch { /* Optional preference only. */ }
       }
-      const health = await fetchApi("/api/healthz", undefined, { retries: 0 });
-      if (health.response.ok) publishAiAvailability((health.payload as { ai: Parameters<typeof publishAiAvailability>[0] }).ai);
+      await publishServerAiAvailability();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not refresh the connection."); }
   }
 
@@ -120,8 +131,7 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
       if (next.connected) {
         try { setWelcome(localStorage.getItem(`conditions:chatgpt-welcome:${userId}`) !== 'seen'); } catch { /* Optional preference only. */ }
       }
-      const health = await fetchApi('/api/healthz', undefined, { retries: 0 });
-      if (health.response.ok) publishAiAvailability((health.payload as { ai: Parameters<typeof publishAiAvailability>[0] }).ai);
+      await publishServerAiAvailability();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not finish ChatGPT sign-in. Start again.');
     }
@@ -201,13 +211,15 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
           <div>
             <button className="field-button" disabled={busy} onClick={() => void refresh()}>Refresh connection</button>{" "}
             {(connection.connected || connection.state === "permission_required" || connection.state === "reauthentication_required") && <button className="field-button" disabled={busy} onClick={() => {
-              void act("/api/account/chatgpt/disconnect", { method: "POST" }).then((payload) => {
+              void act("/api/account/chatgpt/disconnect", { method: "POST" }).then(async (payload) => {
                 setConnection(payload as Connection);
                 setModels([]);
                 setSignIn(null);
                 setCallbackUrl('');
                 setMessage((payload as { message: string }).message);
-                publishAiAvailability({ available: false, billingSource: "chatgpt", accountUserId: userId });
+                // Disconnecting returns AI requests to the server's providers: stop labelling requests as
+                // using the ChatGPT plan at once, then read what the server's providers offer.
+                await publishServerAiAvailability({ available: false, billingSource: "api", accountUserId: userId });
               }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not disconnect ChatGPT."));
             }}>Disconnect ChatGPT</button>}
           </div>

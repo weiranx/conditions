@@ -43,7 +43,7 @@ test('connections are enabled for every account by default and preserve legacy o
   expect(accounts.serviceForUser('../../escape')).toBeNull();
   expect(accounts.serviceForUser('00000000-0000-4000-8000-000000000004').status()).toMatchObject({ connected: false, accounts: [] });
   const defaults = createChatGPTAccounts({ env: {}, store });
-  expect(defaults.serviceForUser(firstId).hasRegistration()).toBe(false);
+  expect(defaults.serviceForUser(firstId).routesRequests()).toBe(false);
   expect(defaults.serviceForUser(secondId).status().email).toBe('second@example.com');
   expect(defaults.serviceForUser(firstId).status().accounts).toEqual([]);
   expect(accounts.isEnabled()).toBe(true);
