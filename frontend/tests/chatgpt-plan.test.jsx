@@ -82,9 +82,11 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
   assert.ok(document.body.textContent.includes('Remote revocation was not confirmed'));
   assert.equal(requests.filter((request) => request.pathname.endsWith('/disconnect')).length, 1);
   // Disconnecting hands AI back to the server's providers instead of switching it off.
+  // The ChatGPT state is withdrawn before the check, which then publishes the server's answer.
   assert.equal(requests.at(-1).pathname, '/api/healthz');
-  assert.equal(availability.length, 1);
-  assert.ok(Object.values(availability[0]).some(Boolean));
+  assert.equal(availability.length, 2);
+  assert.ok(Object.values(availability[0]).every((available) => available === false));
+  assert.ok(Object.values(availability[1]).some(Boolean));
   assert.ok(document.querySelector('a[href="https://chatgpt.com/settings/usage"]'));
 });
 
