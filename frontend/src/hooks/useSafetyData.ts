@@ -425,23 +425,28 @@ export function useSafetyData({
     // The opening the reader has already seen; the full read keeps it rather than
     // changing the top of the report a second time.
     let openingHero: AiBriefHero | null = null;
-    if (params.opening) {
-      // The opening goes first and alone: the full read starts only once it has
-      // answered or failed, so no other AI request competes with the top of the report.
+    // A full read that lands first brings its own opening, and one that answers
+    // after it is ignored, so the top of the report still changes only once.
+    let readLanded = false;
+    // The opening and the full read are asked for at the same time. The opening,
+    // from a fast model and a smaller report, usually answers first and leads the
+    // report; the full read no longer waits for it, so it arrives sooner.
+    const openingDone = params.opening ? (async () => {
       try {
         const result = await fetchAiOpening(request);
-        if (!current()) return;
+        if (!current() || readLanded) return;
         const hero = result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
         openingHero = hero;
         setAiReadRun((run) => run && { ...run, opening: hero ? 'written' : 'kept', hero, openingSeconds: secondsSince() });
       } catch {
-        if (!current()) return;
+        if (!current() || readLanded) return;
         setAiReadRun((run) => run && { ...run, opening: 'kept', openingSeconds: secondsSince() });
       }
-    }
+    })() : Promise.resolve();
     try {
       const result = await fetchAiBrief(request);
       if (!current()) return;
+      readLanded = true;
       const readHero = result.hero === undefined
         ? undefined
         : result.hero && typeof result.hero.headline === 'string' && typeof result.hero.reason === 'string' ? result.hero : null;
@@ -471,6 +476,9 @@ export function useSafetyData({
         seconds: secondsSince(),
       });
     } catch (err) {
+      // An opening still being written may yet lead the report, so the read
+      // stays under way until it has answered.
+      await openingDone;
       if (!current()) return;
       setAiBriefError(err instanceof Error ? err.message : 'AI brief unavailable');
       // An opening already written stays.

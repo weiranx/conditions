@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowDown, ArrowUp, RotateCcw, Sparkles, Square } from "lucide-react";
-import { buildApiUrl } from "../lib/api-client";
+import { buildApiUrl, fetchWithEncodedBody } from "../lib/api-client";
 import { useAiAccess } from "../hooks/useAiAccess";
 import { useAIBillingSource } from "../hooks/useAiAvailability";
 import type { PersistedReportChatMessage } from "../app/report-storage";
@@ -48,7 +48,8 @@ export function ChatConversation({
   const [awayFromLatest, setAwayFromLatest] = useState(false);
   const lastSaved = useRef(JSON.stringify(initialMessages));
   const transport = useMemo(() => new DefaultChatTransport({
-    api: buildApiUrl("/api/report-chat"), credentials: "include",
+    // Each question sends the whole report again, so its body is gzipped where the browser can.
+    api: buildApiUrl("/api/report-chat"), credentials: "include", fetch: fetchWithEncodedBody,
   }), []);
   const { messages, sendMessage, regenerate, status, error, stop } = useChat<Message>({
     transport, messages: initialMessages as Message[],

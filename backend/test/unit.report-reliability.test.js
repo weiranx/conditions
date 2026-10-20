@@ -1,6 +1,6 @@
 const { calculateSafetyScore } = require('../src/utils/safety-score');
 const { selectForecastIntervals } = require('../src/utils/report-evidence');
-const { validateBrief, validateQuestions, validateChapters, validateHero, deterministicBrief } = require('../src/utils/brief-validation');
+const { validateBrief, validateBriefing, validateBriefChapters, validateQuestions, validateChapters, validateHero, deterministicBrief } = require('../src/utils/brief-validation');
 const start = '2026-09-16T08:30:00-07:00';
 const row = (timeIso, extra = {}) => ({ timeIso, temp: 55, feelsLike: 55, wind: 5, gust: 8, precipChance: 0, ...extra });
 const base = () => ({
@@ -272,4 +272,32 @@ test('fact checks resolve shortened paths, list items and uncited report numbers
   // Text whose only citation names nothing in the report fails.
   expect(failing({ 'WHY IT MATTERS': section('Road access may be limited.', [{ path: 'closures.count', value: 1 }]) }))
     .toEqual(['WHY IT MATTERS: cited path closures.count is not a value in the report']);
+});
+test('a read written in two answers checks each part on its own', () => {
+  const report = { weather: { windGust: 8 }, safety: { score: 80 } };
+  const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
+  const cite = [{ path: 'weather.windGust', value: 8 }];
+  const briefing = JSON.stringify({
+    sections: headings.map(heading => ({ heading, text: 'Forecast gusts are 8 mph.', evidence: cite })),
+    questions: ['When do the gusts build?'],
+    hero: { headline: 'Light wind through the window', reason: 'Gusts stay near 8 mph.', evidence: cite },
+    chapters: { forecast: { text: 'Gusts stay at 8 mph.', evidence: cite } },
+  });
+  const read = validateBriefing(briefing, report, 'CAUTION');
+  expect(read).toMatchObject({ questions: ['When do the gusts build?'], hero: { headline: 'Light wind through the window' } });
+  // Chapters belong to the other answer and are not read from this one.
+  expect(read.chapters).toBeUndefined();
+  expect(validateBriefing(JSON.stringify({ chapters: {} }), report, 'CAUTION')).toBeNull();
+
+  const problems = [];
+  const chapters = validateBriefChapters(JSON.stringify({ chapters: { forecast: { text: 'Gusts stay at 8 mph.', evidence: cite }, timing: { text: 'Gusts reach 99 mph.', evidence: cite } } }), report, 'CAUTION', { problems });
+  expect(chapters).toEqual({ chapters: { forecast: { text: 'Gusts stay at 8 mph.', evidence: cite } }, satellite: null });
+  expect(problems).toEqual(['timing chapter: states 99, which is not a number in the report']);
+  // Nothing to show is a failed answer, with why.
+  const empty = [];
+  expect(validateBriefChapters(JSON.stringify({ sections: [] }), report, 'CAUTION', { problems: empty })).toBeNull();
+  expect(empty).toEqual(['the answer had no "chapters" object']);
+  const cut = [];
+  expect(validateBriefChapters('{"chapters":{"forecast"', report, 'CAUTION', { problems: cut })).toBeNull();
+  expect(cut).toEqual([expect.stringMatching(/^the chapters answer was not valid JSON \(\d+ characters/)]);
 });

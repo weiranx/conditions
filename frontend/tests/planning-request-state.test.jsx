@@ -183,8 +183,17 @@ test('the active healthy wake check still regenerates its report', async t => {
   assert.equal(h.current.loading, false);
 });
 
-// An AI read asked for with its opening: the opening goes out alone, and the full
-// read only once it has answered or failed.
+// An AI read asked for with its opening: the opening and the full read go out
+// together. Their bodies are gzipped first, off the main thread, so the requests
+// are waited for rather than counted at once.
+async function untilRequests(h, count) {
+  for (let i = 0; i < 200 && h.requests.length < count; i += 1) {
+    await act(async () => new Promise((resolve) => setImmediate(resolve)));
+  }
+}
+const requestFor = (h, pathname) => h.requests.find((r) => r.url.pathname === pathname);
+const opening = (h) => requestFor(h, '/api/ai-brief/opening');
+const fullRead = (h) => requestFor(h, '/api/ai-brief');
 async function startAiRead(t) {
   const h = await mountHook(t, useSafetyData, {
     todayDate: plan.date, preferences, isProductionBuild: true,
@@ -193,49 +202,93 @@ async function startAiRead(t) {
   await act(async () => {
     void h.current.handleRequestAiBrief({ safetyData: makeReport(plan, 'clear'), decisionLevel: 'CAUTION', opening: true });
   });
-  assert.deepEqual(h.requests.map((r) => r.url.pathname), ['/api/ai-brief/opening'], 'no other AI request starts before the opening');
+  await untilRequests(h, 2);
+  assert.deepEqual(h.requests.map((r) => r.url.pathname).sort(), ['/api/ai-brief', '/api/ai-brief/opening'], 'the full read starts with the opening, not after it');
   return h;
 }
 const aiHeroFor = (headline) => ({ headline, reason: 'Gusts build after noon.', evidence: [{ path: 'weather.windGust', value: 20 }], level: 'CAUTION' });
 const aiRead = (hero) => ({ narrative: 'BIG PICTURE: Wind.\nBEST MOVE: Go early.', evidence: [], questions: [], chapters: {}, hero, validation: 'evidence_checked', checks: { attempts: 1, problems: [], seconds: [9] } });
 
+test('the AI read sends the report once encoded, gzipped where the runtime can', async t => {
+  const h = await startAiRead(t);
+  for (const request of h.requests) {
+    assert.equal(request.init.headers['Content-Encoding'], 'gzip');
+    assert.equal(request.init.headers['Content-Type'], 'application/json');
+    const text = await new Response(new Blob([request.init.body]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    const body = JSON.parse(text);
+    assert.equal(body.decisionLevel, 'CAUTION');
+    assert.equal(body.report.forecast.selectedDate, plan.date);
+  }
+  assert.equal(opening(h).init.body, fullRead(h).init.body, 'both requests share one encoded body');
+});
+
 test('the AI opening shows as soon as it is written, and the full read keeps it', async t => {
   const h = await startAiRead(t);
   assert.equal(h.current.aiReadRun.opening, 'pending');
-  await act(async () => h.requests[0].respond({ hero: aiHeroFor('Opening from the fast model'), checks: { problems: [], seconds: [2] } }));
+  await act(async () => opening(h).respond({ hero: aiHeroFor('Opening from the fast model'), checks: { problems: [], seconds: [2] } }));
   assert.equal(h.current.aiReadRun.opening, 'written');
   assert.equal(h.current.aiReadRun.hero.headline, 'Opening from the fast model');
-  assert.deepEqual(h.requests.map((r) => r.url.pathname), ['/api/ai-brief/opening', '/api/ai-brief'], 'the full read starts once the opening is written');
   assert.equal(h.current.aiBriefLoading, true, 'the full read is still being written');
-  await act(async () => h.requests[1].respond(aiRead(aiHeroFor('A different opening from the read'))));
+  await act(async () => fullRead(h).respond(aiRead(aiHeroFor('A different opening from the read'))));
   assert.equal(h.current.aiBriefLoading, false);
   assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the fast model', 'the top of the report changes once, not twice');
   assert.equal(typeof h.current.aiReadRun.seconds, 'number');
 });
 
-test('a failed opening is filled by the read\'s own', async t => {
+test('a full read that lands before the opening leads with its own, and the late opening is ignored', async t => {
   const h = await startAiRead(t);
-  await act(async () => h.requests[0].respond({ hero: null, checks: { problems: ['OPENING: states 99'], seconds: [2] } }));
-  assert.equal(h.current.aiReadRun.opening, 'kept');
-  assert.equal(h.current.aiReadRun.hero, null);
-  await act(async () => h.requests[1].respond(aiRead(aiHeroFor('Opening from the read'))));
+  await act(async () => fullRead(h).respond(aiRead(aiHeroFor('Opening from the read'))));
+  assert.equal(h.current.aiBriefLoading, false);
+  assert.equal(h.current.aiReadRun.opening, 'written');
+  assert.equal(h.current.aiReadRun.hero.headline, 'Opening from the read');
+  assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the read');
+  await act(async () => opening(h).respond({ hero: aiHeroFor('A late opening'), checks: { problems: [], seconds: [12] } }));
+  assert.equal(h.current.aiReadRun.hero.headline, 'Opening from the read', 'the top of the report changes once, not twice');
+  assert.equal(h.current.aiReadRun.openingSeconds, null);
   assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the read');
 });
 
-test('an opening that times out is not asked again, and the read starts at once', async t => {
+test('a failed opening is filled by the read\'s own', async t => {
   const h = await startAiRead(t);
-  await act(async () => h.requests[0].respond({ error: 'Request timed out.' }, 503));
-  assert.deepEqual(h.requests.map((r) => r.url.pathname), ['/api/ai-brief/opening', '/api/ai-brief']);
+  await act(async () => opening(h).respond({ hero: null, checks: { problems: ['OPENING: states 99'], seconds: [2] } }));
   assert.equal(h.current.aiReadRun.opening, 'kept');
-  assert.equal(h.current.aiBriefLoading, true);
+  assert.equal(h.current.aiReadRun.hero, null);
+  await act(async () => fullRead(h).respond(aiRead(aiHeroFor('Opening from the read'))));
+  assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the read');
 });
 
-test('a read dropped for another report cannot land on it, or start its full read', async t => {
+test('an opening that times out is not asked again, and does not fail the read', async t => {
+  const h = await startAiRead(t);
+  await act(async () => opening(h).respond({ error: 'Request timed out.' }, 503));
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.current.aiReadRun.opening, 'kept');
+  assert.equal(h.current.aiBriefLoading, true);
+  assert.equal(h.current.aiBriefError, null);
+  await act(async () => fullRead(h).respond(aiRead(aiHeroFor('Opening from the read'))));
+  assert.equal(h.current.aiBriefDetails.hero.headline, 'Opening from the read');
+  assert.equal(h.current.aiBriefError, null);
+});
+
+test('a full read that fails first still lets the opening being written lead', async t => {
+  const h = await startAiRead(t);
+  await act(async () => fullRead(h).respond({ error: 'Bad request' }, 400));
+  assert.equal(h.current.aiBriefLoading, true, 'the read stays under way while its opening is written');
+  assert.equal(h.current.aiReadRun.opening, 'pending');
+  await act(async () => opening(h).respond({ hero: aiHeroFor('Opening from the fast model'), checks: { problems: [], seconds: [2] } }));
+  assert.equal(h.current.aiBriefLoading, false);
+  assert.equal(h.current.aiBriefError, 'Bad request');
+  assert.equal(h.current.aiReadRun.opening, 'written');
+  assert.equal(h.current.aiReadRun.hero.headline, 'Opening from the fast model');
+});
+
+test('a read dropped for another report cannot land on it', async t => {
   const h = await startAiRead(t);
   await act(async () => h.current.setAiBriefLoading(false));
   assert.equal(h.current.aiReadRun, null);
-  await act(async () => h.requests[0].respond({ hero: aiHeroFor('Stale opening') }));
-  assert.equal(h.requests.length, 1, 'a dropped read never sends its full read');
+  await act(async () => opening(h).respond({ hero: aiHeroFor('Stale opening') }));
+  await act(async () => fullRead(h).respond(aiRead(aiHeroFor('Stale read'))));
+  assert.equal(h.requests.length, 2);
   assert.equal(h.current.aiReadRun, null);
   assert.equal(h.current.aiBriefNarrative, null);
+  assert.equal(h.current.aiBriefDetails, null);
 });

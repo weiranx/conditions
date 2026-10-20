@@ -26,6 +26,22 @@ const registerSnowVisionRoute = (options) => registerSnowVisionRouteWithoutAccou
   ensureAccountAccess: options.ensureAccountAccess || allowAccountAccess,
 });
 
+// The read is two answers written at once, the briefing and the chapters; these
+// tell them apart by what each is asked for, and answer each from its own list
+// (the last answer repeats; an Error is thrown).
+const isChaptersCall = (options) => /^Return JSON only: \{"chapters"/m.test(options?.system || '');
+const callsFor = (mock, part) => mock.mock.calls.filter(([, options]) => isChaptersCall(options) === (part === 'chapters'));
+const answerParts = ({ briefing = [], chapters = [] }) => {
+  const queues = { briefing: [...briefing], chapters: [...chapters] };
+  return jest.fn(async (_prompt, options) => {
+    const queue = queues[isChaptersCall(options) ? 'chapters' : 'briefing'];
+    const next = queue.length > 1 ? queue.shift() : queue[0];
+    if (next instanceof Error) throw next;
+    return next;
+  });
+};
+const chaptersAnswer = (gust) => JSON.stringify({ chapters: { forecast: { text: `Gusts reach ${gust} mph through the window.`, evidence: [{ path: 'weather.windGust', value: gust }] } } });
+
 const rejectDisabledFeature = () => {
   const error = new Error('AI features are unavailable');
   error.code = 'AI_FEATURE_DISABLED';
@@ -115,12 +131,18 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
   expect(response.body.validation).toBe('deterministic_fallback');
   expect(response.body.narrative).toContain('Strong wind is expected.');
   expect(response.body.narrative).not.toMatch(/avalanche/i);
-  // The unusable answer is retried once, with what failed, before falling back.
-  expect(askAI).toHaveBeenCalledTimes(2);
-  expect(askAI.mock.calls[1][0]).toMatch(/failed these fact checks[\s\S]*not valid JSON/);
+  // Each unusable answer, the briefing and the chapters, is retried once, with what failed, before falling back.
+  expect(askAI).toHaveBeenCalledTimes(4);
+  const briefingCalls = callsFor(askAI, 'briefing');
+  expect(briefingCalls).toHaveLength(2);
+  expect(briefingCalls[1][0]).toMatch(/failed these fact checks[\s\S]*not valid JSON/);
+  expect(callsFor(askAI, 'chapters')[1][0]).toMatch(/failed these fact checks[\s\S]*the chapters answer was not valid JSON[\s\S]*Keep every chapter\.$/);
   expect(response.body.checks.problems[0]).toMatch(/^first answer: the answer was not valid JSON \(\d+ characters, ending "/);
   expect(response.body.checks.problems).toEqual(expect.arrayContaining([expect.stringMatching(/^retry: the answer was not valid JSON/)]));
-  const prompt = askAI.mock.calls[0][0];
+  expect(response.body.checks.seconds).toHaveLength(4);
+  const prompt = briefingCalls[0][0];
+  // Both parts read the same report.
+  expect(callsFor(askAI, 'chapters')[0][0]).toBe(prompt);
   expect(prompt).toMatch(/Disabled product domains: avalanche/i);
   expect(prompt).toContain('Cloudy and windy');
   expect(prompt).not.toMatch(/Considerable|Deep Persistent Slab|Avalanche rescue kit/);
@@ -131,7 +153,7 @@ test('AI brief retries once with the failed checks and keeps the corrected read'
   app.use(express.json());
   const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
   const answer = (gust) => JSON.stringify({ sections: headings.map((heading) => ({ heading, text: `Gusts reach ${gust} mph.`, evidence: [{ path: 'weather.windGust', value: 42 }] })) });
-  const askAI = jest.fn().mockResolvedValueOnce(answer(55)).mockResolvedValueOnce(answer(42));
+  const askAI = answerParts({ briefing: [answer(55), answer(42)], chapters: [chaptersAnswer(42)] });
   registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)
@@ -141,8 +163,12 @@ test('AI brief retries once with the failed checks and keeps the corrected read'
   expect(response.status).toBe(200);
   expect(response.body.validation).toBe('evidence_checked');
   expect(response.body.narrative).toMatch(/^BIG PICTURE: Gusts reach 42 mph\./);
-  expect(askAI).toHaveBeenCalledTimes(2);
-  expect(askAI.mock.calls[1][0]).toContain('BIG PICTURE: states 55, which is not a number in the report');
+  expect(callsFor(askAI, 'briefing')).toHaveLength(2);
+  expect(callsFor(askAI, 'briefing')[1][0]).toContain('BIG PICTURE: states 55, which is not a number in the report');
+  // The briefing's retry does not ask for the chapters again.
+  expect(callsFor(askAI, 'chapters')).toHaveLength(1);
+  expect(response.body.chapters).toEqual({ forecast: { text: 'Gusts reach 42 mph through the window.', evidence: [{ path: 'weather.windGust', value: 42 }] } });
+  expect(response.body.checks).toMatchObject({ attempts: 2, seconds: [expect.any(Number), expect.any(Number), expect.any(Number)] });
 });
 
 test('AI brief shows a usable read at once, without a second request for the part that failed', async () => {
@@ -150,7 +176,7 @@ test('AI brief shows a usable read at once, without a second request for the par
   app.use(express.json());
   const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
   const first = JSON.stringify({ sections: headings.map((heading) => ({ heading, text: heading === 'WATCH CLOSELY' ? 'Gusts reach 99 mph.' : 'Gusts reach 42 mph.', evidence: [{ path: 'weather.windGust', value: 42 }] })) });
-  const askAI = jest.fn().mockResolvedValueOnce(first);
+  const askAI = answerParts({ briefing: [first], chapters: [chaptersAnswer(42)] });
   registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)
@@ -160,17 +186,17 @@ test('AI brief shows a usable read at once, without a second request for the par
   expect(response.status).toBe(200);
   expect(response.body.validation).toBe('evidence_checked');
   expect(response.body.narrative).not.toMatch(/WATCH CLOSELY/);
-  expect(askAI).toHaveBeenCalledTimes(1);
-  // The reader can see why part of the read was left out, and how long the answer took.
+  expect(askAI).toHaveBeenCalledTimes(2);
+  // The reader can see why part of the read was left out, and how long each answer took.
   expect(response.body.checks.attempts).toBe(1);
-  expect(response.body.checks.seconds).toEqual([expect.any(Number)]);
+  expect(response.body.checks.seconds).toEqual([expect.any(Number), expect.any(Number)]);
   expect(response.body.checks.problems).toEqual(expect.arrayContaining(['WATCH CLOSELY: states 99, which is not a number in the report']));
 });
 
 test('AI brief falls back to the checks summary when the retry request fails', async () => {
   const app = express();
   app.use(express.json());
-  const askAI = jest.fn().mockResolvedValueOnce('not json').mockRejectedValueOnce(new Error('timeout'));
+  const askAI = answerParts({ briefing: ['not json', new Error('timeout')], chapters: [chaptersAnswer(47)] });
   registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)
@@ -179,8 +205,9 @@ test('AI brief falls back to the checks summary when the retry request fails', a
 
   expect(response.status).toBe(200);
   expect(response.body.validation).toBe('deterministic_fallback');
-  expect(askAI).toHaveBeenCalledTimes(2);
-  expect(response.body.checks.seconds).toHaveLength(2);
+  expect(response.body.chapters).toEqual({});
+  expect(askAI).toHaveBeenCalledTimes(3);
+  expect(response.body.checks.seconds).toHaveLength(3);
   expect(response.body.checks.problems).toEqual(expect.arrayContaining(['retry: the retry request failed: timeout']));
 });
 
@@ -272,10 +299,13 @@ test('AI opening reuses a full read already written for the same report', async 
   const app = express();
   app.use(express.json());
   const headings = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
-  const askAI = jest.fn().mockResolvedValueOnce(JSON.stringify({
-    sections: headings.map((heading) => ({ heading, text: 'Gusts reach 44 mph.', evidence: [{ path: 'weather.windGust', value: 44 }] })),
-    hero: { headline: 'Wind sets the pace of the day', reason: 'Gusts reach 44 mph.', evidence: [{ path: 'weather.windGust', value: 44 }] },
-  }));
+  const askAI = answerParts({
+    briefing: [JSON.stringify({
+      sections: headings.map((heading) => ({ heading, text: 'Gusts reach 44 mph.', evidence: [{ path: 'weather.windGust', value: 44 }] })),
+      hero: { headline: 'Wind sets the pace of the day', reason: 'Gusts reach 44 mph.', evidence: [{ path: 'weather.windGust', value: 44 }] },
+    })],
+    chapters: [chaptersAnswer(44)],
+  });
   registerAiBriefRoute({ app, askAI });
   const body = { decisionLevel: 'CAUTION', report: { weather: { description: 'Cached opening fixture', windGust: 44 }, safety: { explanations: ['Gusty.'] } } };
 
@@ -284,7 +314,7 @@ test('AI opening reuses a full read already written for the same report', async 
 
   expect(response.status).toBe(200);
   expect(response.body).toMatchObject({ cached: true, hero: { headline: 'Wind sets the pace of the day' } });
-  expect(askAI).toHaveBeenCalledTimes(1);
+  expect(askAI).toHaveBeenCalledTimes(2);
 });
 
 test('AI opening rejects a request without a report and answers 503 when AI is off', async () => {
@@ -302,7 +332,10 @@ test('AI opening rejects a request without a report and answers 503 when AI is o
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {
   const app = express();
   app.use(express.json());
-  const askAI = jest.fn().mockResolvedValue(JSON.stringify({ sections: ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'].map(heading => ({ heading, text: 'Avalanche conditions remain part of this saved report.', evidence: [{ path: 'avalanche.risk', value: 'Moderate' }] })) }));
+  const askAI = answerParts({
+    briefing: [JSON.stringify({ sections: ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'].map(heading => ({ heading, text: 'Avalanche conditions remain part of this saved report.', evidence: [{ path: 'avalanche.risk', value: 'Moderate' }] })) })],
+    chapters: [JSON.stringify({ chapters: { terrain: { text: 'Avalanche danger is Moderate.', evidence: [{ path: 'avalanche.risk', value: 'Moderate' }] } } })],
+  });
   registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)
@@ -318,7 +351,8 @@ test('AI brief preserves the feature snapshot of a previously generated report',
 
   expect(response.status).toBe(200);
   expect(response.body.narrative).toMatch(/Avalanche conditions/i);
-  expect(askAI).toHaveBeenCalledTimes(1);
+  expect(response.body.chapters.terrain.text).toBe('Avalanche danger is Moderate.');
+  expect(askAI).toHaveBeenCalledTimes(2);
   expect(askAI.mock.calls[0][0]).toMatch(/Moderate/);
 });
 
@@ -394,4 +428,147 @@ test('a report over the prompt limit is still explained, with restated tables le
   const prompt = askAI.mock.calls[0][0];
   expect(prompt).toContain('"omittedForLength":["evaluation.terrain.byAspect"]');
   expect(prompt).not.toContain('"byAspect"');
+});
+
+const HEADINGS = ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'];
+const briefingAnswer = (gust) => JSON.stringify({
+  sections: HEADINGS.map((heading) => ({ heading, text: `Gusts reach ${gust} mph.`, evidence: [{ path: 'weather.windGust', value: gust }] })),
+  questions: ['When do the gusts ease?'],
+  hero: { headline: 'Wind sets the pace of the day', reason: `Gusts reach ${gust} mph.`, evidence: [{ path: 'weather.windGust', value: gust }] },
+});
+
+test('AI brief asks for the briefing and the chapters at once, each for its own part', async () => {
+  const app = express();
+  app.use(express.json());
+  const pending = [];
+  const askAI = jest.fn((_prompt, options) => new Promise((resolve) => { pending.push({ options, resolve }); }));
+  registerAiBriefRoute({ app, askAI });
+
+  const response = request(app)
+    .post('/api/ai-brief')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { description: 'Parallel fixture', windGust: 51 }, safety: { explanations: ['Gusty.'] } } })
+    .then((result) => result);
+  // Both answers are asked for before either has answered.
+  for (let i = 0; i < 50 && pending.length < 2; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(pending).toHaveLength(2);
+  const briefing = pending.find(({ options }) => !isChaptersCall(options));
+  const chapters = pending.find(({ options }) => isChaptersCall(options));
+  expect(briefing.options).toMatchObject({ feature: 'report-brief', maxTokens: AI_BRIEF_MAX_TOKENS });
+  expect(briefing.options.system).toContain(AI_BRIEF_SYSTEM_PROMPT);
+  expect(briefing.options.system).toMatch(/\{"sections":\[/);
+  expect(briefing.options.system).toMatch(/do not return "chapters"/);
+  expect(chapters.options.system).toContain(AI_BRIEF_SYSTEM_PROMPT);
+  expect(chapters.options.system).not.toMatch(/\{"sections":\[/);
+  expect(chapters.options.system).toMatch(/"forecast"[\s\S]*"timing"[\s\S]*"terrain"[\s\S]*"sources"/);
+  // The chapters answer first, and the read waits for the briefing.
+  chapters.resolve(chaptersAnswer(51));
+  briefing.resolve(briefingAnswer(51));
+  const { body } = await response;
+
+  expect(body).toMatchObject({
+    validation: 'evidence_checked',
+    narrative: expect.stringMatching(/^BIG PICTURE: Gusts reach 51 mph\./),
+    questions: ['When do the gusts ease?'],
+    chapters: { forecast: { text: 'Gusts reach 51 mph through the window.' } },
+    hero: { headline: 'Wind sets the pace of the day', level: 'CAUTION' },
+    checks: { attempts: 1, problems: [], seconds: [expect.any(Number), expect.any(Number)] },
+  });
+  expect(askAI).toHaveBeenCalledTimes(2);
+});
+
+test('AI brief keeps the briefing when the chapters cannot be written', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = answerParts({ briefing: [briefingAnswer(52)], chapters: [new Error('Request timed out.')] });
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { description: 'Chapters fail fixture', windGust: 52 }, safety: { explanations: ['Gusty.'] } } });
+
+  expect(response.status).toBe(200);
+  expect(response.body.validation).toBe('evidence_checked');
+  expect(response.body.chapters).toEqual({});
+  expect(response.body.hero).toMatchObject({ headline: 'Wind sets the pace of the day' });
+  // A failed request for the chapters is asked again as it was; the briefing is not asked again.
+  expect(callsFor(askAI, 'briefing')).toHaveLength(1);
+  const chapterCalls = callsFor(askAI, 'chapters');
+  expect(chapterCalls).toHaveLength(2);
+  expect(chapterCalls[1][0]).toBe(chapterCalls[0][0]);
+  expect(response.body.checks).toMatchObject({ attempts: 2, seconds: [expect.any(Number), expect.any(Number), expect.any(Number)] });
+  expect(response.body.checks.problems).toEqual([
+    'first answer: the chapters request failed: Request timed out.',
+    'retry: the retry chapters request failed: Request timed out.',
+  ]);
+});
+
+test('AI brief chapters that fail their checks are asked for once more on their own', async () => {
+  const app = express();
+  app.use(express.json());
+  const badChapters = JSON.stringify({ chapters: { forecast: { text: 'Gusts reach 99 mph.', evidence: [{ path: 'weather.windGust', value: 53 }] } } });
+  const askAI = answerParts({ briefing: [briefingAnswer(53)], chapters: [badChapters, chaptersAnswer(53)] });
+  registerAiBriefRoute({ app, askAI });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ decisionLevel: 'CAUTION', report: { weather: { description: 'Chapters retry fixture', windGust: 53 }, safety: { explanations: ['Gusty.'] } } });
+
+  expect(response.body.chapters.forecast.text).toBe('Gusts reach 53 mph through the window.');
+  expect(callsFor(askAI, 'briefing')).toHaveLength(1);
+  expect(callsFor(askAI, 'chapters')[1][0]).toMatch(/failed these fact checks[\s\S]*forecast chapter: states 99/);
+  expect(response.body.checks.attempts).toBe(2);
+});
+
+test('AI opening is written from a smaller fit of the report, and checked against it', async () => {
+  const app = express();
+  app.use(express.json({ limit: '5mb' }));
+  const askAI = jest.fn().mockResolvedValue(JSON.stringify({
+    hero: { headline: 'Wind builds through the afternoon', reason: 'Gusts reach 39 mph on the ridge.', evidence: [{ path: 'weather.windGust', value: 39 }] },
+  }));
+  registerAiBriefRoute({ app, askAI });
+  // Restated per-aspect detail: well under the full read's limit, over the opening's.
+  const byAspect = Array.from({ length: 300 }, (_, i) => ({ aspect: 'N', hour: i, note: 'x'.repeat(100) }));
+  const report = { weather: { description: 'Smaller opening fixture', windGust: 39 }, safety: { explanations: ['Gusty.'] }, evaluation: { terrain: { byAspect } } };
+
+  const response = await request(app).post('/api/ai-brief/opening').send({ decisionLevel: 'CAUTION', report });
+
+  expect(response.status).toBe(200);
+  expect(response.body.hero).toMatchObject({ headline: 'Wind builds through the afternoon' });
+  const prompt = askAI.mock.calls[0][0];
+  expect(prompt).toContain('"omittedForLength":["evaluation.terrain.byAspect"]');
+  expect(prompt).not.toContain('"byAspect"');
+  expect(prompt.length).toBeLessThan(26000);
+
+  // A citation of a field the opening never saw fails its checks.
+  askAI.mockReset();
+  askAI.mockResolvedValue(JSON.stringify({
+    hero: { headline: 'Wind builds through the afternoon', reason: 'North slopes hold the wind.', evidence: [{ path: 'evaluation.terrain.byAspect.0.aspect', value: 'N' }] },
+  }));
+  const unseen = await request(app).post('/api/ai-brief/opening').send({ decisionLevel: 'CAUTION', report: { ...report, weather: { ...report.weather, description: 'Unseen citation fixture' } } });
+  expect(unseen.body.hero).toBeNull();
+  expect(unseen.body.checks.problems).toEqual([expect.stringMatching(/^OPENING: cited path evaluation\.terrain\.byAspect\.0\.aspect is not a value in the report/)]);
+
+  // The full read still reads the whole report.
+  const read = answerParts({ briefing: ['not json'], chapters: ['not json'] });
+  const readApp = express();
+  readApp.use(express.json({ limit: '5mb' }));
+  registerAiBriefRoute({ app: readApp, askAI: read });
+  await request(readApp).post('/api/ai-brief').send({ decisionLevel: 'CAUTION', report });
+  expect(read.mock.calls[0][0]).toContain('"byAspect"');
+  expect(read.mock.calls[0][0]).not.toContain('omittedForLength');
+});
+
+test('AI opening reads the full fit when the evidence behind the decision alone is too large to shorten', async () => {
+  const app = express();
+  app.use(express.json({ limit: '5mb' }));
+  const askAI = jest.fn().mockResolvedValue('not json');
+  registerAiBriefRoute({ app, askAI });
+  // Safety is never shortened, so the opening's fit cannot be made.
+  const report = { weather: { description: 'Protected opening fixture', windGust: 40 }, safety: { explanations: Array.from({ length: 60 }, (_, i) => `Explanation ${i} ${'y'.repeat(500)}`) } };
+
+  await request(app).post('/api/ai-brief/opening').send({ decisionLevel: 'CAUTION', report });
+
+  const prompt = askAI.mock.calls[0][0];
+  expect(prompt).toContain('Explanation 59');
+  expect(prompt).not.toContain('omittedForLength');
 });

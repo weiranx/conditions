@@ -321,12 +321,32 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     throw lastError || new Error('Open-Meteo rainfall archive request failed');
   };
 
+  const rainfallCacheKeyFor = (lat, lon) => `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
+  const rainfallApiUrlsFor = (lat, lon) => [
+    buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon),
+    buildOpenMeteoRainfallApiUrl('customer-api.open-meteo.com', lat, lon),
+  ];
+  // Places whose forecast payload a prefetch has just fetched. The report that started the prefetch takes
+  // its mark, so its source reads as a fresh fetch rather than a cached one.
+  const prefetchedForecastKeys = new Set();
+
+  // Starts the forecast payload request for a place before the report needs it; the report's own call
+  // joins it. A failed prefetch is retried by that call.
+  const prefetchRecentRainfall = ({ lat, lon, fetchOptions }) => {
+    const key = rainfallCacheKeyFor(lat, lon);
+    rainfallForecastPayloadCache
+      .getOrFetch(key, () => fetchForecastPayload(rainfallApiUrlsFor(lat, lon), fetchOptions).then((payload) => {
+        // A mark no report came for (one that ended early) is dropped rather than kept forever.
+        if (prefetchedForecastKeys.size >= 300) prefetchedForecastKeys.clear();
+        prefetchedForecastKeys.add(key);
+        return payload;
+      }))
+      .catch(() => {});
+  };
+
   const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWindowHours, fetchOptions) => {
-    const rainfallCacheKey = `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
-    const apiUrls = [
-      buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon),
-      buildOpenMeteoRainfallApiUrl('customer-api.open-meteo.com', lat, lon),
-    ];
+    const rainfallCacheKey = rainfallCacheKeyFor(lat, lon);
+    const apiUrls = rainfallApiUrlsFor(lat, lon);
 
     let rainfallJson = null;
     let usingCachedPayload = false;
@@ -341,7 +361,8 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
         () => fetchForecastPayload(apiUrls, fetchOptions),
       );
       rainfallJson = forecastResult.value;
-      usingCachedPayload = forecastResult.cached;
+      const fetchedByPrefetch = prefetchedForecastKeys.delete(rainfallCacheKey);
+      usingCachedPayload = forecastResult.cached && !fetchedByPrefetch;
       usingStaleCachedPayload = forecastResult.stale;
     } catch (error) {
       rethrowIfAborted(fetchOptions, error);
@@ -504,7 +525,7 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     };
   };
 
-  return { fetchRecentRainfallData };
+  return { fetchRecentRainfallData, prefetchRecentRainfall };
 };
 
 module.exports = {

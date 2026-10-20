@@ -177,12 +177,12 @@ const { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback, prefetchOpe
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
 
-const { fetchWeatherAlertsData, fetchAirQualityData } = createAlertsService({
+const { fetchWeatherAlertsData, fetchAirQualityData, prefetchWeatherAlerts, prefetchAirQuality } = createAlertsService({
   fetchWithTimeout,
   airNowApiKey: process.env.AIRNOW_API_KEY || null,
 });
 
-const { fetchRecentRainfallData } = createPrecipitationService({
+const { fetchRecentRainfallData, prefetchRecentRainfall } = createPrecipitationService({
   fetchWithTimeout,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
@@ -482,9 +482,13 @@ const safetyHandler = async (req, res) => {
       : null;
     if (prefetchedSnowpackPromise) timing.track('snowpack', prefetchedSnowpackPromise);
     if (prefetchedLocalConditionsPromise) timing.track('localConditions', prefetchedLocalConditionsPromise);
-    // The atmospheric step waits for weather, but its Open-Meteo payload needs
-    // only coordinates.
+    // The atmospheric, alerts, air quality and rainfall steps wait for weather to
+    // know the planned start, but the payloads they read need only coordinates.
+    // Their own calls later join these requests or find them cached.
     prefetchOpenMeteoAtmosphere({ lat: parsedLat, lon: parsedLon, fetchOptions });
+    prefetchWeatherAlerts({ lat: parsedLat, lon: parsedLon, fetchOptions });
+    prefetchAirQuality({ lat: parsedLat, lon: parsedLon, fetchOptions });
+    prefetchRecentRainfall({ lat: parsedLat, lon: parsedLon, fetchOptions });
     try {
       const weatherResult = await fetchWeatherPipeline({
         parsedLat,
@@ -542,30 +546,28 @@ const safetyHandler = async (req, res) => {
       (reason) => ({ status: 'rejected', reason }),
     ));
     const scoreFeatures = getFeatureFlags();
-    const parallelBatchPromise = Promise.all([
-      settle('supplemental', fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, selectedDate: selectedForecastDate, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
-      settle('alerts', fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
-      settle('airQuality', fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)),
-      settle('rainfall', fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),
-      prefetchedSnowpackPromise
-        || settle('snowpack', fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions)),
-      settle('atmosphere', fetchAtmosphericSignals({
+    const supplementalPromise = settle('supplemental', fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, selectedDate: selectedForecastDate, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions }));
+    const alertsPromise = settle('alerts', fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso));
+    const airQualityPromise = settle('airQuality', fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions));
+    const rainfallPromise = settle('rainfall', fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions));
+    const snowpackPromise = prefetchedSnowpackPromise
+      || settle('snowpack', fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions));
+    const atmospherePromise = settle('atmosphere', fetchAtmosphericSignals({
+      lat: parsedLat,
+      lon: parsedLon,
+      selectedDate: selectedForecastDate,
+      startClock: requestedStartClock,
+      gridDataUrl,
+      targetTimeIso: alertTargetTimeIso || airQualityTargetTime,
+      fetchOptions,
+    }));
+    const localConditionsPromise = prefetchedLocalConditionsPromise
+      || settle('localConditions', fetchLocalConditions({
         lat: parsedLat,
         lon: parsedLon,
         selectedDate: selectedForecastDate,
-        startClock: requestedStartClock,
-        gridDataUrl,
-        targetTimeIso: alertTargetTimeIso || airQualityTargetTime,
         fetchOptions,
-      })),
-      prefetchedLocalConditionsPromise
-        || settle('localConditions', fetchLocalConditions({
-          lat: parsedLat,
-          lon: parsedLon,
-          selectedDate: selectedForecastDate,
-          fetchOptions,
-        })),
-    ]);
+      }));
 
     // 3. Avalanche Pipeline: Map Layer → Detail APIs → Scraper Fallback
     const avalancheResult = await avalanchePipelinePromise;
@@ -577,21 +579,10 @@ const safetyHandler = async (req, res) => {
     // Post-processing: derived danger, expiry checks, staleness warnings
     avalancheData = applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso });
 
-    const [supplementalResult, alertsResult, airQualityResult, rainfallResult, snowpackResult, atmosphericResult, localConditionsResult] = await parallelBatchPromise;
-
-    if (alertsResult.status === 'fulfilled') {
-      alertsData = alertsResult.value;
-    } else {
-      logger.warn({ err: alertsResult.reason }, 'Alerts fetch failed');
-      alertsData = createUnavailableAlertsData("unavailable");
-    }
-
-    if (airQualityResult.status === 'fulfilled') {
-      airQualityData = airQualityResult.value;
-    } else {
-      logger.warn({ err: airQualityResult.reason }, 'AirQuality fetch failed');
-      airQualityData = createUnavailableAirQualityData("unavailable");
-    }
+    // The avalanche relevance decision (an AI call when Use AI is on) reads only
+    // weather, the avalanche forecast, snowpack and rainfall. It starts once
+    // those are in, while alerts, air quality and the other sources still load.
+    const [rainfallResult, snowpackResult] = await Promise.all([rainfallPromise, snowpackPromise]);
 
     if (rainfallResult.status === 'fulfilled') {
       rainfallData = rainfallResult.value;
@@ -605,6 +596,51 @@ const safetyHandler = async (req, res) => {
     } else {
       logger.warn({ err: snowpackResult.reason }, 'Snowpack fetch failed');
       snowpackData = createUnavailableSnowpackData("unavailable");
+    }
+
+    const relevanceInputs = {
+      lat: parsedLat,
+      selectedDate: selectedForecastDate,
+      weatherData,
+      avalancheData,
+      snowpackData,
+      rainfallData,
+      activity: requestedActivity,
+    };
+    const avalancheRelevancePromise = avalancheAiRelevance.decide({
+      ...relevanceInputs,
+      lon: parsedLon,
+      name: logName,
+      startClock: requestedStartClock,
+      travelWindowHours: requestedTravelWindowHours,
+      rules: evaluateAvalancheRelevance(relevanceInputs),
+      aiOff,
+    });
+    timing.track('avalancheRelevance', avalancheRelevancePromise);
+    // A throw before the await below leaves the decision unawaited; this handler keeps a rejection from going
+    // unhandled meanwhile. The await still sees it.
+    avalancheRelevancePromise.catch(() => {});
+
+    const [supplementalResult, alertsResult, airQualityResult, atmosphericResult, localConditionsResult] = await Promise.all([
+      supplementalPromise,
+      alertsPromise,
+      airQualityPromise,
+      atmospherePromise,
+      localConditionsPromise,
+    ]);
+
+    if (alertsResult.status === 'fulfilled') {
+      alertsData = alertsResult.value;
+    } else {
+      logger.warn({ err: alertsResult.reason }, 'Alerts fetch failed');
+      alertsData = createUnavailableAlertsData("unavailable");
+    }
+
+    if (airQualityResult.status === 'fulfilled') {
+      airQualityData = airQualityResult.value;
+    } else {
+      logger.warn({ err: airQualityResult.reason }, 'AirQuality fetch failed');
+      airQualityData = createUnavailableAirQualityData("unavailable");
     }
 
     let atmosphericSignals = {};
@@ -640,25 +676,6 @@ const safetyHandler = async (req, res) => {
     });
     heatRiskData = buildHeatRiskData({ weatherData });
 
-    const relevanceInputs = {
-      lat: parsedLat,
-      selectedDate: selectedForecastDate,
-      weatherData,
-      avalancheData,
-      snowpackData,
-      rainfallData,
-      activity: requestedActivity,
-    };
-    const avalancheRelevancePromise = avalancheAiRelevance.decide({
-      ...relevanceInputs,
-      lon: parsedLon,
-      name: logName,
-      startClock: requestedStartClock,
-      travelWindowHours: requestedTravelWindowHours,
-      rules: evaluateAvalancheRelevance(relevanceInputs),
-      aiOff,
-    });
-    timing.track('avalancheRelevance', avalancheRelevancePromise);
     const avalancheRelevance = await avalancheRelevancePromise;
     avalancheData = {
       ...avalancheData,
