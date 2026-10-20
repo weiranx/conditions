@@ -87,15 +87,18 @@ test('a report opens where the reader left it', async t => {
   function Report({ id }) {
     const [returning] = useState(() => placeToReturnTo(store.current, id));
     const [sections, setSections] = useState(() => new Set(returning?.sections ?? []));
-    opened = { returning, setSections };
-    useKeepReportPlace(store, id, sections, returning);
+    // On a phone a rendered section can be shut again, so the open ones are kept apart.
+    const [open, setOpen] = useState(() => new Set(returning?.opened ?? []));
+    opened = { returning, setSections, setOpen };
+    useKeepReportPlace(store, id, sections, open, returning);
     return null;
   }
   const h = await mount(t, 'http://localhost/planner', Reading, { id: key, show: true });
   assert.equal(opened.returning, null, 'a report read for the first time opens at its top');
   await act(async () => opened.setSections(new Set(['forecast', 'timing'])));
+  await act(async () => opened.setOpen(new Set(['forecast'])));
   await act(async () => h.window.scrollTo({ top: 1400 }));
-  assert.deepEqual(store.current, { report: key, scrollY: 1400, sections: ['forecast', 'timing'] });
+  assert.deepEqual(store.current, { report: key, scrollY: 1400, sections: ['forecast', 'timing'], opened: ['forecast'] });
 
   // Another page opens at its top; the report keeps the place it was left at.
   await h.render({ id: key, show: false });
@@ -106,6 +109,7 @@ test('a report opens where the reader left it', async t => {
   h.setPageHeight(600);
   await h.render({ id: key, show: true });
   assert.deepEqual(opened.returning.sections, ['forecast', 'timing']);
+  assert.deepEqual(opened.returning.opened, ['forecast'], 'a section rendered and then shut comes back shut');
   assert.equal(h.window.scrollY, 600, 'the page is not yet tall enough');
   assert.equal(store.current.scrollY, 1400, 'a short page does not overwrite the place');
   h.setPageHeight(5000);
@@ -119,11 +123,11 @@ test('a report opens where the reader left it', async t => {
 });
 
 test('scrolling first ends the wait for the old spot', async t => {
-  const store = { current: { report: 'r', scrollY: 1400, sections: [] } };
+  const store = { current: { report: 'r', scrollY: 1400, sections: [], opened: [] } };
   const none = new Set();
   function Report() {
     const [returning] = useState(() => placeToReturnTo(store.current, 'r'));
-    useKeepReportPlace(store, 'r', none, returning);
+    useKeepReportPlace(store, 'r', none, none, returning);
     return null;
   }
   const h = await mount(t, 'http://localhost/planner', Report, {}, { height: 300 });
@@ -138,11 +142,11 @@ test('scrolling first ends the wait for the old spot', async t => {
 });
 
 test('a spot the page grows too slowly to reach stays kept for next time', async t => {
-  const store = { current: { report: 'r', scrollY: 1400, sections: ['forecast'] } };
+  const store = { current: { report: 'r', scrollY: 1400, sections: ['forecast'], opened: ['forecast'] } };
   const none = new Set();
   function Report() {
     const [returning] = useState(() => placeToReturnTo(store.current, 'r'));
-    useKeepReportPlace(store, 'r', none, returning);
+    useKeepReportPlace(store, 'r', none, none, returning);
     return null;
   }
   let now = 0;

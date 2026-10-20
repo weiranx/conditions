@@ -134,10 +134,10 @@ export function Report({
     chapters.map((c) => c.id).filter((id) => returning?.sections.includes(id)),
   ));
   // On a phone each section starts shut, its heading, checks and lead; a tap on the heading or a jump opens it.
-  // Back at an old spot, the sections the reader had open open again.
+  // Back at an old spot, the sections the reader had open open again; one they rendered and then shut stays shut.
   const narrow = useNarrow();
   const [opened, setOpened] = useState<ReadonlySet<Chapter>>(() => new Set(
-    chapters.map((c) => c.id).filter((id) => returning?.sections.includes(id)),
+    chapters.map((c) => c.id).filter((id) => returning?.opened.includes(id)),
   ));
   // A jump lands on a part of a section once it, and every section above it, has rendered.
   const landing = useRef<{ chapter: Chapter; anchor?: string; smooth: boolean; needed: Chapter[] } | null>(null);
@@ -213,7 +213,7 @@ export function Report({
   // The brief's checks also say which sections hold a problem.
   const brief = buildBrief({ w, hours: skyHours, clock, route, activity: reportActivity(report) });
 
-  useKeepReportPlace(kept, placeKey, mounted, returning);
+  useKeepReportPlace(kept, placeKey, mounted, opened, returning);
   const mount = useCallback((id: Chapter) => {
     setMounted((previous) => (previous.has(id) ? previous : new Set(previous).add(id)));
   }, []);
@@ -277,13 +277,14 @@ export function Report({
     };
   }, []);
   useEffect(() => {
-    // A printed report holds every section, with its warnings and the AI read's detail open.
+    // A printed report holds every section with every fold open. Folds that mount
+    // here, during the event, cannot hear it themselves, so each is opened by hand.
     const all = () => {
       flushSync(() => {
         setMounted(new Set(chapters.map((c) => c.id)));
         setOpened(new Set(chapters.map((c) => c.id)));
       });
-      topRef.current?.querySelectorAll<HTMLDetailsElement>("details.sky-notice-fold, details.ai-read-fold, details.supplemental-source, details.sky-check-passed").forEach((fold) => { fold.open = true; });
+      topRef.current?.querySelectorAll<HTMLDetailsElement>("details:not(.report-actions-menu)").forEach((fold) => { fold.open = true; });
     };
     window.addEventListener("beforeprint", all);
     return () => window.removeEventListener("beforeprint", all);

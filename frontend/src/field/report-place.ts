@@ -4,11 +4,13 @@ import type { PersistedReport } from "../app/report-storage";
 // Where the reader was in a report, kept while they visit another page, so the
 // brief they come back to opens at the spot they left.
 
-/** How far down the report was read, and the sections rendered by then. */
+/** How far down the report was read, the sections rendered by then, and the ones the reader had open. */
 export type ReadingPlace = {
   report: string;
   scrollY: number;
   sections: string[];
+  /** On a phone, where sections open and shut, the ones open when the reader left; rendered is not the same as open. */
+  opened: string[];
 };
 
 /** One report: the same forecast for the same plan, however it was opened. */
@@ -35,13 +37,14 @@ export function useKeepReportPlace(
   store: MutableRefObject<ReadingPlace | null> | undefined,
   report: string,
   sections: ReadonlySet<string>,
+  opened: ReadonlySet<string>,
   returning: ReadingPlace | null,
 ) {
   const restoring = useRef(Boolean(returning && returning.scrollY > 0));
   const save = useCallback(() => {
     if (!store || restoring.current) return;
-    store.current = { report, scrollY: window.scrollY, sections: [...sections] };
-  }, [store, report, sections]);
+    store.current = { report, scrollY: window.scrollY, sections: [...sections], opened: [...opened] };
+  }, [store, report, sections, opened]);
   // A layout effect stops listening as the report leaves, before the next page scrolls to its top.
   useLayoutEffect(() => {
     save();

@@ -132,6 +132,22 @@ test('printing opens every chapter on a phone', async (t) => {
   assert.equal(document.querySelectorAll('.sky-chapter-block.is-shut').length, 0);
 });
 
+test('the Print action waits for every chapter, then the print opens every fold in them', async (t) => {
+  const h = await mountReport(t, { phone: true });
+  const print = [...document.querySelectorAll('.report-actions-popover button')].find((b) => /Print report/.test(b.textContent));
+  await act(async () => print.click());
+  // The action prints once every chapter, lazily loaded ones included, has rendered.
+  for (let i = 0; i < 100 && h.printed() === 0; i += 1) await wait(50);
+  assert.equal(h.printed(), 1);
+  assert.equal(document.querySelectorAll('.sky-chapter-block.is-shut, .sky-section-loading').length, 0);
+  // Folds that mounted while the print waited cannot hear its event, so the report opens them by hand.
+  await act(async () => h.window.dispatchEvent(new h.window.Event('beforeprint')));
+  const folds = [...document.querySelectorAll('.field-report details:not(.report-actions-menu)')];
+  assert.ok(folds.some((fold) => fold.closest('.sky-fold')), 'the chapters hold generic folds');
+  assert.deepEqual(folds.filter((fold) => !fold.open).map((fold) => fold.className), [], 'every fold is open for print');
+  assert.equal(document.querySelector('.report-actions-menu').open, false, 'the actions menu stays shut');
+});
+
 test('on a wider screen every chapter is open, with no toggle', async (t) => {
   await mountReport(t, { phone: false });
   assert.equal(document.querySelectorAll('.sky-chapter-block.is-shut, .sky-chapter-toggle').length, 0);
