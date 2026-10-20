@@ -532,3 +532,28 @@ details.sky-notice-fold { display: block; }
 @media print {
   .sky-card.is-secondary, .field-app .sky-report .field-panel.is-secondary { background: none; }
 }
+
+/* ---------- Phones: each chapter starts shut, its heading, checks and lead ---------- */
+/* The heading is the switch: the whole header answers a tap, and a chevron says it opens. */
+.sky-chapter-block.is-collapsible .sky-chapter-top { position: relative; }
+.sky-chapter-toggle {
+  display: inline-flex; align-items: center; gap: 12px; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; letter-spacing: inherit; text-align: left; cursor: pointer;
+}
+.sky-chapter-toggle::before { content: ""; position: absolute; inset: 0; }
+.sky-chapter-toggle::after {
+  content: ""; flex: none; width: 9px; height: 9px; margin-top: -4px; border: solid var(--sky-secondary); border-width: 0 2px 2px 0;
+  transform: rotate(45deg); transition: transform 0.15s ease;
+}
+.sky-chapter-toggle[aria-expanded="true"]::after { margin-top: 4px; transform: rotate(-135deg); }
+.sky-chapter-toggle:focus-visible { outline: none; }
+.sky-chapter-toggle:focus-visible::before { outline: 3px solid var(--sky-accent); outline-offset: 4px; border-radius: 8px; }
+/* Shut chapters stack close, one under the other, like a contents list with the answers in it. */
+.sky-chapter-block.is-shut { margin-top: 28px; }
+.sky-chapter-block.is-shut > .sky-lead { margin-top: 8px; font-size: 16px; color: var(--sky-secondary); }
+.sky-chapter-block.is-shut > .sky-lead strong { color: var(--sky-label); }
+.sky-chapter-block.is-shut > .sky-lead .is-over { color: var(--sky-caution); }
+@media (prefers-reduced-motion: reduce) { .sky-chapter-toggle::after { transition: none; } }
+@media print {
+  .sky-chapter-toggle::after { display: none; }
+}

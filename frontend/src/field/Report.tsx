@@ -37,6 +37,7 @@ import { BriefSections, StatusTag } from "./sky/BriefSections";
 import { buildBrief, sectionChecks } from "./sky/brief-model";
 import { DeferredSection, ReportNav, type ReportPlace } from "./sky/ReportNav";
 import { landOn, sectionsReady } from "./sky/report-scroll";
+import { useNarrow } from "./sky/useNarrow";
 import { placeToReturnTo, reportPlaceKey, useKeepReportPlace, type ReadingPlace } from "./report-place";
 import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
@@ -132,6 +133,12 @@ export function Report({
   const [mounted, setMounted] = useState<ReadonlySet<Chapter>>(() => new Set(
     chapters.map((c) => c.id).filter((id) => returning?.sections.includes(id)),
   ));
+  // On a phone each section starts shut, its heading, checks and lead; a tap on the heading or a jump opens it.
+  // Back at an old spot, the sections the reader had open open again.
+  const narrow = useNarrow();
+  const [opened, setOpened] = useState<ReadonlySet<Chapter>>(() => new Set(
+    chapters.map((c) => c.id).filter((id) => returning?.sections.includes(id)),
+  ));
   // A jump lands on a part of a section once it, and every section above it, has rendered.
   const landing = useRef<{ chapter: Chapter; anchor?: string; smooth: boolean; needed: Chapter[] } | null>(null);
   const [navigation, setNavigation] = useState(0);
@@ -210,6 +217,16 @@ export function Report({
   const mount = useCallback((id: Chapter) => {
     setMounted((previous) => (previous.has(id) ? previous : new Set(previous).add(id)));
   }, []);
+  const toggleChapter = (id: Chapter) => {
+    const opening = !opened.has(id);
+    setOpened((previous) => {
+      const next = new Set(previous);
+      if (opening) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    if (opening) mount(id);
+  };
   useEffect(() => {
     // Only an explicit navigation moves focus; loading a report must not.
     const request = landing.current;
@@ -262,7 +279,10 @@ export function Report({
   useEffect(() => {
     // A printed report holds every section, with its warnings and the AI read's detail open.
     const all = () => {
-      flushSync(() => setMounted(new Set(chapters.map((c) => c.id))));
+      flushSync(() => {
+        setMounted(new Set(chapters.map((c) => c.id)));
+        setOpened(new Set(chapters.map((c) => c.id)));
+      });
       topRef.current?.querySelectorAll<HTMLDetailsElement>("details.sky-notice-fold, details.ai-read-fold, details.supplemental-source, details.sky-check-passed").forEach((fold) => { fold.open = true; });
     };
     window.addEventListener("beforeprint", all);
@@ -358,8 +378,10 @@ export function Report({
     }
     const index = visibleChapters.findIndex((c) => c.id === next);
     if (index < 0) return;
-    const needed = visibleChapters.slice(0, index + 1).map((c) => c.id);
+    // A shut section above the target stays shut on a phone, so only the target needs rendering there.
+    const needed = narrow ? [next] : visibleChapters.slice(0, index + 1).map((c) => c.id);
     setMounted((previous) => (needed.every((id) => previous.has(id)) ? previous : new Set([...previous, ...needed])));
+    setOpened((previous) => (previous.has(next) ? previous : new Set(previous).add(next)));
     landing.current = { chapter: next, anchor, smooth, needed };
     setNavigation((n) => n + 1);
   }
@@ -368,8 +390,9 @@ export function Report({
     if (read) landOn(read, { smooth: true });
   }
   function printReport() {
-    // Every section renders before the page prints.
+    // Every section renders, open, before the page prints.
     setMounted(new Set(chapters.map((c) => c.id)));
+    setOpened(new Set(chapters.map((c) => c.id)));
     const root = topRef.current;
     const ids = visibleChapters.map((c) => c.id);
     const started = Date.now();
@@ -762,10 +785,19 @@ export function Report({
           {visibleChapters.map((c) => {
             const { checks } = sectionChecks(brief, c.id);
             const ready = mounted.has(c.id);
+            const shut = narrow && !opened.has(c.id);
+            const body = `sky-chapter-body-${c.id}`;
             return (
-              <section key={c.id} className="sky-chapter-block" data-chapter={c.id} data-mounted={ready ? "true" : "false"} aria-labelledby={`sky-chapter-${c.id}`}>
+              <section key={c.id} className={`sky-chapter-block${narrow ? " is-collapsible" : ""}${shut ? " is-shut" : ""}`}
+                data-chapter={c.id} data-mounted={ready ? "true" : "false"} aria-labelledby={`sky-chapter-${c.id}`}>
                 <header className="sky-chapter-top">
-                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`} tabIndex={-1}>{c.label}</h2>
+                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`} tabIndex={-1}>
+                    {narrow ? (
+                      <button type="button" className="sky-chapter-toggle" aria-expanded={!shut} aria-controls={body} onClick={() => toggleChapter(c.id)}>
+                        {c.label}
+                      </button>
+                    ) : c.label}
+                  </h2>
                   {checks.length > 0 && (
                     <ul className="sky-chapter-checks" aria-label={`${c.label} checks`}>
                       {checks.map((check) => (
@@ -778,11 +810,15 @@ export function Report({
                   )}
                 </header>
                 {chapterLead(c.id)}
-                <DeferredSection id={c.id} mounted={ready} onNear={mount}>
-                  <Suspense fallback={<p className="field-loading sky-section-loading" role="status">Loading {c.label.toLowerCase()}…</p>}>
-                    {chapterContent(c.id)}
-                  </Suspense>
-                </DeferredSection>
+                <div className="sky-chapter-body" id={body} hidden={shut}>
+                  {!shut && (
+                    <DeferredSection id={c.id} mounted={ready} onNear={mount}>
+                      <Suspense fallback={<p className="field-loading sky-section-loading" role="status">Loading {c.label.toLowerCase()}…</p>}>
+                        {chapterContent(c.id)}
+                      </Suspense>
+                    </DeferredSection>
+                  )}
+                </div>
               </section>
             );
           })}
