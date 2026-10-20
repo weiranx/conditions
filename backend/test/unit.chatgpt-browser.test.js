@@ -68,7 +68,7 @@ describe('browser ChatGPT sign-in', () => {
     expect(tokenBody.get('redirect_uri')).toBe(url.searchParams.get('redirect_uri'));
     expect(verifyIdentity).toHaveBeenCalledWith('private-id-oaiapp_first', 'oaiapp_first', url.searchParams.get('nonce'));
     expect(accounts.serviceForUser(firstId).status().connected).toBe(true);
-    expect(accounts.serviceForUser(secondId).hasRegistration()).toBe(false);
+    expect(accounts.serviceForUser(secondId).routesRequests()).toBe(false);
   });
 
   test('resume and completion are bound to the initiating browser session and Conditions user', async () => {

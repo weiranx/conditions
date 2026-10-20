@@ -82,6 +82,11 @@ const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore
     record.expiresAt = Date.now() + tokens.expires_in * 1000;
     record.reauthenticationRequired = false;
   };
+  // An expired or unapproved session keeps requests on the plan until reconnected; an explicit disconnect releases them.
+  const routesRequests = () => {
+    const record = activeRecord(store.read());
+    return Boolean(record && (record.refresh_token || record.reauthenticationRequired));
+  };
   const status = () => {
     try {
       const record = activeRecord(store.read());
@@ -261,7 +266,7 @@ const createChatGPTService = ({ store = new ChatGPTProfileStore(new ChatGPTStore
     });
     return { ...status(), revoked };
   };
-  return { store, status, hasRegistration: () => Boolean(activeRecord(store.read())), begin, complete, accessToken, models, reasoningEffortsFor, selectModel, selectAccount, modelForRequest, disconnect, apiError };
+  return { store, status, routesRequests, begin, complete, accessToken, models, reasoningEffortsFor, selectModel, selectAccount, modelForRequest, disconnect, apiError };
 };
 
 const chatGPTService = createChatGPTService();

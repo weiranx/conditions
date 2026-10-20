@@ -29,6 +29,11 @@ function readSignIn(value: unknown): SignIn | null {
 
 const jsonPost = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
+async function publishServerAiAvailability() {
+  const health = await fetchApi("/api/healthz", undefined, { retries: 0 });
+  if (health.response.ok) publishAiAvailability((health.payload as { ai: Parameters<typeof publishAiAvailability>[0] }).ai);
+}
+
 export function ChatGPTPlan({ userId }: { userId: string }) {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [models, setModels] = useState<Model[]>([]);
@@ -80,8 +85,7 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
       if (next.connected) {
         try { setWelcome(localStorage.getItem(`conditions:chatgpt-welcome:${userId}`) !== "seen"); } catch { /* Optional preference only. */ }
       }
-      const health = await fetchApi("/api/healthz", undefined, { retries: 0 });
-      if (health.response.ok) publishAiAvailability((health.payload as { ai: Parameters<typeof publishAiAvailability>[0] }).ai);
+      await publishServerAiAvailability();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not refresh the connection."); }
   }
 
@@ -120,8 +124,7 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
       if (next.connected) {
         try { setWelcome(localStorage.getItem(`conditions:chatgpt-welcome:${userId}`) !== 'seen'); } catch { /* Optional preference only. */ }
       }
-      const health = await fetchApi('/api/healthz', undefined, { retries: 0 });
-      if (health.response.ok) publishAiAvailability((health.payload as { ai: Parameters<typeof publishAiAvailability>[0] }).ai);
+      await publishServerAiAvailability();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not finish ChatGPT sign-in. Start again.');
     }
@@ -201,13 +204,14 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
           <div>
             <button className="field-button" disabled={busy} onClick={() => void refresh()}>Refresh connection</button>{" "}
             {(connection.connected || connection.state === "permission_required" || connection.state === "reauthentication_required") && <button className="field-button" disabled={busy} onClick={() => {
-              void act("/api/account/chatgpt/disconnect", { method: "POST" }).then((payload) => {
+              void act("/api/account/chatgpt/disconnect", { method: "POST" }).then(async (payload) => {
                 setConnection(payload as Connection);
                 setModels([]);
                 setSignIn(null);
                 setCallbackUrl('');
                 setMessage((payload as { message: string }).message);
-                publishAiAvailability({ available: false, billingSource: "chatgpt", accountUserId: userId });
+                // Disconnecting returns AI requests to the server's providers; read what they now offer.
+                await publishServerAiAvailability();
               }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not disconnect ChatGPT."));
             }}>Disconnect ChatGPT</button>}
           </div>

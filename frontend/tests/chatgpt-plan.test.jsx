@@ -27,7 +27,7 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
     else if (pathname.endsWith('/signin/start')) payload = { signIn };
     else if (pathname.endsWith('/signin/cancel')) payload = { canceled: true };
     else if (pathname.endsWith('/signin/complete')) payload = connection = { enabled: true, connected: true, state: 'connected', email: 'me@example.com', model: null };
-    else if (pathname === '/api/healthz') payload = { ai: { available: true, billingSource: 'chatgpt' } };
+    else if (pathname === '/api/healthz') payload = { ai: { available: true, billingSource: connection.connected ? 'chatgpt' : 'api' } };
     else if (pathname === '/api/account/chatgpt/models') payload = { models: [{ id: 'account-model', name: 'My model' }] };
     else if (pathname === '/api/account/chatgpt/model') payload = connection = { ...connection, model: JSON.parse(init.body).model };
     else if (pathname === '/api/account/chatgpt/disconnect') payload = connection = { enabled: true, connected: false, state: 'disconnected', revoked: false, message: 'Disconnected locally. Remote revocation was not confirmed.' };
@@ -76,8 +76,14 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
     select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   });
   assert.equal(connection.model, 'account-model');
+  const availability = [];
+  dom.window.addEventListener('summitsafe:ai-availability-change', (event) => availability.push(event.detail));
   await press('Disconnect ChatGPT');
   assert.ok(document.body.textContent.includes('Remote revocation was not confirmed'));
   assert.equal(requests.filter((request) => request.pathname.endsWith('/disconnect')).length, 1);
+  // Disconnecting hands AI back to the server's providers instead of switching it off.
+  assert.equal(requests.at(-1).pathname, '/api/healthz');
+  assert.equal(availability.length, 1);
+  assert.ok(Object.values(availability[0]).some(Boolean));
   assert.ok(document.querySelector('a[href="https://chatgpt.com/settings/usage"]'));
 });

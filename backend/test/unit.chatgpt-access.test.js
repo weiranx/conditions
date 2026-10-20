@@ -7,7 +7,7 @@ const { registerChatGPTRoutes } = require('../src/routes/chatgpt');
 
 const owner = { id: '00000000-0000-4000-8000-000000000002', email: 'owner@example.com' };
 const other = { id: '00000000-0000-4000-8000-000000000003', email: 'other@example.com' };
-const onlyOwner = (service = { hasRegistration: () => true }) => ({ isEnabled: () => true, serviceForUser: (id) => id === owner.id ? service : null });
+const onlyOwner = (service = { routesRequests: () => true }) => ({ isEnabled: () => true, serviceForUser: (id) => id === owner.id ? service : null });
 const accountService = { available: true, getUserForSession: async (token) => token === 'owner' ? owner : token === 'other' ? other : null };
 
 test('only the owner foreground browser request receives a plan context; parallel callers remain isolated', async () => {
@@ -67,8 +67,8 @@ test('connection controls require the real owner session and explicit allowed Or
 });
 
 test('parallel personal accounts select their own service from the session, never a supplied user ID', async () => {
-  const first = { hasRegistration: () => true, status: () => ({ email: 'first@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
-  const second = { hasRegistration: () => true, status: () => ({ email: 'second@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
+  const first = { routesRequests: () => true, status: () => ({ email: 'first@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
+  const second = { routesRequests: () => true, status: () => ({ email: 'second@example.com' }), disconnect: jest.fn(async () => ({ revoked: true })) };
   const accounts = { isEnabled: () => true, serviceForUser: (id) => id === owner.id ? first : id === other.id ? second : null };
   const app = express();
   app.use(express.json());
@@ -108,12 +108,23 @@ test('default-enabled accounts can connect without configuration while untouched
       expect((await request(app).get('/api/account/chatgpt').set('Cookie', `bc_session=${token}`)).body).toMatchObject({ enabled: true, connected: false });
       expect((await request(app).get('/api/safety').set('Cookie', `bc_session=${token}`)).body.userId).toBeNull();
     }
-    await accounts.serviceForUser(owner.id).store.update((value) => {
-      value.registrations.push({ client_id: 'oaiapp_connected' });
+    const ownerStore = accounts.serviceForUser(owner.id).store;
+    const planUser = async (token) => (await request(app).get('/api/safety').set('Cookie', `bc_session=${token}`)).body.userId;
+    await ownerStore.update((value) => {
+      value.registrations.push({ client_id: 'oaiapp_connected', access_token: 'test-access', refresh_token: 'test-refresh' });
       value.activeClientId = 'oaiapp_connected';
     });
-    // A retained registration, including a disconnected one, never opts back into API billing.
-    expect((await request(app).get('/api/safety').set('Cookie', 'bc_session=owner')).body.userId).toBe(owner.id);
-    expect((await request(app).get('/api/safety').set('Cookie', 'bc_session=other')).body.userId).toBeNull();
+    expect(await planUser('owner')).toBe(owner.id);
+    expect(await planUser('other')).toBeNull();
+    // An expired session stays on the plan path (and asks to reconnect) rather than billing the app's API.
+    await ownerStore.update((value) => {
+      const record = value.registrations[0];
+      delete record.access_token; delete record.refresh_token;
+      record.reauthenticationRequired = true;
+    });
+    expect(await planUser('owner')).toBe(owner.id);
+    // An explicit disconnect keeps the registration for reconnecting but returns requests to the server provider.
+    await ownerStore.update((value) => { delete value.registrations[0].reauthenticationRequired; });
+    expect(await planUser('owner')).toBeNull();
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
