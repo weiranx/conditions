@@ -29,9 +29,18 @@ function readSignIn(value: unknown): SignIn | null {
 
 const jsonPost = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-async function publishServerAiAvailability() {
-  const health = await fetchApi("/api/healthz", undefined, { retries: 0 });
-  if (health.response.ok) publishAiAvailability((health.payload as { ai: Parameters<typeof publishAiAvailability>[0] }).ai);
+type AiStatus = Parameters<typeof publishAiAvailability>[0];
+
+// Best effort: the change it follows has already happened, so a failed check never reports that change as failed.
+async function publishServerAiAvailability(fallback?: AiStatus) {
+  try {
+    const health = await fetchApi("/api/healthz", undefined, { retries: 0 });
+    if (health.response.ok) {
+      publishAiAvailability((health.payload as { ai: AiStatus }).ai);
+      return;
+    }
+  } catch { /* The shared availability poll retries. */ }
+  if (fallback) publishAiAvailability(fallback);
 }
 
 export function ChatGPTPlan({ userId }: { userId: string }) {
@@ -210,8 +219,9 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
                 setSignIn(null);
                 setCallbackUrl('');
                 setMessage((payload as { message: string }).message);
-                // Disconnecting returns AI requests to the server's providers; read what they now offer.
-                await publishServerAiAvailability();
+                // Disconnecting returns AI requests to the server's providers; read what they now offer,
+                // and until that answer arrives never label requests as using the ChatGPT plan.
+                await publishServerAiAvailability({ available: false, billingSource: "api", accountUserId: userId });
               }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not disconnect ChatGPT."));
             }}>Disconnect ChatGPT</button>}
           </div>

@@ -87,3 +87,36 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
   assert.ok(Object.values(availability[0]).some(Boolean));
   assert.ok(document.querySelector('a[href="https://chatgpt.com/settings/usage"]'));
 });
+
+test('a failed availability check after disconnecting does not report the disconnect as failed', async (t) => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://conditions.example.com/' });
+  const previous = { window: globalThis.window, document: globalThis.document, localStorage: globalThis.localStorage, fetch: globalThis.fetch, CustomEvent: globalThis.CustomEvent };
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, CustomEvent: dom.window.CustomEvent, IS_REACT_ACT_ENVIRONMENT: true });
+  localStorage.setItem('conditions:chatgpt-welcome:conditions-owner-id', 'seen');
+  let connection = { enabled: true, connected: true, state: 'connected', email: 'me@example.com', model: 'account-model' };
+  globalThis.fetch = async (url) => {
+    const pathname = new URL(String(url), dom.window.location.origin).pathname;
+    if (pathname === '/api/healthz') throw new TypeError('Failed to fetch');
+    let payload;
+    if (pathname === '/api/account/chatgpt') payload = connection;
+    else if (pathname === '/api/account/chatgpt/disconnect') payload = connection = { enabled: true, connected: false, state: 'disconnected', revoked: true, message: 'Disconnected ChatGPT.' };
+    else throw new Error(`Unexpected request: ${pathname}`);
+    return new Response(JSON.stringify(payload), { status: 200 });
+  };
+  const root = createRoot(document.getElementById('root'));
+  t.after(async () => {
+    await act(async () => root.unmount());
+    dom.window.close();
+    Object.assign(globalThis, previous);
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+  await act(async () => root.render(<ChatGPTPlan userId="conditions-owner-id" />));
+  const availability = [];
+  dom.window.addEventListener('summitsafe:ai-availability-change', (event) => availability.push(event.detail));
+  await act(async () => [...document.querySelectorAll('button')].find((element) => element.textContent === 'Disconnect ChatGPT').click());
+  assert.ok(document.body.textContent.includes('Disconnected ChatGPT.'));
+  assert.equal(document.querySelector('[role="alert"]'), null);
+  // Until the server answers, AI waits for the next poll instead of claiming the ChatGPT plan.
+  assert.equal(availability.length, 1);
+  assert.ok(Object.values(availability[0]).every((available) => available === false));
+});
