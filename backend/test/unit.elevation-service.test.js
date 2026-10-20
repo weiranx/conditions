@@ -27,25 +27,90 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-test('USGS gets 3.5 seconds, not the whole request timeout, and its answer is kept for the week', async () => {
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+};
+
+test('USGS gets the whole request timeout, and its answer is kept for the week', async () => {
   const { fetchObjectiveElevationFt, fetchWithTimeout, usgsCalls, openMeteoCalls } = setup();
 
   await expect(fetchObjectiveElevationFt(46.8523, -121.7603, { headers: {} })).resolves.toEqual(USGS);
-  expect(fetchWithTimeout.mock.calls[0][2]).toBe(3500);
+  expect(fetchWithTimeout.mock.calls[0][2]).toBe(9000);
   expect(openMeteoCalls()).toBe(0);
+  // The hedge timer is cleared once USGS answers, so nothing is left holding the process open.
+  expect(jest.getTimerCount()).toBe(0);
 
   jest.setSystemTime(Date.now() + 6 * DAY);
   await expect(fetchObjectiveElevationFt(46.8523, -121.7603, { headers: {} })).resolves.toEqual(USGS);
   expect(usgsCalls()).toBe(1);
 });
 
-test('a request timeout shorter than that is respected', async () => {
-  const { fetchObjectiveElevationFt, fetchWithTimeout } = setup({ requestTimeoutMs: 2000 });
-  await fetchObjectiveElevationFt(46.8523, -121.7603, {});
-  expect(fetchWithTimeout.mock.calls[0][2]).toBe(2000);
+test('a USGS answer inside the hedge window is used without asking Open-Meteo', async () => {
+  const { fetchObjectiveElevationFt, services, openMeteoCalls } = setup();
+  const usgs = deferred();
+  services.usgs = () => usgs.promise;
+
+  const lookup = fetchObjectiveElevationFt(46.8523, -121.7603, {});
+  await jest.advanceTimersByTimeAsync(1400);
+  usgs.resolve(usgsAnswer());
+  await expect(lookup).resolves.toEqual(USGS);
+  await jest.advanceTimersByTimeAsync(1000);
+  expect(openMeteoCalls()).toBe(0);
 });
 
-test('a slow USGS falls back to Open-Meteo, whose answer is remembered for minutes and not for a week', async () => {
+test('a slow USGS is hedged with Open-Meteo, and its late answer is kept for the next report', async () => {
+  const { fetchObjectiveElevationFt, services, elevationCache, usgsCalls, openMeteoCalls } = setup();
+  const usgs = deferred();
+  services.usgs = () => usgs.promise;
+
+  const lookup = fetchObjectiveElevationFt(46.8523, -121.7603, {});
+  await jest.advanceTimersByTimeAsync(1499);
+  expect(openMeteoCalls()).toBe(0);
+  await jest.advanceTimersByTimeAsync(1);
+  await expect(lookup).resolves.toEqual(OPEN_METEO);
+  expect(openMeteoCalls()).toBe(1);
+
+  // USGS answers after the report went out: the week-long cache gets it and the provisional answer is passed over.
+  usgs.resolve(usgsAnswer());
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(elevationCache.get('46.8523,-121.7603')).toMatchObject({ stale: false, value: USGS });
+  await expect(fetchObjectiveElevationFt(46.8523, -121.7603, {})).resolves.toEqual(USGS);
+  expect([usgsCalls(), openMeteoCalls()]).toEqual([1, 1]);
+});
+
+test('when Open-Meteo fails during the hedge the report waits for USGS', async () => {
+  const { fetchObjectiveElevationFt, services } = setup();
+  const usgs = deferred();
+  services.usgs = () => usgs.promise;
+  services.openMeteo = async () => { throw new Error('offline'); };
+
+  const lookup = fetchObjectiveElevationFt(46.8523, -121.7603, {});
+  await jest.advanceTimersByTimeAsync(3000);
+  usgs.resolve(usgsAnswer());
+  await expect(lookup).resolves.toEqual(USGS);
+});
+
+test('a slow USGS that then fails still counts toward leaving USGS alone', async () => {
+  const { fetchObjectiveElevationFt, services, usgsCalls } = setup();
+  for (const lon of [-121.1, -121.2, -121.3]) {
+    const usgs = deferred();
+    services.usgs = () => usgs.promise;
+    const lookup = fetchObjectiveElevationFt(46.8, lon, {});
+    await jest.advanceTimersByTimeAsync(1500);
+    await expect(lookup).resolves.toEqual(OPEN_METEO);
+    usgs.reject(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }));
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  services.usgs = async () => usgsAnswer();
+  // The breaker is open, so the fourth place goes straight to Open-Meteo without waiting out the hedge.
+  await expect(fetchObjectiveElevationFt(46.8, -121.4, {})).resolves.toEqual(OPEN_METEO);
+  expect(usgsCalls()).toBe(3);
+});
+
+test('a failed USGS falls back to Open-Meteo at once, whose answer is remembered for minutes and not for a week', async () => {
   const { fetchObjectiveElevationFt, services, usgsCalls, openMeteoCalls } = setup();
   services.usgs = timedOut;
 

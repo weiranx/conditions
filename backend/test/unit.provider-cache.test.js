@@ -417,3 +417,164 @@ describe('getOrFetch shouldStore', () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('air quality, alerts and rainfall prefetch and AirNow cache', () => {
+  const HOUR = 60 * 60 * 1000;
+  const hourString = (ms) => new Date(ms).toISOString().slice(0, 13) + ':00';
+  const openMeteoAirQuality = (nowMs) => ({
+    timezone: 'UTC',
+    hourly: {
+      time: [hourString(nowMs), hourString(nowMs + 24 * HOUR)],
+      us_aqi: [30, 40],
+      pm2_5: [5, 6],
+      pm10: [8, 9],
+      ozone: [40, 41],
+    },
+  });
+  const airNowRows = (lat, lon, nowMs) => [{
+    AQI: 72, Latitude: lat, Longitude: lon, UTC: new Date(nowMs - 30 * 60 * 1000).toISOString().slice(0, 16),
+    Parameter: 'PM2.5', FullAQSCode: '000000001', SiteName: 'Test monitor',
+  }];
+  const deferred = () => {
+    let resolve;
+    const promise = new Promise((res) => { resolve = res; });
+    return { promise, resolve };
+  };
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const isAirNow = (url) => String(url).includes('airnowapi.org');
+
+  test('AirNow is asked at the same time as Open-Meteo, not after it', async () => {
+    const lat = 40.1111;
+    const lon = -111.1111;
+    const openMeteo = deferred();
+    const fetchWithTimeout = jest.fn((url) => (isAirNow(url)
+      ? Promise.resolve(okJsonResponse(airNowRows(lat, lon, Date.now())))
+      : openMeteo.promise));
+    const { fetchAirQualityData } = createAlertsService({ fetchWithTimeout, airNowApiKey: 'test-key' });
+
+    const result = fetchAirQualityData(lat, lon, new Date().toISOString(), {});
+    await flush();
+    expect(fetchWithTimeout.mock.calls.map(([url]) => isAirNow(url))).toEqual([true, false]);
+
+    openMeteo.resolve(okJsonResponse(openMeteoAirQuality(Date.now())));
+    await expect(result).resolves.toMatchObject({ usAqi: 72, dataType: 'observed_nowcast', observation: { available: true } });
+  });
+
+  test('AirNow observations are cached per place while each target time still picks its own headline', async () => {
+    const lat = 40.2222;
+    const lon = -111.2222;
+    const fetchWithTimeout = jest.fn(async (url) => okJsonResponse(isAirNow(url)
+      ? airNowRows(lat, lon, Date.now())
+      : openMeteoAirQuality(Date.now())));
+    const { fetchAirQualityData } = createAlertsService({ fetchWithTimeout, airNowApiKey: 'test-key' });
+
+    const now = await fetchAirQualityData(lat, lon, new Date().toISOString(), {});
+    const tomorrow = await fetchAirQualityData(lat, lon, new Date(Date.now() + 24 * HOUR).toISOString(), {});
+
+    expect(fetchWithTimeout.mock.calls.filter(([url]) => isAirNow(url))).toHaveLength(1);
+    expect(now).toMatchObject({ usAqi: 72, dataType: 'observed_nowcast' });
+    expect(tomorrow).toMatchObject({ usAqi: 40, dataType: 'modeled_forecast', observation: { available: true } });
+  });
+
+  test('a failed AirNow request keeps the modeled note and is asked again by the next report', async () => {
+    const lat = 40.3333;
+    const lon = -111.3333;
+    let airNowUp = false;
+    const fetchWithTimeout = jest.fn(async (url) => {
+      if (!isAirNow(url)) return okJsonResponse(openMeteoAirQuality(Date.now()));
+      return airNowUp ? okJsonResponse(airNowRows(lat, lon, Date.now())) : { ok: false, status: 503, json: async () => ({}) };
+    });
+    const { fetchAirQualityData } = createAlertsService({ fetchWithTimeout, airNowApiKey: 'test-key' });
+
+    const failed = await fetchAirQualityData(lat, lon, new Date().toISOString(), {});
+    expect(failed.note).toBe('EPA AirNow observation unavailable; using modeled hourly air quality.');
+    expect(failed.observation).toBeUndefined();
+
+    airNowUp = true;
+    const recovered = await fetchAirQualityData(lat, lon, new Date().toISOString(), {});
+    expect(recovered).toMatchObject({ usAqi: 72, observation: { available: true } });
+    expect(fetchWithTimeout.mock.calls.filter(([url]) => isAirNow(url))).toHaveLength(2);
+  });
+
+  test('past ten minutes the last AirNow answer is served while one refresh runs in the background', async () => {
+    jest.useFakeTimers({ now: Date.now(), doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      const lat = 40.4444;
+      const lon = -111.4444;
+      const refresh = deferred();
+      let airNowCalls = 0;
+      const fetchWithTimeout = jest.fn((url) => {
+        if (!isAirNow(url)) return Promise.resolve(okJsonResponse(openMeteoAirQuality(Date.now())));
+        airNowCalls += 1;
+        return airNowCalls === 1 ? Promise.resolve(okJsonResponse(airNowRows(lat, lon, Date.now()))) : refresh.promise;
+      });
+      const { fetchAirQualityData } = createAlertsService({ fetchWithTimeout, airNowApiKey: 'test-key' });
+      await fetchAirQualityData(lat, lon, new Date().toISOString(), {});
+
+      jest.setSystemTime(Date.now() + 15 * 60 * 1000);
+      // The refresh never answers within this report, which still gets the earlier observation.
+      await expect(fetchAirQualityData(lat, lon, new Date().toISOString(), {})).resolves.toMatchObject({ observation: { available: true } });
+      expect(airNowCalls).toBe(2);
+      refresh.resolve(okJsonResponse([]));
+      await flush();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('an air quality prefetch is joined by the report, which asks each provider once', async () => {
+    const lat = 40.5555;
+    const lon = -111.5555;
+    const fetchWithTimeout = jest.fn(async (url) => okJsonResponse(isAirNow(url)
+      ? airNowRows(lat, lon, Date.now())
+      : openMeteoAirQuality(Date.now())));
+    const { fetchAirQualityData, prefetchAirQuality } = createAlertsService({ fetchWithTimeout, airNowApiKey: 'test-key' });
+
+    prefetchAirQuality({ lat, lon, fetchOptions: {} });
+    await flush();
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2);
+    await expect(fetchAirQualityData(lat, lon, new Date().toISOString(), {})).resolves.toMatchObject({ usAqi: 72 });
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2);
+  });
+
+  test('a failed prefetch is retried by the report rather than left unhandled', async () => {
+    const lat = 40.6666;
+    const lon = -111.6666;
+    let up = false;
+    const fetchWithTimeout = jest.fn(async () => (up ? okJsonResponse({ features: [] }) : { ok: false, status: 500, json: async () => ({}) }));
+    const { fetchWeatherAlertsData, prefetchWeatherAlerts } = createAlertsService({ fetchWithTimeout });
+
+    prefetchWeatherAlerts({ lat, lon, fetchOptions: {} });
+    await flush();
+    up = true;
+    await expect(fetchWeatherAlertsData(lat, lon, {}, null)).resolves.toMatchObject({ status: 'none' });
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2);
+  });
+
+  test('an alerts prefetch in flight is joined by the report', async () => {
+    const answer = deferred();
+    const fetchWithTimeout = jest.fn(() => answer.promise);
+    const { fetchWeatherAlertsData, prefetchWeatherAlerts } = createAlertsService({ fetchWithTimeout });
+
+    prefetchWeatherAlerts({ lat: 40.7777, lon: -111.7777, fetchOptions: {} });
+    await flush();
+    const report = fetchWeatherAlertsData(40.7777, -111.7777, {}, null);
+    answer.resolve(okJsonResponse({ features: [] }));
+    await expect(report).resolves.toMatchObject({ status: 'none' });
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  test('a rainfall prefetch is joined by the report, which still reads as a fresh fetch', async () => {
+    const fetchWithTimeout = jest.fn(async () => okJsonResponse(precipitationPayload));
+    const { fetchRecentRainfallData, prefetchRecentRainfall } = createPrecipitationService({ fetchWithTimeout, requestTimeoutMs: 100 });
+
+    prefetchRecentRainfall({ lat: 46.1111, lon: -121.1111, fetchOptions: {} });
+    await flush();
+    const first = await fetchRecentRainfallData(46.1111, -121.1111, '2026-07-10T00:00:00Z', 1, {});
+    const second = await fetchRecentRainfallData(46.1111, -121.1111, '2026-07-10T01:00:00Z', 1, {});
+
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+    expect(first.source).toBe('Open-Meteo Precipitation History (Rain + Snowfall)');
+    expect(second.source).toBe('Open-Meteo Precipitation History (Rain + Snowfall, cached)');
+  });
+});

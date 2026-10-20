@@ -15,6 +15,22 @@ jest.mock('../src/utils/fire-risk', () => {
   return { ...actual, buildFireRiskData: jest.fn(actual.buildFireRiskData) };
 });
 
+// The avalanche relevance service is the real one; only its `decide` is wrapped so a test can see when the
+// handler starts the decision.
+jest.mock('../src/utils/avalanche-ai-relevance', () => {
+  const actual = jest.requireActual('../src/utils/avalanche-ai-relevance');
+  const mockDecide = jest.fn();
+  return {
+    ...actual,
+    mockDecide,
+    createAvalancheAiRelevance: (options) => {
+      const service = actual.createAvalancheAiRelevance(options);
+      mockDecide.mockImplementation(service.decide);
+      return { ...service, decide: mockDecide };
+    },
+  };
+});
+
 const { buildOpenMeteoWeatherApiUrl } = require('../src/utils/weather-data');
 
 const FORECAST_DATE = '2026-07-15';
@@ -53,10 +69,17 @@ const jsonResponse = (status, body) => ({
 const notFoundResponse = () => jsonResponse(404, { error: 'not found' });
 
 let hourlyForecastGate = null;
+// Lets one test answer or hold a particular upstream; returning nothing falls through to the defaults below.
+let upstreamOverride = null;
 
 const buildFetchMock = () =>
   jest.fn(async (url) => {
     const u = String(url);
+
+    if (upstreamOverride) {
+      const overridden = await upstreamOverride(u);
+      if (overridden) return overridden;
+    }
 
     if (u.includes('api.weather.gov/points/')) {
       return jsonResponse(200, {
@@ -162,6 +185,53 @@ describe('/api/safety response payload (mocked upstreams)', () => {
 
     const res = await responsePromise;
     expect(res.status).toBe(200);
+  }, 20000);
+
+  test('GET /api/safety starts the avalanche relevance decision before air quality has answered', async () => {
+    const { mockDecide } = require('../src/utils/avalanche-ai-relevance');
+    let releaseAirQuality;
+    const airQualityGate = new Promise((resolve) => {
+      releaseAirQuality = resolve;
+    });
+    upstreamOverride = async (url) => {
+      if (url.includes('air-quality-api.open-meteo.com')) {
+        await airQualityGate;
+        return notFoundResponse();
+      }
+      if (url.includes('past_days=3')) {
+        return jsonResponse(200, {
+          timezone: 'UTC',
+          hourly: { time: ['2026-07-15T00:00', '2026-07-15T01:00'], precipitation: [0, 0], rain: [0, 0], snowfall: [0, 0] },
+        });
+      }
+      return null;
+    };
+    const decisionsBefore = mockDecide.mock.calls.length;
+
+    const responsePromise = Promise.resolve(
+      request(app).get(`/api/safety?lat=47.1000&lon=-121.5000&date=${FORECAST_DATE}&start=08:00`),
+    );
+    try {
+      for (let attempt = 0; attempt < 400 && mockDecide.mock.calls.length === decisionsBefore; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      // Air quality is still held, yet the decision has its inputs and is under way.
+      expect(mockDecide.mock.calls.length).toBe(decisionsBefore + 1);
+      expect(mockDecide.mock.calls.at(-1)[0]).toMatchObject({ lat: 47.1, lon: -121.5, selectedDate: FORECAST_DATE });
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('air-quality-api.open-meteo.com'))).toBe(true);
+    } finally {
+      upstreamOverride = null;
+      releaseAirQuality();
+    }
+
+    const res = await responsePromise;
+    expect(res.status).toBe(200);
+    expect(res.body.avalanche).toHaveProperty('relevant');
+    const timing = Object.fromEntries(res.headers['server-timing'].split(', ').map((entry) => {
+      const [name, duration] = entry.split(';dur=');
+      return [name, Number(duration)];
+    }));
+    expect(timing.avalancheRelevance).toBeLessThan(timing.airQuality);
   }, 20000);
 
   test('GET /api/safety with ai=off reports every AI capability off', async () => {
