@@ -10,8 +10,11 @@ bootstrap.window.close();
 delete globalThis.window;
 delete globalThis.document;
 import { ChatGPTPlan } from '../src/field/ChatGPTPlan';
+import { useAiAvailability, useAIBillingSource } from '../src/hooks/useAiAvailability';
+import { AccountContext } from '../src/contexts/account';
 
-test('browser-only ChatGPT setup can sign in, cancel, choose a model, and disconnect', async (t) => {
+for (const serverAvailable of [true, false]) {
+test(`ChatGPT disconnect switches to server AI and respects server availability: ${serverAvailable}`, async (t) => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://conditions.example.com/' });
   const previous = { window: globalThis.window, document: globalThis.document, localStorage: globalThis.localStorage, fetch: globalThis.fetch, CustomEvent: globalThis.CustomEvent };
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, CustomEvent: dom.window.CustomEvent, IS_REACT_ACT_ENVIRONMENT: true });
@@ -27,13 +30,22 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
     else if (pathname.endsWith('/signin/start')) payload = { signIn };
     else if (pathname.endsWith('/signin/cancel')) payload = { canceled: true };
     else if (pathname.endsWith('/signin/complete')) payload = connection = { enabled: true, connected: true, state: 'connected', email: 'me@example.com', model: null };
-    else if (pathname === '/api/healthz') payload = { ai: { available: true, billingSource: 'chatgpt' } };
+    else if (pathname === '/api/healthz') payload = { ai: connection.connected
+      ? { available: true, billingSource: 'chatgpt', accountUserId: 'conditions-owner-id' }
+      : { available: serverAvailable, features: { routeAnalysis: { available: false } } } };
     else if (pathname === '/api/account/chatgpt/models') payload = { models: [{ id: 'account-model', name: 'My model' }] };
     else if (pathname === '/api/account/chatgpt/model') payload = connection = { ...connection, model: JSON.parse(init.body).model };
     else if (pathname === '/api/account/chatgpt/disconnect') payload = connection = { enabled: true, connected: false, state: 'disconnected', revoked: false, message: 'Disconnected locally. Remote revocation was not confirmed.' };
     else throw new Error(`Unexpected request: ${pathname}`);
     return new Response(JSON.stringify(payload), { status: 200 });
   };
+  let availability;
+  let billingSource;
+  function Consumer() {
+    availability = useAiAvailability();
+    billingSource = useAIBillingSource();
+    return null;
+  }
   const root = createRoot(document.getElementById('root'));
   t.after(async () => {
     await act(async () => root.unmount());
@@ -46,7 +58,9 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
     assert.ok(button, `Missing button: ${text}`);
     button.click();
   });
-  await act(async () => root.render(<ChatGPTPlan userId="conditions-owner-id" />));
+  await act(async () => root.render(<AccountContext.Provider value={{ user: { id: 'conditions-owner-id' } }}>
+    <ChatGPTPlan userId="conditions-owner-id" /><Consumer />
+  </AccountContext.Provider>));
   assert.ok(!document.body.textContent.includes('npm run'));
   await press('Continue with ChatGPT');
   assert.ok(document.querySelector('a[href="' + signIn.authorizationUrl + '"]'));
@@ -67,8 +81,12 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
   assert.equal(document.querySelector('textarea'), null);
   assert.ok(!JSON.stringify(localStorage).includes('private-code'));
   assert.ok(document.body.textContent.includes('You’re using your ChatGPT plan'));
-  await press('Got it');
-  assert.equal(localStorage.getItem('conditions:chatgpt-welcome:conditions-owner-id'), 'seen');
+  assert.equal(billingSource, 'chatgpt');
+  assert.equal(availability.aiBrief, true);
+  if (serverAvailable) {
+    await press('Got it');
+    assert.equal(localStorage.getItem('conditions:chatgpt-welcome:conditions-owner-id'), 'seen');
+  }
   await press('Load available models');
   await act(async () => {
     const select = document.querySelector('select');
@@ -77,7 +95,12 @@ test('browser-only ChatGPT setup can sign in, cancel, choose a model, and discon
   });
   assert.equal(connection.model, 'account-model');
   await press('Disconnect ChatGPT');
+  assert.equal(billingSource, 'api');
+  assert.equal(availability.aiBrief, serverAvailable);
+  assert.equal(availability.routeAnalysis, false);
+  assert.ok(!document.body.textContent.includes('You’re using your ChatGPT plan'));
   assert.ok(document.body.textContent.includes('Remote revocation was not confirmed'));
   assert.equal(requests.filter((request) => request.pathname.endsWith('/disconnect')).length, 1);
   assert.ok(document.querySelector('a[href="https://chatgpt.com/settings/usage"]'));
 });
+}

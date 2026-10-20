@@ -7,7 +7,7 @@ const { registerChatGPTRoutes } = require('../src/routes/chatgpt');
 
 const owner = { id: '00000000-0000-4000-8000-000000000002', email: 'owner@example.com' };
 const other = { id: '00000000-0000-4000-8000-000000000003', email: 'other@example.com' };
-const onlyOwner = (service = { hasRegistration: () => true }) => ({ isEnabled: () => true, serviceForUser: (id) => id === owner.id ? service : null });
+const onlyOwner = (service = { hasRegistration: () => true, status: () => ({ state: 'connected' }) }) => ({ isEnabled: () => true, serviceForUser: (id) => id === owner.id ? service : null });
 const accountService = { available: true, getUserForSession: async (token) => token === 'owner' ? owner : token === 'other' ? other : null };
 
 test('only the owner foreground browser request receives a plan context; parallel callers remain isolated', async () => {
@@ -112,8 +112,66 @@ test('default-enabled accounts can connect without configuration while untouched
       value.registrations.push({ client_id: 'oaiapp_connected' });
       value.activeClientId = 'oaiapp_connected';
     });
-    // A retained registration, including a disconnected one, never opts back into API billing.
-    expect((await request(app).get('/api/safety').set('Cookie', 'bc_session=owner')).body.userId).toBe(owner.id);
+    // Earlier disconnects retained a registration without tokens; these accounts also use server AI.
+    expect((await request(app).get('/api/safety').set('Cookie', 'bc_session=owner')).body.userId).toBeNull();
     expect((await request(app).get('/api/safety').set('Cookie', 'bc_session=other')).body.userId).toBeNull();
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test.each(['connected', 'permission_required', 'reauthentication_required', 'unavailable'])(
+  '%s connections do not silently switch to server billing', async (state) => {
+    const app = express();
+    const service = { hasRegistration: () => true, status: () => ({ state }) };
+    app.use(createChatGPTMiddleware({ getAccountService: () => accountService, accounts: onlyOwner(service) }));
+    app.get('/api/healthz', (_req, res) => res.json({ userId: currentChatGPT()?.userId || null }));
+    expect((await request(app).get('/api/healthz').set('Cookie', 'bc_session=owner')).body.userId).toBe(owner.id);
+  },
+);
+
+test.each([true, false])('disconnect restores server AI and spend checks (remote revocation: %s)', async (revoked) => {
+  const fs = require('node:fs');
+  const directory = fs.mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'chatgpt-disconnect-'));
+  try {
+    const { createChatGPTAccounts } = require('../src/auth/chatgpt-accounts');
+    const { ChatGPTStore } = require('../src/auth/chatgpt-store');
+    const { createChatGPTService } = require('../src/auth/chatgpt');
+    const fetcher = jest.fn(async () => {
+      if (!revoked) throw new Error('offline');
+      return { ok: true, status: 200, json: async () => ({ revocation_endpoint: 'https://auth.openai.com/revoke' }) };
+    });
+    const store = new ChatGPTStore(directory);
+    const accounts = createChatGPTAccounts({ env: {}, store,
+      createService: (options) => createChatGPTService({ ...options, fetcher }) });
+    for (const user of [owner, other]) {
+      await accounts.serviceForUser(user.id).store.update((value) => {
+        value.activeClientId = `oaiapp_${user.id}`;
+        value.registrations.push({ client_id: value.activeClientId, access_token: `access-${user.id}`,
+          refresh_token: `refresh-${user.id}`, scopes: ['resource.invoke', 'chatgpt.tokens.use.direct'] });
+      });
+    }
+    const usageService = { available: true, assertUserCanGenerate: jest.fn(async () => ({ exhausted: false })) };
+    const guard = createAccountAccessGuard({ service: accountService, usageService });
+    const app = express();
+    app.use(createChatGPTMiddleware({ getAccountService: () => accountService, accounts }));
+    app.get('/api/healthz', (_req, res) => res.json({ userId: currentChatGPT()?.userId || null }));
+    app.post('/api/ai-brief', async (req, res) => {
+      if (await guard(req, res)) res.json({ billingSource: currentChatGPT() ? 'chatgpt' : 'api' });
+    });
+    registerChatGPTRoutes({ app, accountService, accounts, allowedOrigins: ['https://conditions.example.com'] });
+    expect((await request(app).post('/api/ai-brief').set('Cookie', 'bc_session=owner')).body.billingSource).toBe('chatgpt');
+    expect(usageService.assertUserCanGenerate).not.toHaveBeenCalled();
+    const result = await request(app).post('/api/account/chatgpt/disconnect').set('Cookie', 'bc_session=owner')
+      .set('Origin', 'https://conditions.example.com');
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ state: 'disconnected', revoked });
+    expect(result.body.message).toContain('configured server provider');
+    expect((await request(app).get('/api/healthz').set('Cookie', 'bc_session=owner')).body.userId).toBeNull();
+    expect((await request(app).post('/api/ai-brief').set('Cookie', 'bc_session=owner')).body.billingSource).toBe('api');
+    expect(usageService.assertUserCanGenerate).toHaveBeenCalledWith(owner.id, 'free');
+    expect((await request(app).get('/api/healthz').set('Cookie', 'bc_session=other')).body.userId).toBe(other.id);
+    // Recreating services from disk preserves the switch without deleting saved registrations.
+    const restored = createChatGPTAccounts({ env: {}, store: new ChatGPTStore(directory) }).serviceForUser(owner.id);
+    expect(restored.hasRegistration()).toBe(true);
+    expect(restored.status().state).toBe('disconnected');
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

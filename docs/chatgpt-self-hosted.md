@@ -31,7 +31,7 @@ Outbound HTTPS to `auth.openai.com` and `api.openai.com` is required. Serve Cond
 
 An optional installation-wide `CHATGPT_ENABLED=false` setting disables connection access for all accounts. Restart/recreate the backend when changing this setting. The old `CHATGPT_ACCOUNT_USER_IDS` list is no longer used and can be removed.
 
-Accounts that have never connected ChatGPT retain their existing server-provider behavior. Once an account has connected, a disconnected, expired, or failed connection does not fall back to separately billed API providers.
+Accounts that have never connected ChatGPT, and accounts that explicitly disconnected it, use the configured server provider and normal Conditions API allowance. Retained registrations from earlier disconnects also use the server provider. Expired credentials, missing permissions, usage limits, and connection failures do not automatically fall back to separately billed API providers; choose **Disconnect ChatGPT** to switch back to server AI.
 
 ## Choose a model and use AI
 
@@ -45,7 +45,7 @@ Your ChatGPT limits apply. Usage records use provider `chatgpt` and zero Platfor
 
 Choose **Continue with ChatGPT** to reconnect the selected saved registration. Choose **Use another ChatGPT account** to create a separate registration, then complete the same browser flow. When multiple registrations are saved, **Saved ChatGPT account** switches the active connection within the current Conditions account. Client IDs, verified identities, model choices, and credentials remain separate.
 
-**Disconnect ChatGPT** attempts to revoke the renewable session and clears local access, refresh, and ID tokens. It retains the account/client mapping and host ID. If remote revocation cannot be confirmed, the UI says so; disconnect Conditions in ChatGPT settings too. Disconnecting one Conditions account leaves your other accounts connected and does not enable API-key fallback for the disconnected account. Generated AI caches are scoped by Conditions account, ChatGPT registration, and selected model.
+**Disconnect ChatGPT** attempts to revoke the renewable session and clears local access, refresh, and ID tokens. It retains the account/client mapping and host ID. If remote revocation cannot be confirmed, the UI says so; disconnect Conditions in ChatGPT settings too. Your requests switch back to the configured server provider, subject to its availability, enabled features, and your Conditions API allowance. Disconnecting one Conditions account leaves your other accounts connected. Generated AI caches are scoped by Conditions account, ChatGPT registration, and selected model.
 
 Refreshes are serialized with a filesystem lock and committed atomically. If a process crashes while holding `CHATGPT_AUTH_DIR/.lock`, stop all backend/CLI processes using the store before removing the stale lock directory and restarting. A busy lock is never automatically stolen.
 

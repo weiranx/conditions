@@ -201,13 +201,18 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
           <div>
             <button className="field-button" disabled={busy} onClick={() => void refresh()}>Refresh connection</button>{" "}
             {(connection.connected || connection.state === "permission_required" || connection.state === "reauthentication_required") && <button className="field-button" disabled={busy} onClick={() => {
-              void act("/api/account/chatgpt/disconnect", { method: "POST" }).then((payload) => {
+              void act("/api/account/chatgpt/disconnect", { method: "POST" }).then(async (payload) => {
                 setConnection(payload as Connection);
                 setModels([]);
                 setSignIn(null);
                 setCallbackUrl('');
+                setWelcome(false);
                 setMessage((payload as { message: string }).message);
-                publishAiAvailability({ available: false, billingSource: "chatgpt", accountUserId: userId });
+                publishAiAvailability({ available: false, billingSource: "api" });
+                try {
+                  const health = await fetchApi('/api/healthz', undefined, { retries: 0 });
+                  if (health.response.ok) publishAiAvailability((health.payload as { ai: Parameters<typeof publishAiAvailability>[0] }).ai);
+                } catch { /* The shared availability poll retries if the health check is unreachable. */ }
               }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not disconnect ChatGPT."));
             }}>Disconnect ChatGPT</button>}
           </div>
@@ -219,6 +224,7 @@ export function ChatGPTPlan({ userId }: { userId: string }) {
           <p>Choose Continue with ChatGPT, approve access in the new tab, then paste its return address here. Conditions verifies the sign-in and keeps the connection securely on your personal server. No terminal, API key, or credential-file transfer is needed.</p>
           <p>Each Conditions account has its own ChatGPT connections and model selection. Sign-in alone does not authorize plan usage; approve that permission separately in ChatGPT. Connecting does not grant access to your ChatGPT conversations.</p>
           <p>This connection powers your foreground requests only. Automatic watch summaries use the separately configured server provider.</p>
+          <p>Disconnecting ChatGPT switches AI requests back to the configured server provider and your Conditions API allowance.</p>
         </details>
         {error && <p className="sky-notice is-caution" role="alert">{error}</p>}
         {message && <p role="status">{message}</p>}

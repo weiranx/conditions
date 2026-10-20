@@ -104,8 +104,8 @@ const registerChatGPTRoutes = ({ app, accountService, accounts = chatGPTAccounts
     pending.delete(transactionKey(req, user));
     const result = await service.disconnect();
     res.json({ enabled: true, ...result, message: result.revoked
-      ? 'Disconnected ChatGPT.'
-      : 'Disconnected locally. Remote revocation was not confirmed; remove Conditions in ChatGPT settings.' });
+      ? 'Disconnected ChatGPT. AI requests now use the configured server provider and Conditions API allowance.'
+      : 'Disconnected locally. AI requests now use the configured server provider and Conditions API allowance. Remote revocation was not confirmed; remove Conditions in ChatGPT settings.' });
   }));
 };
 
