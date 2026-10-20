@@ -1,7 +1,6 @@
 /* The report's AI read: it leads the brief, so it sits on the page like the
-   checks below it rather than as a panel tucked under More. */
-.ai-read,
-.ai-chapter-note {
+   checks below it. */
+.ai-read {
   --ai-label: var(--sky-label, var(--f-ink));
   --ai-secondary: var(--sky-secondary, var(--f-muted));
   --ai-fill: var(--sky-fill, var(--f-wash));
@@ -285,25 +284,6 @@
 .ai-read-questions button:focus-visible {
   outline: 3px solid var(--ai-accent);
   outline-offset: 2px;
-}
-.ai-chapter-note {
-  display: grid;
-  gap: 6px;
-  margin: 12px 0 18px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--ai-accent) 7%, var(--sky-surface, var(--f-paper)));
-  box-shadow: inset 4px 0 0 var(--ai-accent);
-}
-.ai-chapter-note p {
-  margin: 0;
-  max-width: 72ch;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--ai-label);
-}
-.ai-chapter-note .sky-link {
-  justify-self: start;
 }
 @media (max-width: 600px) {
   .ai-read {

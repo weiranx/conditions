@@ -18,14 +18,15 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import { GearActions } from "./GearActions";
+import { GearActions, GearLead } from "./GearActions";
 import { ReportInsights } from "./ReportInsights";
 import "./report-reading.css";
 import "./report-navigation.css";
-import { AiChapterNote, AiRead } from "./AiRead";
+import { AiRead } from "./AiRead";
+import { AiLead, SourcesLead, TerrainLead, TimingLead } from "./chapter-leads";
 import { ForecastDiscussion } from "./ForecastDiscussion";
 import { starterQuestions, suggestedQuestions } from "./ai-explanation";
-import { isOutdatedRead, shownAiHero } from "../app/ai-evidence";
+import { aiChapterText, isOutdatedRead, shownAiHero } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
 import { ApproachNote } from "./sky/ApproachNote";
 import { summarizePlannedRoute } from "./route-planning";
@@ -58,7 +59,7 @@ import {
 } from "../app/report-sections";
 import { useWhere } from "../hooks/useWhere";
 import { ageLabel, dateLabel } from "./data";
-import { Forecast } from "./Forecast";
+import { Forecast, ForecastLead } from "./Forecast";
 import { Conditions } from "./Conditions";
 const Timing = lazy(() =>
   import("./Timing").then((m) => ({ default: m.Timing })),
@@ -262,7 +263,7 @@ export function Report({
     // A printed report holds every section, with its warnings and the AI read's detail open.
     const all = () => {
       flushSync(() => setMounted(new Set(chapters.map((c) => c.id))));
-      topRef.current?.querySelectorAll<HTMLDetailsElement>("details.sky-notice-fold, details.ai-read-fold").forEach((fold) => { fold.open = true; });
+      topRef.current?.querySelectorAll<HTMLDetailsElement>("details.sky-notice-fold, details.ai-read-fold, details.supplemental-source, details.sky-check-passed").forEach((fold) => { fold.open = true; });
     };
     window.addEventListener("beforeprint", all);
     return () => window.removeEventListener("beforeprint", all);
@@ -273,7 +274,7 @@ export function Report({
   // once per report and plan, unless the reader turned that off.
   const autoReadKey = useRef<string | null>(null);
   const readKey = `${data.generatedAt ?? ""}|${JSON.stringify(evaluation.params ?? null)}`;
-  // An admin switch: off, the read sits under More and is written only on request.
+  // An admin switch: off, the read sits at the end of Checks & sources and is written only on request.
   const aiFirst = ai.aiReport;
   // Under AI-first the AI writes the report's opening; the badge and the checks
   // beside it still come from the evaluation.
@@ -594,9 +595,10 @@ export function Report({
   const chapterContent = (id: Chapter) => {
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
-        <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
+        <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} lead={false} />
         {aiEnabled && (
           <ForecastDiscussion
+            folded
             report={data}
             objectiveName={report.plan.objectiveName}
             units={{ temperature: w.preferences.temperatureUnit, wind: w.preferences.windSpeedUnit, elevation: w.preferences.elevationUnit }}
@@ -621,8 +623,21 @@ export function Report({
         onSources={() => go("sources")}
         activityLabel={data.forecast?.activity ? activity.label : null}
         localize={w.localizeUnitText}
+        lead={false}
       />
     );
+    return null;
+  };
+  // Each chapter opens with one lead, in its heading so it shows before the chapter loads:
+  // under AI-first the AI's analysis of the chapter when it wrote one, otherwise the checks' sentence.
+  const chapterLead = (id: Chapter) => {
+    const text = aiFirst ? aiChapterText(w.aiBriefNarrative, w.aiBriefDetails, id) : null;
+    if (text) return <AiLead text={text} onReadAll={toAiRead} />;
+    if (id === "forecast") return <ForecastLead report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />;
+    if (id === "timing") return <TimingLead workspace={w} hours={skyHours} />;
+    if (id === "terrain") return <TerrainLead workspace={w} />;
+    if (id === "sources") return <SourcesLead workspace={w} />;
+    if (id === "gear" && flags.gearRecommendations) return <GearLead decision={decision} actionLine={w.decisionActionLine} />;
     return null;
   };
   const showChat = aiEnabled && (ai.reportChat || w.reportChatMessages.length > 0);
@@ -667,7 +682,7 @@ export function Report({
   // A read the reader can write or ask about; under AI-first it leads the brief instead.
   const aiReadShown = aiEnabled && Boolean(w.aiBriefNarrative || ((ai.aiBrief || ai.reportChat) && !w.viewingHistoryReport));
   const insights = insightCounts(data);
-  // Reference that once sat under More: the end of Checks & sources, each folded.
+  // Reference at the end of Checks & sources, each folded.
   const sourcesMore = (
     <>
       {!aiFirst && (aiReadShown || showChat) && (
@@ -762,15 +777,7 @@ export function Report({
                     </ul>
                   )}
                 </header>
-                {aiFirst && (
-                  <AiChapterNote
-                    narrative={w.aiBriefNarrative}
-                    details={w.aiBriefDetails}
-                    chapter={c.id}
-                    onReadAll={toAiRead}
-                    onOpen={(chapter) => go(chapter)}
-                  />
-                )}
+                {chapterLead(c.id)}
                 <DeferredSection id={c.id} mounted={ready} onNear={mount}>
                   <Suspense fallback={<p className="field-loading sky-section-loading" role="status">Loading {c.label.toLowerCase()}…</p>}>
                     {chapterContent(c.id)}

@@ -1,5 +1,5 @@
 import { SurfacePrediction } from "./SurfacePrediction";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import type { AvalancheProblem } from "../app/types";
@@ -172,6 +172,20 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
 
 const AVALANCHE_SCALE = ["Low", "Moderate", "Considerable", "High", "Extreme"];
 
+/** The avalanche outlook: open when it bears on the plan, otherwise a fold that says why it waits. */
+function AvalancheOutlook({ open, hint, note, children }: { open: boolean; hint?: string; note: string; children: ReactNode }) {
+  if (!open) return <Fold id="sky-terrain-avalanche" title="Avalanche outlook" hint={hint ?? note}>{children}</Fold>;
+  return (
+    <section className="sky-section" aria-labelledby="sky-terrain-avalanche">
+      <div className="sky-sh">
+        <h2 id="sky-terrain-avalanche" className="sky-subhead">Avalanche outlook</h2>
+        <p>{note}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: SkyHour[] }) {
   const data = w.safetyData!;
   const flags = resolveReportFeatureFlags(data.featureFlags);
@@ -220,30 +234,23 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
     const values = (Array.isArray(size) ? size : size === undefined || size === null || size === "" ? [] : [size]).map((value) => String(value).replace(/^D/i, ""));
     return values.length ? `D${[...new Set([values[0], values[values.length - 1]])].join("–D")}` : null;
   };
+  // Closed, the fold names the surface and where the approach starts.
+  const approachHint = [
+    surface ? `Surface ${surface.toLowerCase()}` : "Surface not assessed",
+    approach ? `start ${w.formatElevationDisplay(Math.round(approach.trailheadElevationFt / 100) * 100)}${approachHours > 0 ? `, ${approachHours} h judged on the way up` : ""}` : null,
+    flags.windLoadingDetails && w.windLoadingApplies ? `wind loading ${String(w.windLoadingLevel).toLowerCase()}` : null,
+  ].filter(Boolean).join(" · ");
+  // The outlook is open when it bears on the plan; otherwise it waits, saying why.
+  const avalancheOpen = avalanche.relevant || (avalancheLevel ?? 0) >= 1;
   const snowDepth = data.snowpack?.snotel?.snowDepthIn == null
     ? "Unavailable"
     : formatSnowDepthForElevationUnit(data.snowpack.snotel.snowDepthIn, w.preferences.elevationUnit);
   return (
     <div className="sky-terrain">
-      <p className="sky-lead">
-        {objectiveFt !== null ? <>Your objective at <strong>{w.formatElevationDisplay(objectiveFt)}</strong> is </> : <>The surface is </>}
-        <strong className={status === "over" ? "is-over" : status === "missing" ? "is-missing" : undefined}>
-          {surface ? surface.toLowerCase() : "not assessed"}
-        </strong>.
-        {levels.length > 0 && (
-          <> {levels.map((l, i) => (
-            <span key={l.label}>{i > 0 ? "; " : ""}{i > 0 ? l.label.toLowerCase() : l.label} near{" "}
-              <strong className={l.tone === "cold" && objectiveFt !== null && l.ft <= objectiveFt ? "is-cold" : undefined}>{w.formatElevationDisplay(l.ft)}</strong>
-            </span>
-          ))}{levels.some((l) => l.tone === "cold" && objectiveFt !== null && l.ft <= objectiveFt) ? ", below your objective" : ""}.</>
-        )}{" "}
-        <span className="sky-lead-note">{terrainCondition.summary}</span>
-      </p>
-
       {flags.elevationForecast && (
         <section className="sky-section" aria-labelledby="sky-terrain-mountain">
           <div className="sky-sh">
-            <h2 id="sky-terrain-mountain">
+            <h2 id="sky-terrain-mountain" className="sky-subhead">
               {selectedHour ? <>The mountain at {hourLabel(selectedHour)}</> : "The mountain at your start"}
             </h2>
             <p>Forecast by elevation. Heights are to scale; the ridge is illustrative.</p>
@@ -312,12 +319,9 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
         </section>
       )}
 
-      <section className="sky-section" aria-labelledby="sky-terrain-approach">
-        <div className="sky-sh">
-          <h2 id="sky-terrain-approach">Your approach</h2>
-          <p>Early hours are checked where you are, not at the objective.</p>
-        </div>
-        <div className="sky-card">
+      <Fold id="sky-terrain-approach" title="Approach and surface" hint={approachHint}>
+        <section className="sky-card is-secondary" aria-labelledby="sky-terrain-approach-head">
+          <span className="sky-card-head"><span id="sky-terrain-approach-head">Your approach</span></span>
           <div className="sky-elevation-check">
             <label>
               <span>{capitalize(w.objectiveTerms.start)} elevation ({w.elevationUnitLabel})</span>
@@ -348,11 +352,10 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                   ? ` Clear, calm conditions make a valley inversion likely for ${inversionHours} approach hour${inversionHours === 1 ? "" : "s"}: those hours are treated as colder, not warmer, than the objective.`
                   : ""}`}
           </p>
-        </div>
-      </section>
+        </section>
 
-      <div className="sky-duo sky-section">
-        <section className="sky-card field-terrain-overview" aria-labelledby="sky-terrain-surface">
+      <div className="sky-duo">
+        <section className="sky-card is-secondary field-terrain-overview" aria-labelledby="sky-terrain-surface">
           <span className="sky-card-head">
             <span id="sky-terrain-surface">Surface</span>
             <StatusTag status={status}>{surface || "Not assessed"}</StatusTag>
@@ -378,7 +381,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
           />
         </section>
         {flags.windLoadingDetails && w.windLoadingApplies && (
-          <section className="sky-card" aria-labelledby="sky-terrain-wind">
+          <section className="sky-card is-secondary" aria-labelledby="sky-terrain-wind">
             <span className="sky-card-head">
               <span id="sky-terrain-wind">Wind loading</span>
               <span className="sky-chip">{w.windLoadingLevel} · {w.windLoadingConfidence}</span>
@@ -402,16 +405,14 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
           </section>
         )}
       </div>
+      </Fold>
 
       {flags.terrainWindow && <TerrainWindow workspace={w} />}
 
       {flags.avalancheDetails && (
-        <section className="sky-section" aria-labelledby="sky-terrain-avalanche">
-          <div className="sky-sh">
-            <h2 id="sky-terrain-avalanche">Avalanche outlook</h2>
-            <p>Regional bulletin{data.avalanche?.center ? ` · ${data.avalanche.center}` : ""}</p>
-          </div>
-          <div className="sky-card">
+        <AvalancheOutlook open={avalancheOpen} hint={avalanche.relevant ? undefined : "Not relevant for this plan"}
+          note={`Regional bulletin${data.avalanche?.center ? ` · ${data.avalanche.center}` : ""}`}>
+          <div className={`sky-card${avalancheOpen ? "" : " is-secondary"}`}>
             {avalanche.relevant ? (
               <>
                 <div className="sky-danger" role="img"
@@ -488,12 +489,12 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
               ]}
             />
           </div>
-        </section>
+        </AvalancheOutlook>
       )}
 
       {flags.snowpackDetails && (
         <Fold id="sky-terrain-snow" title="Snow observations" hint="Stations, models and satellite.">
-          <div className="sky-card">
+          <div className="sky-card is-secondary">
             <span className="sky-card-head"><span>{snowpack.interpretation?.headline || "Snowpack assessment"}</span></span>
             {snowpack.depthConflict && (
               <p className="sky-notice is-caution">
@@ -596,14 +597,15 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
       )}
 
       {aiEnabled && flags.satelliteImagery && flags.snowpackDetails && (
+        <Fold id="sky-terrain-satellite" title="Satellite snow imagery"
+          hint={w.snowVisionAnalysis ? "AI read of recent Sentinel-2 imagery" : "AI read of recent imagery, on request"}>
         <section
-          className="sky-card sky-section ai-panel"
-          aria-labelledby="sky-terrain-satellite"
+          className="sky-card is-secondary ai-panel"
+          aria-label="Satellite snow imagery"
           aria-busy={w.snowVisionLoading}
         >
           <div className="ai-panel-head">
             <span className="sky-card-head">
-              <span id="sky-terrain-satellite">Satellite snow imagery</span>
               <span className="ai-panel-badge"><Sparkles size={11} aria-hidden="true" />AI</span>
             </span>
             {w.snowVisionAnalysis && !w.viewingHistoryReport ? (
@@ -667,14 +669,14 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
             </p>
           )}
         </section>
+        </Fold>
       )}
 
-      <details className="sky-card sky-section sky-map-card report-map-disclosure">
-        <summary><Mountain size={18} aria-hidden="true" /> Explore the terrain map</summary>
+      <Fold id="sky-terrain-map" title={<><Mountain size={14} aria-hidden="true" />Terrain map</>} hint="Explore the slopes around your objective" className="report-map-disclosure">
         <Suspense fallback={<div className="field-map-loading">Loading terrain…</div>}>
           <FieldMap plan={planFromReport(w.reportSnapshot!)} workspace={w} />
         </Suspense>
-      </details>
+      </Fold>
     </div>
   );
 }

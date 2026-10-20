@@ -60,20 +60,75 @@ const METRICS: WeatherTrendMetricKey[] = ["temp", "feelsLike", "gust", "wind", "
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
-export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, terms = SUMMIT_TERMS }: {
+/** The Weather chapter's lead: how many hours cross your limits, the peaks, and the low. */
+export function ForecastLead({ report, evaluation, elevation = (ft) => `${ft} ft`, terms = SUMMIT_TERMS }: {
+  report: PersistedReport;
+  evaluation: PlanEvaluation;
+  elevation?: (ft: number) => string;
+  terms?: ObjectiveTerms;
+}) {
+  const preferences = report.preferences!;
+  const trend = (report.safetyData.weather.trend || []).slice(0, report.plan.travelWindowHours);
+  const { rows, insights: insight, approachSummary } = evaluation.travelWindow.readings;
+  if (!trend.length) return null;
+  const temp = (value: number | null | undefined) => formatTemperatureForUnit(value, preferences.temperatureUnit);
+  const wind = (value: number | null | undefined) => formatWindForUnit(value, preferences.windSpeedUnit);
+  const clock = (value: string) => formatClockForStyle(value, preferences.timeStyle);
+  const nearFt = (ft: number | undefined) => elevation(Math.round((ft ?? 0) / 100) * 100);
+  const tones = hourTones(rows);
+  const overIdx = tones.flatMap((t, i) => (t === "over" ? [i] : []));
+  const missingCount = tones.filter((t) => t === "missing").length;
+  const temperatures = trend.map((point) => point.temp).filter(finite);
+  const low = Math.min(...temperatures);
+  const gusts = trend.map((p) => p.gust).filter(finite);
+  const peakGust = gusts.length ? Math.max(...gusts) : null;
+  const peakGustAt = peakGust === null ? -1 : trend.findIndex((p) => p.gust === peakGust);
+  const rains = trend.map((p) => p.precipChance).filter(finite);
+  const peakRain = rains.length ? Math.max(...rains) : null;
+  const peakRainAt = peakRain === null ? -1 : trend.findIndex((p) => p.precipChance === peakRain);
+  const lowAt = temperatures.length ? trend.findIndex((p) => p.temp === low) : -1;
+  return (
+    <p className="sky-lead">
+      {overIdx.length > 0
+        ? <><strong className="is-over">{overIdx.length} of {rows.length} hours</strong> cross your limits, starting {clock(trend[overIdx[0]].time)}. </>
+        : missingCount > 0
+          ? <><strong className="is-missing">{missingCount} of {rows.length} hours</strong> have incomplete readings; the rest are within your limits. </>
+          : <><strong>All {rows.length} hours</strong> are within your limits. </>}
+      {peakGust !== null && <>Gusts peak at <strong>{wind(peakGust)}</strong> at {clock(trend[peakGustAt].time)}</>}
+      {peakRain !== null && <>{peakGust !== null ? " and rain chance at " : "Rain chance peaks at "}<strong>{peakRain}%</strong> at {clock(trend[peakRainAt].time)}</>}
+      {(peakGust !== null || peakRain !== null) && ". "}
+      {temperatures.length > 0 && <>The low is <strong>{temp(low)}</strong> at {clock(trend[lowAt].time)}. </>}
+      <span className="sky-lead-note">{insight.conditionTrendSummary}</span>
+      {approachSummary && (
+        <span className="sky-lead-note">
+          {" "}{approachSummary.adjustedHours} h {approachSummary.adjustedHours === 1 ? "is" : "are"} checked at your
+          estimated elevation ({approachSummary.lowFt === approachSummary.highFt ? `~${nearFt(approachSummary.lowFt)}` : `~${nearFt(approachSummary.lowFt)}–${nearFt(approachSummary.highFt)}`}),
+          not the {terms.top}; the chart shows the {terms.top} forecast.
+        </span>
+      )}
+    </p>
+  );
+}
+
+const hourTones = (rows: PlanEvaluation["travelWindow"]["readings"]["rows"]): HourTone[] =>
+  rows.map((row) => row.failedRules.length > 0 ? "over" : !row.complete ? "missing" : row.pass ? "within" : "over");
+
+export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, terms = SUMMIT_TERMS, lead = true }: {
   report: PersistedReport;
   /** The backend's evaluation: each reading checked against the limits, at the party's estimated elevation on the approach. */
   evaluation: PlanEvaluation;
   elevation?: (ft: number) => string;
   /** What the report calls the objective and the start of the approach. */
   terms?: ObjectiveTerms;
+  /** The chapter opens with its own lead; the report shows it in the chapter heading instead. */
+  lead?: boolean;
 }) {
   const [hour, setHour] = useState(0);
   const [metric, setMetric] = useState<WeatherTrendMetricKey>("temp");
   const flags = resolveReportFeatureFlags(report.safetyData.featureFlags);
   const preferences = report.preferences!;
   const trend = (report.safetyData.weather.trend || []).slice(0, report.plan.travelWindowHours);
-  const { rows, insights: insight, approachSummary } = evaluation.travelWindow.readings;
+  const { rows, insights: insight } = evaluation.travelWindow.readings;
   const { weatherTrend: trendRows, bluebird } = evaluation.interpretation;
   const nearFt = (ft: number | undefined) => elevation(Math.round((ft ?? 0) / 100) * 100);
   // The values a row was actually checked against: the party's elevation on the approach.
@@ -111,7 +166,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
   const temperatures = trend.map((point) => point.temp).filter(finite);
   const low = Math.min(...temperatures);
   const high = Math.max(...temperatures);
-  const tones: HourTone[] = rows.map((row) => row.failedRules.length > 0 ? "over" : !row.complete ? "missing" : row.pass ? "within" : "over");
+  const tones = hourTones(rows);
   const minutes = trend.map((point) => parseTimeInputMinutes(point.time) ?? parseHourLabelToMinutes(point.time) ?? NaN);
   const labels = minutes.map((m, i) => Number.isFinite(m) ? shortHour(m, preferences.timeStyle === "24h" ? "24h" : "12h") : clock(trend[i].time));
   const sky = buildSkyHours(rows as PlannedRow[], {
@@ -146,17 +201,6 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
       : metric === "precipChance" ? [{ value: preferences.maxPrecipChance, label: `your limit ${preferences.maxPrecipChance}%`, tone: "caution" }]
         : [];
 
-  // Lead: what the traveller needs from this chapter in two sentences.
-  const overIdx = tones.flatMap((t, i) => (t === "over" ? [i] : []));
-  const missingCount = tones.filter((t) => t === "missing").length;
-  const gusts = trend.map((p) => p.gust).filter(finite);
-  const peakGust = gusts.length ? Math.max(...gusts) : null;
-  const peakGustAt = peakGust === null ? -1 : trend.findIndex((p) => p.gust === peakGust);
-  const rains = trend.map((p) => p.precipChance).filter(finite);
-  const peakRain = rains.length ? Math.max(...rains) : null;
-  const peakRainAt = peakRain === null ? -1 : trend.findIndex((p) => p.precipChance === peakRain);
-  const lowAt = temperatures.length ? trend.findIndex((p) => p.temp === low) : -1;
-
   const appearance = weatherAppearance(selected);
   const tone = tones[selectedIndex];
   // The readout shows the objective forecast; approach hours add what was checked below it.
@@ -165,29 +209,11 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
 
   return (
     <div className="forecast sky-weather">
-      <p className="sky-lead">
-        {overIdx.length > 0
-          ? <><strong className="is-over">{overIdx.length} of {rows.length} hours</strong> cross your limits, starting {clock(trend[overIdx[0]].time)}. </>
-          : missingCount > 0
-            ? <><strong className="is-missing">{missingCount} of {rows.length} hours</strong> have incomplete readings; the rest are within your limits. </>
-            : <><strong>All {rows.length} hours</strong> are within your limits. </>}
-        {peakGust !== null && <>Gusts peak at <strong>{wind(peakGust)}</strong> at {clock(trend[peakGustAt].time)}</>}
-        {peakRain !== null && <>{peakGust !== null ? " and rain chance at " : "Rain chance peaks at "}<strong>{peakRain}%</strong> at {clock(trend[peakRainAt].time)}</>}
-        {(peakGust !== null || peakRain !== null) && ". "}
-        {temperatures.length > 0 && <>The low is <strong>{temp(low)}</strong> at {clock(trend[lowAt].time)}. </>}
-        <span className="sky-lead-note">{insight.conditionTrendSummary}</span>
-        {approachSummary && (
-          <span className="sky-lead-note">
-            {" "}{approachSummary.adjustedHours} h {approachSummary.adjustedHours === 1 ? "is" : "are"} checked at your
-            estimated elevation ({approachSummary.lowFt === approachSummary.highFt ? `~${nearFt(approachSummary.lowFt)}` : `~${nearFt(approachSummary.lowFt)}–${nearFt(approachSummary.highFt)}`}),
-            not the {terms.top}; the chart shows the {terms.top} forecast.
-          </span>
-        )}
-      </p>
+      {lead && <ForecastLead report={report} evaluation={evaluation} elevation={elevation} terms={terms} />}
 
       <section className="sky-section" aria-labelledby="sky-weather-hours">
         <div className="sky-sh">
-          <h2 id="sky-weather-hours">Hour by hour</h2>
+          <h2 id="sky-weather-hours" className="sky-subhead">Hour by hour</h2>
           <p>Pick a measurement. Hatched hours cross a limit; the strip below shows daylight.</p>
         </div>
         <div className="sky-card sky-hour-card">
@@ -249,7 +275,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
       </section>
 
       <Fold id="sky-weather-table" title="Every hour against your limits" hint="Tap an hour to see all its readings.">
-        <div className="sky-card sky-table-card">
+        <div className="sky-card is-secondary sky-table-card">
           <table className="sky-table">
             <thead>
               <tr>
@@ -303,7 +329,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
 
       <Fold id="sky-weather-window" title="Across your window" hint="Temperature range, clear-sky share, hours within limits.">
         <div className="sky-trio">
-          <div className="sky-card">
+          <div className="sky-card is-secondary">
             <span className="sky-card-head"><span>Temperature range</span></span>
             {temperatures.length > 0 ? (
               <>
@@ -312,7 +338,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
               </>
             ) : <span className="sky-big is-small">Unavailable</span>}
           </div>
-          <div className="sky-card">
+          <div className="sky-card is-secondary">
             <span className="sky-card-head"><span>Clear, dry daylight</span></span>
             <span className="sky-big">{bluebird.percent === null ? "—" : `${bluebird.percent}%`}</span>
             <p className="sky-cap">Bluebird day <strong>{bluebird.percent === null ? "Unavailable" : `${bluebird.percent}%`}</strong> of available daylight hours</p>
@@ -330,7 +356,7 @@ export function Forecast({ report, evaluation, elevation = (ft) => `${ft} ft`, t
               </p>
             </details>
           </div>
-          <div className="sky-card">
+          <div className="sky-card is-secondary">
             <span className="sky-card-head"><span>Hours within limits</span></span>
             <span className="sky-big">{rows.filter((row) => row.pass).length}<span className="sky-big-unit"> of {rows.length}</span></span>
             <p className="sky-cap">{insight.conditionTrendLabel}</p>

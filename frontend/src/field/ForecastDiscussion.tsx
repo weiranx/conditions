@@ -12,6 +12,7 @@ import {
 import { AiExplanationSkeleton } from "./AiExplanation";
 import { SourceLink } from "./Details";
 import "./forecast-discussion.css";
+import { Fold } from "./sky/Fold";
 
 const issued = (value: string | null | undefined, timeStyle: TimeStyle) => value && Number.isFinite(Date.parse(value))
   ? new Date(value).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short", hour12: timeStyle !== "24h" })
@@ -26,10 +27,12 @@ export interface ForecastDiscussionProps {
   /** The report's AI read is configured and enabled on this server. */
   available: boolean;
   timeStyle?: TimeStyle;
+  /** Shut until asked for, as reference beside the forecast. */
+  folded?: boolean;
 }
 
 /** The NWS forecasters' discussion, read by AI against this plan. Regional context: it never changes the verdict. */
-export function ForecastDiscussion({ report, objectiveName, units, available, timeStyle = "ampm" }: ForecastDiscussionProps) {
+export function ForecastDiscussion({ report, objectiveName, units, available, timeStyle = "ampm", folded = false }: ForecastDiscussionProps) {
   const access = useContext(AiAccessContext);
   const discussion = report.supplementalEvidence?.discussion;
   const request: DiscussionSummaryRequest = { report, objectiveName, units };
@@ -67,11 +70,11 @@ export function ForecastDiscussion({ report, objectiveName, units, available, ti
     }
   };
 
-  return (
-    <section className="sky-card sky-section ai-panel forecast-discussion" aria-labelledby="sky-forecast-discussion" aria-busy={loading}>
+  const card = (
+    <section className={`sky-card ai-panel forecast-discussion${folded ? " is-secondary" : " sky-section"}`} aria-labelledby="sky-forecast-discussion" aria-busy={loading}>
       <div className="ai-panel-head">
         <span className="sky-card-head">
-          <span id="sky-forecast-discussion">Forecaster discussion</span>
+          <span id="sky-forecast-discussion" className={folded ? "sr-only" : undefined}>Forecaster discussion</span>
           <span className="ai-panel-badge"><Sparkles size={11} aria-hidden="true" />AI</span>
         </span>
         <FileText size={18} aria-hidden="true" className="sky-muted" />
@@ -127,5 +130,12 @@ export function ForecastDiscussion({ report, objectiveName, units, available, ti
       )}
       {discussion.sourceLink && <SourceLink url={discussion.sourceLink}>Read the full discussion</SourceLink>}
     </section>
+  );
+  if (!folded) return card;
+  return (
+    <Fold id="sky-forecast-discussion-fold" title="Forecaster’s discussion"
+      hint={`NWS ${office}Area Forecast Discussion${issuedAt ? ` · issued ${issuedAt}` : ""}${summary ? " · summarized for this plan" : ""}`}>
+      {card}
+    </Fold>
   );
 }

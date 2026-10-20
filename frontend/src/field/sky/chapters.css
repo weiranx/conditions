@@ -168,10 +168,6 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-problem p { margin: 4px 0 0; font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
 
 /* Map disclosure */
-.sky-map-card > summary { display: flex; align-items: center; gap: 8px; min-height: 36px; cursor: pointer; list-style: none; font-size: 16px; font-weight: 650; }
-.sky-map-card > summary::-webkit-details-marker { display: none; }
-.sky-map-card > summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border: solid var(--sky-secondary); border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.sky-map-card[open] > summary::after { transform: rotate(-135deg); }
 
 @media (max-width: 650px) {
   .sky-wind-row { grid-template-columns: 1fr; justify-items: center; }
@@ -260,9 +256,10 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-nav-dot.is-over { background: var(--sky-caution); }
 .sky-nav-dot.is-missing { box-shadow: inset 0 0 0 1.5px currentColor; opacity: 0.7; }
 
-.sky-chapter-block { margin-top: 64px; }
+.sky-chapter-block { margin-top: 56px; }
 .sky-chapter-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; padding-top: 20px; border-top: 1px solid var(--sky-separator); }
-.sky-chapter-name { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; outline: none; }
+/* The chapter name is the report's one display heading; everything inside a chapter is a small label. */
+.sky-chapter-name { margin: 0; font-family: var(--sky-display); font-size: 34px; font-weight: 500; line-height: 1.1; letter-spacing: -0.018em; outline: none; }
 /* Each section says up front how its checks came out. */
 .sky-chapter-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; }
 .sky-chapter-checks li { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sky-secondary); }
@@ -273,7 +270,7 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 @media (max-width: 650px) {
   .sky-verdict-card { padding: 18px; border-radius: 20px; }
   .sky-verdict-card h2 { font-size: 23px; }
-  .sky-chapter-name { font-size: 26px; }
+  .sky-chapter-name { font-size: 28px; }
   .sky-chapter-block { margin-top: 48px; }
 }
 
@@ -469,4 +466,69 @@ details.sky-notice-fold { display: block; }
   .sky-check-row .sky-open { font-size: 0; }
   .sky-notice.is-compact:has(> svg) { display: flex; }
   .sky-notice-body { padding-left: 0; }
+}
+
+/* ---------- One lead per chapter, and a quieter hierarchy inside it ---------- */
+/* Subsection titles inside a chapter: a small label, never a second chapter name. */
+.sky-subhead,
+.sky-sh h2.sky-subhead,
+.field-app .sky-report .field-panel h2.sky-subhead {
+  display: flex; align-items: center; gap: 6px; margin: 0;
+  font-family: var(--sky-font); font-size: 12.5px; font-weight: 650; line-height: 1.3; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--sky-secondary);
+}
+.sky-subhead svg { flex: none; }
+.sky-sh:has(> .sky-subhead) { padding-bottom: 8px; }
+/* The chapter's lead, in its heading: the checks' sentence or, marked, the AI's. */
+.sky-chapter-block > .sky-lead { margin-top: 12px; }
+.sky-lead.is-ai { font-size: 18px; }
+.sky-ai-mark {
+  display: inline-flex; align-items: center; gap: 3px; margin-right: 2px; padding: 1px 7px; border-radius: 999px; vertical-align: 2px;
+  background: color-mix(in srgb, var(--sky-accent) 12%, transparent); color: var(--sky-accent); font-size: 11px; font-weight: 650; letter-spacing: 0.02em;
+}
+.sky-lead-link { padding: 0; border: 0; background: none; color: var(--sky-accent); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sky-lead-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Cards other than a chapter's main picture: no frame, a faint ground, less padding. */
+.sky-card.is-secondary,
+.field-app .sky-report .field-panel.is-secondary {
+  padding: 12px 14px; border-radius: 14px; box-shadow: none;
+  background: color-mix(in srgb, var(--sky-fill) 38%, transparent);
+}
+.sky-card.is-secondary .sky-card-head { font-size: 13px; }
+.sky-fold-body > .sky-card.is-secondary:only-child,
+.sky-fold-body > .field-panel.is-secondary:only-child { background: none; padding: 0; }
+/* A tile's caption keeps to two lines; the rest is in the chapter it opens. */
+.sky-tile .sky-cap { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+/* Checks & sources: the checks to review are open; the ones that pass wait behind one row in the same list. */
+.sky-check-passed { border-top: 1px solid var(--sky-separator); }
+.sky-check-list > details + .sky-check-passed { border-top: 0; }
+.sky-check-passed > summary {
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 10px; cursor: pointer; list-style: none; border-radius: 10px;
+}
+.sky-check-passed > summary::-webkit-details-marker { display: none; }
+.field-app .sky-check-passed > summary::before { content: none; display: none; }
+.sky-check-passed > summary .sky-check-label { flex: 1; }
+.sky-check-passed > summary:hover { background: color-mix(in srgb, var(--sky-fill) 60%, transparent); }
+.sky-check-passed > summary:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; }
+.sky-check-passed[open] > summary .sky-status { visibility: hidden; }
+.sky-check-passed > details { border-top: 1px solid var(--sky-separator); }
+/* Gear: the standard kit waits behind one row under the items this forecast adds. */
+.gear-standard { margin-top: 4px; }
+/* Each extra source in the evidence fold opens on its own. */
+.supplemental-source > summary { cursor: pointer; list-style: none; padding: 4px 0; }
+.supplemental-source > summary::-webkit-details-marker { display: none; }
+.field-app .supplemental-source > summary::before { content: none; display: none; }
+.supplemental-source > summary::after {
+  content: ""; flex: none; align-self: center; width: 7px; height: 7px; border: solid var(--sky-secondary); border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+}
+.supplemental-source[open] > summary::after { transform: rotate(45deg) translateY(-2px); }
+.supplemental-source > summary > span { margin-left: auto; }
+.field-app .sky-report .supplemental-evidence details.supplemental-source { padding: 10px 0; border-top: 1px solid var(--sky-separator); }
+@media (max-width: 650px) {
+  .sky-lead.is-ai { font-size: 17px; }
+  .sky-fold-text { display: grid; gap: 2px; }
+}
+@media print {
+  .sky-card.is-secondary, .field-app .sky-report .field-panel.is-secondary { background: none; }
 }

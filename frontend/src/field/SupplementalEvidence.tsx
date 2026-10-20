@@ -1,5 +1,6 @@
 import type { SafetyData, SupplementalDiscussionSection, SupplementalSource, TimeStyle } from '../app/types';
 import { SourceLink } from './Details';
+import { Fold } from './sky/Fold';
 import './supplemental-evidence.css';
 
 const HOUR = 3600000;
@@ -51,11 +52,13 @@ function Discussion({ source }: { source: SupplementalSource }) {
   </>;
 }
 
-export function SupplementalEvidence({ evidence, localize = (text) => text, timeStyle = 'ampm' }: {
+export function SupplementalEvidence({ evidence, localize = (text) => text, timeStyle = 'ampm', folded = false }: {
   evidence?: SafetyData['supplementalEvidence'];
   localize?: (text: string) => string;
   /** The traveler's clock; times are otherwise written as the browser's locale would. */
   timeStyle?: TimeStyle;
+  /** Shut until asked for, naming its sources, with each source shut too. */
+  folded?: boolean;
 }) {
   if (!evidence || !Object.values(evidence).some(Boolean)) return null;
   const stamp = (value?: string) => timestamp(value, timeStyle);
@@ -66,8 +69,8 @@ export function SupplementalEvidence({ evidence, localize = (text) => text, time
   const available = entries.filter(([, source]) => source.available).sort(([a], [b]) => rank(a, nearStart) - rank(b, nearStart));
   const missing = entries.filter(([, source]) => !source.available);
 
-  return <section className="field-panel supplemental-evidence" aria-labelledby="supplemental-evidence-title">
-    <h2 id="supplemental-evidence-title">Additional source evidence</h2>
+  const panel = <section className={`field-panel supplemental-evidence${folded ? ' is-secondary' : ''}`} aria-labelledby={folded ? 'sky-sources-evidence' : 'supplemental-evidence-title'}>
+    {!folded && <h2 id="supplemental-evidence-title">Additional source evidence</h2>}
     <p className="field-muted">Use these sources to cross-check the report. They do not change its safety score.{start !== null ? ` Listed by relevance to your ${stamp(new Date(start).toISOString())} start.` : ''}</p>
     {available.map(([key, source]) => {
       const valid = time(source.validTime);
@@ -84,8 +87,10 @@ export function SupplementalEvidence({ evidence, localize = (text) => text, time
           <dd>{localize(`${reading.value} ${name === 'temperatureF' ? '°F' : 'mph'}`)} <small>· {stamp(reading.observedTime)}</small></dd>
         </div>)}</dl>
       </div>);
-      return <article key={key}>
-        <div className="supplemental-evidence-heading"><h3>{source.source}</h3><span>{status(source)}</span></div>
+      const heading = <><h3>{source.source}</h3><span>{status(source)}</span></>;
+      const Source = folded ? 'details' : 'article';
+      return <Source key={key} className={folded ? 'supplemental-source' : undefined}>
+        {folded ? <summary className="supplemental-evidence-heading">{heading}</summary> : <div className="supplemental-evidence-heading">{heading}</div>}
         <p className="field-muted">{kinds[source.kind]}{source.issuedTime ? ` · Issued ${stamp(source.issuedTime)}` : ''}</p>
         {observedLater && <p>These readings are from {fromStart(checked, start).replace(' your start', '')} your start, so they show conditions now, not during the trip. Use them to judge whether today&apos;s forecast is running high or low.</p>}
         {stations?.length ? (observedLater ? <details><summary>Show {stations.length} current station reading{stations.length === 1 ? '' : 's'}</summary>{stations}</details> : stations) : null}
@@ -108,11 +113,16 @@ export function SupplementalEvidence({ evidence, localize = (text) => text, time
         {key === 'discussion' && source.text ? <Discussion source={source} /> : null}
         <p>{source.note}</p>
         <SourceLink url={source.sourceLink}>View source</SourceLink>
-      </article>;
+      </Source>;
     })}
     {missing.length > 0 && <div className="supplemental-missing">
       <h3>Not available for this report</h3>
       <ul>{missing.map(([key, source]) => <li key={key}><strong>{source.source}</strong> · {status(source)}{source.note ? <span className="field-muted"> — {source.note}</span> : null}</li>)}</ul>
     </div>}
   </section>;
+  if (!folded) return panel;
+  const hint = available.length
+    ? `${available.length} ${available.length === 1 ? 'source' : 'sources'}: ${available.map(([, source]) => source.source).join(', ')}`
+    : 'None available for this report';
+  return <Fold id="sky-sources-evidence" title="Additional source evidence" hint={hint}>{panel}</Fold>;
 }

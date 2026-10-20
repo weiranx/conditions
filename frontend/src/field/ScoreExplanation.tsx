@@ -1,4 +1,5 @@
 import type { SafetyData } from "../app/types";
+import { Fold } from "./sky/Fold";
 
 const groupLabels: Record<string, string> = {
   avalanche: "Avalanche",
@@ -10,9 +11,11 @@ const groupLabels: Record<string, string> = {
 };
 const points = (value: number) => Number(value.toFixed(1)).toString();
 
-export function ScoreExplanation({ safety, localize = (text) => text }: {
+export function ScoreExplanation({ safety, localize = (text) => text, folded = false }: {
   safety: SafetyData["safety"];
   localize?: (text: string) => string;
+  /** Shut until asked for, with the score and its largest deductions on its one line. */
+  folded?: boolean;
 }) {
   const groups = Object.entries(safety.groupImpacts || {})
     .map(([key, group]) => ({ key, ...group, deduction: group.effective ?? group.capped }))
@@ -20,12 +23,13 @@ export function ScoreExplanation({ safety, localize = (text) => text }: {
     .sort((a, b) => b.deduction! - a.deduction!);
   const insufficient = safety.assessmentStatus === 'insufficient_evidence';
   const reasons = [...new Set([...(safety.evidenceReasons || []), ...(safety.confidenceReasons || [])])];
-  return (
-    <section className="field-panel report-score-explanation" aria-labelledby="report-score-heading">
+  const shownScore = !insufficient && Number.isFinite(safety.score) ? points(safety.score) : null;
+  const panel = (
+    <section className={`field-panel report-score-explanation${folded ? " is-secondary" : ""}`} aria-labelledby={folded ? "sky-sources-score" : "report-score-heading"}>
       <header className="report-score-heading">
         <div>
-          <span className="field-kicker">Understanding the assessment</span>
-          <h2 id="report-score-heading">What drives this score</h2>
+          {!folded && <span className="field-kicker">Understanding the assessment</span>}
+          {!folded && <h2 id="report-score-heading">What drives this score</h2>}
           <p>Higher scores mean fewer modeled hazards. Trip checks and field warnings still apply.</p>
         </div>
         <div className="report-score-total" aria-label={`Safety score ${!insufficient && Number.isFinite(safety.score) ? points(safety.score) : 'unavailable'} out of 100`}>
@@ -68,4 +72,10 @@ export function ScoreExplanation({ safety, localize = (text) => text }: {
       {safety.scoreVersion && <p className="report-score-version">Scoring model {safety.scoreVersion} · Saved reports may use earlier rules.</p>}
     </section>
   );
+  if (!folded) return panel;
+  const hint = [
+    shownScore === null ? (insufficient ? "Insufficient evidence" : "Score unavailable") : `Score ${shownScore}`,
+    ...groups.slice(0, 2).map((group) => `${groupLabels[group.key] || group.key} −${points(group.deduction!)}`),
+  ].join(" · ");
+  return <Fold id="sky-sources-score" title="What drives this score" hint={hint}>{panel}</Fold>;
 }
