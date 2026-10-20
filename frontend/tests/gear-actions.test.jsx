@@ -142,6 +142,18 @@ test("the chapter counts unmet checks in one line instead of repeating them, and
     document.querySelector(".gear-field-plan").textContent,
     /Nothing in this report calls for a plan change/,
   );
+  assert.equal(document.querySelector(".gear-advisories"), null);
+});
+
+test("advice below the limits is listed once, since no check carries it", async (t) => {
+  await mount(t, {
+    decision: {
+      ...decision,
+      advisories: ["Air quality is moderate (AQI 62).", "Allow extra time.", "Air quality is moderate (AQI 62)."],
+    },
+  });
+  const items = [...document.querySelectorAll(".gear-advisories li")].map((li) => li.textContent);
+  assert.deepEqual(items, ["Air quality is moderate (AQI 62)."], "cautions already in the checks are not repeated; duplicates collapse");
 });
 
 test("items show why they were added, localized, and forecast items group together", async (t) => {

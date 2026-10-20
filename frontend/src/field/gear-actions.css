@@ -18,6 +18,7 @@
 .gear-field-plan { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin: 12px 0 0; font-size: 15px; line-height: 1.45; color: var(--sky-secondary); }
 .gear-field-plan strong { color: var(--sky-caution); font-weight: 650; }
 .gear-field-plan .sky-link { display: inline-flex; align-items: center; gap: 2px; min-height: 36px; padding: 0; }
+.gear-advisories { margin: 8px 0 0; padding: 0 0 0 18px; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; color: var(--sky-secondary); }
 .gear-quiet { margin: 0; font-size: 15px; line-height: 1.5; color: var(--sky-secondary); }
 
 .gear-progress { margin: 0 0 14px; padding: 14px 16px; border-radius: 16px; background: var(--sky-surface); }

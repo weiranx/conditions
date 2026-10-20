@@ -98,6 +98,11 @@ export function GearActions({
     (check) => !check.ok && check.action?.trim(),
   );
   const noGo = decision.level === "NO-GO";
+  // Advice below any limit (moderate air, elevated fire or heat, a field report's action)
+  // is not a failing check, so it appears nowhere else in the report.
+  const advisories = [...new Set((decision.advisories ?? []).filter(
+    (item) => item && !decision.blockers.includes(item) && !decision.cautions.includes(item),
+  ))];
 
   return (
     <section
@@ -125,6 +130,11 @@ export function GearActions({
           <ArrowUpRight size={15} aria-hidden="true" />
         </button>
       </p>
+      {advisories.length > 0 && (
+        <ul className="gear-advisories" aria-label="Plan around">
+          {advisories.map((item) => <li key={item}>{localize(item)}</li>)}
+        </ul>
+      )}
       <section className="gear-kit sky-section" aria-labelledby={`${id}-kit`}>
         <div className="sky-sh">
           <h2 id={`${id}-kit`} className="sky-subhead">
