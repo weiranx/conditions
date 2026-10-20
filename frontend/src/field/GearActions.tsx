@@ -80,12 +80,6 @@ export function GearActions({
   }
   const items = [...uniqueItems.values()];
   const packedCount = items.filter((item) => packed.has(itemKey(item))).length;
-  const blockers = [...new Set(decision.blockers.filter(Boolean))];
-  const cautions = [
-    ...new Set(
-      [...decision.cautions, ...(decision.advisories ?? [])].filter((item) => item && !blockers.includes(item)),
-    ),
-  ];
   const actions = decision.checks.filter(
     (check) => !check.ok && check.action?.trim(),
   );
@@ -105,63 +99,16 @@ export function GearActions({
           <p>{actionLine}</p>
         </div>
       </div>
-      <section className="gear-field-plan sky-section" aria-labelledby={`${id}-actions`}>
-        <div className="sky-sh">
-          <h2 id={`${id}-actions`}>Before you leave</h2>
-          <p>Settle these first. They can change the plan.</p>
-        </div>
-        <div className="gear-plan-card">
-          {blockers.length > 0 && (
-            <div className="gear-concerns is-blocked">
-              <h3>Must resolve</h3>
-              <ol>
-                {blockers.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ol>
-            </div>
-          )}
-          {cautions.length > 0 && (
-            <div className="gear-concerns">
-              <h3>Plan around</h3>
-              <ol start={blockers.length + 1} style={{ counterReset: `gear ${blockers.length}` }}>
-                {cautions.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ol>
-            </div>
-          )}
-          {actions.length > 0 && (
-            <details className="gear-check-actions sky-details">
-              <summary>
-                {actions.length}{" "}
-                {actions.length === 1 ? "check needs" : "checks need"} attention
-              </summary>
-              <ul>
-                {actions.map((check, i) => (
-                  <li key={`${check.key || check.label}-${i}`}>
-                    <span className="gear-unmet">Needs review</span>
-                    <strong>{check.label}</strong>
-                    <p>{check.action}</p>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-          {blockers.length === 0 &&
-            cautions.length === 0 &&
-            actions.length === 0 && (
-              <p className="gear-quiet">
-                Nothing in this report calls for a plan change. Check current
-                sources and agree on a turnaround time with your group.
-              </p>
-            )}
-          <button className="field-button" type="button" onClick={onSources}>
-            Review checks & sources{" "}
-            <ArrowUpRight size={15} aria-hidden="true" />
-          </button>
-        </div>
-      </section>
+      {/* The checks themselves are in the brief and in Checks & sources; here, only how many and where. */}
+      <p className="gear-field-plan">
+        {actions.length > 0
+          ? <><strong>{actions.length} {actions.length === 1 ? "check needs" : "checks need"} attention</strong>{" · "}</>
+          : <>Nothing in this report calls for a plan change.{" "}</>}
+        <button className="sky-link" type="button" onClick={onSources}>
+          Review checks & sources
+          <ArrowUpRight size={15} aria-hidden="true" />
+        </button>
+      </p>
       <section className="gear-kit sky-section" aria-labelledby={`${id}-kit`}>
         <div className="sky-sh">
           <h2 id={`${id}-kit`}>

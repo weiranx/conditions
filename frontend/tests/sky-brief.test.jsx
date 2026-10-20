@@ -97,6 +97,21 @@ test("the sky names the over-limit window and starts on the first hour that need
     /<ul class="sky-limiting" aria-label="Checks setting the decision"><li>Fire danger is elevated \(Moderate\)<\/li><li>Check fire locations<\/li><\/ul>/);
 });
 
+test("a headline that names the one span outside the limits leaves the sky to mark it without saying it again", () => {
+  const hours = buildSkyHours([row(), row({ time: "08:00", pass: false, failedRules: ["Gust 31 mph above 25 mph"], gust: 31 }), row({ time: "09:00" })], plan);
+  const html = hero(hours, { spanInHeadline: true });
+  assert.doesNotMatch(html, /sky-callout/);
+  assert.match(html, /url\(#[^)]+p\)/, "the hatched band still marks the span");
+  const two = buildSkyHours([row({ pass: false, failedRules: ["Gust 31 mph above 25 mph"] }), row({ time: "08:00" }), row({ time: "09:00", pass: false, failedRules: ["Gust 31 mph above 25 mph"] })], plan);
+  assert.match(hero(two, { spanInHeadline: true }), /2 periods outside your limits/, "more than one span is still counted on the sky");
+});
+
+test("an action can sit beside the decision", () => {
+  const html = hero(buildSkyHours([row()], plan), { pillAside: <button className="sky-pill-aside">Watch this plan</button> });
+  assert.ok(html.indexOf("sky-pill-aside") > html.indexOf("sky-pill is-watch"));
+  assert.ok(html.indexOf("sky-pill-aside") < html.indexOf("field-verdict-title"));
+});
+
 test("a status shows right under the subtitle, before the decision", () => {
   const hours = buildSkyHours([row({})], plan);
   const html = hero(hours, { status: <div className="sky-passed">This start has passed.</div> });
@@ -182,7 +197,7 @@ test("the avalanche tile draws the danger scale as five numbered steps with the 
 });
 
 test("the daylight tile puts sunrise and sunset under the arc as text, not inside the drawing", () => {
-  const tile = checkCard(brief(briefWorkspace({}, NO_ALERTS)), "Daylight");
+  const tile = checkCard(brief(briefWorkspace({ returnMinutes: 1200 }, NO_ALERTS)), "Daylight");
   assert.doesNotMatch(tile.match(/<svg.*?<\/svg>/s)[0], /<text/, "no chart text to shrink with the tile");
   assert.match(tile, /class="sky-viz-ends" aria-hidden="true"><span>06:52<\/span><span>19:30<\/span>/);
 });
@@ -257,13 +272,37 @@ test("each check card says which part of the report explains it, with no popup i
   assert.ok(numbers.every((n) => n.to && n.anchor), "every headline number leads somewhere too");
 });
 
-test("the brief hands the reader on to the first section instead of a full-report link", () => {
-  const w = briefWorkspace({}, NO_ALERTS);
-  const html = renderToStaticMarkup(<BriefSections w={w} hours={buildSkyHours([row()], plan)} clock={fmt.clock} onOpen={() => {}} activity="hiking"
-    next={{ chapter: "forecast", label: "Weather", hint: "Hour by hour, rain and snow, heat, fire and air." }} />);
-  assert.match(html, /sky-continue[^]*Keep reading[^]*<strong>Weather<\/strong>[^]*Hour by hour, rain and snow/);
-  assert.doesNotMatch(html, /Read the full report|Pack for today/);
-  assert.doesNotMatch(brief(w), /Keep reading/);
+test("the brief ends with its checks: the section bar, not a card, hands the reader on", () => {
+  const html = brief(briefWorkspace({}, NO_ALERTS));
+  assert.doesNotMatch(html, /sky-continue|Keep reading|Read the full report|Pack for today/);
+  assert.ok(html.trimEnd().endsWith("</section>"));
+});
+
+test("checks within your limits are a line each under the tiles that need attention", () => {
+  const html = brief(briefWorkspace({ returnMinutes: 1200 }, NO_ALERTS));
+  const tiles = html.slice(0, html.indexOf("sky-check-rows"));
+  const rows = html.slice(html.indexOf("sky-check-rows"));
+  assert.deepEqual(cardOrder(tiles), ["Daylight"], "only the failing check keeps a tile");
+  assert.deepEqual(cardOrder(rows), ["Weather", "Alerts", "Terrain &amp; snow", "Avalanche", "Air &amp; fire"]);
+  assert.match(html, /<h3 class="sky-check-group">Needs attention<\/h3>[^]*<h3 class="sky-check-group">Within limits<\/h3>/);
+  // A line keeps its status and caption and still opens its reading, but drops the tile's drawing.
+  const air = checkCard(rows, "Air &amp; fire");
+  assert.match(air, /sky-status is-ok[^]*AQI 32/);
+  assert.match(air, /sky-cap">Good · fire risk low/);
+  assert.doesNotMatch(air, /<svg class="sky-viz"/);
+  assert.match(rows, /<button type="button" title="Good · fire risk low\.[^"]*" class="sky-check sky-check-row">/, "the full caption shows on hover");
+  // One group needs no labels.
+  const clear = brief(briefWorkspace({}, NO_ALERTS));
+  assert.doesNotMatch(clear, /sky-check-group/);
+  assert.doesNotMatch(clear, /class="sky-checks"/);
+});
+
+test("the brief carries one-line notes under its numbers", () => {
+  const html = renderToStaticMarkup(<BriefSections w={briefWorkspace({}, NO_ALERTS)} hours={buildSkyHours([row()], plan)} clock={fmt.clock} onOpen={() => {}}
+    activity="hiking" notes={<p className="sky-brief-line">First hour judged lower down</p>} />);
+  assert.ok(html.indexOf("sky-brief-lines") > html.indexOf("sky-numbers"));
+  assert.ok(html.indexOf("sky-brief-lines") < html.indexOf("sky-brief-checks"));
+  assert.doesNotMatch(brief(briefWorkspace({}, NO_ALERTS)), /sky-brief-lines/);
 });
 
 test("a section takes the worst of the checks it explains", () => {
@@ -351,9 +390,11 @@ test("the headline names what crosses your limits and when", () => {
 
 test("the weather tile shows the sky, the low and high, and how it feels", () => {
   const hours = buildSkyHours([row({ temp: 41, condition: "Cloudy" }), row({ time: "08:00", temp: 58, condition: "Cloudy" }), row({ time: "09:00", temp: 67, condition: "Sunny" })], plan);
-  const html = brief(briefWorkspace({}, { pleasantness: { score: 68, label: "Mixed", summary: "" } }), hours);
+  // Within your limits the weather is a line: the most common sky leads.
+  assert.match(checkCard(brief(briefWorkspace(), hours), "Weather"), /sky-status is-ok">.*Cloudy/, "the most common sky leads");
+  const over = buildSkyHours([row({ temp: 41, condition: "Cloudy", pass: false, failedRules: ["gust 40>25 mph"] }), row({ time: "08:00", temp: 58, condition: "Cloudy" }), row({ time: "09:00", temp: 67, condition: "Sunny" })], plan);
+  const html = brief(briefWorkspace({}, { pleasantness: { score: 68, label: "Mixed", summary: "" } }), over);
   const card = checkCard(html, "Weather");
-  assert.match(card, /sky-status is-ok">.*Cloudy/, "the most common sky leads");
   assert.match(card, /L 41°F/);
   assert.match(card, /H 67°F/);
   assert.match(card, /Comfort<\/span><strong>Mixed<\/strong>/);
@@ -412,14 +453,10 @@ test("feels-like numbers are checked against the matching limit", () => {
   assert.match(html, new RegExp(`floor ${minFeelsLikeF}°F`));
 });
 
-test("extras wait under More; the pack list lives in Gear & actions, not the brief", () => {
+test("the brief has no More fold, and the pack list lives in Gear & actions, not the brief", () => {
   const w = briefWorkspace({ gearRecommendations: [{ title: "Headlamp", category: "Safety", reason: "Dark before you're back" }] });
-  const html = renderToStaticMarkup(<BriefSections w={w} hours={buildSkyHours([row()], plan)} clock={fmt.clock} onOpen={() => {}}
-    activity="hiking" more={<p>Trip debrief</p>} />);
-  assert.match(html, /sky-fold[^]*<h2 id="sky-more">More<\/h2>[^]*Trip debrief/);
-  assert.match(html, /<details>/, "closed until asked for");
-  assert.doesNotMatch(html, /<details open|Pack for today|Headlamp/);
-  assert.doesNotMatch(brief(w), /sky-more/, "nothing to show, no More");
+  const html = brief(w);
+  assert.doesNotMatch(html, /sky-more|<details|Pack for today|Headlamp/);
 });
 
 test("a check never reads clear over data it cannot confirm", () => {

@@ -374,3 +374,25 @@
     height: 72px;
   }
 }
+/* Leading the report, the read is its big picture and best move; the rest waits under one line. */
+.ai-read.is-leading { padding: 14px 18px 4px; }
+.ai-read.is-leading .ai-brief-heading { align-items: center; }
+.ai-read.is-leading .ai-brief-heading > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.ai-read.is-leading h2 { margin: 0; font-size: 17px; }
+.ai-read.is-leading .ai-explanation { gap: 10px; margin-top: 8px; }
+.ai-read.is-leading .ai-explanation-section:is(.is-overview, .is-lead) .ai-explanation-copy { font-size: 16px; }
+.ai-read.is-leading .ai-explanation-section.is-action { padding: 10px 14px 11px; }
+.ai-read.is-leading .ai-read-cites { margin-top: 4px; }
+/* The read's title already says this is the big picture; the label stays for screen readers. */
+.ai-read.is-leading .ai-explanation-section:is(.is-overview, .is-lead) .ai-explanation-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ai-read.is-leading .ai-explanation-section:is(.is-overview, .is-lead) .ai-explanation-copy { margin-top: 0; }
+.ai-read-fold { margin-top: 8px; }
+.ai-read-fold > summary { gap: 10px; justify-content: flex-start; padding-top: 6px; }
+.ai-read-fold > summary > svg { margin-left: auto; flex: none; }
+.ai-read-fold-hint { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 500; color: var(--ai-secondary); }
+.ai-read-fold-body { display: grid; gap: 14px; padding: 6px 0 12px; }
+.ai-read-fold-body > * { margin: 0; }
+.ai-read-fold-body .ai-explanation-supporting { padding-top: 0; border-top: 0; }
+@media (max-width: 520px) {
+  .ai-read-fold-hint { display: none; }
+}

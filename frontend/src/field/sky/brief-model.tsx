@@ -46,6 +46,9 @@ const UNCHECKED_ROUTE: Record<Extract<PlannedRouteSummary, { state: "unchecked" 
   "not-run": "Open Route to check conditions at timed checkpoints along the route.",
 };
 
+/** A problem along the route does not set the decision; the card says so, in place of a note in the hero. */
+const OBJECTIVE_DECIDES = " The decision uses the objective’s forecast, not these checkpoints.";
+
 /** Status, status text and caption for the planned route's check card. */
 function routeCheck(route: PlannedRouteSummary, format: { temp: (f: number) => string; wind: (mph: number) => string; eta: (time: string) => string }) {
   if (route.state === "checking") return {
@@ -61,12 +64,12 @@ function routeCheck(route: PlannedRouteSummary, format: { temp: (f: number) => s
   if (firstOver) return {
     status: "over" as Status,
     statusText: `${overCount} of ${stops.length} over`,
-    caption: `${firstOver.name}${firstOver.eta ? ` at ${format.eta(firstOver.eta)}` : ""}: ${describeCheckpointBreach(firstOver.breach, format)}.${back}`,
+    caption: `${firstOver.name}${firstOver.eta ? ` at ${format.eta(firstOver.eta)}` : ""}: ${describeCheckpointBreach(firstOver.breach, format)}.${back}${OBJECTIVE_DECIDES}`,
   };
   if (route.firstHazard) return {
     status: "over" as Status,
     statusText: route.hazardCount === 1 ? "1 alert or danger" : `${route.hazardCount} alerts or dangers`,
-    caption: `Within your limits, but ${route.firstHazard.name}${route.firstHazard.eta ? ` at ${format.eta(route.firstHazard.eta)}` : ""} has ${describeCheckpointHazard(route.firstHazard.hazard)}.${back}`,
+    caption: `Within your limits, but ${route.firstHazard.name}${route.firstHazard.eta ? ` at ${format.eta(route.firstHazard.eta)}` : ""} has ${describeCheckpointHazard(route.firstHazard.hazard)}.${back}${OBJECTIVE_DECIDES}`,
   };
   if (missingCount) return {
     status: "missing" as Status,

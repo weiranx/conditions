@@ -1,5 +1,5 @@
 import { SupplementalEvidence } from './SupplementalEvidence';
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, TriangleAlert } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
@@ -29,7 +29,11 @@ const FIELD_NAMES: Record<string, string> = {
   isDaytime: "daylight",
 };
 
-export function Sources({ workspace: w }: { workspace: Workspace }) {
+export function Sources({ workspace: w, more = null }: {
+  workspace: Workspace;
+  /** Reference that closes the chapter, e.g. the AI read when it does not lead the report. */
+  more?: ReactNode;
+}) {
   const flags = resolveReportFeatureFlags(w.safetyData?.featureFlags);
   const f = evidenceFormat(w);
   // Group the readings by the source that supplied them: "NOAA: temperature, wind, …".
@@ -70,12 +74,12 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
   const missing = freshness.rows.filter((row) => row.state === "missing").map((row) => row.label);
   return (
     <div className="sky-sources">
+      {/* The counts only: each check is listed right below. */}
       <p className="sky-lead">
         <strong>{checks.length - review.length} of {checks.length} checks</strong> pass
-        {review.length > 0 && <>; <strong className="is-over">{review.length} need review</strong></>}.{" "}
-        <strong>{current} of {freshness.rows.length} sources</strong> are current
-        {missing.length > 0 && <>, and <strong className="is-missing">{missing.join(", ")}</strong> didn't load, so this report can't rule out what {missing.length === 1 ? "it covers" : "they cover"}</>}.{" "}
-        <span className="sky-lead-note">Evidence quality: {w.safetyData?.safety.evidenceQuality || "not assessed"}.</span>
+        {review.length > 0 && <> · <strong className="is-over">{review.length} need review</strong></>}
+        {" "}· <strong>{current} of {freshness.rows.length} sources</strong> current
+        {missing.length > 0 && <> · <strong className="is-missing">{missing.join(", ")}</strong> missing</>}.
       </p>
 
       <section className="sky-section" aria-labelledby="sky-sources-checks">
@@ -237,6 +241,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
           </details>
         </section>
       </div>
+      {more}
     </div>
   );
 }

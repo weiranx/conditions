@@ -260,18 +260,6 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-nav-dot.is-over { background: var(--sky-caution); }
 .sky-nav-dot.is-missing { box-shadow: inset 0 0 0 1.5px currentColor; opacity: 0.7; }
 
-/* The brief hands the reader on to the first section. */
-.sky-continue {
-  flex-direction: row; align-items: center; justify-content: space-between; gap: 16px;
-  width: 100%; margin-top: 16px; padding: 16px 20px; border: 0; text-align: left; color: var(--sky-label); font: inherit; cursor: pointer;
-}
-.sky-continue-text { display: grid; gap: 2px; min-width: 0; }
-.sky-continue strong { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-.sky-continue > svg { flex: none; color: var(--sky-accent); }
-@media (prefers-reduced-motion: no-preference) {
-  .sky-continue:hover > svg { transform: translateY(2px); transition: transform 0.2s ease; }
-}
-
 .sky-chapter-block { margin-top: 64px; }
 .sky-chapter-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; padding-top: 20px; border-top: 1px solid var(--sky-separator); }
 .sky-chapter-name { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; outline: none; }
@@ -287,8 +275,6 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
   .sky-verdict-card h2 { font-size: 23px; }
   .sky-chapter-name { font-size: 26px; }
   .sky-chapter-block { margin-top: 48px; }
-  .sky-continue { padding: 14px 16px; }
-  .sky-continue strong { font-size: 18px; }
 }
 
 /* Facts in a three-up grid (route checkpoint, compared day). */
@@ -426,3 +412,61 @@ html[data-theme="dark"] .sky-snow-columns .sc-snow { fill: #dfe6ea; }
 .sky-snow-columns .sc-ground { stroke: var(--sky-label); stroke-width: 2; }
 .sky-legend i.is-snow { background: #f4f7f8; box-shadow: inset 0 0 0 1px var(--sky-separator); }
 .sky-legend i.is-swe { background: color-mix(in srgb, var(--sky-cold) 55%, var(--sky-surface)); }
+
+/* ---------- The brief: one screen, no repeats ---------- */
+/* A short line under the numbers, e.g. the hours judged on the approach. */
+.sky-brief-lines { display: grid; gap: 6px; margin: 0 0 4px; }
+.sky-approach-note.sky-brief-line { margin: 0; max-width: none; padding: 0 4px; font-size: 13px; color: var(--sky-secondary); }
+.sky-approach-note.sky-brief-line svg { color: var(--sky-secondary); }
+.sky-approach-note.sky-brief-line button { color: var(--sky-accent); text-decoration: none; }
+/* Checks that need attention keep their tiles; the rest are a line each, still a step into their section. */
+.sky-brief-checks { margin-top: 20px; }
+.sky-check-group { margin: 0 4px 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sky-secondary); }
+.sky-checks + .sky-check-group { margin-top: 18px; }
+.sky-check-rows { margin: 0; padding: 0; list-style: none; border-radius: 18px; background: var(--sky-surface) var(--sky-sheen); box-shadow: var(--sky-elevation); overflow: hidden; }
+.sky-check-rows > li + li { border-top: 1px solid var(--sky-separator); }
+.sky-check-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; min-height: 48px;
+  padding: 8px 16px; border: 0; background: none; color: var(--sky-label); font: inherit; text-align: left; cursor: pointer;
+}
+.sky-check-row:hover { background: color-mix(in srgb, var(--sky-fill) 55%, transparent); }
+.sky-check-row:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; }
+.sky-check-row .sky-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; font-weight: 600; color: var(--sky-label); white-space: nowrap; }
+.sky-check-row .sky-card-head > svg { flex: none; color: var(--sky-secondary); }
+.sky-check-row .sky-card-head .sky-status { font-size: 13px; font-weight: 550; }
+.sky-check-row .sky-cap { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sky-check-row .sky-open { margin: 0; padding: 0; font-size: 13px; white-space: nowrap; }
+.sky-check-row:hover .sky-open { text-decoration: underline; text-underline-offset: 3px; }
+/* A borderline plan's watch, beside the decision it is about. */
+.sky-pill-aside {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 32px; margin: 20px 0 0 10px; padding: 0 4px;
+  border: 0; background: none; color: #fff; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.sky-pill-aside:disabled { opacity: 0.6; cursor: default; }
+.sky-pill-aside:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-radius: 4px; }
+/* Status lines above the brief: one line each; a warning opens to its detail. */
+.sky-notice.is-compact { padding: 8px 14px; border-radius: 12px; font-size: 14px; }
+.sky-notice.is-compact > .sky-link { flex: none; min-height: 32px; padding: 0 2px; font-size: 14px; }
+.sky-notice.is-info.is-compact { justify-content: flex-start; }
+.sky-notice-line { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+details.sky-notice-fold { display: block; }
+.sky-notice-fold > summary { display: flex; align-items: center; gap: 12px; min-height: 28px; cursor: pointer; list-style: none; }
+.sky-notice-fold > summary::-webkit-details-marker { display: none; }
+.field-app .sky-notice-fold > summary::before { content: none; display: none; }
+.sky-notice-fold > summary > svg { flex: none; color: var(--sky-caution); }
+.sky-notice-fold > summary::after {
+  content: ""; flex: none; width: 7px; height: 7px; border: solid var(--sky-secondary); border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-2px);
+}
+.sky-notice-fold[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
+.sky-notice-fold[open] .sky-notice-line { white-space: normal; }
+.sky-notice-body { display: grid; gap: 6px; padding: 8px 0 2px 28px; font-size: 14px; line-height: 1.5; }
+.sky-notice-body p { margin: 0; }
+.sky-notice-body .sky-link { justify-self: start; min-height: 32px; padding: 0; font-size: 14px; }
+@media (max-width: 650px) {
+  .sky-check-row { grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; gap: 10px; padding: 8px 12px; }
+  /* The arrow says it opens; the cue's words would crowd the caption out. */
+  .sky-check-row .sky-open { font-size: 0; }
+  .sky-notice.is-compact:has(> svg) { display: flex; }
+  .sky-notice-body { padding-left: 0; }
+}

@@ -63,6 +63,27 @@ test('the AI read leads with the picture and the move, cites its evidence and of
   assert.doesNotMatch(html, /didn’t pass the report’s fact checks/);
 });
 
+test('leading the report, the read is its big picture and best move; the rest and the ask wait under one line', () => {
+  const html = read({ acrossReport: true });
+  const fold = html.indexOf('<details class="ai-read-more ai-read-fold">');
+  assert.ok(fold > 0, 'one fold holds the rest');
+  const open = html.slice(0, fold);
+  const folded = html.slice(fold);
+  assert.match(open, /Big picture[^]*Gusts reach 32 mph[^]*Best move[^]*Start at dawn/);
+  assert.match(open, /Rewrite/, 'the rewrite stays at hand');
+  assert.doesNotMatch(open, /Why it matters|Watch closely|Ask anything|Suggested questions|can be wrong/);
+  assert.match(folded, /<summary><span>Ask about this report<\/span>/);
+  assert.match(folded, /Why it matters[^]*Watch closely[^]*Ask anything about this plan[^]*Suggested questions[^]*go\/no-go comes from the report’s checks/);
+  assert.equal((html.match(/<details/g) || []).length, 1, 'no fold inside the fold');
+  // Apart from the report, or before anything is written, the read is laid out in full.
+  assert.doesNotMatch(read(), /ai-read-fold/);
+  assert.doesNotMatch(read({ acrossReport: true, narrative: null, details: null }), /ai-read-fold/);
+  // With the report's chat right below, asking is left to it.
+  const withChat = read({ acrossReport: true, chatBelow: true });
+  assert.match(withChat, /<summary><span>Why, what to watch, and how sure<\/span>/);
+  assert.doesNotMatch(withChat, /Ask anything|Suggested questions/);
+});
+
 test('the AI read says when its text came from the checks rather than the model', () => {
   const html = read({ details: { ...details, evidence: [], questions: [], validation: 'deterministic_fallback' } });
   assert.match(html, /didn’t pass the report’s fact checks/);
