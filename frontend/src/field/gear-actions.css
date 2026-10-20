@@ -13,27 +13,12 @@
 .gear-decision.is-blocked strong { color: var(--sky-caution); }
 
 .sky-gear .sky-sh h2 { display: flex; align-items: center; gap: 8px; }
-.sky-gear .sky-sh h2 svg { color: var(--sky-secondary); }
 
-.gear-plan-card { display: grid; gap: 14px; padding: 16px 18px; border-radius: 20px; background: var(--sky-surface); }
-.gear-plan-card > .field-button { justify-self: start; }
-.gear-concerns h3 { margin: 0 0 8px; font-size: 13px; font-weight: 650; color: var(--sky-secondary); }
-.gear-concerns ol { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: gear; }
-.gear-concerns li {
-  position: relative; display: block; padding: 10px 12px 10px 48px; border-radius: 12px; background: var(--sky-fill);
-  font-size: 15px; line-height: 1.45; counter-increment: gear;
-}
-.gear-concerns li::before {
-  content: counter(gear); position: absolute; left: 12px; top: 9px; display: grid; place-items: center;
-  width: 24px; height: 24px; border-radius: 50%; background: var(--sky-surface); font-size: 13px; font-weight: 700; color: var(--sky-label);
-}
-.gear-concerns.is-blocked li { background: var(--sky-caution-fill); font-weight: 600; }
-.gear-concerns.is-blocked li::before { background: var(--sky-caution); color: #fff; }
-.gear-check-actions ul { display: grid; gap: 10px; margin: 8px 0 0; padding: 0; list-style: none; }
-.gear-check-actions li { padding: 10px 12px; border-radius: 12px; background: var(--sky-fill); }
-.gear-check-actions strong { display: block; font-size: 15px; font-weight: 650; }
-.gear-check-actions p { margin: 2px 0 0; font-size: 14px; line-height: 1.45; color: var(--sky-secondary); }
-.gear-unmet { display: inline-block; margin-bottom: 2px; font-size: 12px; font-weight: 650; color: var(--sky-caution); }
+/* What the checks ask of the plan, in one line: the checks themselves are in the brief and Checks & sources. */
+.gear-field-plan { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin: 12px 0 0; font-size: 15px; line-height: 1.45; color: var(--sky-secondary); }
+.gear-field-plan strong { color: var(--sky-caution); font-weight: 650; }
+.gear-field-plan .sky-link { display: inline-flex; align-items: center; gap: 2px; min-height: 36px; padding: 0; }
+.gear-advisories { margin: 8px 0 0; padding: 0 0 0 18px; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; color: var(--sky-secondary); }
 .gear-quiet { margin: 0; font-size: 15px; line-height: 1.5; color: var(--sky-secondary); }
 
 .gear-progress { margin: 0 0 14px; padding: 14px 16px; border-radius: 16px; background: var(--sky-surface); }

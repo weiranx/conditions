@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { SummitDecision } from "../app/types";
 import "./gear-actions.css";
+import { Fold } from "./sky/Fold";
 
 type GearItem = {
   title: string;
@@ -48,6 +49,16 @@ const headline = {
 } as const;
 const identity = (text: string) => text;
 
+/** The chapter's lead: what the decision asks of the plan before packing. */
+export function GearLead({ decision, actionLine }: { decision: SummitDecision; actionLine: string }) {
+  return (
+    <p className="sky-lead">
+      <strong className={decision.level === "NO-GO" ? "is-over" : undefined}>{headline[decision.level] ?? headline.CAUTION}</strong>{" "}
+      {actionLine}
+    </p>
+  );
+}
+
 export function GearActions({
   hidden,
   recommendations,
@@ -56,6 +67,7 @@ export function GearActions({
   onSources,
   activityLabel = null,
   localize = identity,
+  lead = true,
 }: {
   hidden: boolean;
   recommendations: GearItem[];
@@ -64,6 +76,8 @@ export function GearActions({
   onSources: () => void;
   activityLabel?: string | null;
   localize?: (text: string) => string;
+  /** The chapter opens with the decision box; the report shows its lead in the chapter heading instead. */
+  lead?: boolean;
 }) {
   const id = useId();
   const [packed, setPacked] = useState<Set<string>>(() => new Set());
@@ -80,16 +94,15 @@ export function GearActions({
   }
   const items = [...uniqueItems.values()];
   const packedCount = items.filter((item) => packed.has(itemKey(item))).length;
-  const blockers = [...new Set(decision.blockers.filter(Boolean))];
-  const cautions = [
-    ...new Set(
-      [...decision.cautions, ...(decision.advisories ?? [])].filter((item) => item && !blockers.includes(item)),
-    ),
-  ];
   const actions = decision.checks.filter(
     (check) => !check.ok && check.action?.trim(),
   );
   const noGo = decision.level === "NO-GO";
+  // Advice below any limit (moderate air, elevated fire or heat, a field report's action)
+  // is not a failing check, so it appears nowhere else in the report.
+  const advisories = [...new Set((decision.advisories ?? []).filter(
+    (item) => item && !decision.blockers.includes(item) && !decision.cautions.includes(item),
+  ))];
 
   return (
     <section
@@ -98,74 +111,34 @@ export function GearActions({
       aria-labelledby={`${id}-title`}
     >
       <h2 id={`${id}-title`} className="sr-only">Gear and field actions</h2>
-      <div className={`gear-decision${noGo ? " is-blocked" : ""}`}>
-        <TriangleAlert size={20} aria-hidden="true" />
-        <div>
-          <strong>{headline[decision.level] ?? headline.CAUTION}</strong>
-          <p>{actionLine}</p>
+      {lead && (
+        <div className={`gear-decision${noGo ? " is-blocked" : ""}`}>
+          <TriangleAlert size={20} aria-hidden="true" />
+          <div>
+            <strong>{headline[decision.level] ?? headline.CAUTION}</strong>
+            <p>{actionLine}</p>
+          </div>
         </div>
-      </div>
-      <section className="gear-field-plan sky-section" aria-labelledby={`${id}-actions`}>
-        <div className="sky-sh">
-          <h2 id={`${id}-actions`}>Before you leave</h2>
-          <p>Settle these first. They can change the plan.</p>
-        </div>
-        <div className="gear-plan-card">
-          {blockers.length > 0 && (
-            <div className="gear-concerns is-blocked">
-              <h3>Must resolve</h3>
-              <ol>
-                {blockers.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ol>
-            </div>
-          )}
-          {cautions.length > 0 && (
-            <div className="gear-concerns">
-              <h3>Plan around</h3>
-              <ol start={blockers.length + 1} style={{ counterReset: `gear ${blockers.length}` }}>
-                {cautions.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ol>
-            </div>
-          )}
-          {actions.length > 0 && (
-            <details className="gear-check-actions sky-details">
-              <summary>
-                {actions.length}{" "}
-                {actions.length === 1 ? "check needs" : "checks need"} attention
-              </summary>
-              <ul>
-                {actions.map((check, i) => (
-                  <li key={`${check.key || check.label}-${i}`}>
-                    <span className="gear-unmet">Needs review</span>
-                    <strong>{check.label}</strong>
-                    <p>{check.action}</p>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-          {blockers.length === 0 &&
-            cautions.length === 0 &&
-            actions.length === 0 && (
-              <p className="gear-quiet">
-                Nothing in this report calls for a plan change. Check current
-                sources and agree on a turnaround time with your group.
-              </p>
-            )}
-          <button className="field-button" type="button" onClick={onSources}>
-            Review checks & sources{" "}
-            <ArrowUpRight size={15} aria-hidden="true" />
-          </button>
-        </div>
-      </section>
+      )}
+      {/* The checks themselves are in the brief and in Checks & sources; here, only how many and where. */}
+      <p className="gear-field-plan">
+        {actions.length > 0
+          ? <><strong>{actions.length} {actions.length === 1 ? "check needs" : "checks need"} attention</strong>{" · "}</>
+          : <>Nothing in this report calls for a plan change.{" "}</>}
+        <button className="sky-link" type="button" onClick={onSources}>
+          Review checks & sources
+          <ArrowUpRight size={15} aria-hidden="true" />
+        </button>
+      </p>
+      {advisories.length > 0 && (
+        <ul className="gear-advisories" aria-label="Plan around">
+          {advisories.map((item) => <li key={item}>{localize(item)}</li>)}
+        </ul>
+      )}
       <section className="gear-kit sky-section" aria-labelledby={`${id}-kit`}>
         <div className="sky-sh">
-          <h2 id={`${id}-kit`}>
-            <Backpack size={20} aria-hidden="true" />
+          <h2 id={`${id}-kit`} className="sky-subhead">
+            <Backpack size={16} aria-hidden="true" />
             Packing list
           </h2>
           <p>
@@ -206,66 +179,71 @@ export function GearActions({
               const members = items.filter(
                 (item) => groupFor(item.tone) === group.id,
               );
-              return (
-                members.length > 0 && (
-                  <fieldset
-                    className={`gear-group is-${group.id}`}
-                    key={group.id}
-                  >
-                    <legend>
-                      {group.label}
-                      <span>{members.length}</span>
-                    </legend>
-                    <p className="gear-group-note">{group.note}</p>
-                    <div className="gear-grid">
-                      {members.map((item) => {
-                        const key = itemKey(item);
-                        const checked = packed.has(key);
-                        return (
-                          <label
-                            className={`gear-item${checked ? " is-packed" : ""}`}
-                            key={key}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(event) => {
-                                const nextChecked = event.currentTarget.checked;
-                                setPacked((current) => {
-                                  const next = new Set(current);
-                                  if (nextChecked) next.add(key);
-                                  else next.delete(key);
-                                  return next;
-                                });
-                              }}
-                            />
-                            <span className="gear-check" aria-hidden="true">
-                              {checked && <Check size={15} strokeWidth={3} />}
+              if (!members.length) return null;
+              const fieldset = (
+                <fieldset className={`gear-group is-${group.id}`} key={group.id}>
+                  <legend className={group.id === "other" ? "sr-only" : undefined}>
+                    {group.label}
+                    <span>{members.length}</span>
+                  </legend>
+                  {group.id !== "other" && <p className="gear-group-note">{group.note}</p>}
+                  <div className="gear-grid">
+                    {members.map((item) => {
+                      const key = itemKey(item);
+                      const checked = packed.has(key);
+                      return (
+                        <label
+                          className={`gear-item${checked ? " is-packed" : ""}`}
+                          key={key}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const nextChecked = event.currentTarget.checked;
+                              setPacked((current) => {
+                                const next = new Set(current);
+                                if (nextChecked) next.add(key);
+                                else next.delete(key);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span className="gear-check" aria-hidden="true">
+                            {checked && <Check size={15} strokeWidth={3} />}
+                          </span>
+                          <span className="gear-item-copy">
+                            <span className="gear-item-meta">
+                              {item.category}
+                              {checked && <span>Packed</span>}
                             </span>
-                            <span className="gear-item-copy">
-                              <span className="gear-item-meta">
-                                {item.category}
-                                {checked && <span>Packed</span>}
+                            <strong>{item.title}</strong>
+                            {item.reason && (
+                              <span className="gear-item-why">
+                                <span className="sr-only">Why: </span>
+                                {localize(item.reason)}
                               </span>
-                              <strong>{item.title}</strong>
-                              {item.reason && (
-                                <span className="gear-item-why">
-                                  <span className="sr-only">Why: </span>
-                                  {localize(item.reason)}
-                                </span>
-                              )}
-                              {item.detail && (
-                                <span className="gear-item-detail">
-                                  {localize(item.detail)}
-                                </span>
-                              )}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
-                )
+                            )}
+                            {item.detail && (
+                              <span className="gear-item-detail">
+                                {localize(item.detail)}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              );
+              // The kit for every trip like this one waits shut; what this forecast adds stays open.
+              if (group.id !== "other") return fieldset;
+              const packedHere = members.filter((item) => packed.has(itemKey(item))).length;
+              return (
+                <Fold key={group.id} id={`${id}-standard`} title={group.label} className="gear-standard"
+                  hint={`${members.length} ${members.length === 1 ? "item" : "items"}${packedHere ? `, ${packedHere} packed` : ""} · ${group.note.toLowerCase().replace(/\.$/, "")}`}>
+                  {fieldset}
+                </Fold>
               );
             })}
           </>

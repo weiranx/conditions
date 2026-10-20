@@ -36,7 +36,7 @@ function useArrival(text: string) {
 }
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, headline, reason, writing = false, bridge, limitingChecks = [], note, actions, photo, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, pillAside, headline, reason, writing = false, spanInHeadline = false, bridge, limitingChecks = [], note, actions, photo, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
@@ -48,10 +48,14 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   /** A time-sensitive status shown right under the subtitle, e.g. a start that has passed. */
   status?: ReactNode;
   level: "GO" | "CAUTION" | "NO-GO" | string;
+  /** A small action beside the decision, e.g. watching a borderline plan. */
+  pillAside?: ReactNode;
   headline: string;
   reason: string;
   /** The AI is writing the headline and reason: placeholders stand in, so the checks' wording isn't swapped out under the reader. */
   writing?: boolean;
+  /** The headline already names the one span outside the limits, so the sky marks it without saying it again. */
+  spanInHeadline?: boolean;
   bridge?: string;
   limitingChecks?: string[];
   /** Extra context under the reason, e.g. hours checked below the summit. */
@@ -161,12 +165,12 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
       ? `, checked near ${format.elevation ? format.elevation(h.elevationFt as number) : `${h.elevationFt} ft`}${h.inversionRisk ? " with a possible valley inversion" : ""}`
       : "");
   const callout = overRuns.length === 1
-    ? `Outside your limits · ${spanLabel(hours, overRuns[0], format.clock)}`
+    ? spanInHeadline ? null : `Outside your limits · ${spanLabel(hours, overRuns[0], format.clock)}`
     : overRuns.length > 1 ? `${overRuns.length} periods outside your limits`
     : runs.some((run) => run.tone === "missing") ? "Some hours have incomplete readings" : "Within your limits all day";
   const calloutX = overRuns.length === 1 ? (x(overRuns[0].start) + x(overRuns[0].end + 1)) / 2 : width / 2;
   // Keep the whole label inside the sky: about 7 px per character at 12 px bold, plus a margin.
-  const calloutHalf = Math.min(width / 2, (callout.length + 2) * 3.5 + 12);
+  const calloutHalf = Math.min(width / 2, ((callout?.length ?? 0) + 2) * 3.5 + 12);
   const toneWord = LEVEL_LABEL[level] || level;
   const tone = level === "GO" ? "go" : level === "NO-GO" ? "stop" : "watch";
 
@@ -293,10 +297,12 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
                 </g>
               );
             })}
-            <text x={Math.max(calloutHalf, Math.min(width - calloutHalf, calloutX))} y={stripY - 8} textAnchor="middle" className="sky-callout"
-              fill={overRuns.length ? "#FF9A4D" : "rgba(255,255,255,.85)"}>
-              {overRuns.length ? "▲ " : ""}{callout}
-            </text>
+            {callout && (
+              <text x={Math.max(calloutHalf, Math.min(width - calloutHalf, calloutX))} y={stripY - 8} textAnchor="middle" className="sky-callout"
+                fill={overRuns.length ? "#FF9A4D" : "rgba(255,255,255,.85)"}>
+                {overRuns.length ? "▲ " : ""}{callout}
+              </text>
+            )}
             {preview !== null && preview !== safeSelected && (
               <rect x={x(preview) + 2} y={stripY - 8} width={Math.max(4, cw - 4)} height="68" rx="10"
                 fill="rgba(255,255,255,.08)" stroke="#fff" strokeOpacity=".55" strokeWidth="1.5" strokeDasharray="4 4" />
@@ -319,6 +325,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
           {tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
           <span><span className="sr-only">Trip decision: </span>{toneWord}</span>
         </span>
+        {pillAside}
         {writing ? (
           <>
             <h2 id="field-verdict-title" ref={arrival.headline} className="is-writing">
@@ -345,7 +352,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
         )}
         {note}
         </div>
-        {hour && (
+        {/* On a narrow screen the Weather chapter's hour chart carries the readout; the sky keeps its slider. */}
+        {hour && !compact && (
           <div className="sky-readout" aria-live="polite">
             <div>
               <div className="sky-readout-time">{format.clock(hour.minute)}</div>

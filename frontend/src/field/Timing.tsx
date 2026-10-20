@@ -99,11 +99,6 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
     })]
       .sort((a, b) => a.start - b.start);
 
-  const overPlan = hours.filter(isOverHour).length;
-  const daylightLength = sunrise !== null && sunset !== null && sunset > sunrise ? sunset - sunrise : null;
-  const best = comparison?.scenarios.find((s) => s.startTime === comparison.bestStartTime);
-  // Another start is suggested only when it is clearly better than the plan.
-  const suggestion = comparison?.suggestion ?? null;
   // The hour that most needs attention, when any hour carries a risk signal.
   const peak = w.peakCriticalWindow;
   const peakTime = w.evaluation?.criticalWindow.peakTime ?? null;
@@ -116,27 +111,10 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
 
   return (
     <div className="sky-timing">
-      <p className="sky-lead">
-        Your <strong>{w.displayStartTime} start</strong> has you back at{" "}
-        <strong>{w.formatClockForStyle(w.returnTimeDisplay, w.preferences.timeStyle)}{w.returnExtendsPastMidnight ? " (+1 day)" : ""}</strong>
-        {planDaylight !== null && (planDaylight < 0
-          ? <>, <strong className="is-over">{duration(-planDaylight)} after sunset</strong></>
-          : <>, {duration(planDaylight)} before sunset</>)}
-        {overPlan > 0 && <>, with <strong className="is-over">{overPlan} h over your limits</strong></>}.{" "}
-        {suggestion && best && (
-          <>Starting at <strong>{clockText(best.startTime)}</strong> {suggestion}. </>
-        )}
-        <span className="sky-lead-note">
-          {sunrise !== null && sunset !== null
-            ? `Sunrise ${clock(sunrise)} · Sunset ${clock(sunset)}${daylightLength ? ` · ${duration(daylightLength)} of daylight` : ""}.`
-            : "Sunrise and sunset are unavailable for this plan."}
-        </span>
-      </p>
-
       {flags.startTimeComparisons && (
         <section className="sky-section" aria-labelledby="sky-timing-compare">
           <div className="sky-sh">
-            <h2 id="sky-timing-compare">Compare start times</h2>
+            <h2 id="sky-timing-compare" className="sky-subhead">Compare start times</h2>
             <p>{comparison?.recommendationReason || "Same trip length, different departures."}</p>
           </div>
           <div className="sky-card sky-timeline-card">
@@ -215,10 +193,14 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
         </section>
       )}
 
-      <Fold id="sky-timing-daylight-limits" title="Daylight and your limits" hint="Sunrise, sunset and the limits behind these checks.">
+      <Fold id="sky-timing-daylight-limits" title="Daylight and your limits"
+        hint={[
+          sunrise !== null && sunset !== null ? `Sunrise ${clock(sunrise)} · sunset ${clock(sunset)}` : "Sunrise and sunset unavailable",
+          `gusts to ${w.formatWindDisplay(w.preferences.maxWindGustMph)}, rain chance to ${w.preferences.maxPrecipChance}%`,
+        ].join(" · ")}>
       <div className="sky-duo">
         {flags.daylightTimeline && (
-          <section className="sky-card report-daylight-panel" aria-labelledby="sky-timing-daylight">
+          <section className="sky-card is-secondary report-daylight-panel" aria-labelledby="sky-timing-daylight">
             <span className="sky-card-head"><span id="sky-timing-daylight">Your day outside</span></span>
             <DaylightChart
               start={w.alpineStartTime}
@@ -241,7 +223,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
             </dl>
           </section>
         )}
-        <section className="sky-card" aria-labelledby="sky-timing-limits">
+        <section className="sky-card is-secondary" aria-labelledby="sky-timing-limits">
           <span className="sky-card-head"><span id="sky-timing-limits">Your planning limits</span></span>
           <dl className="sky-list">
             {limits.map((limit) => (
@@ -264,8 +246,8 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
       </Fold>
 
       {flags.contingencyPlanning && w.safetyData?.contingency?.status === "ok" && (
-        <div className="sky-section">
           <ContingencyCard
+            folded
             contingency={w.safetyData.contingency}
             returnMinutes={Number.isFinite(w.returnMinutes) ? (w.returnMinutes as number) : null}
             clock={clock}
@@ -273,7 +255,6 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
             formatWind={(value) => w.formatWindDisplay(value)}
             timeZone={w.objectiveTimezone}
           />
-        </div>
       )}
     </div>
   );

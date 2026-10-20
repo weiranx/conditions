@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AiChapterNote, AiRead } from '../src/field/AiRead';
+import { AiRead } from '../src/field/AiRead';
 import { starterQuestions } from '../src/field/ai-explanation';
 import { aiHero, isOutdatedRead, shownAiHero, evidenceChapter, evidenceLabel, evidenceLinks } from '../src/app/ai-evidence';
 import { buildPersistedReport, parseAiBriefDetails, parsePersistedReport } from '../src/app/report-storage';
@@ -63,6 +63,27 @@ test('the AI read leads with the picture and the move, cites its evidence and of
   assert.doesNotMatch(html, /didn’t pass the report’s fact checks/);
 });
 
+test('leading the report, the read is its big picture and best move; the rest and the ask wait under one line', () => {
+  const html = read({ acrossReport: true });
+  const fold = html.indexOf('<details class="ai-read-more ai-read-fold">');
+  assert.ok(fold > 0, 'one fold holds the rest');
+  const open = html.slice(0, fold);
+  const folded = html.slice(fold);
+  assert.match(open, /Big picture[^]*Gusts reach 32 mph[^]*Best move[^]*Start at dawn/);
+  assert.match(open, /Rewrite/, 'the rewrite stays at hand');
+  assert.doesNotMatch(open, /Why it matters|Watch closely|Ask anything|Suggested questions|can be wrong/);
+  assert.match(folded, /<summary><span>Ask about this report<\/span>/);
+  assert.match(folded, /Why it matters[^]*Watch closely[^]*Ask anything about this plan[^]*Suggested questions[^]*go\/no-go comes from the report’s checks/);
+  assert.equal((html.match(/<details/g) || []).length, 1, 'no fold inside the fold');
+  // Apart from the report, or before anything is written, the read is laid out in full.
+  assert.doesNotMatch(read(), /ai-read-fold/);
+  assert.doesNotMatch(read({ acrossReport: true, narrative: null, details: null }), /ai-read-fold/);
+  // With the report's chat right below, asking is left to it.
+  const withChat = read({ acrossReport: true, chatBelow: true });
+  assert.match(withChat, /<summary><span>Why, what to watch, and how sure<\/span>/);
+  assert.doesNotMatch(withChat, /Ask anything|Suggested questions/);
+});
+
 test('the AI read says when its text came from the checks rather than the model', () => {
   const html = read({ details: { ...details, evidence: [], questions: [], validation: 'deterministic_fallback' } });
   assert.match(html, /didn’t pass the report’s fact checks/);
@@ -82,32 +103,6 @@ test('the AI read waits, offers, or steps aside depending on what is available',
   assert.doesNotMatch(saved, /Rewrite|Ask anything|Suggested questions/);
   assert.equal(read({ narrative: null, details: null, readOnly: true }), '');
   assert.match(read({ error: 'AI usage limit reached' }), /role="alert">AI usage limit reached/);
-});
-
-test('each chapter opens with the parts of the read that cite it', () => {
-  const note = (chapter, extra = {}) => renderToStaticMarkup(
-    <AiChapterNote narrative={narrative} details={details} chapter={chapter} onReadAll={() => {}} {...extra} />,
-  );
-  const weather = note('forecast');
-  assert.match(weather, /AI analysis · weather[^]*Big picture[^]*Why it matters/);
-  assert.doesNotMatch(weather, /Comfort check|Data confidence/);
-  assert.match(note('terrain'), /Data confidence[^]*avalanche bulletin/);
-  assert.match(note('gear'), /Best move[^]*Start at dawn/);
-  assert.equal(note('route'), '');
-  assert.equal(note('forecast', { details: { ...details, validation: 'deterministic_fallback' } }), '');
-  assert.equal(note('forecast', { details: null }), '');
-});
-
-test('a chapter leads with the AI\'s own analysis of it when the read wrote one', () => {
-  const withChapters = { ...details, chapters: { terrain: { text: 'Wind-loaded north aspects are the concern above the col.', evidence: [{ path: 'avalanche.dangerLevel', value: 2 }, { path: 'weather.windGust', value: 32 }] } } };
-  const note = (chapter) => renderToStaticMarkup(
-    <AiChapterNote narrative={narrative} details={withChapters} chapter={chapter} onReadAll={() => {}} onOpen={() => {}} />,
-  );
-  const terrain = note('terrain');
-  assert.match(terrain, /AI analysis · terrain &amp; snow[^]*Wind-loaded north aspects/);
-  assert.doesNotMatch(terrain, /Data confidence/, 'the chapter analysis replaces the read\'s excerpts');
-  assert.match(terrain, /<span>Avalanche danger level<\/span>[^]*<button[^>]*>Wind gust<\/button>/, 'a citation of this chapter is plain text; another chapter\'s opens it');
-  assert.match(note('forecast'), /Big picture/, 'chapters without an analysis keep the read\'s excerpts');
 });
 
 test('saved chapter analyses keep only the AI chapters and well-formed citations', () => {

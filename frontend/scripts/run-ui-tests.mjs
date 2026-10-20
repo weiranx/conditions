@@ -44,6 +44,10 @@ const leafletCoordinateOnly = {
       ].join("\n"),
       loader: "js",
     }));
+    // A package's stylesheet (Leaflet's, under the terrain map) loads empty, as the app's own do.
+    build.onResolve({ filter: /\.css$/, namespace: "file" }, (args) =>
+      args.path.startsWith(".") ? undefined : { path: args.path, namespace: "no-style" });
+    build.onLoad({ filter: /.*/, namespace: "no-style" }, () => ({ contents: "", loader: "js" }));
   },
 };
 

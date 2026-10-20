@@ -1,5 +1,5 @@
 import { SupplementalEvidence } from './SupplementalEvidence';
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, TriangleAlert } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
@@ -29,7 +29,36 @@ const FIELD_NAMES: Record<string, string> = {
   isDaytime: "daylight",
 };
 
-export function Sources({ workspace: w }: { workspace: Workspace }) {
+type DecisionCheck = NonNullable<Workspace["decision"]>["checks"][number];
+
+/** One decision check: its label and result, opening to the detail and the action it asks for. */
+function CheckItem({ check }: { check: DecisionCheck }) {
+  return (
+    <details open={!check.ok} className={check.ok ? "is-ok" : "is-over"}>
+      <summary>
+        <span className={`sky-check-icon ${check.ok ? "field-pass" : "field-fail"}`}>
+          {check.ok ? <Check size={16} aria-hidden="true" /> : <TriangleAlert size={16} aria-hidden="true" />}
+        </span>
+        <span className="sky-check-label">{check.label}</span>
+        <span className={`sky-status is-${check.ok ? "ok" : "over"}`}>{check.ok ? "Pass" : "Review"}</span>
+      </summary>
+      <div className="sky-check-body">
+        <p>{check.detail}</p>
+        {check.action && (
+          <p>
+            <strong>Action:</strong> {check.action}
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
+export function Sources({ workspace: w, more = null }: {
+  workspace: Workspace;
+  /** Reference that closes the chapter, e.g. the AI read when it does not lead the report. */
+  more?: ReactNode;
+}) {
   const flags = resolveReportFeatureFlags(w.safetyData?.featureFlags);
   const f = evidenceFormat(w);
   // Group the readings by the source that supplied them: "NOAA: temperature, wind, …".
@@ -63,52 +92,36 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
       });
     return () => controller.abort();
   }, [report, w.activeSavedReportId, w.accountUserId]);
-  const checks = [...(w.decision?.checks || [])].sort((a, b) => Number(a.ok) - Number(b.ok));
+  const checks = w.decision?.checks || [];
   const review = checks.filter((check) => !check.ok);
+  // Passing checks wait behind one line in the same list; the ones to review are open.
+  const passing = checks.filter((check) => check.ok);
   const freshness = w.interpretation!.sourceFreshness;
   const current = freshness.rows.filter((row) => row.state === "fresh" || row.state === "aging").length;
-  const missing = freshness.rows.filter((row) => row.state === "missing").map((row) => row.label);
+  const missingSources = freshness.rows.filter((row) => row.state === "missing").map((row) => row.label);
+  const freshHint = `${current} of ${freshness.rows.length} current${missingSources.length ? ` · ${missingSources.join(", ")} missing` : ""}`;
   return (
     <div className="sky-sources">
-      <p className="sky-lead">
-        <strong>{checks.length - review.length} of {checks.length} checks</strong> pass
-        {review.length > 0 && <>; <strong className="is-over">{review.length} need review</strong></>}.{" "}
-        <strong>{current} of {freshness.rows.length} sources</strong> are current
-        {missing.length > 0 && <>, and <strong className="is-missing">{missing.join(", ")}</strong> didn't load, so this report can't rule out what {missing.length === 1 ? "it covers" : "they cover"}</>}.{" "}
-        <span className="sky-lead-note">Evidence quality: {w.safetyData?.safety.evidenceQuality || "not assessed"}.</span>
-      </p>
-
       <section className="sky-section" aria-labelledby="sky-sources-checks">
-        <div className="sky-sh">
-          <h2 id="sky-sources-checks">Checks</h2>
-          <p>Items that need review are open.</p>
-        </div>
+        <h2 id="sky-sources-checks" className="sr-only">Checks</h2>
         <div className="sky-card sky-check-list">
-          {checks.map((check, i) => (
-            <details key={check.key || i} open={!check.ok} className={check.ok ? "is-ok" : "is-over"}>
+          {review.map((check, i) => <CheckItem key={check.key || i} check={check} />)}
+          {passing.length > 0 && (
+            <details className="sky-check-passed">
               <summary>
-                <span className={`sky-check-icon ${check.ok ? "field-pass" : "field-fail"}`}>
-                  {check.ok ? <Check size={16} aria-hidden="true" /> : <TriangleAlert size={16} aria-hidden="true" />}
-                </span>
-                <span className="sky-check-label">{check.label}</span>
-                <span className={`sky-status is-${check.ok ? "ok" : "over"}`}>{check.ok ? "Pass" : "Review"}</span>
+                <span className="sky-check-icon field-pass"><Check size={16} aria-hidden="true" /></span>
+                <span className="sky-check-label">{passing.length} passed</span>
+                <span className="sky-status is-ok">{review.length ? "Show" : "All pass"}</span>
               </summary>
-              <div className="sky-check-body">
-                <p>{check.detail}</p>
-                {check.action && (
-                  <p>
-                    <strong>Action:</strong> {check.action}
-                  </p>
-                )}
-              </div>
+              {passing.map((check, i) => <CheckItem key={check.key || i} check={check} />)}
             </details>
-          ))}
+          )}
           {checks.length === 0 && <p className="sky-empty">No decision checks are available for this report.</p>}
         </div>
       </section>
 
-      <Fold id="sky-sources-fresh" title="How fresh is each source" hint="When each forecast and bulletin was issued.">
-        <div className="sky-card">
+      <Fold id="sky-sources-fresh" title="How fresh is each source" hint={freshHint}>
+        <div className="sky-card is-secondary">
           {freshness.hasWarning && <p className="sky-notice is-missing">{freshness.warningSummary}</p>}
           <FreshnessChart rows={freshness.rows} age={(issued) => w.formatAgeFromNow(issued)} stamp={(issued) => w.formatPubTime(issued)} />
           <div className="sky-link-row">
@@ -129,7 +142,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
       {(comparison || comparisonError || w.dayOverDay) && (
         <div className="sky-duo sky-section">
           {comparison && (
-            <section className="sky-card" aria-labelledby="sky-sources-since">
+            <section className="sky-card is-secondary" aria-labelledby="sky-sources-since">
               <span className="sky-card-head"><span id="sky-sources-since">Since the previous matching report</span></span>
               <strong className="sky-card-lede">{comparison.headline}</strong>
               <p className="sky-cap">Baseline {dateLabel(comparison.baselineAt)}</p>
@@ -142,7 +155,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
           )}
           {comparisonError && <p className="sky-cap">{comparisonError}</p>}
           {w.dayOverDay && (
-            <section className="sky-card" aria-labelledby="sky-sources-prior">
+            <section className="sky-card is-secondary" aria-labelledby="sky-sources-prior">
               <span className="sky-card-head">
                 <span id="sky-sources-prior">Change from the prior day</span>
                 {w.dayOverDay.scoreComparable && <span className="sky-chip">{w.dayOverDay.deltaLabel} pts</span>}
@@ -169,16 +182,12 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
       )}
 
       {flags.scoreBreakdown && w.safetyData && (
-        <div className="sky-section">
-          <ScoreExplanation safety={w.safetyData.safety} localize={w.localizeUnitText} />
-        </div>
+        <ScoreExplanation safety={w.safetyData.safety} localize={w.localizeUnitText} folded />
       )}
-      <div className="sky-section">
-        <SupplementalEvidence evidence={w.safetyData?.supplementalEvidence} localize={w.localizeUnitText} timeStyle={w.preferences.timeStyle} />
-      </div>
+      <SupplementalEvidence evidence={w.safetyData?.supplementalEvidence} localize={w.localizeUnitText} timeStyle={w.preferences.timeStyle} folded />
 
       <div className="sky-duo sky-section">
-        <section className="sky-card" aria-labelledby="sky-sources-alerts">
+        <section className="sky-card is-secondary" aria-labelledby="sky-sources-alerts">
           <span className="sky-card-head">
             <span id="sky-sources-alerts">Official alerts</span>
             <span className={`sky-chip${w.nwsAlertCount > 0 ? " is-over" : ""}`}>{w.nwsAlertCount} for your time</span>
@@ -211,7 +220,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
             </p>
           )}
         </section>
-        <section className="sky-card" aria-labelledby="sky-sources-provenance">
+        <section className="sky-card is-secondary" aria-labelledby="sky-sources-provenance">
           <span className="sky-card-head"><span id="sky-sources-provenance">Forecast provenance</span></span>
           <p className="sky-cap is-body">{w.weatherSourceDisplay}</p>
           <Evidence
@@ -237,6 +246,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
           </details>
         </section>
       </div>
+      {more}
     </div>
   );
 }

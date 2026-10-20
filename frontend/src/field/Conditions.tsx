@@ -53,7 +53,7 @@ function ExposureCard({ icon, title, value, tone = "ok", status, children, note,
   className?: string;
 }) {
   return (
-    <section className={`sky-card sky-exposure condition-card ${className}`} aria-label={title}>
+    <section className={`sky-card is-secondary sky-exposure condition-card ${className}`} aria-label={title}>
       <span className="sky-card-head">
         <span className="sky-exposure-title">{icon}{title}</span>
         {status && <span className={`sky-status is-${tone}`}>{tone === "over" && <TriangleAlert size={14} aria-hidden="true" />}{status}</span>}
@@ -109,17 +109,23 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
   const air = data.airQuality;
   const tempContext = data.weather.temperatureContext24h;
   const moon = data.atmosphere?.moon;
+  // Closed, the fold reads the same levels its cards show.
+  const exposureHint = [
+    flags.heatRiskDetails ? `Heat ${String(heatRisk.label || "unavailable").toLowerCase()}` : null,
+    flags.fireRiskDetails ? `Fire ${String(fireRisk.label || "unavailable").toLowerCase()}` : null,
+    flags.airQualityDetails
+      ? airQualityFutureNotApplicable ? "AQI current only" : aqiKnown ? `AQI ${aqi}${air?.category ? ` ${air.category.toLowerCase()}` : ""}` : "AQI unavailable"
+      : null,
+    `Visibility ${visibility.level === "Unknown" ? "unavailable" : String(visibility.level).toLowerCase()}`,
+  ].filter(Boolean).join(" · ");
   const skyClock = (minute: number) =>
     w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   return (
     <div className="field-conditions sky-conditions">
-      <section className="sky-section" aria-labelledby="sky-precip-title">
-        <div className="sky-sh">
-          <h2 id="sky-precip-title">Rain and snow</h2>
-          <p>{rainfall.expectedTravelWindowHours}-hour window and the days before it.</p>
-        </div>
+      <Fold id="sky-precip-title" title="Rain and snow"
+        hint={`${rainfall.expectedRainWindowDisplay} rain · ${rainfall.expectedSnowWindowDisplay} snow expected in your ${rainfall.expectedTravelWindowHours}-hour window`}>
         {objectiveFt !== null && skyHours.length > 0 && (
-          <section className="sky-card sky-precip-card" aria-label="Rain and snow on the mountain">
+          <section className="sky-card is-secondary sky-precip-card" aria-label="Rain and snow on the mountain">
             <span className="sky-card-head">
               <span className="sky-exposure-title"><Snowflake size={16} aria-hidden="true" />Rain or snow on your route</span>
               <span className="sky-muted">Heights to scale · ridge illustrative</span>
@@ -136,7 +142,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
           </section>
         )}
         <div className="sky-duo">
-          <section className="sky-card report-precip-panel" aria-label="Expected precipitation">
+          <section className="sky-card is-secondary report-precip-panel" aria-label="Expected precipitation">
             <span className="sky-card-head">
               <span className="sky-exposure-title"><Droplets size={16} aria-hidden="true" />Expected during your trip</span>
               <SourceLink url={w.safeRainfallLink} />
@@ -157,7 +163,7 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               <p>{rainfall.noteLine} {rainfall.expectedNoteLine}</p>
             </details>
           </section>
-          <section className="sky-card" aria-label="Recent precipitation">
+          <section className="sky-card is-secondary" aria-label="Recent precipitation">
             <span className="sky-card-head"><span>Recently fallen</span><span className="sky-muted">{rainfall.modeLabel}</span></span>
             <div className="report-precip-charts">
               <AccumulationBars
@@ -192,13 +198,9 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
             </div>
           </section>
         </div>
-      </section>
+      </Fold>
 
-      <section className="sky-section" aria-labelledby="sky-exposure-title">
-        <div className="sky-sh">
-          <h2 id="sky-exposure-title">Beyond the weather</h2>
-          <p>Heat, fire, air, visibility and sun for this outing.</p>
-        </div>
+      <Fold id="sky-exposure-title" title="Heat, fire, air and visibility" hint={exposureHint}>
         <div className="sky-exposure-grid field-condition-grid">
           {flags.heatRiskDetails && (
             <ExposureCard className="is-heat" icon={<ThermometerSun size={16} aria-hidden="true" />} title="Heat exposure"
@@ -336,11 +338,12 @@ export function Conditions({ workspace: w, hours: skyHours = [] }: { workspace: 
               elevation={(ft) => w.formatElevationDisplay(ft)} />
           )}
         </div>
-      </section>
+      </Fold>
 
       {flags.fieldObservations && (
-        <Fold id="sky-field-title" title="Field reports and access">
-          <div className="sky-card sky-field-card">
+        <Fold id="sky-field-title" title="Field reports and access"
+          hint={unusual.length ? `${unusual.length} to review` : missing.length === 5 ? "Observations incomplete" : "Nothing unusual reported"}>
+          <div className="sky-card is-secondary sky-field-card">
             <span className="sky-card-head">
               <span className="sky-exposure-title"><Radio size={16} aria-hidden="true" />Station, radar, water, smoke and access</span>
               <span className={`sky-status is-${unusual.length ? "over" : missing.length === 5 ? "missing" : "ok"}`}>

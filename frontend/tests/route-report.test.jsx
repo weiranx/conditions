@@ -115,7 +115,7 @@ function workspace() {
 const brief = (route) => renderToStaticMarkup(
   <BriefSections w={workspace()} hours={hours} clock={(m) => `${m}`}
     onOpen={() => {}} route={route} />);
-const routeCard = (html) => html.slice(html.indexOf("is-route"), html.indexOf("<span>Weather</span>"));
+const routeCard = (html) => html.slice(html.indexOf("is-route"), html.indexOf("</button>", html.indexOf("is-route")));
 
 test("the brief's checks lead with the planned route and the card says how it went", () => {
   const route = summarize({
@@ -128,10 +128,17 @@ test("the brief's checks lead with the planned route and the card says how it we
   assert.match(card, /East Ridge/);
   assert.match(card, /9\.4 mi · \+5100 ft gain · 3 checkpoints/);
   assert.match(card, /sky-status is-over[^>]*>.*1 of 3 over/);
-  assert.match(card, /Col at @09:30: gusts 42 mph, over your 30 mph limit\. Back at the start around @15:00\./);
+  assert.match(card, /Col at @09:30: gusts 42 mph, over your 30 mph limit\. Back at the start around @15:00\. The decision uses the objective’s forecast, not these checkpoints\./,
+    "the card, not a note in the hero, says the route does not set the decision");
   assert.match(card, /Checkpoints along East Ridge: Trailhead at @06:00, within your limits; Col at @09:30, over your limits/);
   assert.match(card, /Along the route/, "the card says it leads to the route section");
   assert.doesNotMatch(html, /NaN|undefined/);
+});
+
+test("a route within every limit is a line among the clear checks", () => {
+  const html = brief(summarize({ analysis: analysis([stop(), stop({ name: "Col", etaTime: "09:30" })]) }));
+  assert.match(html, /class="sky-check sky-check-row is-route">[^]*Within limits[^]*All 2 checkpoint forecasts are within your limits/);
+  assert.doesNotMatch(html, /sky-route-strip|The decision uses/);
 });
 
 test("without a planned route the brief shows no route card", () => {

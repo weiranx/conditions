@@ -1,14 +1,9 @@
 import type { SafetyData, TimeStyle } from '../app/types';
-import { reportInsightItems } from '../app/report-insights';
+import { disclaimerOnlyInsight as disclaimerOnly, reportInsightItems } from '../app/report-insights';
 import { SourceLink } from './Details';
 import './report-insights.css';
 
 type Insight = ReturnType<typeof reportInsightItems>[number];
-
-// Items that only restate what a feed cannot establish. They stay in the
-// payload for the AI brief and field brief but are not worth screen space.
-const disclaimerOnly = (item: Insight) =>
-  item.tone === 'gap' || (item.tone === 'context' && ['access', 'station-wind', 'water'].includes(item.id));
 
 export function ReportInsights({ data, localize = text => text, onSources, timeStyle = 'ampm' }: {
   data: SafetyData;

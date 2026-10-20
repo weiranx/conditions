@@ -65,7 +65,7 @@ async function mount(t, overrides = {}) {
   return { render, click: async (node) => act(async () => node.click()) };
 }
 
-test("packing sorts priority first, deduplicates items and keeps blockers after completion", async (t) => {
+test("packing sorts priority first, deduplicates items and keeps the decision after completion", async (t) => {
   const h = await mount(t, {
     recommendations: [lamp, shell, rescue, shell, { ...rescue, tone: "neutral" }, { ...lamp, title: " " }],
   });
@@ -81,10 +81,6 @@ test("packing sorts priority first, deduplicates items and keeps blockers after 
   assert.match(
     document.querySelector('[role="status"]').textContent,
     /List complete/,
-  );
-  assert.match(
-    document.querySelector(".gear-concerns.is-blocked").textContent,
-    /Change the exposed route/,
   );
   assert.match(
     document.querySelector(".gear-decision").textContent,
@@ -125,7 +121,7 @@ test("missing gear has an explicit empty state and preserves source review", asy
   assert.equal(reviews, 1);
 });
 
-test("only unmet checks expose actions and clear reports do not invent warnings", async (t) => {
+test("the chapter counts unmet checks in one line instead of repeating them, and clear reports do not invent warnings", async (t) => {
   const h = await mount(t, {
     decision: {
       ...decision,
@@ -135,22 +131,29 @@ test("only unmet checks expose actions and clear reports do not invent warnings"
       ],
     },
   });
-  assert.match(
-    document.querySelector(".gear-check-actions").textContent,
-    /Needs review.*Wind threshold.*Choose sheltered terrain/,
-  );
-  assert.doesNotMatch(
-    document.querySelector(".gear-check-actions").textContent,
-    /Hidden action/,
-  );
+  const line = document.querySelector(".gear-field-plan").textContent;
+  assert.match(line, /^1 check needs attention · Review checks & sources$/);
+  assert.doesNotMatch(document.body.textContent, /Hidden action|Choose sheltered terrain|Change the exposed route|Allow extra time|Before you leave/,
+    "the checks and their actions are in the brief and Checks & sources, not repeated here");
   await h.render({
     decision: { level: "GO", blockers: [], cautions: [], checks: [] },
   });
-  assert.equal(document.querySelector(".gear-concerns"), null);
   assert.match(
     document.querySelector(".gear-field-plan").textContent,
     /Nothing in this report calls for a plan change/,
   );
+  assert.equal(document.querySelector(".gear-advisories"), null);
+});
+
+test("advice below the limits is listed once, since no check carries it", async (t) => {
+  await mount(t, {
+    decision: {
+      ...decision,
+      advisories: ["Air quality is moderate (AQI 62).", "Allow extra time.", "Air quality is moderate (AQI 62)."],
+    },
+  });
+  const items = [...document.querySelectorAll(".gear-advisories li")].map((li) => li.textContent);
+  assert.deepEqual(items, ["Air quality is moderate (AQI 62)."], "cautions already in the checks are not repeated; duplicates collapse");
 });
 
 test("items show why they were added, localized, and forecast items group together", async (t) => {

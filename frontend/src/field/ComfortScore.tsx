@@ -28,7 +28,7 @@ export function ComfortScore({ comfort, localize = (text) => text, elevation = (
   const reasons = comfort.confidenceReasons || [];
   const adjustments = comfort.adjustments || [];
   return (
-    <section className="sky-card sky-exposure condition-card is-comfort comfort-score" aria-label="Weather comfort">
+    <section className="sky-card is-secondary sky-exposure condition-card is-comfort comfort-score" aria-label="Weather comfort">
       <span className="sky-card-head"><span className="sky-exposure-title"><Smile size={16} aria-hidden="true" />Weather comfort</span></span>
       <span className="sky-big">{score === null ? "Unknown" : comfort.label}</span>
       <ConditionScale label="Weather comfort score" value={score} maximum={100} format={(value) => `${Math.round(value)}/100`} bands={COMFORT_BANDS} />

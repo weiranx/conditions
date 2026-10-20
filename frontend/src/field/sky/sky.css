@@ -421,7 +421,7 @@ button.sky-card:focus-visible { outline: 3px solid var(--sky-accent); outline-of
 }
 @media print {
   .sky-hero { color: #000; background: none; }
-  .sky-canvas, .sky-hero-actions, .sky-chapter-tabs, .sky-hint, .sky-continue, .sky-open, .sky-section-placeholder { display: none; }
+  .sky-canvas, .sky-hero-actions, .sky-chapter-tabs, .sky-hint, .sky-pill-aside, .sky-open, .sky-section-placeholder { display: none; }
   .sky-hero-in { padding-bottom: 0; }
   .sky-hero :is(h1, h2, .sky-lede, .sky-limiting, .sky-subtitle, .sky-kicker, .sky-ai-byline) { color: #000; text-shadow: none; }
   .sky-ai-byline button, .sky-ai-byline.is-pending { display: none; }

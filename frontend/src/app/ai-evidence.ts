@@ -100,11 +100,6 @@ export function sectionCitations(details: AiBriefDetails | null, title: string):
   return details.evidence.find((section) => section.heading.trim().toUpperCase() === heading)?.evidence ?? [];
 }
 
-/** Whether a section of the read cites anything a chapter shows. */
-export function sectionCitesChapter(citations: AiBriefCitation[], chapter: EvidenceChapter): boolean {
-  return citations.some((citation) => evidenceChapter(citation.path) === chapter);
-}
-
 const LEVEL_RANK: Record<string, number> = { GO: 0, CAUTION: 1, 'NO-GO': 2 };
 
 /**
@@ -138,4 +133,14 @@ function heroBeside(hero: AiBriefHero | null | undefined, level: string): AiBrie
  */
 export function isOutdatedRead(narrative: string | null, details: AiBriefDetails | null): boolean {
   return Boolean(narrative) && (!details || details.hero === undefined);
+}
+
+/**
+ * The AI's fact-checked analysis of one report chapter, when the read wrote one.
+ * Under AI-first it is the chapter's lead in place of the checks' sentence.
+ */
+export function aiChapterText(narrative: string | null, details: AiBriefDetails | null, chapter: string): string | null {
+  if (!narrative || !details || details.validation === "deterministic_fallback") return null;
+  if (chapter !== "forecast" && chapter !== "timing" && chapter !== "terrain" && chapter !== "sources") return null;
+  return details.chapters?.[chapter]?.text?.trim() || null;
 }

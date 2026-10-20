@@ -144,12 +144,13 @@
 }
 /* The older disclosure style draws its own chevron; Sky disclosures use one on the right. */
 .field-app details.sky-details > summary::before { content: none; display: none; }
-/* A folded report section: a heading row that opens the detail beneath it. */
+/* A folded report section: one quiet row, its label and the key fact inside, that opens the detail beneath it. */
 .sky-fold > details > summary {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  min-height: 56px; padding: 12px 16px; cursor: pointer; list-style: none;
-  border: 1px solid var(--sky-separator); border-radius: 16px; background: var(--sky-fill);
+  min-height: 48px; padding: 10px 4px; cursor: pointer; list-style: none;
+  border: 0; border-top: 1px solid var(--sky-separator); border-bottom: 1px solid var(--sky-separator); background: none;
 }
+.sky-fold + .sky-fold > details > summary { border-top: 0; }
 .sky-fold > details > summary::-webkit-details-marker { display: none; }
 .field-app .sky-fold > details > summary::before { content: none; display: none; }
 .sky-fold > details > summary::after {
@@ -157,11 +158,19 @@
   transform: rotate(45deg) translateY(-2px); transition: transform 0.15s ease;
 }
 .sky-fold > details[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
-.sky-fold > details > summary:hover { box-shadow: var(--sky-elevation-raised); }
+.sky-fold > details > summary:hover { background: color-mix(in srgb, var(--sky-fill) 45%, transparent); }
+.sky-fold > details > summary:hover .sky-subhead { color: var(--sky-label); }
 .sky-fold > details > summary:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
-.sky-fold-text { display: grid; gap: 2px; min-width: 0; }
-.sky-fold-text h2 { margin: 0; font-size: 18px; font-weight: 650; }
-.sky-fold-hint { font-size: 14px; line-height: 1.4; color: var(--sky-secondary); }
+.sky-fold-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; }
+.sky-fold-text h2 { margin: 0; }
+.sky-fold-hint { min-width: 0; font-size: 14px; line-height: 1.4; color: var(--sky-secondary); }
+/* Folds stacked one after another read as one list, even across a chapter's parts. */
+.sky-section.sky-fold { margin-top: 24px; }
+.sky-section.sky-fold + .sky-section.sky-fold,
+:is(.sky-fold, :has(> .sky-fold:last-child)) + :is(div, section):has(> .sky-fold:first-child) > .sky-fold:first-child,
+:has(> .sky-fold:last-child) + .sky-fold { margin-top: 0; }
+:is(.sky-fold, :has(> .sky-fold:last-child)) + :is(div, section):has(> .sky-fold:first-child) > .sky-fold:first-child > details > summary,
+:has(> .sky-fold:last-child) + .sky-fold > details > summary { border-top: 0; }
 .sky-fold-body { display: grid; gap: 20px; padding-top: 14px; }
 /* Parts stacked inside a fold carry their own top margins; the grid gap spaces them. */
 .sky-fold-body > * { margin: 0; }

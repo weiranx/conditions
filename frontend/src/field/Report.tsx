@@ -12,28 +12,32 @@ import {
   Link,
   Mail,
   Ellipsis,
+  Info,
   Printer,
   RefreshCw,
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import { GearActions } from "./GearActions";
+import { GearActions, GearLead } from "./GearActions";
 import { ReportInsights } from "./ReportInsights";
 import "./report-reading.css";
 import "./report-navigation.css";
-import { AiChapterNote, AiRead } from "./AiRead";
+import { AiRead } from "./AiRead";
+import { AiLead, SourcesLead, TerrainLead, TimingLead } from "./chapter-leads";
 import { ForecastDiscussion } from "./ForecastDiscussion";
 import { starterQuestions, suggestedQuestions } from "./ai-explanation";
-import { isOutdatedRead, shownAiHero } from "../app/ai-evidence";
+import { aiChapterText, isOutdatedRead, shownAiHero } from "../app/ai-evidence";
 import { SkyHero } from "./sky/SkyHero";
 import { ApproachNote } from "./sky/ApproachNote";
-import { RouteNote } from "./sky/RouteNote";
 import { summarizePlannedRoute } from "./route-planning";
 import { closeDetailsOnOutsidePress } from "./touch";
+import { Fold } from "./sky/Fold";
+import { insightCounts } from "../app/report-insights";
 import { BriefSections, StatusTag } from "./sky/BriefSections";
 import { buildBrief, sectionChecks } from "./sky/brief-model";
 import { DeferredSection, ReportNav, type ReportPlace } from "./sky/ReportNav";
 import { landOn, sectionsReady } from "./sky/report-scroll";
+import { useNarrow } from "./sky/useNarrow";
 import { placeToReturnTo, reportPlaceKey, useKeepReportPlace, type ReadingPlace } from "./report-place";
 import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
@@ -56,7 +60,7 @@ import {
 } from "../app/report-sections";
 import { useWhere } from "../hooks/useWhere";
 import { ageLabel, dateLabel } from "./data";
-import { Forecast } from "./Forecast";
+import { Forecast, ForecastLead } from "./Forecast";
 import { Conditions } from "./Conditions";
 const Timing = lazy(() =>
   import("./Timing").then((m) => ({ default: m.Timing })),
@@ -129,6 +133,12 @@ export function Report({
   const [mounted, setMounted] = useState<ReadonlySet<Chapter>>(() => new Set(
     chapters.map((c) => c.id).filter((id) => returning?.sections.includes(id)),
   ));
+  // On a phone each section starts shut, its heading, checks and lead; a tap on the heading or a jump opens it.
+  // Back at an old spot, the sections the reader had open open again; one they rendered and then shut stays shut.
+  const narrow = useNarrow();
+  const [opened, setOpened] = useState<ReadonlySet<Chapter>>(() => new Set(
+    chapters.map((c) => c.id).filter((id) => returning?.opened.includes(id)),
+  ));
   // A jump lands on a part of a section once it, and every section above it, has rendered.
   const landing = useRef<{ chapter: Chapter; anchor?: string; smooth: boolean; needed: Chapter[] } | null>(null);
   const [navigation, setNavigation] = useState(0);
@@ -172,7 +182,8 @@ export function Report({
     w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   const copy = evaluation.verdict;
   // Say what crosses your limits and when, in plain words; the decision's own headline covers the rest.
-  const headline = plainHeadline(skyHours, clock) ?? decision.headline;
+  const plain = plainHeadline(skyHours, clock);
+  const headline = plain ?? decision.headline;
   // The route chosen in the plan, once the report has a Route chapter to show it.
   const route = routeChapter
     ? summarizePlannedRoute({
@@ -202,10 +213,20 @@ export function Report({
   // The brief's checks also say which sections hold a problem.
   const brief = buildBrief({ w, hours: skyHours, clock, route, activity: reportActivity(report) });
 
-  useKeepReportPlace(kept, placeKey, mounted, returning);
+  useKeepReportPlace(kept, placeKey, mounted, opened, returning);
   const mount = useCallback((id: Chapter) => {
     setMounted((previous) => (previous.has(id) ? previous : new Set(previous).add(id)));
   }, []);
+  const toggleChapter = (id: Chapter) => {
+    const opening = !opened.has(id);
+    setOpened((previous) => {
+      const next = new Set(previous);
+      if (opening) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    if (opening) mount(id);
+  };
   useEffect(() => {
     // Only an explicit navigation moves focus; loading a report must not.
     const request = landing.current;
@@ -256,8 +277,15 @@ export function Report({
     };
   }, []);
   useEffect(() => {
-    // A printed report holds every section.
-    const all = () => flushSync(() => setMounted(new Set(chapters.map((c) => c.id))));
+    // A printed report holds every section with every fold open. Folds that mount
+    // here, during the event, cannot hear it themselves, so each is opened by hand.
+    const all = () => {
+      flushSync(() => {
+        setMounted(new Set(chapters.map((c) => c.id)));
+        setOpened(new Set(chapters.map((c) => c.id)));
+      });
+      topRef.current?.querySelectorAll<HTMLDetailsElement>("details:not(.report-actions-menu)").forEach((fold) => { fold.open = true; });
+    };
     window.addEventListener("beforeprint", all);
     return () => window.removeEventListener("beforeprint", all);
   }, []);
@@ -267,7 +295,7 @@ export function Report({
   // once per report and plan, unless the reader turned that off.
   const autoReadKey = useRef<string | null>(null);
   const readKey = `${data.generatedAt ?? ""}|${JSON.stringify(evaluation.params ?? null)}`;
-  // An admin switch: off, the read sits under More and is written only on request.
+  // An admin switch: off, the read sits at the end of Checks & sources and is written only on request.
   const aiFirst = ai.aiReport;
   // Under AI-first the AI writes the report's opening; the badge and the checks
   // beside it still come from the evaluation.
@@ -301,7 +329,7 @@ export function Report({
     <div className="sky-ai-byline">
       <p>
         <Sparkles size={13} aria-hidden="true" />
-        <span>Rewritten by AI from this report’s data. The call comes from the checks.</span>
+        <span>Worded by AI; the call comes from the checks.</span>
         <button type="button" aria-expanded={checksWording} onClick={() => setChecksWording((open) => !open)}>
           {checksWording ? "Hide the checks’ wording" : "Show the checks’ wording"}
         </button>
@@ -351,8 +379,10 @@ export function Report({
     }
     const index = visibleChapters.findIndex((c) => c.id === next);
     if (index < 0) return;
-    const needed = visibleChapters.slice(0, index + 1).map((c) => c.id);
+    // A shut section above the target stays shut on a phone, so only the target needs rendering there.
+    const needed = narrow ? [next] : visibleChapters.slice(0, index + 1).map((c) => c.id);
     setMounted((previous) => (needed.every((id) => previous.has(id)) ? previous : new Set([...previous, ...needed])));
+    setOpened((previous) => (previous.has(next) ? previous : new Set(previous).add(next)));
     landing.current = { chapter: next, anchor, smooth, needed };
     setNavigation((n) => n + 1);
   }
@@ -361,8 +391,9 @@ export function Report({
     if (read) landOn(read, { smooth: true });
   }
   function printReport() {
-    // Every section renders before the page prints.
+    // Every section renders, open, before the page prints.
     setMounted(new Set(chapters.map((c) => c.id)));
+    setOpened(new Set(chapters.map((c) => c.id)));
     const root = topRef.current;
     const ids = visibleChapters.map((c) => c.id);
     const started = Date.now();
@@ -478,6 +509,19 @@ export function Report({
       evaluation.interpretation.sourceFreshness.warningSummary ||
       "Some sources returned incomplete data. Check the official forecasts before committing."
     : "";
+  // Each warning stays one tap away; closed, the notice is a single line of what needs checking.
+  const cautionLine = [
+    dataWarning ? "Some sources returned incomplete data" : null,
+    copy.warnings.length ? `${copy.warnings.length} field ${copy.warnings.length === 1 ? "report" : "reports"} to check` : null,
+    copy.missing.length === 1 ? copy.missing[0].title : copy.missing.length > 1 ? `${copy.missing.length} feeds unavailable` : null,
+  ].filter(Boolean).join(" · ");
+  // A borderline plan offers a watch beside the decision rather than in a banner.
+  const watchOffer = flags.objectiveWatch && !watching && !feedback && !w.viewingHistoryReport && copy.tone === "watch" && !copy.insufficient ? (
+    <button type="button" className="sky-pill-aside" disabled={actionBusy} onClick={onWatch}>
+      <Bell size={14} aria-hidden="true" />
+      Watch this plan
+    </button>
+  ) : null;
   const notices = (
     <>
       {w.viewingHistoryReport && (w.restoredReportSource === "itinerary" ? (
@@ -493,29 +537,22 @@ export function Report({
             and won’t update. For current conditions, edit the plan and generate a new report.</div>
         </aside>
       ))}
-      {flags.objectiveWatch && !watching && !feedback && !w.viewingHistoryReport && copy.tone === "watch"
-        && !copy.insufficient && (
-        <aside className="sky-notice" aria-label="Watch this objective">
-          <Bell size={20} aria-hidden="true" />
-          <div>Conditions are borderline for this plan. Watch it and we will flag it if the forecast gets worse or better.</div>
-          <button type="button" className="field-button" disabled={actionBusy} onClick={onWatch}>Watch this plan</button>
-        </aside>
-      )}
       {feedback && (
-        <p className="sky-notice is-info" role="status">
-          {feedback}
+        <p className="sky-notice is-info is-compact" role="status">
+          <Info size={16} aria-hidden="true" />
+          <span className="sky-notice-line">{feedback}</span>
           {feedbackAction && (
-            <>
-              {" "}
-              <button type="button" className="field-button" onClick={feedbackAction.onClick}>{feedbackAction.label}</button>
-            </>
+            <button type="button" className="sky-link" onClick={feedbackAction.onClick}>{feedbackAction.label}</button>
           )}
         </p>
       )}
-      {(dataWarning || copy.warnings.length > 0 || copy.missing.length > 0) && (
-        <div className="sky-notice is-caution" role="status" aria-label="Warnings and evidence gaps">
-          <TriangleAlert size={20} aria-hidden="true" />
-          <div>
+      {cautionLine && (
+        <details className="sky-notice sky-notice-fold is-caution is-compact" aria-label="Warnings and evidence gaps">
+          <summary>
+            <TriangleAlert size={16} aria-hidden="true" />
+            <span className="sky-notice-line">{cautionLine}</span>
+          </summary>
+          <div className="sky-notice-body">
             {dataWarning && <p>{dataWarning}</p>}
             {copy.warnings.length > 0 && <p>
               <strong>Field reports to check.</strong>{" "}
@@ -523,9 +560,9 @@ export function Report({
               Check when each report was made and whether it applies to your route.
             </p>}
             {copy.missing.length > 0 && <p>{copy.missing.map((signal) => signal.title).join(" · ")}. Missing data does not mean conditions are clear.</p>}
+            {dataWarning && <button type="button" className="sky-link" onClick={() => go("sources", "sky-sources-fresh")}>Checks &amp; sources</button>}
           </div>
-          {dataWarning && <button type="button" className="sky-link" onClick={() => go("sources")}>Checks &amp; sources</button>}
-        </div>
+        </details>
       )}
       {w.tripForecastRows.length > 0 && (
         <div className="field-preset-list" role="group" aria-label="Days from your comparison">
@@ -576,21 +613,16 @@ export function Report({
       terms={w.objectiveTerms}
       text={hero?.note?.text}
       writing={opening.holding}
-    />
-  );
-  const routeNote = (
-    <RouteNote
-      route={route}
-      format={{ temp: (f) => w.formatTempDisplay(f), wind: (mph) => w.formatWindDisplay(mph), eta }}
-      onOpen={() => go("route")}
+      compact
     />
   );
   const chapterContent = (id: Chapter) => {
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
-        <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />
+        <Forecast report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} lead={false} />
         {aiEnabled && (
           <ForecastDiscussion
+            folded
             report={data}
             objectiveName={report.plan.objectiveName}
             units={{ temperature: w.preferences.temperatureUnit, wind: w.preferences.windSpeedUnit, elevation: w.preferences.elevationUnit }}
@@ -603,7 +635,7 @@ export function Report({
     );
     if (id === "timing") return <Timing key="timing" workspace={w} hours={skyHours} />;
     if (id === "terrain") return <Terrain key="terrain" workspace={w} hours={skyHours} />;
-    if (id === "sources") return <Sources key="sources" workspace={w} />;
+    if (id === "sources") return <Sources key="sources" workspace={w} more={sourcesMore} />;
     if (id === "route" && routeChapter) return <Route key="route" workspace={w} />;
     if (id === "gear" && flags.gearRecommendations) return (
       <GearActions
@@ -615,8 +647,21 @@ export function Report({
         onSources={() => go("sources")}
         activityLabel={data.forecast?.activity ? activity.label : null}
         localize={w.localizeUnitText}
+        lead={false}
       />
     );
+    return null;
+  };
+  // Each chapter opens with one lead, in its heading so it shows before the chapter loads:
+  // under AI-first the AI's analysis of the chapter when it wrote one, otherwise the checks' sentence.
+  const chapterLead = (id: Chapter) => {
+    const text = aiFirst ? aiChapterText(w.aiBriefNarrative, w.aiBriefDetails, id) : null;
+    if (text) return <AiLead text={text} onReadAll={toAiRead} />;
+    if (id === "forecast") return <ForecastLead report={report} evaluation={evaluation} elevation={(ft) => w.formatElevationDisplay(ft)} terms={w.objectiveTerms} />;
+    if (id === "timing") return <TimingLead workspace={w} hours={skyHours} />;
+    if (id === "terrain") return <TerrainLead workspace={w} />;
+    if (id === "sources") return <SourcesLead workspace={w} />;
+    if (id === "gear" && flags.gearRecommendations) return <GearLead decision={decision} actionLine={w.decisionActionLine} />;
     return null;
   };
   const showChat = aiEnabled && (ai.reportChat || w.reportChatMessages.length > 0);
@@ -635,6 +680,7 @@ export function Report({
       acrossReport={aiFirst}
       openingRewritten={Boolean(hero)}
       readsSatellite={readsSatellite}
+      chatBelow={aiFirst && showChat}
       onRequest={() => void w.handleRequestAiBriefAction({ opening: aiFirst })}
       onAsk={(text) => {
         if (!w.requestAiAccess()) return;
@@ -657,19 +703,33 @@ export function Report({
       />
     </Suspense>
   );
-  const briefMore = (
+  // A read the reader can write or ask about; under AI-first it leads the brief instead.
+  const aiReadShown = aiEnabled && Boolean(w.aiBriefNarrative || ((ai.aiBrief || ai.reportChat) && !w.viewingHistoryReport));
+  const insights = insightCounts(data);
+  // Reference at the end of Checks & sources, each folded.
+  const sourcesMore = (
     <>
-        {!aiFirst && aiRead}
-        {!aiFirst && chat}
-        {w.viewingHistoryReport && w.restoredReportSource === "saved" && w.accountUser && (
-          <Suspense fallback={null}>
-            <TripDebrief report={report} aiAvailable={ai.tripDebrief} formatClock={eta} />
-          </Suspense>
-        )}
-      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
+      {!aiFirst && (aiReadShown || showChat) && (
+        <Fold id="sky-sources-ai" title="AI read" hint={w.aiBriefNarrative ? "What this means for your plan, and ask about it" : "A plain-language read of this report"}>
+          {aiRead}
+          {chat}
+        </Fold>
+      )}
+      {insights.cautions > 0 ? (
+        <Fold id="sky-sources-insights" title="Field and access flags"
+          hint={`${insights.cautions} ${insights.cautions === 1 ? "check" : "checks"} to resolve before you commit`}>
+          <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
+        </Fold>
+      ) : (
+        <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} timeStyle={w.preferences.timeStyle} />
+      )}
     </>
   );
-  const firstChapter = visibleChapters[0];
+  const debrief = w.viewingHistoryReport && w.restoredReportSource === "saved" && w.accountUser ? (
+    <Suspense fallback={null}>
+      <TripDebrief report={report} aiAvailable={ai.tripDebrief} formatClock={eta} />
+    </Suspense>
+  ) : null;
   return (
     <div className="field-report sky-report is-brief" ref={topRef}>
       <SkyHero
@@ -684,8 +744,10 @@ export function Report({
         headline={heroHeadline}
         reason={heroReason}
         writing={opening.holding}
+        spanInHeadline={!hero && plain !== null}
+        pillAside={watchOffer}
         limitingChecks={copy.limitingChecks}
-        note={<>{heroByline}{approachNote}{routeNote}</>}
+        note={heroByline}
         actions={actions}
         photo={data.objectiveImage}
         format={{
@@ -718,17 +780,25 @@ export function Report({
           route={route}
           activity={reportActivity(report)}
           onOpen={(chapter, anchor) => go(chapter, anchor)}
-          next={firstChapter ? { chapter: firstChapter.id, label: firstChapter.label, hint: firstChapter.hint } : null}
-          more={briefMore}
+          notes={approachNote}
         />
         <div className="field-chapter-content" id="field-report-detail">
           {visibleChapters.map((c) => {
             const { checks } = sectionChecks(brief, c.id);
             const ready = mounted.has(c.id);
+            const shut = narrow && !opened.has(c.id);
+            const body = `sky-chapter-body-${c.id}`;
             return (
-              <section key={c.id} className="sky-chapter-block" data-chapter={c.id} data-mounted={ready ? "true" : "false"} aria-labelledby={`sky-chapter-${c.id}`}>
+              <section key={c.id} className={`sky-chapter-block${narrow ? " is-collapsible" : ""}${shut ? " is-shut" : ""}`}
+                data-chapter={c.id} data-mounted={ready ? "true" : "false"} aria-labelledby={`sky-chapter-${c.id}`}>
                 <header className="sky-chapter-top">
-                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`} tabIndex={-1}>{c.label}</h2>
+                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`} tabIndex={-1}>
+                    {narrow ? (
+                      <button type="button" className="sky-chapter-toggle" aria-expanded={!shut} aria-controls={body} onClick={() => toggleChapter(c.id)}>
+                        {c.label}
+                      </button>
+                    ) : c.label}
+                  </h2>
                   {checks.length > 0 && (
                     <ul className="sky-chapter-checks" aria-label={`${c.label} checks`}>
                       {checks.map((check) => (
@@ -740,24 +810,21 @@ export function Report({
                     </ul>
                   )}
                 </header>
-                {aiFirst && (
-                  <AiChapterNote
-                    narrative={w.aiBriefNarrative}
-                    details={w.aiBriefDetails}
-                    chapter={c.id}
-                    onReadAll={toAiRead}
-                    onOpen={(chapter) => go(chapter)}
-                  />
-                )}
-                <DeferredSection id={c.id} mounted={ready} onNear={mount}>
-                  <Suspense fallback={<p className="field-loading sky-section-loading" role="status">Loading {c.label.toLowerCase()}…</p>}>
-                    {chapterContent(c.id)}
-                  </Suspense>
-                </DeferredSection>
+                {chapterLead(c.id)}
+                <div className="sky-chapter-body" id={body} hidden={shut}>
+                  {!shut && (
+                    <DeferredSection id={c.id} mounted={ready} onNear={mount}>
+                      <Suspense fallback={<p className="field-loading sky-section-loading" role="status">Loading {c.label.toLowerCase()}…</p>}>
+                        {chapterContent(c.id)}
+                      </Suspense>
+                    </DeferredSection>
+                  )}
+                </div>
               </section>
             );
           })}
         </div>
+        {debrief}
         <p className="field-muted">
           Backcountry Conditions is a planning aid, not a guarantee of safety. Check
           official forecasts, and make the final call from what you see in the field

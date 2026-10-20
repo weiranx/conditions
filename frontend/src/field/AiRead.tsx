@@ -6,7 +6,6 @@ import { imageryDateLabel } from "./data";
 import {
   evidenceLinks,
   sectionCitations,
-  sectionCitesChapter,
   type EvidenceChapter,
 } from "../app/ai-evidence";
 import { chapterLabel } from "./sky/report-chapters";
@@ -187,6 +186,7 @@ export function AiRead({
   readOnly,
   fallbackQuestions,
   readsSatellite = false,
+  chatBelow = false,
   onRequest,
   onAsk,
   onOpen,
@@ -210,6 +210,8 @@ export function AiRead({
   fallbackQuestions: string[];
   /** Snow shapes this trip, so the read also looks at a satellite image of it. */
   readsSatellite?: boolean;
+  /** The report's chat sits right below, with the same questions: leading the report, the read leaves asking to it. */
+  chatBelow?: boolean;
   onRequest: () => void;
   onAsk: (question: string) => void;
   onOpen: (chapter: EvidenceChapter) => void;
@@ -241,8 +243,50 @@ export function AiRead({
     onAsk(question);
   }
 
+  const tucked = acrossReport && Boolean(narrative);
+  const ask = canAsk && !(tucked && chatBelow) && (
+    <div className="ai-read-ask">
+      <form className="ai-read-form" onSubmit={submit}>
+        <label className="sr-only" htmlFor={`${id}-ask`}>Ask about this plan</label>
+        <input
+          id={`${id}-ask`}
+          type="text"
+          maxLength={1000}
+          placeholder="Ask anything about this plan…"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit" className="field-button field-button-primary" aria-label="Ask" disabled={!draft.trim()}>
+          <ArrowUp size={18} aria-hidden="true" />
+        </button>
+      </form>
+      {questions.length > 0 && (
+        <div className="ai-read-questions" role="group" aria-label="Suggested questions">
+          {questions.map((question) => (
+            <button key={question} type="button" onClick={() => onAsk(question)}>{question}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  const footnote = (narrative || canWrite) && (
+    <p className="ai-brief-footnote">
+      <Info size={13} aria-hidden="true" />
+      Written by AI from this report’s data and can be wrong. The go/no-go comes from the report’s checks, not the AI.
+    </p>
+  );
+  // Leading the report, the read is its big picture and best move; the rest, and the ask, wait one tap away.
+  const changes = !loading && acrossReport && (
+    <ReadChanges details={details} run={run} openingRewritten={openingRewritten} onOpen={onOpen} />
+  );
+  const supporting = more.length > 0 && (
+    <div className={`ai-explanation-supporting${more.length === 3 ? " is-three" : ""}`}>
+      {more.map(render)}
+    </div>
+  );
+
   return (
-    <section className="ai-read" aria-labelledby={`${id}-title`} aria-busy={loading} id="ai-read">
+    <section className={`ai-read${tucked ? " is-leading" : ""}`} aria-labelledby={`${id}-title`} aria-busy={loading} id="ai-read">
       <div className="ai-brief-heading">
         <div>
           <span className="field-kicker ai-brief-kicker">
@@ -267,27 +311,23 @@ export function AiRead({
       {loading && narrative && <ReadProgress run={run} satellite={readsSatellite} />}
       {narrative ? (
         <div className={`ai-explanation ai-read-body${loading ? " is-stale" : ""}`}>
-          {!loading && acrossReport && (
-            <ReadChanges details={details} run={run} openingRewritten={openingRewritten} onOpen={onOpen} />
-          )}
+          {!tucked && changes}
           {fallback && (
             <p className="ai-read-fallback">
               The AI answer didn’t pass the report’s fact checks, so this summary comes straight from the checks.
             </p>
           )}
-          <CheckDetails details={details} />
+          {!tucked && <CheckDetails details={details} />}
           {lead.map(render)}
           {action.map(render)}
-          {details && <SatelliteSnow details={details} onOpen={onOpen} />}
-          {more.length > 0 && (
+          {!tucked && details && <SatelliteSnow details={details} onOpen={onOpen} />}
+          {!tucked && supporting && (
             <details className="ai-read-more">
               <summary>
                 <span>Why, what to watch, and how sure</span>
                 <ChevronRight size={16} aria-hidden="true" />
               </summary>
-              <div className={`ai-explanation-supporting${more.length === 3 ? " is-three" : ""}`}>
-                {more.map(render)}
-              </div>
+              {supporting}
             </details>
           )}
         </div>
@@ -305,82 +345,28 @@ export function AiRead({
           </button>
         </div>
       ) : null}
-      {canAsk && (
-        <div className="ai-read-ask">
-          <form className="ai-read-form" onSubmit={submit}>
-            <label className="sr-only" htmlFor={`${id}-ask`}>Ask about this plan</label>
-            <input
-              id={`${id}-ask`}
-              type="text"
-              maxLength={1000}
-              placeholder="Ask anything about this plan…"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            <button type="submit" className="field-button field-button-primary" aria-label="Ask" disabled={!draft.trim()}>
-              <ArrowUp size={18} aria-hidden="true" />
-            </button>
-          </form>
-          {questions.length > 0 && (
-            <div className="ai-read-questions" role="group" aria-label="Suggested questions">
-              {questions.map((question) => (
-                <button key={question} type="button" onClick={() => onAsk(question)}>{question}</button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {(narrative || canWrite) && (
-        <p className="ai-brief-footnote">
-          <Info size={13} aria-hidden="true" />
-          Written by AI from this report’s data and can be wrong. The go/no-go comes from the report’s checks, not the AI.
-        </p>
+      {tucked ? (
+        <details className="ai-read-more ai-read-fold">
+          <summary>
+            <span>{ask ? "Ask about this report" : supporting ? "Why, what to watch, and how sure" : "About this AI read"}</span>
+            {ask && <span className="ai-read-fold-hint">{supporting ? "why, what to watch, how sure · " : ""}suggested questions</span>}
+            <ChevronRight size={16} aria-hidden="true" />
+          </summary>
+          <div className="ai-read-fold-body">
+            {changes}
+            <CheckDetails details={details} />
+            {details && <SatelliteSnow details={details} onOpen={onOpen} />}
+            {supporting}
+            {ask}
+            {footnote}
+          </div>
+        </details>
+      ) : (
+        <>
+          {ask}
+          {footnote}
+        </>
       )}
     </section>
-  );
-}
-
-/**
- * The AI's analysis at the top of a chapter: the fact-checked chapter analysis
- * when the read wrote one, otherwise the parts of the read that cite the chapter.
- */
-export function AiChapterNote({ narrative, details, chapter, onReadAll, onOpen }: {
-  narrative: string | null;
-  details: AiBriefDetails | null;
-  chapter: EvidenceChapter;
-  onReadAll: () => void;
-  /** Opens the chapter a citation points to. */
-  onOpen?: (chapter: EvidenceChapter) => void;
-}) {
-  if (!narrative || !details || details.validation === "deterministic_fallback") return null;
-  const analysis = chapter === "forecast" || chapter === "timing" || chapter === "terrain" || chapter === "sources"
-    ? details.chapters?.[chapter]
-    : undefined;
-  const sections = parseExplanation(narrative);
-  const relevant = analysis ? [] : chapter === "gear"
-    ? sections.filter((s) => s.kind === "action")
-    : sections.filter((s) => s.kind !== "comfort" && sectionCitesChapter(sectionCitations(details, s.title), chapter));
-  if (!analysis && !relevant.length) return null;
-  return (
-    <aside className="ai-chapter-note" aria-label={`AI analysis of ${chapterLabel(chapter)}`}>
-      <span className="field-kicker ai-brief-kicker">
-        <Sparkles size={14} aria-hidden="true" />
-        AI analysis · {chapterLabel(chapter).toLowerCase()}
-      </span>
-      {analysis ? <p>{analysis.text}</p> : relevant.slice(0, 2).map((section, index) => (
-        <p key={`${section.kind}-${index}`}><strong>{section.title}.</strong> {section.text}</p>
-      ))}
-      {analysis && analysis.evidence.length > 0 && (
-        <p className="ai-read-cites">
-          <span className="ai-read-cites-label">Based on</span>
-          {evidenceLinks(analysis.evidence).map((link) => link.chapter && link.chapter !== chapter && onOpen ? (
-            <button key={link.label} type="button" onClick={() => onOpen(link.chapter!)} title={`Open ${chapterLabel(link.chapter)}`}>{link.label}</button>
-          ) : (
-            <span key={link.label}>{link.label}</span>
-          ))}
-        </p>
-      )}
-      <button type="button" className="sky-link" onClick={onReadAll}>Full AI read</button>
-    </aside>
   );
 }

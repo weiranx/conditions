@@ -6,7 +6,9 @@
 
 The controllers in `model/` retain the established planning, account, persistence, sharing, feature-flag, and administrative behavior. Domain hooks and score calculations continue to come from the existing application modules. GPX duration is applied through an explicit action.
 
-The report is one scrolling page: the hero and brief, then every section (Weather, Timing, Terrain & snow, Route, Checks & sources, Gear & actions) in the activity's order. A section bar (`sky/ReportNav.tsx`) stays pinned, marks the section in view and dots the sections whose checks are over a limit or missing evidence. Each brief card and headline number scrolls straight to the part of a section that explains it (`sky/brief-model.tsx` names the section and anchor; `sky/report-scroll.ts` opens any fold around it). Sections render as the reader nears them, and a jump renders every section above its target before landing; printing renders them all. Older `#planner-section-*` links scroll to their section.
+The report is one scrolling page: the hero and brief, then every section (Weather, Timing, Terrain & snow, Route, Checks & sources, Gear & actions) in the activity's order. A section bar (`sky/ReportNav.tsx`) stays pinned, marks the section in view and dots the sections whose checks are over a limit or missing evidence. The brief states each finding once: two headline numbers, a full tile for each check that needs attention and a one-line row for each within limits. Each brief card and headline number scrolls straight to the part of a section that explains it (`sky/brief-model.tsx` names the section and anchor; `sky/report-scroll.ts` opens any fold around it). Sections render as the reader nears them, and a jump renders every section above its target before landing; printing renders them all. Older `#planner-section-*` links scroll to their section.
+
+Each section opens with one lead in its heading (`chapter-leads.tsx`): the checks' sentence, or under AI-first the AI's analysis of that section. Inside, the section's main picture is open and the rest is reference in folds (`sky/Fold.tsx`) whose closed line carries the key number. Below 700 px wide each section starts shut, showing its heading, checks and lead; a tap on the heading, the section bar or a brief card opens it.
 
 ## Feature coverage
 
@@ -19,7 +21,7 @@ The report is one scrolling page: the hero and brief, then every section (Weathe
 | Elevation forecasts, terrain timeline, avalanche, snowpack, satellite snow, wind loading | `Terrain` |
 | Rain/snow history, heat, fire, AQI, visibility, atmosphere, field observations | `Conditions` |
 | Named routes, GPX checkpoint analysis, elevation profile, checkpoint details | `Route` |
-| Gear checklist, AI read (leads the brief, cites its evidence, notes in each chapter), ask bar, persistent report chat | `Report`, `AiRead`, `Chat` |
+| Gear checklist, AI read (leads the brief, cites its evidence, leads each section it analysed), ask bar, persistent report chat | `Report`, `AiRead`, `Chat` |
 | Multi-day ranking, day detail, copy/print, open day in planner, trip chat | `Compare` |
 | Multi-day itineraries: camps, layovers, exits, high points, bail points, GPX split, trip brief with each day and night, saved trips, per-day watches, trip chat | `ItineraryPlan`, `Itinerary`, `SavedTrips`, `useItinerary` |
 | Objective × date shortlist, hazard ranking, weather tradeoffs, local Plan A / Plan B | `ObjectiveShortlist`, `useObjectiveShortlist` |

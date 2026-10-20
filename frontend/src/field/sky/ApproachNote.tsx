@@ -9,7 +9,7 @@ const roundTo100 = (ft: number) => Math.round(ft / 100) * 100;
  * Plain-language note for hours checked below the objective, so a changed
  * verdict never comes from an adjustment the reader cannot see.
  */
-export function ApproachNote({ hours, summary, source, clock, elevation, onEdit, terms = SUMMIT_TERMS, text, writing = false }: {
+export function ApproachNote({ hours, summary, source, clock, elevation, onEdit, terms = SUMMIT_TERMS, text, writing = false, compact = false }: {
   hours: SkyHour[];
   /** The hours checked below the objective, as the backend evaluated them. */
   summary: ApproachSummary | null;
@@ -22,11 +22,13 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
   text?: string;
   /** The AI is writing this note with the opening: placeholders stand in for the template's wording. */
   writing?: boolean;
+  /** One line in the brief: the inversion caveat is left to the Weather and Terrain chapters. */
+  compact?: boolean;
 }) {
   if (!summary || !source) return null;
   if (writing) {
     return (
-      <div className="sky-approach-note is-writing">
+      <div className={`sky-approach-note is-writing${compact ? " sky-brief-line" : ""}`}>
         <Mountain size={16} aria-hidden="true" />
         <p>
           <span className="sr-only">AI is writing this note</span>
@@ -42,7 +44,7 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
   const range = low === high ? `~${elevation(low)}` : `~${elevation(low)}–${elevation(high)}`;
   const inversion = summary.inversionRuns.map((run) => spanLabel(hours, run, clock)).filter(Boolean).join(" and ");
   return (
-    <div className="sky-approach-note">
+    <div className={`sky-approach-note${compact ? " sky-brief-line" : ""}`}>
       <Mountain size={16} aria-hidden="true" />
       <p>
         {text ? <>{text}{" "}</> : <>
@@ -54,7 +56,7 @@ export function ApproachNote({ hours, summary, source, clock, elevation, onEdit,
             {source === "estimated" ? `Set ${terms.start}` : "Edit approach"}
           </button>
         )}
-        {inversion && !text && (
+        {inversion && !text && !compact && (
           <span className="sky-approach-inversion">
             Clear, calm conditions: {inversion} may be colder at the {terms.start} than at the {terms.top}.
           </span>

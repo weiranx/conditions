@@ -1,5 +1,6 @@
 import type { ContingencyData } from "../app/types";
 import { durationLabel } from "./sky/status";
+import { Fold } from "./sky/Fold";
 
 const SEVERITY_LABEL: Record<string, string> = {
   high: "Serious",
@@ -16,6 +17,8 @@ interface ContingencyCardProps {
   formatWind: (value: number | null | undefined) => string;
   /** The objective's IANA time zone; event times are read on its clock. */
   timeZone?: string | null;
+  /** Shut until asked for, with what a delay brings on its one line. */
+  folded?: boolean;
 }
 
 const hoursLabel = (hours: number) => durationLabel(Math.round(hours * 60));
@@ -33,7 +36,7 @@ function localMinuteAt(ms: number, timeZone: string): number | null {
   }
 }
 
-export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp, formatWind, timeZone = null }: ContingencyCardProps) {
+export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp, formatWind, timeZone = null, folded = false }: ContingencyCardProps) {
   if (!contingency || contingency.status !== "ok") return null;
   const buffer = contingency.delayBuffer;
   const night = contingency.overnight?.status === "ok" ? contingency.overnight : null;
@@ -79,9 +82,14 @@ export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp,
     }).filter((reason): reason is string => Boolean(reason))
     : [];
 
-  return (
-    <section className="sky-card sky-contingency" aria-labelledby="sky-timing-contingency">
-      <span className="sky-card-head"><span id="sky-timing-contingency">If you're delayed</span></span>
+  // Closed, the fold still says what a delay brings: "3 h late: Dark by 8:00 PM · Unplanned night: serious".
+  const hint = [
+    buffer ? `${hoursLabel(buffer.hours)} late: ${buffer.coveredHours <= 0 ? "not forecast" : bufferEvents.length ? bufferEvents.join(" · ") : "no new hazards"}` : null,
+    night ? `Unplanned night${night.severity ? `: ${SEVERITY_LABEL[night.severity].toLowerCase()}` : `, feels like ${formatTemp(night.minFeelsLikeF)}`}` : null,
+  ].filter(Boolean).join(" · ");
+  const card = (
+    <section className={`sky-card sky-contingency${folded ? " is-secondary" : ""}`} aria-labelledby="sky-timing-contingency">
+      <span className={`sky-card-head${folded ? " sr-only" : ""}`}><span id="sky-timing-contingency">If you're delayed</span></span>
       {buffer && (
         <>
           <p className="sky-cap is-body">
@@ -133,4 +141,5 @@ export function ContingencyCard({ contingency, returnMinutes, clock, formatTemp,
       )}
     </section>
   );
+  return folded ? <Fold id="sky-timing-contingency-fold" title="If you’re delayed" hint={hint}>{card}</Fold> : card;
 }
