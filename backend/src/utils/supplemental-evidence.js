@@ -51,7 +51,10 @@ const createSupplementalEvidenceService = ({ fetchWithTimeout, synopticToken, no
   const getBytes = createEvidenceFetcher(fetchWithTimeout);
   const json = async (url, fetchOptions) => JSON.parse((await getBytes(url, { fetchOptions })).toString());
   const metadata = createCache({ name: 'evidence-nws-metadata', ttlMs: 24 * HOUR, maxEntries: 200 });
-  const current = createCache({ name: 'evidence-current', ttlMs: 5 * 60000, maxEntries: 200 });
+  // Past its five minutes an answer is still served for ten more while one background request refreshes it,
+  // so the first report after expiry does not wait on NWS or Synoptic. The discussion is issued a few times a
+  // day, and station readings are filtered to the last two hours whenever they are read.
+  const current = createCache({ name: 'evidence-current', ttlMs: 5 * 60000, staleTtlMs: 10 * 60000, maxEntries: 200 });
   const nbm = createNbmService({ getBytes, now });
   const smoke = createHrrrSmokeService({ getBytes, now });
   // The weather pipeline has nearly always looked this point up already. With its cache passed in, the

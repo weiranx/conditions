@@ -245,18 +245,16 @@ const parseJson = (raw) => {
   if (start < 0 || end <= start) return null;
   try { return JSON.parse(text.slice(start, end + 1)); } catch { return null; }
 };
-/**
- * Checks an AI read. Returns the read, or null when it can't be used; either
- * way `options.problems` (when given) collects why each rejected part failed,
- * so a retry can tell the model what to fix.
- */
-const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}) => {
+// The answer as JSON, or null with why it could not be read.
+const parseAnswer = (raw, problems, label = 'the answer') => {
   const parsed = parseJson(raw);
-  if (!parsed || typeof parsed !== 'object') {
-    const text = String(raw ?? '').trim();
-    problems.push(`the answer was not valid JSON (${text.length} characters, ending "${text.slice(-60)}"; it may have been cut off)`);
-    return null;
-  }
+  if (parsed && typeof parsed === 'object') return parsed;
+  const text = String(raw ?? '').trim();
+  problems.push(`${label} was not valid JSON (${text.length} characters, ending "${text.slice(-60)}"; it may have been cut off)`);
+  return null;
+};
+// The six sections, each checked on its own; null without the required ones.
+const checkSections = (parsed, report, decisionLevel, units, problems) => {
   if (!Array.isArray(parsed.sections)) { problems.push('the answer had no "sections" array'); return null; }
   const kept = [];
   for (const heading of HEADINGS) {
@@ -271,11 +269,54 @@ const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}
   return {
     narrative: kept.map(({ heading, text }) => `${heading}: ${text}`).join('\n'),
     evidence: kept.map(({ heading, evidence }) => ({ heading, evidence })),
+  };
+};
+/**
+ * Checks an AI read. Returns the read, or null when it can't be used; either
+ * way `options.problems` (when given) collects why each rejected part failed,
+ * so a retry can tell the model what to fix.
+ */
+const validateBrief = (raw, report, decisionLevel, { units, problems = [] } = {}) => {
+  const parsed = parseAnswer(raw, problems);
+  if (!parsed) return null;
+  const sections = checkSections(parsed, report, decisionLevel, units, problems);
+  if (!sections) return null;
+  return {
+    ...sections,
     questions: validateQuestions(parsed.questions),
     chapters: validateChapters(parsed.chapters, report, decisionLevel, units, problems),
     hero: validateHero(parsed.hero, report, decisionLevel, units, problems),
     satellite: validateSatellite(parsed.satellite, report, decisionLevel, units, problems),
   };
+};
+/**
+ * Checks the briefing part of a read written in two answers: the sections,
+ * questions and opening. Null when the sections can't be shown.
+ */
+const validateBriefing = (raw, report, decisionLevel, { units, problems = [] } = {}) => {
+  const parsed = parseAnswer(raw, problems);
+  if (!parsed) return null;
+  const sections = checkSections(parsed, report, decisionLevel, units, problems);
+  if (!sections) return null;
+  return {
+    ...sections,
+    questions: validateQuestions(parsed.questions),
+    hero: validateHero(parsed.hero, report, decisionLevel, units, problems),
+  };
+};
+/**
+ * Checks the chapters part of a read written in two answers: the chapters and,
+ * when the report carries a satellite image, what the read saw in it. Null
+ * when nothing in it can be shown.
+ */
+const validateBriefChapters = (raw, report, decisionLevel, { units, problems = [] } = {}) => {
+  const parsed = parseAnswer(raw, problems, 'the chapters answer');
+  if (!parsed) return null;
+  if (!parsed.chapters || typeof parsed.chapters !== 'object' || Array.isArray(parsed.chapters)) problems.push('the answer had no "chapters" object');
+  const chapters = validateChapters(parsed.chapters, report, decisionLevel, units, problems);
+  const satellite = validateSatellite(parsed.satellite, report, decisionLevel, units, problems);
+  if (!Object.keys(chapters).length && !satellite) return null;
+  return { chapters, satellite };
 };
 /**
  * Checks the report's AI opening written on its own, ahead of the full read:
@@ -313,4 +354,4 @@ const deterministicBrief = (report, decisionLevel) => {
     `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : concerns.slice(0, 2).map(item => item.action).join(' ') || 'Resolve failed checks and missing evidence before committing.'}`,
   ].join('\n');
 };
-module.exports = { validateBrief, validateOpening, validateQuestions, validateChapters, validateHero, validateSatellite, deterministicBrief, numbers, citedNumbers, forms, kindOfPath };
+module.exports = { validateBrief, validateBriefing, validateBriefChapters, validateOpening, validateQuestions, validateChapters, validateHero, validateSatellite, deterministicBrief, numbers, citedNumbers, forms, kindOfPath };

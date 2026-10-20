@@ -118,6 +118,48 @@ test('NWS discussion preserves regional prose and rejects an expired product', a
   expect(expired.discussion).toMatchObject({ available: false, status: 'no_data' });
 });
 
+test('a discussion just past its five minutes is served at once while one refresh runs in the background', async () => {
+  jest.useFakeTimers({ now, doNotFake: ['setImmediate', 'nextTick'] });
+  try {
+    let productText = 'Regional winds increase tomorrow.';
+    let hold = null;
+    // Each lookup of the discussion starts by listing the office's products.
+    const productCalls = () => fetchWithTimeout.mock.calls.filter(([url]) => url.includes('/types/')).length;
+    const settle = async () => { for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
+    const fetchWithTimeout = jest.fn(async (url) => {
+      if (url.includes('/points/')) return new Response(JSON.stringify({ properties: { gridId: 'SGX' } }));
+      if (url.includes('/types/')) return new Response(JSON.stringify({ '@graph': [{ id: '12345678-1234-1234-1234-123456789012', issuanceTime: fresh }] }));
+      if (hold) await hold;
+      return new Response(JSON.stringify({ productCode: 'AFD', issuanceTime: fresh, productText }));
+    });
+    const service = createSupplementalEvidenceService({ fetchWithTimeout, now: () => now });
+    const args = { ...location, featureFlags: { fieldObservations: false, airQualityDetails: false }, targetTimeIso: fresh };
+    expect((await service(args)).discussion.text).toBe('Regional winds increase tomorrow.');
+
+    // Six minutes on, NWS is slow and has a newer discussion: the report does not wait for it.
+    jest.setSystemTime(now + 6 * 60000);
+    productText = 'Winds ease Thursday.';
+    let release;
+    hold = new Promise((resolve) => { release = resolve; });
+    expect((await service(args)).discussion.text).toBe('Regional winds increase tomorrow.');
+    await settle();
+    expect(productCalls()).toBe(2);
+
+    release();
+    hold = null;
+    await settle();
+    expect((await service(args)).discussion.text).toBe('Winds ease Thursday.');
+    expect(productCalls()).toBe(2);
+
+    // Past fifteen minutes the answer is gone and the report waits for NWS again.
+    jest.setSystemTime(now + 22 * 60000);
+    await service(args);
+    expect(productCalls()).toBe(3);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test('regional forecast lookups reuse the weather pipeline\'s cached NOAA point instead of asking NOAA again', async () => {
   const shared = { '46.8523,-121.7603': { properties: { gridId: 'SEW' } } };
   const pointsCache = { getOrFetch: jest.fn(async (key, load) => shared[key] ?? load()) };

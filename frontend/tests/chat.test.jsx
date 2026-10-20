@@ -18,6 +18,15 @@ if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNa
 else delete globalThis.navigator;
 import { AiAccessContext } from '../src/contexts/ai-access';
 
+// The chat gzips the report it sends where the runtime can; this reads the body either way.
+async function sentJson(init) {
+  const headers = new Headers(init.headers);
+  if (headers.get('Content-Encoding') !== 'gzip') return JSON.parse(init.body);
+  return JSON.parse(await new Response(new Blob([init.body]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+}
+// Gzipping runs off the main thread, so a request starts a few turns after the click.
+const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+
 async function mount(t, props = {}, allowed = true) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const previous = { window: globalThis.window, document: globalThis.document };
@@ -108,7 +117,7 @@ test('retry keeps one user question and sends the same report context', async t 
   const previousFetch = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (_url, init) => {
-    requests.push(JSON.parse(init.body));
+    requests.push(await sentJson(init));
     if (requests.length === 1) return new Response('Temporarily unavailable', { status: 503 });
     const chunks = [
       { type: 'start', messageId: 'answer' },
@@ -124,8 +133,10 @@ test('retry keeps one user question and sends the same report context', async t 
   t.after(() => { globalThis.fetch = previousFetch; });
   await h.click('Open chat full screen');
   await act(async () => document.querySelector('.field-chat-suggestions button').click());
+  await settle();
   assert.ok(document.querySelector('[role="alert"]'));
   await act(async () => document.querySelector('.field-chat-error button').click());
+  await settle();
   assert.equal(requests.length, 2);
   for (const request of requests) {
     assert.equal(request.report, '{"objective":"Rainier"}');
@@ -148,7 +159,7 @@ test('suggested follow-up sends conversation history and renders the next answer
   const previousFetch = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (_url, init) => {
-    requests.push(JSON.parse(init.body));
+    requests.push(await sentJson(init));
     const chunks = [
       { type: 'start', messageId: 'follow-up-answer' },
       { type: 'text-start', id: 'text' },
@@ -163,6 +174,7 @@ test('suggested follow-up sends conversation history and renders the next answer
   };
   t.after(() => { globalThis.fetch = previousFetch; });
   await act(async () => document.querySelector('.field-chat-suggestions button').click());
+  await settle();
   assert.equal(requests.length, 1);
   assert.equal(requests[0].report, '{"objective":"Rainier"}');
   assert.equal(requests[0].messages.length, 3);
@@ -179,7 +191,7 @@ test('a question asked from the report opens the chat and is sent once', async t
   const previousFetch = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (_url, init) => {
-    requests.push(JSON.parse(init.body));
+    requests.push(await sentJson(init));
     const chunks = [
       { type: 'start', messageId: 'answer' },
       { type: 'text-start', id: 'text' },

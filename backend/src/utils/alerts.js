@@ -7,6 +7,10 @@ const { createCache, normalizeCoordKey } = require('./cache');
 const airQualityCache = createCache({ name: 'air-quality', ttlMs: 30 * 60 * 1000, staleTtlMs: 30 * 60 * 1000, maxEntries: 100 });
 const ACTIVE_ALERTS_CACHE_TTL_MS = 2 * 60 * 1000;
 const AIR_QUALITY_SAMPLE_TOLERANCE_MS = 90 * 60 * 1000;
+// AirNow monitors report hourly, so observations a few minutes old are as current as a new request would be.
+// The stale window lets a warm report use the last answer while one background request refreshes it.
+const AIRNOW_CACHE_TTL_MS = 10 * 60 * 1000;
+const AIRNOW_CACHE_STALE_TTL_MS = 20 * 60 * 1000;
 
 const ALERT_SEVERITY_RANK = {
   unknown: 0,
@@ -195,19 +199,26 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     maxEntries: 300,
   });
 
+  const getActiveAlertsPayload = (lat, lon, fetchOptions) => activeAlertsPayloadCache.getOrFetch(normalizeCoordKey(lat, lon), async () => {
+    const alertsRes = await fetchWithTimeout(
+      `https://api.weather.gov/alerts/active?point=${lat},${lon}`,
+      fetchOptions,
+    );
+    if (!alertsRes.ok) {
+      throw new Error(`NWS alerts request failed with status ${alertsRes.status}`);
+    }
+    return alertsRes.json();
+  });
+
+  // Starts the alerts request for a place before the report needs it; the report's own call joins it.
+  // A failed prefetch is retried by that call.
+  const prefetchWeatherAlerts = ({ lat, lon, fetchOptions }) => {
+    getActiveAlertsPayload(lat, lon, fetchOptions).catch(() => {});
+  };
+
   const fetchWeatherAlertsData = async (lat, lon, fetchOptions, targetTimeIso = null) => {
     const targetTimeMs = parseIsoTimeToMs(targetTimeIso) ?? Date.now();
-    const cacheKey = normalizeCoordKey(lat, lon);
-    const alertsJson = await activeAlertsPayloadCache.getOrFetch(cacheKey, async () => {
-      const alertsRes = await fetchWithTimeout(
-        `https://api.weather.gov/alerts/active?point=${lat},${lon}`,
-        fetchOptions,
-      );
-      if (!alertsRes.ok) {
-        throw new Error(`NWS alerts request failed with status ${alertsRes.status}`);
-      }
-      return alertsRes.json();
-    });
+    const alertsJson = await getActiveAlertsPayload(lat, lon, fetchOptions);
     const features = Array.isArray(alertsJson?.features) ? alertsJson.features : [];
     if (features.length === 0) {
       return {
@@ -283,18 +294,49 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     };
   };
 
+  // Parsed AirNow observations per place. Only a successful answer is stored (a failed request rejects), so
+  // a report after a failure asks AirNow again.
+  const airNowObservationsCache = createCache({
+    name: 'airnow-observations',
+    ttlMs: AIRNOW_CACHE_TTL_MS,
+    staleTtlMs: AIRNOW_CACHE_STALE_TTL_MS,
+    maxEntries: 300,
+  });
+
+  const getAirQualityPayload = (lat, lon, fetchOptions) => airQualityCache.getOrFetch(normalizeCoordKey(lat, lon), async () => {
+    const aqiRes = await fetchWithTimeout(
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone&forecast_days=7&timezone=UTC`,
+      fetchOptions,
+    );
+    if (!aqiRes.ok) {
+      throw new Error(`Open-Meteo air quality request failed with status ${aqiRes.status}`);
+    }
+    return aqiRes.json();
+  });
+
+  const getAirNowObservations = (lat, lon, fetchOptions) => airNowObservationsCache.getOrFetch(normalizeCoordKey(lat, lon), async () => {
+    const response = await fetchWithTimeout(buildAirNowUrl({ lat, lon, apiKey: airNowApiKey }), fetchOptions);
+    if (!response.ok) throw new Error(`AirNow HTTP ${response.status}`);
+    return parseAirNowObservations(await response.json(), { lat, lon });
+  });
+
+  // Starts both air quality requests for a place before the report needs them; the report's own call joins
+  // them. A failed prefetch is retried by that call.
+  const prefetchAirQuality = ({ lat, lon, fetchOptions }) => {
+    getAirQualityPayload(lat, lon, fetchOptions).catch(() => {});
+    if (airNowApiKey) getAirNowObservations(lat, lon, fetchOptions).catch(() => {});
+  };
+
   const fetchAirQualityData = async (lat, lon, targetForecastTimeIso, fetchOptions) => {
-    const cacheKey = normalizeCoordKey(lat, lon);
-    const aqiJson = await airQualityCache.getOrFetch(cacheKey, async () => {
-      const aqiRes = await fetchWithTimeout(
-        `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone&forecast_days=7&timezone=UTC`,
-        fetchOptions,
-      );
-      if (!aqiRes.ok) {
-        throw new Error(`Open-Meteo air quality request failed with status ${aqiRes.status}`);
-      }
-      return aqiRes.json();
-    });
+    // AirNow does not depend on the Open-Meteo answer, so both requests run at once. The AirNow outcome is
+    // settled here so a report that returns before reading it leaves no unhandled rejection behind.
+    const airNowPromise = airNowApiKey
+      ? getAirNowObservations(lat, lon, fetchOptions).then(
+          (observations) => ({ observations }),
+          (error) => ({ error }),
+        )
+      : null;
+    const aqiJson = await getAirQualityPayload(lat, lon, fetchOptions);
 
     const hourly = aqiJson?.hourly || {};
     const timeArray = Array.isArray(hourly?.time) ? hourly.time : [];
@@ -334,7 +376,7 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
       dataType: 'modeled_forecast',
     };
 
-    if (!airNowApiKey) {
+    if (!airNowPromise) {
       return {
         ...openMeteoResult,
         note: 'Modeled hourly air quality. Configure AIRNOW_API_KEY to add EPA monitor observations.',
@@ -342,9 +384,8 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     }
 
     try {
-      const response = await fetchWithTimeout(buildAirNowUrl({ lat, lon, apiKey: airNowApiKey }), fetchOptions);
-      if (!response.ok) throw new Error(`AirNow HTTP ${response.status}`);
-      const observations = parseAirNowObservations(await response.json(), { lat, lon });
+      const { observations, error } = await airNowPromise;
+      if (error) throw error;
       if (!observations.length) return { ...openMeteoResult, observation: { available: false, source: 'EPA AirNow', note: 'No fresh monitor AQI within 75 km.' } };
       const dominant = observations.reduce((best, row) => (!best || row.aqi > best.aqi ? row : best), null);
       const targetMs = parseIsoTimeToMs(targetForecastTimeIso) ?? Date.now();
@@ -387,7 +428,7 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     }
   };
 
-  return { fetchWeatherAlertsData, fetchAirQualityData };
+  return { fetchWeatherAlertsData, fetchAirQualityData, prefetchWeatherAlerts, prefetchAirQuality };
 };
 
 module.exports = {

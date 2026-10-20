@@ -200,14 +200,17 @@ test('the AI read shows what the fact checks rejected, and saved reads keep it',
   assert.deepEqual(parseAiBriefDetails({ ...details, checks: { attempts: 2, problems: ['a', 3] } }, details.narrative).checks, { attempts: 2, problems: ['a'] });
   // How long the AI took shows even when every check passed.
   assert.match(read({ details: { ...details, checks: { attempts: 1, problems: [], seconds: [23.6] } } }), /Fact-check details · all passed · took 24 s/);
+  // The briefing and the chapters are written side by side: their times are listed, not added.
+  assert.match(read({ details: { ...details, checks: { attempts: 1, problems: [], seconds: [21.2, 14.8] } } }), /took 21 s, 15 s</);
   assert.deepEqual(parseAiBriefDetails({ ...details, checks: { attempts: 1, problems: [], seconds: [12.5, 'x'] } }, details.narrative).checks, { attempts: 1, problems: [], seconds: [12.5] });
 });
 
 test('while the AI writes, the read says what it is doing and what it has done', () => {
   const run = { startedAt: Date.now(), opening: 'pending', hero: null, openingSeconds: null, seconds: null };
   const pending = read({ narrative: null, details: null, loading: true, run });
-  // The full read waits its turn until the opening is written.
-  assert.match(pending, /<li class="is-active">[^]*Rewriting the opening[^]*<li class="is-next">[^]*Then the full read/);
+  // The opening and the full read are written at the same time.
+  assert.match(pending, /<li class="is-active">[^]*Rewriting the opening[^]*<li class="is-active">[^]*Writing the full read/);
+  assert.doesNotMatch(pending, /is-next|Then the full read/);
   const written = read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'written', openingSeconds: 3 } });
   assert.match(written, /<li class="is-done">[^]*Rewrote the opening in 3 s[^]*<li class="is-active">[^]*Writing the full read/);
   assert.match(read({ narrative: null, details: null, loading: true, run: { ...run, opening: 'kept' } }), /<li class="is-kept">[^]*The quick opening didn’t pass its checks; the full read writes it/);

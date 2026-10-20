@@ -137,19 +137,34 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
 };
 
 const USGS_ELEVATION_SOURCE = 'USGS 3DEP elevation service';
-// USGS answers in well under a second when it is healthy. When it is not, waiting out the request timeout
-// would hold every report at a new place for seconds; the Open-Meteo lookup is there for exactly that.
-const USGS_ELEVATION_TIMEOUT_MS = 3500;
+// USGS answers in well under a second when it is healthy. When it has not answered by then, Open-Meteo is
+// asked as well and the first good answer is used, so a slow USGS costs a report at a new place this long
+// and no more. USGS keeps its whole request timeout: a late answer is still kept for the next report.
+const USGS_HEDGE_MS = 1500;
 // Open-Meteo's grid is coarser than USGS's, hundreds of feet lower on a sharp summit. Its answer is used but
 // remembered only briefly, so a later report gets the USGS value once USGS answers again.
 const PROVISIONAL_ELEVATION_TTL_MS = 10 * 60 * 1000;
+const noElevation = () => ({ elevationFt: null, source: null });
 
-const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }) => {
+// The first answer that is not null, or null once every lookup has come back without one.
+const firstAnswer = (lookups) => new Promise((resolve) => {
+  let pending = lookups.length;
+  for (const lookup of lookups) {
+    lookup.then((answer) => {
+      pending -= 1;
+      if (answer) resolve(answer);
+      else if (pending === 0) resolve(null);
+    });
+  }
+});
+
+const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000, hedgeMs = USGS_HEDGE_MS }) => {
   const elevationCache = createCache({ name: 'elevation', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 500 });
   const provisionalCache = createCache({ name: 'elevation-provisional', ttlMs: PROVISIONAL_ELEVATION_TTL_MS, maxEntries: 500 });
   // After a few failures in a row stop asking USGS for a minute, so an outage costs nothing per report.
   const usgsBreaker = createCircuitBreaker({ name: 'usgs-elevation', failureThreshold: 3, resetTimeMs: 60000 });
 
+  // Both lookups resolve to an answer or null and never reject.
   const lookupUsgs = async (lat, lon, fetchOptions) => {
     if (usgsBreaker.isOpen) return null;
     try {
@@ -157,7 +172,7 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }) 
         const response = await fetchWithTimeout(
           `https://epqs.nationalmap.gov/v1/json?x=${lon}&y=${lat}&units=Feet&wkid=4326`,
           fetchOptions,
-          Math.min(requestTimeoutMs, USGS_ELEVATION_TIMEOUT_MS),
+          requestTimeoutMs,
         );
         if (response.status >= 500) throw new Error(`USGS elevation returned ${response.status}`);
         return response;
@@ -175,10 +190,7 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }) 
     return null;
   };
 
-  const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions) => {
-    const usgs = await lookupUsgs(lat, lon, fetchOptions);
-    if (usgs) return usgs;
-
+  const lookupOpenMeteo = async (lat, lon, fetchOptions) => {
     try {
       const openMeteoRes = await fetchWithTimeout(
         `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`,
@@ -195,8 +207,29 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }) 
     } catch (error) {
       logger.warn({ err: error }, 'Elevation Open-Meteo lookup failed');
     }
+    return null;
+  };
 
-    return { elevationFt: null, source: null };
+  const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions, key) => {
+    if (usgsBreaker.isOpen) return (await lookupOpenMeteo(lat, lon, fetchOptions)) || noElevation();
+
+    const usgs = lookupUsgs(lat, lon, fetchOptions);
+    let timer;
+    const hedge = new Promise((resolve) => {
+      timer = setTimeout(resolve, hedgeMs, 'hedge');
+      if (typeof timer.unref === 'function') timer.unref();
+    });
+    const early = await Promise.race([usgs, hedge]);
+    clearTimeout(timer);
+    if (early && early !== 'hedge') return early;
+    if (early === null) return (await lookupOpenMeteo(lat, lon, fetchOptions)) || noElevation();
+
+    // USGS is slow today. Whatever Open-Meteo says serves this report; a USGS answer that lands later is
+    // kept for the week, so the next report at this place gets the finer figure.
+    usgs.then((late) => {
+      if (late) elevationCache.set(key, late);
+    });
+    return (await firstAnswer([usgs, lookupOpenMeteo(lat, lon, fetchOptions)])) || noElevation();
   };
 
   const fetchObjectiveElevationFt = async (lat, lon, fetchOptions) => {
@@ -208,7 +241,7 @@ const createElevationService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }) 
     // Only a USGS answer is kept for the week. Anything else, including no answer at all, is asked for again soon.
     const result = await elevationCache.getOrFetch(
       key,
-      () => _fetchObjectiveElevationFtUncached(lat, lon, fetchOptions),
+      () => _fetchObjectiveElevationFtUncached(lat, lon, fetchOptions, key),
       { shouldStore: (value) => value.source === USGS_ELEVATION_SOURCE },
     );
     if (result.source !== USGS_ELEVATION_SOURCE) provisionalCache.set(key, result);
