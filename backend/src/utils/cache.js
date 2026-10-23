@@ -68,12 +68,17 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
       if (!inflight.has(key)) {
         const bgPromise = Promise.resolve()
           .then(() => fetchFn())
-          .then((val) => { if (shouldStore(val)) set(key, val); return val; })
+          .then((val) => {
+            if (inflight.get(key) === bgPromise && shouldStore(val)) set(key, val);
+            return val;
+          })
           .catch((err) => {
             logger.warn({ cache: name, key, err }, 'Background cache revalidation failed; serving stale value');
             return cached.value;
           })
-          .finally(() => { inflight.delete(key); });
+          .finally(() => {
+            if (inflight.get(key) === bgPromise) inflight.delete(key);
+          });
         inflight.set(key, bgPromise);
       }
       return cached.value;
@@ -85,12 +90,17 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
     const promise = Promise.resolve()
       .then(() => fetchFn())
       .then((val) => {
-        if (shouldStore(val)) set(key, val);
-        inflight.delete(key);
+        // Clearing invalidates this request's cache writes as well as its entry.
+        // It may still answer its callers, but cannot replace a newer fetch or
+        // remove that fetch from the deduplication map.
+        if (inflight.get(key) === promise) {
+          if (shouldStore(val)) set(key, val);
+          inflight.delete(key);
+        }
         return val;
       })
       .catch((err) => {
-        inflight.delete(key);
+        if (inflight.get(key) === promise) inflight.delete(key);
         throw err;
       });
     inflight.set(key, promise);

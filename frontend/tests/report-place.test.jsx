@@ -141,6 +141,26 @@ test('scrolling first ends the wait for the old spot', async t => {
   assert.equal(store.current.scrollY, 120);
 });
 
+test('restoring the old spot keeps section changes made while the page is still growing', async t => {
+  const store = { current: { report: 'r', scrollY: 1400, sections: ['forecast'], opened: ['forecast'] } };
+  function Report({ sections, opened }) {
+    const [returning] = useState(() => placeToReturnTo(store.current, 'r'));
+    useKeepReportPlace(store, 'r', sections, opened, returning);
+    return null;
+  }
+  const h = await mount(t, 'http://localhost/planner', Report, {
+    sections: new Set(['forecast']), opened: new Set(['forecast']),
+  }, { height: 300 });
+  await h.render({ sections: new Set(['forecast', 'timing']), opened: new Set(['timing']) });
+  h.setPageHeight(5000);
+  await h.frames();
+
+  assert.equal(h.window.scrollY, 1400);
+  assert.deepEqual(store.current, {
+    report: 'r', scrollY: 1400, sections: ['forecast', 'timing'], opened: ['timing'],
+  }, 'finishing restoration must save the current sections, not the initial render');
+});
+
 test('a spot the page grows too slowly to reach stays kept for next time', async t => {
   const store = { current: { report: 'r', scrollY: 1400, sections: ['forecast'], opened: ['forecast'] } };
   const none = new Set();

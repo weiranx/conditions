@@ -45,8 +45,10 @@ export function useKeepReportPlace(
     if (!store || restoring.current) return;
     store.current = { report, scrollY: window.scrollY, sections: [...sections], opened: [...opened] };
   }, [store, report, sections, opened]);
+  const latestSave = useRef(save);
   // A layout effect stops listening as the report leaves, before the next page scrolls to its top.
   useLayoutEffect(() => {
+    latestSave.current = save;
     save();
     window.addEventListener("scroll", save, { passive: true });
     return () => window.removeEventListener("scroll", save);
@@ -64,7 +66,7 @@ export function useKeepReportPlace(
       cancel();
       if (!restoring.current) return;
       restoring.current = false;
-      save();
+      latestSave.current();
     };
     const step = () => {
       window.scrollTo({ top: target, behavior: "instant" });
@@ -79,7 +81,7 @@ export function useKeepReportPlace(
     step();
     // Leaving before the spot was reached keeps the place for next time.
     return cancel;
-    // Runs once, as the report opens; `save` is read at the end of the wait.
+    // Runs once, as the report opens; the latest sections are saved at the end of the wait.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
